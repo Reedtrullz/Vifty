@@ -1,0 +1,14 @@
+# Swift / SPM
+.build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+Package.resolved
+
+# macOS
+.DS_Store
+*.app
+
+# IDE
+.idea/
+.vscode/
