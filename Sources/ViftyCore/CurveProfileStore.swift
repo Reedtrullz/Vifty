@@ -20,7 +20,21 @@ public final class CurveProfileStore: @unchecked Sendable {
     public func save(_ profiles: [CurveProfile]) {
         let directory = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        // Write a backup before overwriting the main file.
+        if FileManager.default.fileExists(atPath: url.path) {
+            let backupURL = url.appendingPathExtension("bak")
+            try? FileManager.default.removeItem(at: backupURL)
+            try? FileManager.default.copyItem(at: url, to: backupURL)
+        }
+
         guard let data = try? JSONEncoder().encode(profiles) else { return }
         try? data.write(to: url, options: .atomic)
+
+        // Always ensure a backup copy exists after saving.
+        let backupURL = url.appendingPathExtension("bak")
+        if !FileManager.default.fileExists(atPath: backupURL.path) {
+            try? FileManager.default.copyItem(at: url, to: backupURL)
+        }
     }
 }
