@@ -188,12 +188,21 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
         self.id = id
         self.name = name
         self.sensorID = sensorID
-        self.startTemp = startTemp
-        self.startRPM = startRPM
-        self.midTemp = midTemp
-        self.midRPM = midRPM
-        self.maxTemp = maxTemp
-        self.maxRPM = maxRPM
+
+        // Sort the three points by temperature so the stored profile
+        // always represents a valid monotonically-increasing curve.
+        let points = [
+            (temp: startTemp, rpm: startRPM),
+            (temp: midTemp,   rpm: midRPM),
+            (temp: maxTemp,   rpm: maxRPM)
+        ].sorted { $0.temp < $1.temp }
+
+        self.startTemp = points[0].temp
+        self.startRPM  = points[0].rpm
+        self.midTemp   = points[1].temp
+        self.midRPM    = points[1].rpm
+        self.maxTemp   = points[2].temp
+        self.maxRPM    = points[2].rpm
     }
 
     public func toFanCurve() -> FanCurve {
