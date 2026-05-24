@@ -4,6 +4,9 @@ import ViftyCore
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @StateObject private var daemonInstaller = DaemonInstaller()
+    @State private var newProfileName = ""
+    @State private var showSaveDialog = false
+    @State private var selectedProfileID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -140,6 +143,36 @@ struct ContentView: View {
             Text("Temperature Curve")
                 .font(.headline)
 
+            if !model.savedProfiles.isEmpty {
+                HStack {
+                    Picker("Profile", selection: $selectedProfileID) {
+                        Text("Unsaved").tag(Optional<UUID>.none)
+                        ForEach(model.savedProfiles) { profile in
+                            Text(profile.name).tag(Optional(profile.id))
+                        }
+                    }
+                    .onChange(of: selectedProfileID) { _, newID in
+                        guard let id = newID,
+                              let profile = model.savedProfiles.first(where: { $0.id == id }) else { return }
+                        model.loadProfile(profile)
+                    }
+
+                    if selectedProfileID != nil {
+                        Button {
+                            if let id = selectedProfileID,
+                               let profile = model.savedProfiles.first(where: { $0.id == id }) {
+                                model.deleteProfile(profile)
+                                selectedProfileID = nil
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.red)
+                    }
+                }
+            }
+
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
                 Picker("Sensor", selection: $model.selectedSensorID) {
                     ForEach(sensors) { sensor in
@@ -159,6 +192,38 @@ struct ContentView: View {
                 Text("Live: \(sensor.celsius, specifier: "%.1f") C from \(sensor.name)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                if showSaveDialog {
+                    TextField("Profile name", text: $newProfileName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 150)
+                    Button("Save") {
+                        let name = newProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !name.isEmpty else { return }
+                        model.saveCurrentProfile(name: name)
+                        selectedProfileID = model.savedProfiles.last?.id
+                        newProfileName = ""
+                        showSaveDialog = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    Button("Cancel") {
+                        newProfileName = ""
+                        showSaveDialog = false
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                } else {
+                    Button {
+                        showSaveDialog = true
+                    } label: {
+                        Label("Save Profile", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
     }
