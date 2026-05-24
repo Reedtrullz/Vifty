@@ -163,6 +163,48 @@ public struct FanCurve: Equatable, Sendable {
     }
 }
 
+public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var sensorID: String?
+    public var startTemp: Double
+    public var startRPM: Int
+    public var midTemp: Double
+    public var midRPM: Int
+    public var maxTemp: Double
+    public var maxRPM: Int
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        sensorID: String? = nil,
+        startTemp: Double,
+        startRPM: Int,
+        midTemp: Double,
+        midRPM: Int,
+        maxTemp: Double,
+        maxRPM: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.sensorID = sensorID
+        self.startTemp = startTemp
+        self.startRPM = startRPM
+        self.midTemp = midTemp
+        self.midRPM = midRPM
+        self.maxTemp = maxTemp
+        self.maxRPM = maxRPM
+    }
+
+    public func toFanCurve() -> FanCurve {
+        FanCurve(sensorID: sensorID, points: [
+            CurvePoint(temperatureCelsius: startTemp, rpm: startRPM),
+            CurvePoint(temperatureCelsius: midTemp, rpm: midRPM),
+            CurvePoint(temperatureCelsius: maxTemp, rpm: maxRPM)
+        ])
+    }
+}
+
 public enum FanMode: Equatable, Sendable {
     case auto
     case fixedRPM(Int)
