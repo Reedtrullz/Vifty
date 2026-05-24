@@ -19,12 +19,15 @@ final class AppModel: ObservableObject {
     @Published var fanAccessMessage: String?
     @Published var daemonReachable = false
     @Published var isRunning = false
+    @Published var savedProfiles: [CurveProfile] = []
 
     private let coordinator: FanControlCoordinator
+    private let profileStore = CurveProfileStore()
     private var pollingTask: Task<Void, Never>?
 
     init(coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService())) {
         self.coordinator = coordinator
+        savedProfiles = profileStore.load()
     }
 
     func start() {
@@ -93,6 +96,37 @@ final class AppModel: ObservableObject {
             await coordinator.setMode(.auto)
             await pollOnce()
         }
+    }
+
+    func saveCurrentProfile(name: String) {
+        let profile = CurveProfile(
+            name: name,
+            sensorID: selectedSensorID,
+            startTemp: curveStartTemp,
+            startRPM: Int(curveStartRPM.rounded()),
+            midTemp: curveMidTemp,
+            midRPM: Int(curveMidRPM.rounded()),
+            maxTemp: curveMaxTemp,
+            maxRPM: Int(curveMaxRPM.rounded())
+        )
+        savedProfiles.append(profile)
+        profileStore.save(savedProfiles)
+    }
+
+    func loadProfile(_ profile: CurveProfile) {
+        curveStartTemp = profile.startTemp
+        curveStartRPM = Double(profile.startRPM)
+        curveMidTemp = profile.midTemp
+        curveMidRPM = Double(profile.midRPM)
+        curveMaxTemp = profile.maxTemp
+        curveMaxRPM = Double(profile.maxRPM)
+        selectedSensorID = profile.sensorID
+        applyModeSelection()
+    }
+
+    func deleteProfile(_ profile: CurveProfile) {
+        savedProfiles.removeAll { $0.id == profile.id }
+        profileStore.save(savedProfiles)
     }
 
     func targetRPMPreview(for fan: Fan) -> Int? {
