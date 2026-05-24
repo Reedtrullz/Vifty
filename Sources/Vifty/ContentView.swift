@@ -17,9 +17,6 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task {
-            model.start()
-        }
     }
 
     private var header: some View {
@@ -164,12 +161,6 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .onChange(of: model.curveStartTemp) { model.applyModeSelection() }
-        .onChange(of: model.curveMidTemp) { model.applyModeSelection() }
-        .onChange(of: model.curveMaxTemp) { model.applyModeSelection() }
-        .onChange(of: model.curveStartRPM) { model.applyModeSelection() }
-        .onChange(of: model.curveMidRPM) { model.applyModeSelection() }
-        .onChange(of: model.curveMaxRPM) { model.applyModeSelection() }
     }
 
     private var sensorsPane: some View {
