@@ -183,6 +183,14 @@ public final class SMCClient: @unchecked Sendable {
         return output
     }
 
+    public static let knownPaths: [String] = [
+        "IOService:/AppleARMPE/arm-io/AppleT600xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
+        "IOService:/AppleARMPE/arm-io/AppleT811xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
+        "IOService:/AppleARMPE/arm-io/AppleT812xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
+        "IOService:/AppleARMPE/arm-io/AppleT813xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
+        "IOService:/AppleARMPE/arm-io/AppleT814xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
+    ]
+
     private static func firstSMCService() -> io_service_t {
         let appleSMC = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         if appleSMC != 0 {
@@ -203,10 +211,11 @@ public final class SMCClient: @unchecked Sendable {
             }
         }
 
-        let knownPath = "IOService:/AppleARMPE/arm-io/AppleT600xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint"
-        let pathService = IORegistryEntryFromPath(kIOMainPortDefault, knownPath)
-        if pathService != 0 {
-            return pathService
+        for path in knownPaths {
+            let pathService = IORegistryEntryFromPath(kIOMainPortDefault, path)
+            if pathService != 0 {
+                return pathService
+            }
         }
 
         return 0

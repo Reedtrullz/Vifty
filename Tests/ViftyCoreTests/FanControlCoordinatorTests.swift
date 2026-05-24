@@ -94,6 +94,28 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testFixedRPMAppliesEvenWhenDaemonUnreachable() async throws {
+        // When the daemon is down, writes should fall back to local SMC.
+        // FakeHardware simulates the local path — if the coordinator calls
+        // apply() and it reaches the hardware, the fallback works.
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan()],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.fixedRPM(3000))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3000))])
+    }
+
     private static func fan(minimumRPM: Int = 1400, maximumRPM: Int = 6000) -> Fan {
         Fan(id: 0, name: "Left Fan", currentRPM: minimumRPM, minimumRPM: minimumRPM, maximumRPM: maximumRPM, controllable: true)
     }

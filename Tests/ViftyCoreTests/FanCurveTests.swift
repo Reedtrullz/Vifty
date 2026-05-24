@@ -45,4 +45,18 @@ final class FanCurveTests: XCTestCase {
 
         XCTAssertEqual(decoded, 2500, accuracy: 0.01)
     }
+
+    func testSMCKnownPathsCoverAllAppleSiliconGenerations() {
+        let paths = SMCClient.knownPaths
+        let soCs = paths.compactMap { path -> String? in
+            guard let range = path.range(of: "AppleT"),
+                  let end = path[range.upperBound...].firstIndex(of: "/") else { return nil }
+            return String(path[range.lowerBound..<end])
+        }
+        XCTAssertTrue(soCs.contains("AppleT600xIO"), "M1 Pro/Max missing")
+        XCTAssertTrue(soCs.contains("AppleT811xIO"), "M2 missing")
+        XCTAssertTrue(soCs.contains("AppleT812xIO"), "M2 Pro/Max missing")
+        XCTAssertTrue(soCs.contains("AppleT813xIO"), "M3 missing")
+        XCTAssertTrue(soCs.contains("AppleT814xIO"), "M4 missing")
+    }
 }

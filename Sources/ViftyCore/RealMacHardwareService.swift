@@ -54,18 +54,26 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
 
     public func apply(_ command: FanCommand, fan: Fan) async throws {
         if preferDaemon {
-            try await ViftyDaemonClient().apply(command, fan: fan)
-        } else {
-            try LocalFanHelperClient().apply(command, fan: fan)
+            do {
+                try await ViftyDaemonClient().apply(command, fan: fan)
+                return
+            } catch {
+                // Daemon unreachable — fall through to local SMC.
+            }
         }
+        try LocalFanHelperClient().apply(command, fan: fan)
     }
 
     public func restoreAuto(fan: Fan) async throws {
         if preferDaemon {
-            try await ViftyDaemonClient().restoreAuto(fan: fan)
-        } else {
-            try LocalFanHelperClient().restoreAuto(fan: fan)
+            do {
+                try await ViftyDaemonClient().restoreAuto(fan: fan)
+                return
+            } catch {
+                // Daemon unreachable — fall through to local SMC.
+            }
         }
+        try LocalFanHelperClient().restoreAuto(fan: fan)
     }
 
     private static func readFans(_ smc: SMCClient) -> [Fan] {
