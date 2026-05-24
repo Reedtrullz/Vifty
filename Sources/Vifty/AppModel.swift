@@ -109,7 +109,11 @@ final class AppModel: ObservableObject {
             maxTemp: curveMaxTemp,
             maxRPM: Int(curveMaxRPM.rounded())
         )
-        savedProfiles.append(profile)
+        if let existingIndex = savedProfiles.firstIndex(where: { $0.name == name }) {
+            savedProfiles[existingIndex] = profile
+        } else {
+            savedProfiles.append(profile)
+        }
         profileStore.save(savedProfiles)
     }
 
