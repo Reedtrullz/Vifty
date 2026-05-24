@@ -18,7 +18,7 @@ AI coding instructions for working in this repository.
 | ViftyDaemon | executable | ViftyCore |
 | ViftyHelper | executable | ViftyCore |
 | ViftyPrivateIOKit | C target | IOKit framework |
-| ViftyCoreTests | test | ViftyCore |
+| ViftyCoreTests | test | ViftyCore, Vifty |
 
 ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target needs explicit linking).
 
@@ -44,14 +44,19 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 4. **Protocol abstraction** — Tests use a `FakeHardware` actor conforming to `HardwareService`. All fan logic lives in `FanControlCoordinator`, not in the hardware layer.
 5. **Sendable safety** — `FanControlCoordinator` is an actor. `RealMacHardwareService` is `@unchecked Sendable` (owns non-Sendable IOKit connection). `CallbackState` uses NSLock for one-shot XPC callback delivery.
 6. **Unclean exit recovery** — `ManualControlMarker` writes a file when manual control is active; `recoverIfNeeded()` checks it on next launch.
+7. **Profile temp sorting** — `CurveProfile.init()` sorts the three temperature/RPM pairs into ascending order so stored values always match actual curve behavior. The UI sliders can be set in any order; the init normalizes them.
+8. **Profile backup** — `CurveProfileStore.save()` copies the existing file to a `.bak` backup before overwriting, protecting against disk-full or interrupted-write corruption.
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests`.
+- `swift test` runs `ViftyCoreTests` (28 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `ManualControlMarkerTests` tests sentinel file lifecycle (create, detect, clear, idempotency).
 - `RealMacHardwareServiceTests` tests SMC-unavailable fallback paths.
+- `CurveProfileTests` tests toFanCurve() output and init-time temperature sorting.
+- `CurveProfileStoreTests` tests JSON round-trip, missing/corrupt file handling, and backup file creation.
+- `AppModelTests` tests duplicate-profile overwrite, append behavior, and curve-defaults sync flag.
 - Tests must pass before committing. Run from repo root.
 
 ## Conventions
@@ -62,7 +67,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - Fan IDs are 0-indexed Ints matching SMC key suffixes.
 - Temperature sensor IDs are SMC key strings or `hid-<index>`.
 - Bundle identifier: `tech.reidar.vifty` (app), `tech.reidar.vifty.daemon` (Mach service).
-- UI-facing persistence uses `Codable` + JSON file in `~/Library/Application Support/Vifty/` (see `CurveProfileStore`). No UserDefaults for structured data.
+- UI-facing persistence uses `Codable` + JSON file in `~/Library/Application Support/Vifty/` (see `CurveProfileStore`). No UserDefaults for structured data. Saving a profile with an existing name overwrites it; no duplicate names are permitted.
 
 ## New Feature Checklist
 

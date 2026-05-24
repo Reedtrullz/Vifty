@@ -72,6 +72,7 @@ The app bundle is written to `.build/Vifty.app` and signed ad-hoc (`codesign --s
 - Hardware must be Apple Silicon + MacBookPro — anything else gets an empty snapshot and no manual control.
 - If temperature sensors disappear mid-curve, fans are restored to Auto.
 - An unclean-exit marker file (`~/Library/Application Support/Vifty/manual-control-active`) is written when manual control is active and cleared on clean exit. On next launch, if the marker exists, Vifty restores Auto before starting.
+- Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup written before each save. Duplicate profile names overwrite the existing entry rather than accumulating duplicates.
 
 ## ViftyHelper CLI
 
