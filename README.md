@@ -12,8 +12,9 @@ V1 intentionally excludes HDD/SSD S.M.A.R.T., Boot Camp, Windows support, analyt
 
 - **Menu bar** — temperature and fan RPM at a glance. Click for details and quick actions.
 - **Three fan modes** — Auto (restore system control), Fixed RPM, Temperature Curve (3-point).
+- **Curve profiles** — save, name, and switch between multiple fan curve configurations. Profiles persist across restarts.
 - **Live temperature panel** — all SMC and HID sensors with source labels.
-- **Daemon architecture** — privileged XPC daemon writes SMC keys without repeated permission prompts.
+- **Daemon architecture** — privileged XPC daemon writes SMC keys without repeated permission prompts. Falls back to local SMC if the daemon is unreachable.
 - **Safety defaults** — RPM clamping, auto-restore on sensor loss, unclean-exit recovery marker, hardware validation.
 - **Helper CLI** — standalone `ViftyHelper` for debugging SMC keys and direct fan writes from the terminal.
 
@@ -63,7 +64,7 @@ The app bundle is written to `.build/Vifty.app` and signed ad-hoc (`codesign --s
 | `ViftyHelper` | executable | CLI for direct SMC fan control without the daemon |
 | `ViftyPrivateIOKit` | library | C/IOKit bridge for HID temperature sensors |
 
-**Data flow:** The app polls every 2 seconds → `FanControlCoordinator` resolves the active mode to per-fan RPM targets → writes go through the daemon (`ViftyDaemon`) which owns the SMC connection as root. If the daemon is unreachable, `ViftyHelper` is invoked as a fallback (requires permission each time).
+**Data flow:** The app polls every 2 seconds → `FanControlCoordinator` resolves the active mode to per-fan RPM targets → writes go through the daemon (`ViftyDaemon`) which owns the SMC connection as root. If the daemon is unreachable, the app falls back to direct SMC writes via `LocalFanHelperClient`. Curve profiles are persisted as JSON in `~/Library/Application Support/Vifty/`.
 
 ## Safety
 
