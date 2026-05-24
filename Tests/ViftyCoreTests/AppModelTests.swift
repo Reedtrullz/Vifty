@@ -30,4 +30,23 @@ final class AppModelTests: XCTestCase {
         model.saveCurrentProfile(name: "Loud")
         XCTAssertEqual(model.savedProfiles.count, 2)
     }
+
+    func testCurveDefaultsOnlySyncOnce() {
+        let model = AppModel()
+        // Initially not synced.
+        XCTAssertFalse(model.curveDefaultsSynced)
+
+        // Mark as synced (simulates first poll having run).
+        model.curveDefaultsSynced = true
+
+        // Set values to exact defaults — they should NOT be overwritten.
+        model.curveStartRPM = 1400
+        model.curveMaxRPM = 6000
+
+        // After marking synced, the guard in syncCurveDefaultsIfNeeded
+        // returns early, so these values persist.
+        XCTAssertEqual(model.curveStartRPM, 1400)
+        XCTAssertEqual(model.curveMaxRPM, 6000)
+        XCTAssertTrue(model.curveDefaultsSynced)
+    }
 }

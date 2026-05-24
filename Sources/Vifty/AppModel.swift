@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     @Published var fanAccessMessage: String?
     @Published var daemonReachable = false
     @Published var isRunning = false
+    var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
     private let coordinator: FanControlCoordinator
@@ -175,16 +176,13 @@ final class AppModel: ObservableObject {
     }
 
     private func syncCurveDefaultsIfNeeded(from snapshot: HardwareSnapshot) {
-        guard let fan = snapshot.fans.first else { return }
-        if curveStartRPM == 1400 {
-            curveStartRPM = Double(fan.minimumRPM)
-        }
-        if curveMaxRPM == 6000 {
-            curveMaxRPM = Double(fan.maximumRPM)
-        }
+        guard !curveDefaultsSynced, let fan = snapshot.fans.first else { return }
+        curveStartRPM = Double(fan.minimumRPM)
+        curveMaxRPM = Double(fan.maximumRPM)
         if selectedSensorID == nil {
             selectedSensorID = selectedSensor?.id
         }
+        curveDefaultsSynced = true
     }
 
     private func syncState() async {
