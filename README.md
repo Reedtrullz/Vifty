@@ -45,7 +45,7 @@ The app bundle is written to `.build/Vifty.app` and signed ad-hoc (`codesign --s
 │                    ┌─────────┴─────────┐         │
 │                    ▼                   ▼         │
 │           ViftyDaemonClient    RealMacHardware  │
-│           (XPC, no-auth)      Service (SMC)     │
+│       (XPC, validated client) Service (SMC)     │
 │                    │                             │
 │                    ▼                             │
 │           tech.reidar.vifty.daemon              │
@@ -73,6 +73,28 @@ The app bundle is written to `.build/Vifty.app` and signed ad-hoc (`codesign --s
 - If temperature sensors disappear mid-curve, fans are restored to Auto.
 - An unclean-exit marker file (`~/Library/Application Support/Vifty/manual-control-active`) is written when manual control is active and cleared on clean exit. On next launch, if the marker exists, Vifty restores Auto before starting.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup written before each save. Duplicate profile names overwrite the existing entry rather than accumulating duplicates.
+
+## Fail-safe recovery
+
+If manual fan control misbehaves, restore Auto before trying anything else:
+
+1. In the Vifty UI, select **Auto** in the Mode picker and click **Apply**. This is the preferred recovery path because it restores system fan control without disrupting the daemon.
+2. If the UI is unavailable, use the helper CLI from the repo root after building release binaries. First inspect supported fans and their limits:
+   ```sh
+   sudo .build/release/ViftyHelper probeLocal
+   ```
+   Then restore Auto for each fan ID using its reported minimum and maximum RPM:
+   ```sh
+   sudo .build/release/ViftyHelper auto 0 <minRPM> <maxRPM>
+   sudo .build/release/ViftyHelper auto 1 <minRPM> <maxRPM>
+   ```
+3. To stop the privileged daemon while troubleshooting, unload it from launchd:
+   ```sh
+   sudo launchctl bootout system /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+   ```
+4. If fan state is still unclear, reboot macOS so the firmware/system controller and launchd return to their normal startup state.
+
+Do not run manual fan control on unsupported hardware. Vifty is intended for Apple Silicon MacBook Pro models only; unsupported Macs should remain under macOS automatic fan control.
 
 ## ViftyHelper CLI
 
