@@ -123,6 +123,19 @@ struct ContentView: View {
                 model.applyModeSelection()
             }
 
+            Picker("Manual run", selection: $model.manualRunLimit) {
+                ForEach(ManualRunLimit.presets) { limit in
+                    Text(limit.label).tag(limit)
+                }
+            }
+            .pickerStyle(.menu)
+
+            if let expiresAt = model.manualSessionExpiresAt {
+                Text("Auto restore scheduled at \(expiresAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Button {
                 model.applyModeSelection()
             } label: {
