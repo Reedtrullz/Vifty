@@ -70,6 +70,25 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 18) {
             modePicker
 
+            HStack(spacing: 8) {
+                Image(systemName: model.daemonReachable ? "checkmark.shield" : "xmark.shield")
+                    .foregroundStyle(model.daemonReachable ? .green : .orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fan Helper")
+                        .font(.caption.weight(.semibold))
+                    Text(model.helperHealthSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Repair") {
+                    daemonInstaller.installOrOpenApproval()
+                }
+                .controlSize(.small)
+            }
+            .padding(10)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+
             if model.selectedMode == .curve {
                 curveEditor
             } else if model.selectedMode == .fixed {

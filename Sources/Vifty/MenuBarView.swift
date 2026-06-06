@@ -56,6 +56,10 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Label(model.helperHealthSummary, systemImage: model.daemonReachable ? "checkmark.shield" : "xmark.shield")
+                .font(.caption)
+                .foregroundStyle(model.daemonReachable ? Color.secondary : Color.orange)
+
             Divider()
 
             HStack {
