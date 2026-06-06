@@ -50,6 +50,74 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.curveDefaultsSynced)
     }
 
+    func testHelperHealthSummaryReportsHealthyWhenDaemonAndFansAvailable() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
+    }
+
+    func testHelperHealthSummaryReportsHelperErrorBeforeHealthyState() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.lastError = "The fan helper rejected the command"
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+    }
+
+    func testHelperHealthSummaryReportsReachableWithNoFanData() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
+    }
+
+    func testHelperHealthSummaryPluralizesFanCount() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 2450, minimumRPM: 1400, maximumRPM: 6000, controllable: true)
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 2 fans")
+    }
+
+    func testHelperHealthSummaryReportsUnreachableDaemon() {
+        let model = AppModel()
+        model.daemonReachable = false
+        model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
+    }
+
     func testMenuTitleIncludesPowerSummaryWhenPowerSnapshotAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(

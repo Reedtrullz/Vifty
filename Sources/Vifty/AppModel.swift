@@ -197,6 +197,20 @@ final class AppModel: ObservableObject {
         return parts.joined(separator: " | ")
     }
 
+    var helperHealthSummary: String {
+        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
+            return "Fan helper error"
+        }
+        guard daemonReachable else {
+            return "Fan helper unreachable"
+        }
+        let fanCount = snapshot?.fans.count ?? 0
+        guard fanCount > 0 else {
+            return "Fan helper reachable · no fan data"
+        }
+        return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
+    }
+
     var fanRange: ClosedRange<Double> {
         guard let fan = snapshot?.fans.first else { return 1200...6500 }
         return Double(fan.minimumRPM)...Double(fan.maximumRPM)
