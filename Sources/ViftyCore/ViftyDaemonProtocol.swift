@@ -30,14 +30,21 @@ public enum XPCSnapshotCoding {
             "isAppleSilicon": snapshot.isAppleSilicon,
             "isMacBookPro": snapshot.isMacBookPro,
             "fans": snapshot.fans.map { fan in
-                [
+                var encodedFan: [String: Any] = [
                     "id": fan.id,
                     "name": fan.name,
                     "currentRPM": fan.currentRPM,
                     "minimumRPM": fan.minimumRPM,
                     "maximumRPM": fan.maximumRPM,
                     "controllable": fan.controllable
-                ] as NSDictionary
+                ]
+                if let hardwareMode = fan.hardwareMode {
+                    encodedFan["hardwareMode"] = hardwareMode.rawValue
+                }
+                if let targetRPM = fan.targetRPM {
+                    encodedFan["targetRPM"] = targetRPM
+                }
+                return encodedFan as NSDictionary
             },
             "temperatureSensors": snapshot.temperatureSensors.map { sensor in
                 [
@@ -66,13 +73,17 @@ public enum XPCSnapshotCoding {
                   let controllable = item["controllable"] as? Bool else {
                 return nil
             }
+            let hardwareModeRaw = item["hardwareMode"] as? Int
+            let targetRPM = item["targetRPM"] as? Int
             return Fan(
                 id: id,
                 name: name,
                 currentRPM: currentRPM,
                 minimumRPM: minimumRPM,
                 maximumRPM: maximumRPM,
-                controllable: controllable
+                controllable: controllable,
+                hardwareMode: FanHardwareMode(rawValue: hardwareModeRaw),
+                targetRPM: targetRPM
             )
         }
 
