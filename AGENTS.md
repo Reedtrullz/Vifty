@@ -29,7 +29,11 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCore/RealMacHardwareService.swift` — `RealMacHardwareService` (daemon-first SMC reads/writes, local fallback).
 - `Sources/ViftyCore/CurveProfileStore.swift` — JSON file persistence for saved curve profiles.
 - `Sources/ViftyCore/SMCClient.swift` — IOKit SMC connection, read/write, SMCValue, SMCDecoding (float, FPE2, flt, uint en/decoding).
+- `Sources/ViftyCore/FanInfoReader.swift` — Pure SMC fan snapshot parser for hardware Auto/Forced mode and target RPM.
+- `Sources/ViftyCore/FanDisplayFormatter.swift` — Pure fan-state display strings for UI rows.
 - `Sources/ViftyCore/PowerInfo.swift` — Local IOKit power telemetry parser (`IOPS`, `AppleSmartBattery`, adapter details) + UI formatters.
+- `Sources/ViftyCore/ThermalPressure.swift` — macOS thermal-pressure state model and display helpers.
+- `Sources/ViftyCore/TelemetryHistory.swift` — In-memory rolling telemetry sample buffer.
 - `Sources/ViftyCore/ViftyDaemonClient.swift` — XPC client that talks to the privileged daemon.
 - `Sources/ViftyCore/ViftyDaemonProtocol.swift` — `@objc` XPC protocol + `XPCSnapshotCoding` (NSDictionary ↔ HardwareSnapshot).
 - `Sources/ViftyDaemon/main.swift` — XPC listener with `DaemonService` exporting the protocol.
@@ -51,18 +55,25 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 7. **Profile temp sorting** — `CurveProfile.init()` sorts the three temperature/RPM pairs into ascending order so stored values always match actual curve behavior. The UI sliders can be set in any order; the init normalizes them.
 8. **Profile backup** — `CurveProfileStore.save()` copies the existing file to a `.bak` backup before overwriting, protecting against disk-full or interrupted-write corruption.
 9. **Power telemetry stays app-local** — `PowerInfoReader` reads IOKit power/battery dictionaries directly; it does not require the privileged fan daemon and should keep parser helpers testable with dictionary fixtures.
+10. **Fan hardware state is read-only telemetry** — SMC mode/target fields are surfaced on snapshots and round-tripped through XPC, but fan commands still go through `FanControlCoordinator` and daemon/helper paths.
+11. **Telemetry history is in-memory only** — do not persist rolling samples unless a future plan explicitly covers privacy and retention.
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (48 tests).
+- `swift test` runs `ViftyCoreTests` (73 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
+- `FanInfoReaderTests` tests pure fan hardware-mode/target parsing from synthetic SMC dictionaries.
+- `FanDisplayFormatterTests` tests fan hardware-state display strings without SwiftUI inspection.
 - `ManualControlMarkerTests` tests sentinel file lifecycle (create, detect, clear, idempotency).
 - `RealMacHardwareServiceTests` tests SMC-unavailable snapshot fallback paths and verifies the app does not fall back to unprivileged direct AppleSMC fan writes when the daemon is unavailable.
 - `CurveProfileTests` tests toFanCurve() output and init-time temperature sorting.
 - `CurveProfileStoreTests` tests JSON round-trip, missing/corrupt file handling, and backup file creation.
-- `PowerInfoTests` tests IOKit dictionary parsing for adapter watts, negotiated USB-C voltage/current, PD profiles, signed charge/drain watts, and fallback formatting.
-- `AppModelTests` tests duplicate-profile overwrite, append behavior, curve-defaults sync flag, menu power summaries, and injected power-reader polling.
+- `PowerInfoTests` tests IOKit dictionary parsing for adapter watts, negotiated USB-C voltage/current, PD profiles, signed charge/drain watts, fallback formatting, battery runtime estimates, and plugged-in-but-draining warnings.
+- `ThermalPressureTests` tests thermal-pressure labels and elevated menu summaries.
+- `TelemetryHistoryTests` tests rolling-buffer trimming and limit clamping.
+- `XPCSnapshotCodingTests` tests fan hardware mode/target round trips and older snapshot compatibility.
+- `AppModelTests` tests duplicate-profile overwrite, append behavior, curve-defaults sync flag, menu power summaries, injected power-reader polling, timed manual-mode expiry/restores, telemetry-history append, and helper-health summaries.
 - Tests must pass before committing. Run from repo root.
 
 ## Conventions

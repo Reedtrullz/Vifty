@@ -15,9 +15,15 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Menu bar cockpit** — temperature, fan RPM, and power state at a glance.
 - **Three fan modes** — Auto, Fixed RPM, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves; profiles persist across restarts.
+- **Hardware fan state** — shows actual SMC Auto/Forced mode and target RPM when available.
 - **Live temperature panel** — all SMC and HID sensors with source labels and highest-temperature tracking.
 - **Live power tracking** — battery percentage, charge/drain watts, signed battery current, adapter wattage, negotiated USB-C voltage/current, health, cycle count, battery temperature, and USB-C PD profiles from local IOKit data.
+- **Thermal pressure** — surfaces macOS thermal-pressure state alongside raw temperatures.
+- **Timed manual modes** — Fixed RPM and Temperature Curve modes can automatically restore Auto after a selected duration.
+- **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
+- **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
+- **Helper health summary** — distinguishes healthy helper fan data from helper errors, unreachable daemon state, and empty snapshots.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
 - **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
@@ -75,7 +81,7 @@ The power panel is inspired by projects like [`MacBook-Charger-Power-Indicator`]
 - `AppleSmartBattery` registry values for voltage, signed amperage, capacity, cycles, condition, and temperature.
 - `IOPSCopyExternalPowerAdapterDetails` adapter wattage, USB-C PD negotiation, manufacturer/model metadata, and advertised PD profiles.
 
-The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.) plus a detailed Power panel next to the temperature sensors. Power telemetry is read locally and does not require the privileged fan helper.
+The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.) plus a detailed Power panel next to the temperature sensors. Power telemetry is read locally and does not require the privileged fan helper. When live drain and capacity data are available, Vifty estimates time remaining and warns if the Mac is plugged in but the battery is still draining.
 
 ## Architecture
 
@@ -107,10 +113,12 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 
 - Fan RPM targets are clamped to `[minRPM, maxRPM]` per fan.
 - Hardware must be Apple Silicon + MacBookPro before manual fan control is enabled.
+- Manual fan modes can be time-limited so Vifty restores Auto automatically.
+- The UI distinguishes Vifty's selected mode from the hardware-reported SMC mode when that SMC key is available.
 - If temperature sensors disappear mid-curve, Vifty restores Auto.
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
-- Power and thermal telemetry stays on the Mac. There are no analytics, accounts, network uploads, or cloud dependencies.
+- Power, thermal, and telemetry-history data stay on the Mac. The telemetry history is in-memory only; there are no analytics, accounts, network uploads, or cloud dependencies.
 
 ## Fail-safe recovery
 
