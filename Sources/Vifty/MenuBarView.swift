@@ -24,6 +24,9 @@ struct MenuBarView: View {
                 Label("\(sensor.name): \(sensor.celsius, specifier: "%.1f") C", systemImage: "thermometer.medium")
             }
 
+            Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
+                .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
+
             if let power = model.powerSnapshot {
                 Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
                 if let flow = PowerDisplayFormatter.batteryFlow(for: power) {

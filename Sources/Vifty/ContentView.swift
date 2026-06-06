@@ -40,6 +40,9 @@ struct ContentView: View {
                     .foregroundStyle(power.isPluggedIn ? .green : .secondary)
                     .monospacedDigit()
             }
+            Label("Thermal \(model.thermalPressure.displayName)", systemImage: "speedometer")
+                .font(.caption)
+                .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
             Button {
                 daemonInstaller.installOrOpenApproval()
             } label: {
