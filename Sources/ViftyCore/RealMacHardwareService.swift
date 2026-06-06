@@ -116,21 +116,8 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
     }
 
     private static func readFans(_ smc: SMCClient) -> [Fan] {
-        let fanCount = (try? smc.read("FNum")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? 0
-        guard fanCount > 0 else { return [] }
-
-        return (0..<fanCount).map { index in
-            let actual = (try? smc.read("F\(index)Ac")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? 0
-            let minimum = (try? smc.read("F\(index)Mn")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? 1200
-            let maximum = (try? smc.read("F\(index)Mx")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? max(actual, 6000)
-            return Fan(
-                id: index,
-                name: fanName(index),
-                currentRPM: actual,
-                minimumRPM: minimum,
-                maximumRPM: maximum,
-                controllable: maximum > minimum
-            )
+        SMCFanInfoReader.readFans { key in
+            try smc.read(key)
         }
     }
 
@@ -146,13 +133,6 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
         }.sorted { $0.name < $1.name }
     }
 
-    private static func fanName(_ index: Int) -> String {
-        switch index {
-        case 0: "Left Fan"
-        case 1: "Right Fan"
-        default: "Fan \(index + 1)"
-        }
-    }
 }
 
 private let appleSiliconTemperatureKeys: [(String, String)] = [
