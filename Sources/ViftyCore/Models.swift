@@ -53,6 +53,40 @@ public enum ViftyError: Error, LocalizedError, Equatable {
     }
 }
 
+public enum FanHardwareMode: Equatable, Sendable {
+    case automatic
+    case forced
+    case unknown(Int)
+
+    public init?(rawValue: Int?) {
+        guard let rawValue else { return nil }
+        switch rawValue {
+        case 0:
+            self = .automatic
+        case 1:
+            self = .forced
+        default:
+            self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: Int {
+        switch self {
+        case .automatic: 0
+        case .forced: 1
+        case .unknown(let value): value
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .automatic: "Auto"
+        case .forced: "Forced"
+        case .unknown(let value): "Unknown (\(value))"
+        }
+    }
+}
+
 public struct Fan: Identifiable, Equatable, Sendable {
     public let id: Int
     public var name: String
@@ -60,14 +94,27 @@ public struct Fan: Identifiable, Equatable, Sendable {
     public var minimumRPM: Int
     public var maximumRPM: Int
     public var controllable: Bool
+    public var hardwareMode: FanHardwareMode?
+    public var targetRPM: Int?
 
-    public init(id: Int, name: String, currentRPM: Int, minimumRPM: Int, maximumRPM: Int, controllable: Bool) {
+    public init(
+        id: Int,
+        name: String,
+        currentRPM: Int,
+        minimumRPM: Int,
+        maximumRPM: Int,
+        controllable: Bool,
+        hardwareMode: FanHardwareMode? = nil,
+        targetRPM: Int? = nil
+    ) {
         self.id = id
         self.name = name
         self.currentRPM = currentRPM
         self.minimumRPM = minimumRPM
         self.maximumRPM = maximumRPM
         self.controllable = controllable
+        self.hardwareMode = hardwareMode
+        self.targetRPM = targetRPM
     }
 
     public var percentage: Int {
