@@ -20,11 +20,13 @@ final class AppModel: ObservableObject {
     @Published var daemonReachable = false
     @Published var isRunning = false
     @Published var powerSnapshot: PowerSnapshot?
+    @Published var thermalPressure: ThermalPressure = .nominal
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
+    private let thermalReader: @Sendable () -> ThermalPressure
     private let daemonPing: @Sendable () async -> Bool
     private let profileStore = CurveProfileStore()
     private var pollingTask: Task<Void, Never>?
@@ -32,10 +34,12 @@ final class AppModel: ObservableObject {
     init(
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
         powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
+        thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() }
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
+        self.thermalReader = thermalReader
         self.daemonPing = daemonPing
         savedProfiles = profileStore.load()
     }
@@ -67,6 +71,7 @@ final class AppModel: ObservableObject {
 
     func pollOnce() async {
         powerSnapshot = powerReader()
+        thermalPressure = thermalReader()
         do {
             let nextSnapshot = try await coordinator.tick()
             snapshot = nextSnapshot
@@ -172,6 +177,9 @@ final class AppModel: ObservableObject {
         var parts = [temp, fan]
         if let powerSnapshot {
             parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
+        }
+        if let thermal = thermalPressure.menuSummary {
+            parts.append(thermal)
         }
         return parts.joined(separator: " | ")
     }

@@ -86,6 +86,7 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { expectedPower },
+            thermalReader: { .nominal },
             daemonPing: { false }
         )
 
@@ -93,6 +94,27 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.powerSnapshot, expectedPower)
         XCTAssertEqual(model.menuTitle, "64 C | 2500 RPM | 16.9 W drain")
+    }
+
+    func testMenuTitleIncludesElevatedThermalPressure() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 74, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .serious },
+            daemonPing: { true }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.thermalPressure, .serious)
+        XCTAssertTrue(model.menuTitle.contains("Thermal: Serious"))
     }
 
     private func temporaryMarkerPath() -> URL {
