@@ -96,6 +96,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "64 C | 2500 RPM | 16.9 W drain")
     }
 
+    func testPollOnceAppendsTelemetryHistorySample() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let now = Date(timeIntervalSince1970: 1234)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: -12.5) },
+            thermalReader: { .fair },
+            now: { now },
+            daemonPing: { true }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.telemetryHistory.samples.count, 1)
+        XCTAssertEqual(model.telemetryHistory.samples[0].capturedAt, now)
+        XCTAssertEqual(model.telemetryHistory.samples[0].highestTemperatureCelsius, 64)
+        XCTAssertEqual(model.telemetryHistory.samples[0].firstFanRPM, 2500)
+        XCTAssertEqual(model.telemetryHistory.samples[0].batteryPowerWatts, -12.5)
+        XCTAssertEqual(model.telemetryHistory.samples[0].thermalPressure, .fair)
+    }
+
     func testMenuTitleIncludesElevatedThermalPressure() async {
         let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],

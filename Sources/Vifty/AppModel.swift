@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published var isRunning = false
     @Published var powerSnapshot: PowerSnapshot?
     @Published var thermalPressure: ThermalPressure = .nominal
+    @Published var telemetryHistory = TelemetryHistory()
     @Published var manualRunLimit: ManualRunLimit = .indefinitely
     @Published var manualSessionExpiresAt: Date?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
@@ -75,12 +76,21 @@ final class AppModel: ObservableObject {
     }
 
     func pollOnce() async {
-        powerSnapshot = powerReader()
-        thermalPressure = thermalReader()
+        let currentPower = powerReader()
+        let currentThermalPressure = thermalReader()
+        powerSnapshot = currentPower
+        thermalPressure = currentThermalPressure
         _ = await restoreAutoIfManualSessionExpired()
         do {
             let nextSnapshot = try await coordinator.tick()
             snapshot = nextSnapshot
+            telemetryHistory.append(TelemetrySample(
+                capturedAt: now(),
+                highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
+                firstFanRPM: nextSnapshot.fans.first?.currentRPM,
+                batteryPowerWatts: currentPower.batteryPowerWatts,
+                thermalPressure: currentThermalPressure
+            ))
             lastError = nil
             daemonReachable = await daemonPing()
             fanAccessMessage = nextSnapshot.fans.isEmpty
