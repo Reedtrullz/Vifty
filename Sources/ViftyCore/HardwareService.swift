@@ -39,10 +39,11 @@ public actor FanControlCoordinator {
 
     public func setMode(_ mode: FanMode) {
         state.mode = mode
-        state.manualControlActive = mode != .auto
-        if mode != .auto {
-            uncleanMarker.markActive()
+        guard mode != .auto else {
+            return
         }
+        state.manualControlActive = true
+        uncleanMarker.markActive()
     }
 
     public func tick() async throws -> HardwareSnapshot {
