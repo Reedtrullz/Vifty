@@ -23,11 +23,32 @@ public enum ViftyError: Error, LocalizedError, Equatable {
         case .smcUnavailable:
             "AppleSMC is unavailable."
         case .smcOpenFailed(let code):
-            "AppleSMC open failed with IOKit code \(code)."
+            "AppleSMC open failed with \(Self.describeIOKitCode(code))."
         case .smcCallFailed(let code):
-            "AppleSMC call failed with IOKit code \(code)."
+            if Self.isIOKitNotPrivileged(code) {
+                "AppleSMC call failed with \(Self.describeIOKitCode(code)). Fan writes require the privileged helper or sudo."
+            } else {
+                "AppleSMC call failed with \(Self.describeIOKitCode(code))."
+            }
         case .smcKeyUnavailable(let key):
             "SMC key \(key) is unavailable."
+        }
+    }
+
+    private static func isIOKitNotPrivileged(_ code: Int32) -> Bool {
+        UInt32(bitPattern: code) == 0xe00002c1
+    }
+
+    private static func describeIOKitCode(_ code: Int32) -> String {
+        switch UInt32(bitPattern: code) {
+        case 0xe00002c1:
+            "kIOReturnNotPrivileged (\(code))"
+        case 0xe00002cd:
+            "kIOReturnNotOpen (\(code))"
+        case 0xe00002e2:
+            "kIOReturnNotPermitted (\(code))"
+        default:
+            "IOKit code \(code)"
         }
     }
 }

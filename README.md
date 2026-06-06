@@ -113,6 +113,8 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 
 If manual fan control misbehaves, restore Auto before trying anything else:
 
+> `AppleSMC call failed with kIOReturnNotPrivileged (-536870207)` means macOS rejected a direct fan write because it was not running through the privileged helper/root path. In the app, use **Reinstall Helper** and approve the helper if System Settings asks. From Terminal, direct `ViftyHelper setFixed` / `auto` writes require `sudo`.
+
 1. In the Vifty UI, select **Auto** in the Mode picker and click **Apply**.
 2. If the UI is unavailable, use the helper CLI from the repo root after building release binaries. First inspect supported fans and their limits:
 

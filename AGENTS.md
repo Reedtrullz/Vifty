@@ -43,7 +43,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 1. **Curve resolution happens in `FanControlCoordinator`** — the daemon only receives resolved `fixedRPM` commands. Never pass `temperatureCurve` across XPC.
 2. **RPM clamping** — `FanCurve.clamp()` is the single source. All callers (coordinator, helper, daemon) must clamp before writing.
-3. **Daemon-first** — `RealMacHardwareService` tries `ViftyDaemonClient` first for all operations; falls back to `LocalFanHelperClient` (direct SMC) if the daemon is unreachable. This applies to both reads (`snapshot()`) and writes (`apply()`, `restoreAuto()`).
+3. **Daemon-first with fail-closed writes** — `RealMacHardwareService` tries `ViftyDaemonClient` first for all operations. Reads may fall back to local SMC so the UI can still show sensors; fan writes only fall back to `LocalFanHelperClient` for privileged/root callers. The unprivileged app must fail closed and ask for helper reinstall instead of attempting direct AppleSMC writes.
 4. **Protocol abstraction** — Tests use a `FakeHardware` actor conforming to `HardwareService`. All fan logic lives in `FanControlCoordinator`, not in the hardware layer.
 5. **Sendable safety** — `FanControlCoordinator` is an actor. `RealMacHardwareService` is `@unchecked Sendable` (owns non-Sendable IOKit connection). `CallbackState` uses NSLock for one-shot XPC callback delivery.
 6. **Unclean exit recovery** — `ManualControlMarker` writes a file when manual control is active; `recoverIfNeeded()` checks it on next launch.
@@ -53,11 +53,11 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (42 tests).
+- `swift test` runs `ViftyCoreTests` (46 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `ManualControlMarkerTests` tests sentinel file lifecycle (create, detect, clear, idempotency).
-- `RealMacHardwareServiceTests` tests SMC-unavailable fallback paths.
+- `RealMacHardwareServiceTests` tests SMC-unavailable snapshot fallback paths and verifies the app does not fall back to unprivileged direct AppleSMC fan writes when the daemon is unavailable.
 - `CurveProfileTests` tests toFanCurve() output and init-time temperature sorting.
 - `CurveProfileStoreTests` tests JSON round-trip, missing/corrupt file handling, and backup file creation.
 - `PowerInfoTests` tests IOKit dictionary parsing for adapter watts, negotiated USB-C voltage/current, PD profiles, signed charge/drain watts, and fallback formatting.
