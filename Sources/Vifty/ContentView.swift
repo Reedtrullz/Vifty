@@ -22,6 +22,24 @@ struct ContentView: View {
         }
     }
 
+    private var helperNeedsAttention: Bool {
+        !model.helperHealthSummary.hasPrefix("Fan helper healthy")
+    }
+
+    private var helperHealthSystemImage: String {
+        if !model.daemonReachable {
+            "xmark.shield"
+        } else if helperNeedsAttention {
+            "exclamationmark.shield"
+        } else {
+            "checkmark.shield"
+        }
+    }
+
+    private var helperHealthColor: Color {
+        helperNeedsAttention ? .orange : .green
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "fan")
@@ -71,8 +89,8 @@ struct ContentView: View {
             modePicker
 
             HStack(spacing: 8) {
-                Image(systemName: model.daemonReachable ? "checkmark.shield" : "xmark.shield")
-                    .foregroundStyle(model.daemonReachable ? .green : .orange)
+                Image(systemName: helperHealthSystemImage)
+                    .foregroundStyle(helperHealthColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Fan Helper")
                         .font(.caption.weight(.semibold))
@@ -85,6 +103,8 @@ struct ContentView: View {
                     daemonInstaller.installOrOpenApproval()
                 }
                 .controlSize(.small)
+                .disabled(!helperNeedsAttention)
+                .help(helperNeedsAttention ? "Open helper repair or approval flow" : "Fan helper is healthy")
             }
             .padding(10)
             .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))

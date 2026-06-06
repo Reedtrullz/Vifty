@@ -56,9 +56,9 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Label(model.helperHealthSummary, systemImage: model.daemonReachable ? "checkmark.shield" : "xmark.shield")
+            Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
                 .font(.caption)
-                .foregroundStyle(model.daemonReachable ? Color.secondary : Color.orange)
+                .foregroundStyle(helperHealthMenuColor)
 
             Divider()
 
@@ -82,6 +82,24 @@ struct MenuBarView: View {
         .task {
             model.start()
         }
+    }
+
+    private var helperNeedsAttention: Bool {
+        !model.helperHealthSummary.hasPrefix("Fan helper healthy")
+    }
+
+    private var helperHealthSystemImage: String {
+        if !model.daemonReachable {
+            "xmark.shield"
+        } else if helperNeedsAttention {
+            "exclamationmark.shield"
+        } else {
+            "checkmark.shield"
+        }
+    }
+
+    private var helperHealthMenuColor: Color {
+        helperNeedsAttention ? Color.orange : Color.secondary
     }
 
     private func adapterDetail(_ adapter: PowerAdapter) -> String {
