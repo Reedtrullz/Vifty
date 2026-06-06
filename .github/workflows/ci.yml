@@ -62,7 +62,7 @@ jobs:
         run: ditto -c -k --keepParent .build/Vifty.app "${RUNNER_TEMP}/Vifty.app.zip"
 
       - name: Upload app artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Vifty.app
           path: ${{ runner.temp }}/Vifty.app.zip
