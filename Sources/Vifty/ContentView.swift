@@ -274,6 +274,8 @@ struct ContentView: View {
 private struct PowerPanel: View {
     let snapshot: PowerSnapshot
 
+    private var insights: PowerInsights { PowerInsights(snapshot: snapshot) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -308,6 +310,13 @@ private struct PowerPanel: View {
                 }
                 if let profilesLine {
                     Text(profilesLine)
+                }
+                if let eta = insights.estimatedBatteryText {
+                    Text("Estimate: \(eta)")
+                }
+                if let warning = insights.chargerWarning {
+                    Text(warning)
+                        .foregroundStyle(.orange)
                 }
             }
             .font(.caption)

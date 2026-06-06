@@ -34,6 +34,11 @@ struct MenuBarView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let warning = PowerInsights(snapshot: power).chargerWarning {
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 if let adapter = power.adapter, adapter.powerWatts >= 0.5 {
                     Label(adapterDetail(adapter), systemImage: "powerplug")
                         .font(.caption)
