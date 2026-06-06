@@ -1,4 +1,5 @@
 import SwiftUI
+import ViftyCore
 
 struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
@@ -21,6 +22,20 @@ struct MenuBarView: View {
 
             if let sensor = model.snapshot?.highestTemperature {
                 Label("\(sensor.name): \(sensor.celsius, specifier: "%.1f") C", systemImage: "thermometer.medium")
+            }
+
+            if let power = model.powerSnapshot {
+                Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
+                if let flow = PowerDisplayFormatter.batteryFlow(for: power) {
+                    Label(flow, systemImage: power.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let adapter = power.adapter, adapter.powerWatts >= 0.5 {
+                    Label(adapterDetail(adapter), systemImage: "powerplug")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             ForEach(model.snapshot?.fans ?? []) { fan in
@@ -49,5 +64,18 @@ struct MenuBarView: View {
         .task {
             model.start()
         }
+    }
+
+    private func adapterDetail(_ adapter: PowerAdapter) -> String {
+        var parts: [String] = []
+        if let ratedWatts = adapter.ratedWatts {
+            parts.append("\(ratedWatts) W")
+        } else if adapter.powerWatts >= 0.5 {
+            parts.append(PowerDisplayFormatter.watts(adapter.powerWatts))
+        }
+        if let voltage = adapter.negotiatedVoltageVolts, let current = adapter.negotiatedCurrentAmps {
+            parts.append("\(PowerDisplayFormatter.volts(voltage)) · \(PowerDisplayFormatter.amps(current))")
+        }
+        return parts.isEmpty ? "Adapter connected" : parts.joined(separator: " · ")
     }
 }

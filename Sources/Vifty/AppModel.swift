@@ -19,15 +19,24 @@ final class AppModel: ObservableObject {
     @Published var fanAccessMessage: String?
     @Published var daemonReachable = false
     @Published var isRunning = false
+    @Published var powerSnapshot: PowerSnapshot?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
     private let coordinator: FanControlCoordinator
+    private let powerReader: @Sendable () -> PowerSnapshot
+    private let daemonPing: @Sendable () async -> Bool
     private let profileStore = CurveProfileStore()
     private var pollingTask: Task<Void, Never>?
 
-    init(coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService())) {
+    init(
+        coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
+        powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
+        daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() }
+    ) {
         self.coordinator = coordinator
+        self.powerReader = powerReader
+        self.daemonPing = daemonPing
         savedProfiles = profileStore.load()
     }
 
@@ -57,11 +66,12 @@ final class AppModel: ObservableObject {
     }
 
     func pollOnce() async {
+        powerSnapshot = powerReader()
         do {
             let nextSnapshot = try await coordinator.tick()
             snapshot = nextSnapshot
             lastError = nil
-            daemonReachable = await ViftyDaemonClient().ping()
+            daemonReachable = await daemonPing()
             fanAccessMessage = nextSnapshot.fans.isEmpty
                 ? (daemonReachable ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
                 : nil
@@ -156,10 +166,14 @@ final class AppModel: ObservableObject {
     }
 
     var menuTitle: String {
-        guard let snapshot else { return "Vifty" }
+        guard let snapshot else { return powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty" }
         let temp = snapshot.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
         let fan = snapshot.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
-        return "\(temp) | \(fan)"
+        var parts = [temp, fan]
+        if let powerSnapshot {
+            parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
+        }
+        return parts.joined(separator: " | ")
     }
 
     var fanRange: ClosedRange<Double> {

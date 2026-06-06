@@ -10,6 +10,8 @@
 	<string>Vifty</string>
 	<key>CFBundleDisplayName</key>
 	<string>Vifty</string>
+	<key>CFBundleGetInfoString</key>
+	<string>Vifty — native fan control and power tracking for Apple Silicon MacBook Pros.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -18,9 +20,13 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Reedtrullz. Released under the MIT License.</string>
 </dict>
 </plist>

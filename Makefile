@@ -1,10 +1,13 @@
-.PHONY: app clean-app
+.PHONY: app install pkg clean-app clean-pkg
 
 CONFIGURATION ?= debug
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
 MACOS := $(CONTENTS)/MacOS
+
+install: CONFIGURATION = release
+pkg: CONFIGURATION = release
 
 app:
 	swift build -c $(CONFIGURATION)
@@ -19,5 +22,14 @@ app:
 	codesign --force --deep --sign - "$(APP_DIR)"
 	@echo "Built $(APP_DIR)"
 
+install:
+	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
+
+pkg:
+	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
+
 clean-app:
 	rm -rf "$(APP_DIR)"
+
+clean-pkg:
+	rm -rf .build/pkg-root .build/$(APP_NAME)-*.pkg

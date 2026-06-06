@@ -34,6 +34,12 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if let power = model.powerSnapshot {
+                Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
+                    .font(.caption)
+                    .foregroundStyle(power.isPluggedIn ? .green : .secondary)
+                    .monospacedDigit()
+            }
             Button {
                 daemonInstaller.installOrOpenApproval()
             } label: {
@@ -230,6 +236,10 @@ struct ContentView: View {
 
     private var sensorsPane: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let power = model.powerSnapshot {
+                PowerPanel(snapshot: power)
+            }
+
             HStack {
                 Text("Temperatures")
                     .font(.headline)
@@ -255,6 +265,127 @@ struct ContentView: View {
             }
         }
         .padding(16)
+    }
+}
+
+private struct PowerPanel: View {
+    let snapshot: PowerSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Power", systemImage: snapshot.isPluggedIn ? "bolt.fill" : "battery.50")
+                    .font(.headline)
+                    .foregroundStyle(snapshot.isPluggedIn ? .green : .primary)
+                Spacer()
+                Text(PowerDisplayFormatter.summary(for: snapshot))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 10)], spacing: 10) {
+                PowerMetric(label: "Battery", value: batteryPercentText, systemImage: "battery.75")
+                if let flow = PowerDisplayFormatter.batteryFlow(for: snapshot) {
+                    PowerMetric(label: "Battery flow", value: flow.replacingOccurrences(of: "Battery ", with: ""), systemImage: snapshot.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
+                }
+                if let adapter = snapshot.adapter, adapter.powerWatts >= 0.5 {
+                    PowerMetric(label: "Adapter", value: adapterValue(adapter), systemImage: "powerplug")
+                }
+                if let health = snapshot.healthPercent {
+                    PowerMetric(label: "Health", value: "\(health)%", systemImage: "heart")
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                if let batteryLine {
+                    Text(batteryLine)
+                }
+                if let adapterLine {
+                    Text(adapterLine)
+                }
+                if let profilesLine {
+                    Text(profilesLine)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var batteryPercentText: String {
+        snapshot.percent.map { "\($0)%" } ?? "Unknown"
+    }
+
+    private var batteryLine: String? {
+        var parts: [String] = []
+        if let voltage = snapshot.batteryVoltageVolts {
+            parts.append(PowerDisplayFormatter.volts(voltage))
+        }
+        if let current = snapshot.batteryCurrentAmps {
+            let sign = current >= 0 ? "+" : "−"
+            parts.append("\(sign)\(PowerDisplayFormatter.amps(abs(current)))")
+        }
+        if let temperature = snapshot.temperatureCelsius {
+            parts.append(PowerDisplayFormatter.temperature(temperature))
+        }
+        if let cycles = snapshot.cycleCount {
+            parts.append("\(cycles) cycles")
+        }
+        return parts.isEmpty ? nil : "Battery: " + parts.joined(separator: " · ")
+    }
+
+    private var adapterLine: String? {
+        guard let adapter = snapshot.adapter else { return nil }
+        var parts: [String] = []
+        if let name = adapter.name { parts.append(name) }
+        if let manufacturer = adapter.manufacturer { parts.append(manufacturer) }
+        if let model = adapter.model { parts.append(model) }
+        if let family = adapter.family { parts.append(family) }
+        if let voltage = adapter.negotiatedVoltageVolts, let current = adapter.negotiatedCurrentAmps {
+            parts.append("\(PowerDisplayFormatter.volts(voltage)) · \(PowerDisplayFormatter.amps(current))")
+        }
+        return parts.isEmpty ? nil : "Adapter: " + parts.joined(separator: " · ")
+    }
+
+    private var profilesLine: String? {
+        guard !snapshot.powerDeliveryProfiles.isEmpty else { return nil }
+        let profiles = snapshot.powerDeliveryProfiles.map { profile in
+            "\(PowerDisplayFormatter.volts(profile.voltageVolts))×\(PowerDisplayFormatter.amps(profile.currentAmps))"
+        }
+        return "USB-C PD: " + profiles.joined(separator: ", ")
+    }
+
+    private func adapterValue(_ adapter: PowerAdapter) -> String {
+        if let rated = adapter.ratedWatts { return "\(rated) W" }
+        return PowerDisplayFormatter.watts(adapter.powerWatts)
+    }
+}
+
+private struct PowerMetric: View {
+    let label: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

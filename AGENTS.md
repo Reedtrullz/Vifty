@@ -29,12 +29,15 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCore/RealMacHardwareService.swift` — `RealMacHardwareService` (daemon-first SMC reads/writes, local fallback).
 - `Sources/ViftyCore/CurveProfileStore.swift` — JSON file persistence for saved curve profiles.
 - `Sources/ViftyCore/SMCClient.swift` — IOKit SMC connection, read/write, SMCValue, SMCDecoding (float, FPE2, flt, uint en/decoding).
+- `Sources/ViftyCore/PowerInfo.swift` — Local IOKit power telemetry parser (`IOPS`, `AppleSmartBattery`, adapter details) + UI formatters.
 - `Sources/ViftyCore/ViftyDaemonClient.swift` — XPC client that talks to the privileged daemon.
 - `Sources/ViftyCore/ViftyDaemonProtocol.swift` — `@objc` XPC protocol + `XPCSnapshotCoding` (NSDictionary ↔ HardwareSnapshot).
 - `Sources/ViftyDaemon/main.swift` — XPC listener with `DaemonService` exporting the protocol.
 - `Sources/ViftyHelper/main.swift` — CLI for `probe`, `readKey`, `setFixed`, `auto`, `smcDiagnostics`.
 - `Sources/Vifty/ViftyApp.swift` — `@main` SwiftUI app entry (menu bar extra + window scene).
-- `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving the UI polling loop and profile management.
+- `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
+- `scripts/install-vifty.sh` and `Install Vifty.command` — local install path into `/Applications` or `~/Applications`.
+- `scripts/build-installer-pkg.sh` — unsigned local `.pkg` builder for reusable installs.
 
 ## Architecture Rules
 
@@ -46,17 +49,19 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 6. **Unclean exit recovery** — `ManualControlMarker` writes a file when manual control is active; `recoverIfNeeded()` checks it on next launch.
 7. **Profile temp sorting** — `CurveProfile.init()` sorts the three temperature/RPM pairs into ascending order so stored values always match actual curve behavior. The UI sliders can be set in any order; the init normalizes them.
 8. **Profile backup** — `CurveProfileStore.save()` copies the existing file to a `.bak` backup before overwriting, protecting against disk-full or interrupted-write corruption.
+9. **Power telemetry stays app-local** — `PowerInfoReader` reads IOKit power/battery dictionaries directly; it does not require the privileged fan daemon and should keep parser helpers testable with dictionary fixtures.
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (28 tests).
+- `swift test` runs `ViftyCoreTests` (42 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `ManualControlMarkerTests` tests sentinel file lifecycle (create, detect, clear, idempotency).
 - `RealMacHardwareServiceTests` tests SMC-unavailable fallback paths.
 - `CurveProfileTests` tests toFanCurve() output and init-time temperature sorting.
 - `CurveProfileStoreTests` tests JSON round-trip, missing/corrupt file handling, and backup file creation.
-- `AppModelTests` tests duplicate-profile overwrite, append behavior, and curve-defaults sync flag.
+- `PowerInfoTests` tests IOKit dictionary parsing for adapter watts, negotiated USB-C voltage/current, PD profiles, signed charge/drain watts, and fallback formatting.
+- `AppModelTests` tests duplicate-profile overwrite, append behavior, curve-defaults sync flag, menu power summaries, and injected power-reader polling.
 - Tests must pass before committing. Run from repo root.
 
 ## Conventions
@@ -71,10 +76,11 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## New Feature Checklist
 
-- [ ] Model types in `Models.swift` if needed
-- [ ] `HardwareService` protocol update if daemon needs new capability
-- [ ] `FanControlCoordinator` logic if it's control-flow
+- [ ] Model types in `Models.swift` or `PowerInfo.swift` if needed
+- [ ] `HardwareService` protocol update if daemon/fan control needs new capability
+- [ ] `FanControlCoordinator` logic if it's fan-control flow
 - [ ] `ViftyDaemonProtocol` + `XPCSnapshotCoding` if XPC shape changes
 - [ ] `DaemonService` implementation on the daemon side
-- [ ] `AppModel` + `ContentView` for UI
+- [ ] `AppModel` + `ContentView`/`MenuBarView` for UI
 - [ ] Tests in `ViftyCoreTests`
+- [ ] README/AGENTS updates for user-visible features, install changes, or safety behavior
