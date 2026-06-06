@@ -256,6 +256,8 @@ struct ContentView: View {
                 PowerPanel(snapshot: power)
             }
 
+            HistoryPanel(history: model.telemetryHistory)
+
             HStack {
                 Text("Temperatures")
                     .font(.headline)
@@ -386,6 +388,52 @@ private struct PowerPanel: View {
     private func adapterValue(_ adapter: PowerAdapter) -> String {
         if let rated = adapter.ratedWatts { return "\(rated) W" }
         return PowerDisplayFormatter.watts(adapter.powerWatts)
+    }
+}
+
+private struct HistoryPanel: View {
+    let history: TelemetryHistory
+
+    private var sampleCountText: String {
+        history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
+    }
+
+    private func batteryFlowLabel(for watts: Double) -> String {
+        watts < 0 ? "Battery drain" : "Battery charge"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("History", systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                Spacer()
+                Text(sampleCountText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let latest = history.samples.last {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                    if let temp = latest.highestTemperatureCelsius {
+                        PowerMetric(label: "Latest temp", value: String(format: "%.1f C", temp), systemImage: "thermometer.medium")
+                    }
+                    if let rpm = latest.firstFanRPM {
+                        PowerMetric(label: "Latest fan", value: "\(rpm) RPM", systemImage: "fan")
+                    }
+                    if let watts = latest.batteryPowerWatts {
+                        PowerMetric(label: batteryFlowLabel(for: watts), value: PowerDisplayFormatter.watts(abs(watts)), systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
+                    }
+                    PowerMetric(label: "Thermal", value: latest.thermalPressure.displayName, systemImage: "speedometer")
+                }
+            } else {
+                Text("History appears after the first successful poll.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
