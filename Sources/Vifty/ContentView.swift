@@ -402,6 +402,9 @@ private struct FanRow: View {
                 Text("\(fan.currentRPM) RPM")
                     .monospacedDigit()
             }
+            Text(FanDisplayFormatter.subtitle(for: fan))
+                .font(.caption)
+                .foregroundStyle(fan.hardwareMode == .forced ? .orange : .secondary)
             ProgressView(value: Double(fan.percentage), total: 100)
             HStack {
                 Text("\(fan.minimumRPM) min")
