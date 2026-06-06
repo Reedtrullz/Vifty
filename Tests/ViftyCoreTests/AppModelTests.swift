@@ -117,6 +117,68 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuTitle.contains("Thermal: Serious"))
     }
 
+    func testTimedManualModeRestoresAutoAfterDeadline() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true }
+        )
+
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+        await model.applyCurrentModeSelection()
+
+        clock.now = Date(timeIntervalSince1970: 1000 + 601)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0], "Timed expiry must issue a real Auto restore, not only update UI state")
+    }
+
+    func testExplicitRestoreAutoClearsTimedManualDeadline() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let now = Date(timeIntervalSince1970: 1000)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { now },
+            daemonPing: { true }
+        )
+
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+        await model.applyCurrentModeSelection()
+        XCTAssertNotNil(model.manualSessionExpiresAt)
+
+        await model.restoreAutoNow()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0], "Explicit Auto must also issue a hardware restore")
+    }
+
     private func temporaryMarkerPath() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-app-model-tests")
@@ -124,8 +186,31 @@ final class AppModelTests: XCTestCase {
     }
 }
 
+private final class AppModelTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(now: Date) {
+        self.value = now
+    }
+
+    var now: Date {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+        set {
+            lock.lock()
+            value = newValue
+            lock.unlock()
+        }
+    }
+}
+
 private actor AppModelFakeHardware: HardwareService {
     var snapshotValue: HardwareSnapshot
+    var restoredFanIDs: [Int] = []
 
     init(snapshot: HardwareSnapshot) {
         self.snapshotValue = snapshot
@@ -137,5 +222,5 @@ private actor AppModelFakeHardware: HardwareService {
 
     func apply(_ command: FanCommand, fan: Fan) async throws {}
 
-    func restoreAuto(fan: Fan) async throws {}
+    func restoreAuto(fan: Fan) async throws { restoredFanIDs.append(fan.id) }
 }

@@ -21,12 +21,15 @@ final class AppModel: ObservableObject {
     @Published var isRunning = false
     @Published var powerSnapshot: PowerSnapshot?
     @Published var thermalPressure: ThermalPressure = .nominal
+    @Published var manualRunLimit: ManualRunLimit = .indefinitely
+    @Published var manualSessionExpiresAt: Date?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
     private let thermalReader: @Sendable () -> ThermalPressure
+    private let now: @Sendable () -> Date
     private let daemonPing: @Sendable () async -> Bool
     private let profileStore = CurveProfileStore()
     private var pollingTask: Task<Void, Never>?
@@ -35,11 +38,13 @@ final class AppModel: ObservableObject {
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
         powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
+        now: @escaping @Sendable () -> Date = { Date() },
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() }
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
         self.thermalReader = thermalReader
+        self.now = now
         self.daemonPing = daemonPing
         savedProfiles = profileStore.load()
     }
@@ -72,6 +77,7 @@ final class AppModel: ObservableObject {
     func pollOnce() async {
         powerSnapshot = powerReader()
         thermalPressure = thermalReader()
+        _ = await restoreAutoIfManualSessionExpired()
         do {
             let nextSnapshot = try await coordinator.tick()
             snapshot = nextSnapshot
@@ -90,28 +96,25 @@ final class AppModel: ObservableObject {
     }
 
     func applyModeSelection() {
-        let mode: FanMode
-        switch selectedMode {
-        case .auto:
-            mode = .auto
-        case .fixed:
-            mode = .fixedRPM(Int(fixedRPM.rounded()))
-        case .curve:
-            mode = .temperatureCurve(currentCurve())
-        }
-
-        Task {
-            await coordinator.setMode(mode)
-            await pollOnce()
-        }
+        Task { await applyCurrentModeSelection() }
     }
 
     func restoreAuto() {
+        Task { await restoreAutoNow() }
+    }
+
+    func applyCurrentModeSelection() async {
+        let mode = selectedFanMode()
+        updateManualDeadline(for: mode)
+        await coordinator.setMode(mode)
+        await pollOnce()
+    }
+
+    func restoreAutoNow() async {
         selectedMode = .auto
-        Task {
-            await coordinator.setMode(.auto)
-            await pollOnce()
-        }
+        manualSessionExpiresAt = nil
+        await coordinator.setMode(.auto)
+        await pollOnce()
     }
 
     func saveCurrentProfile(name: String) {
@@ -197,6 +200,44 @@ final class AppModel: ObservableObject {
         ])
     }
 
+    private func selectedFanMode() -> FanMode {
+        switch selectedMode {
+        case .auto:
+            .auto
+        case .fixed:
+            .fixedRPM(Int(fixedRPM.rounded()))
+        case .curve:
+            .temperatureCurve(currentCurve())
+        }
+    }
+
+    private func updateManualDeadline(for mode: FanMode) {
+        guard mode != .auto else {
+            manualSessionExpiresAt = nil
+            return
+        }
+
+        switch manualRunLimit {
+        case .indefinitely:
+            manualSessionExpiresAt = nil
+        case .minutes(let minutes):
+            manualSessionExpiresAt = now().addingTimeInterval(TimeInterval(minutes * 60))
+        }
+    }
+
+    private func restoreAutoIfManualSessionExpired() async -> Bool {
+        guard selectedMode != .auto,
+              let manualSessionExpiresAt,
+              now() >= manualSessionExpiresAt else {
+            return false
+        }
+
+        selectedMode = .auto
+        self.manualSessionExpiresAt = nil
+        await coordinator.setMode(.auto)
+        return true
+    }
+
     private func syncCurveDefaultsIfNeeded(from snapshot: HardwareSnapshot) {
         guard !curveDefaultsSynced, let fan = snapshot.fans.first else { return }
         curveStartRPM = Double(fan.minimumRPM)
@@ -218,4 +259,29 @@ enum ModeSelection: String, CaseIterable, Identifiable {
     case fixed = "Fixed"
 
     var id: String { rawValue }
+}
+
+enum ManualRunLimit: Equatable, Hashable, Identifiable {
+    case indefinitely
+    case minutes(Int)
+
+    var id: String {
+        switch self {
+        case .indefinitely:
+            "indefinitely"
+        case .minutes(let minutes):
+            "\(minutes)m"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .indefinitely:
+            "Until changed"
+        case .minutes(let minutes):
+            "\(minutes) min"
+        }
+    }
+
+    static let presets: [ManualRunLimit] = [.indefinitely, .minutes(10), .minutes(30), .minutes(60)]
 }
