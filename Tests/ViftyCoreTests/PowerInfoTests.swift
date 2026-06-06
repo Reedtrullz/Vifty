@@ -117,4 +117,32 @@ final class PowerInfoTests: XCTestCase {
         XCTAssertEqual(PowerDisplayFormatter.batteryFlow(for: snapshot), "Battery draining at 16.9 W")
         XCTAssertEqual(PowerDisplayFormatter.duration(minutes: 185), "3h 5m")
     }
+
+    func testPowerInsightsEstimateBatteryRuntimeFromLiveDrain() {
+        let snapshot = PowerSnapshot(
+            percent: 50,
+            isPluggedIn: false,
+            batteryVoltageVolts: 12.0,
+            batteryCurrentAmps: -2.0,
+            batteryPowerWatts: -24.0,
+            currentCapacityMah: 4000
+        )
+
+        let insights = PowerInsights(snapshot: snapshot)
+
+        XCTAssertEqual(insights.estimatedBatteryMinutes, 120)
+        XCTAssertEqual(insights.estimatedBatteryText, "2h 0m remaining at current drain")
+    }
+
+    func testPowerInsightsWarnWhenPluggedInButBatteryDraining() {
+        let snapshot = PowerSnapshot(
+            isPluggedIn: true,
+            batteryPowerWatts: -8.4,
+            adapter: PowerAdapter(ratedWatts: 30)
+        )
+
+        let insights = PowerInsights(snapshot: snapshot)
+
+        XCTAssertEqual(insights.chargerWarning, "Plugged in, but battery is draining at 8.4 W")
+    }
 }

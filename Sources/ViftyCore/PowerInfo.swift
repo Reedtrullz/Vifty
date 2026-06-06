@@ -199,6 +199,38 @@ public enum PowerDisplayFormatter {
     }
 }
 
+public struct PowerInsights: Equatable, Sendable {
+    public var estimatedBatteryMinutes: Int?
+    public var chargerWarning: String?
+
+    public init(snapshot: PowerSnapshot) {
+        self.estimatedBatteryMinutes = Self.estimateBatteryMinutes(snapshot)
+        self.chargerWarning = Self.makeChargerWarning(snapshot)
+    }
+
+    public var estimatedBatteryText: String? {
+        estimatedBatteryMinutes.map { "\(PowerDisplayFormatter.duration(minutes: $0)) remaining at current drain" }
+    }
+
+    private static func estimateBatteryMinutes(_ snapshot: PowerSnapshot) -> Int? {
+        guard let watts = snapshot.batteryPowerWatts, watts < -0.5,
+              let voltage = snapshot.batteryVoltageVolts, voltage > 0,
+              let currentCapacityMah = snapshot.currentCapacityMah, currentCapacityMah > 0
+        else { return nil }
+
+        let remainingWh = Double(currentCapacityMah) / 1000.0 * voltage
+        return Int((remainingWh / abs(watts) * 60.0).rounded())
+    }
+
+    private static func makeChargerWarning(_ snapshot: PowerSnapshot) -> String? {
+        guard snapshot.isPluggedIn,
+              let watts = snapshot.batteryPowerWatts,
+              watts < -1.0
+        else { return nil }
+        return "Plugged in, but battery is draining at \(PowerDisplayFormatter.watts(abs(watts)))"
+    }
+}
+
 public enum PowerInfoReader {
     public static func read() -> PowerSnapshot {
         makeSnapshot(
