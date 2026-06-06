@@ -4,6 +4,7 @@ Native macOS menu-bar fan control and charger-power monitoring for Apple Silicon
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
 ![Swift](https://img.shields.io/badge/swift-6.0-orange)
+[![CI](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml/badge.svg)](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml)
 ![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -61,6 +62,8 @@ make install
 # Optional: build an unsigned local installer package in .build/
 make pkg
 ```
+
+GitHub Actions runs the same verification on every push to `main`, every pull request targeting `main`, and manual `workflow_dispatch`: Swift tests, release app bundle build, plist validation, ad-hoc code-signature verification, temporary install-script verification, and a zipped `Vifty.app` artifact upload.
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.
 

@@ -1,0 +1,69 @@
+name: CI
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swiftpm:
+    name: SwiftPM checks
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build release app bundle
+        run: make app CONFIGURATION=release
+
+      - name: Verify app bundle
+        run: |
+          test -x .build/Vifty.app/Contents/MacOS/Vifty
+          test -x .build/Vifty.app/Contents/MacOS/ViftyHelper
+          test -x .build/Vifty.app/Contents/MacOS/ViftyDaemon
+          test -f .build/Vifty.app/Contents/Info.plist
+          test -f .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+          plutil -lint .build/Vifty.app/Contents/Info.plist
+          plutil -lint .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+          codesign --verify --deep --strict .build/Vifty.app
+
+      - name: Verify install script in temporary Applications directory
+        env:
+          VIFTY_INSTALL_DIR: ${{ runner.temp }}/Applications
+        run: |
+          make install
+          test -d "${VIFTY_INSTALL_DIR}/Vifty.app"
+          codesign --verify --deep --strict "${VIFTY_INSTALL_DIR}/Vifty.app"
+          cmp .build/Vifty.app/Contents/MacOS/Vifty "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/Vifty"
+
+      - name: Archive app bundle
+        run: ditto -c -k --keepParent .build/Vifty.app "${RUNNER_TEMP}/Vifty.app.zip"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vifty.app
+          path: ${{ runner.temp }}/Vifty.app.zip
+          if-no-files-found: error

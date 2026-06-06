@@ -36,6 +36,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyHelper/main.swift` — CLI for `probe`, `readKey`, `setFixed`, `auto`, `smcDiagnostics`.
 - `Sources/Vifty/ViftyApp.swift` — `@main` SwiftUI app entry (menu bar extra + window scene).
 - `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
+- `.github/workflows/ci.yml` — GitHub Actions CI: Swift tests, release app build, plist/code-sign checks, temp install verification, and app artifact upload.
 - `scripts/install-vifty.sh` and `Install Vifty.command` — local install path into `/Applications` or `~/Applications`.
 - `scripts/build-installer-pkg.sh` — unsigned local `.pkg` builder for reusable installs.
 
@@ -53,7 +54,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (46 tests).
+- `swift test` runs `ViftyCoreTests` (48 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `ManualControlMarkerTests` tests sentinel file lifecycle (create, detect, clear, idempotency).
