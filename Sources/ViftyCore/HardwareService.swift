@@ -10,6 +10,7 @@ public actor FanControlCoordinator {
     private let hardware: HardwareService
     private let uncleanMarker: ManualControlMarker
     private let significantRPMDelta: Int
+    private var autoRestoreRequested = false
 
     public private(set) var state: ControlState
 
@@ -30,6 +31,7 @@ public actor FanControlCoordinator {
         do {
             let snapshot = try await hardware.snapshot()
             try await restoreAuto(for: snapshot.fans)
+            autoRestoreRequested = false
             uncleanMarker.clear()
             state.statusMessage = "Restored Auto after previous unclean exit"
         } catch {
@@ -39,17 +41,25 @@ public actor FanControlCoordinator {
 
     public func setMode(_ mode: FanMode) {
         state.mode = mode
-        guard mode != .auto else {
-            return
+        switch mode {
+        case .auto:
+            // An explicit Auto selection is an SMC command, not just UI state:
+            // the hardware may still be in forced/manual mode even if our
+            // previous state was already cleared.
+            autoRestoreRequested = true
+            uncleanMarker.markActive()
+        case .fixedRPM, .temperatureCurve:
+            autoRestoreRequested = false
+            state.manualControlActive = true
+            uncleanMarker.markActive()
         }
-        state.manualControlActive = true
-        uncleanMarker.markActive()
     }
 
     public func tick() async throws -> HardwareSnapshot {
         let snapshot = try await hardware.snapshot()
         if state.mode != .auto, snapshot.temperatureSensors.isEmpty {
             try await restoreAuto(for: snapshot.fans)
+            autoRestoreRequested = false
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
             state.statusMessage = "Sensor unavailable, restored Auto"
@@ -60,9 +70,10 @@ public actor FanControlCoordinator {
 
         switch state.mode {
         case .auto:
-            if state.manualControlActive {
+            if state.manualControlActive || autoRestoreRequested {
                 try await restoreAuto(for: snapshot.fans)
             }
+            autoRestoreRequested = false
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
             state.statusMessage = "Auto"
@@ -84,6 +95,7 @@ public actor FanControlCoordinator {
         do {
             let snapshot = try await hardware.snapshot()
             try await restoreAuto(for: snapshot.fans)
+            autoRestoreRequested = false
             state.mode = .auto
             state.manualControlActive = false
             state.lastAppliedRPM = [:]

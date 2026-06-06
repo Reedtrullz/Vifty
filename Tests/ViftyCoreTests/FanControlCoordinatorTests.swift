@@ -122,6 +122,31 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testExplicitAutoSelectionRestoresEvenWhenStateWasAlreadyCleared() async throws {
+        let marker = Self.marker()
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan()],
+                temperatureSensors: [Self.sensor(64)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: marker,
+            initialState: ControlState(mode: .auto, manualControlActive: false)
+        )
+
+        await coordinator.setMode(.auto)
+        _ = try await coordinator.tick()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        XCTAssertFalse(marker.wasManualControlActive)
+    }
+
     func testFixedRPMAppliesEvenWhenDaemonUnreachable() async throws {
         // When the daemon is down, writes should fall back to local SMC.
         // FakeHardware simulates the local path — if the coordinator calls
