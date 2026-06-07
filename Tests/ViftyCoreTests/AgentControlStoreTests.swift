@@ -29,6 +29,16 @@ final class AgentControlStoreTests: XCTestCase {
         XCTAssertTrue(contents.hasSuffix("\n"))
     }
 
+    func testDirectoryIsCreatedWithRestrictedPermissions() throws {
+        let tempDir = temporaryDirectory()
+        let store = AgentControlStore(directory: tempDir)
+        try store.saveActiveLease(nil) // triggers createDirectoryIfNeeded
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: tempDir.path)
+        let permissions = attributes[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.intValue, 0o700)
+    }
+
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vifty-agent-store-\(UUID().uuidString)", isDirectory: true)
     }

@@ -26,6 +26,7 @@ public struct AgentControlStore: Sendable {
         let url = directory.appendingPathComponent("active-lease.json")
         if let lease {
             try encoder.encode(lease).write(to: url, options: .atomic)
+            try restrictFilePermissions(at: url)
         } else if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
@@ -48,6 +49,7 @@ public struct AgentControlStore: Sendable {
             try handle.write(contentsOf: data)
         } else {
             try data.write(to: url, options: .atomic)
+            try restrictFilePermissions(at: url)
         }
     }
 
@@ -65,5 +67,16 @@ public struct AgentControlStore: Sendable {
 
     private func createDirectoryIfNeeded() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
+    }
+
+    private func restrictFilePermissions(at url: URL) throws {
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)],
+            ofItemAtPath: url.path
+        )
     }
 }
