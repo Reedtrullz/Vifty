@@ -1,5 +1,33 @@
 import Foundation
 
+public struct AgentControlScheduledExpiry: Sendable {
+    private let cancelHandler: @Sendable () -> Void
+
+    public init(_ cancelHandler: @escaping @Sendable () -> Void) {
+        self.cancelHandler = cancelHandler
+    }
+
+    public func cancel() {
+        cancelHandler()
+    }
+}
+
+public typealias AgentControlExpiryScheduler = @Sendable (_ delay: TimeInterval, _ operation: @escaping @Sendable () async -> Void) -> AgentControlScheduledExpiry
+
+public enum AgentControlDefaultScheduler {
+    public static func schedule(after delay: TimeInterval, operation: @escaping @Sendable () async -> Void) -> AgentControlScheduledExpiry {
+        let task = Task {
+            let nanoseconds = UInt64(max(0, delay) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            await operation()
+        }
+        return AgentControlScheduledExpiry {
+            task.cancel()
+        }
+    }
+}
+
 public actor AgentControlService {
     private let hardware: HardwareService
     private let policy: AgentControlPolicy
@@ -7,11 +35,14 @@ public actor AgentControlService {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
     private let leaseID: @Sendable () -> String
+    private let expiryScheduler: AgentControlExpiryScheduler
 
     private var activeLease: AgentCoolingLease?
     private var lastDecision: AgentControlDecision?
     private var lastErrorCode: AgentControlErrorCode?
     private var operationInProgress = false
+    private var scheduledExpiry: AgentControlScheduledExpiry?
+    private let monitorIntervalSeconds: TimeInterval = 5
 
     public init(
         hardware: HardwareService,
@@ -19,7 +50,8 @@ public actor AgentControlService {
         store: AgentControlStore = AgentControlStore(),
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
-        leaseID: @escaping @Sendable () -> String = { UUID().uuidString }
+        leaseID: @escaping @Sendable () -> String = { UUID().uuidString },
+        expiryScheduler: @escaping AgentControlExpiryScheduler = AgentControlDefaultScheduler.schedule(after:operation:)
     ) {
         self.hardware = hardware
         self.policy = policy
@@ -27,7 +59,14 @@ public actor AgentControlService {
         self.thermalReader = thermalReader
         self.now = now
         self.leaseID = leaseID
+        self.expiryScheduler = expiryScheduler
         self.activeLease = try? store.loadActiveLease()
+        self.scheduledExpiry = nil
+        if let activeLease {
+            Task { [weak self] in
+                await self?.scheduleMonitor(for: activeLease)
+            }
+        }
     }
 
     public func status() -> AgentControlStatus {
@@ -44,6 +83,12 @@ public actor AgentControlService {
     public func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus {
         try beginOperation()
         defer { endOperation() }
+
+        if let lease = activeLease,
+           lease.request.idempotencyKey == request.idempotencyKey,
+           lease.isActive(at: now()) {
+            return status()
+        }
 
         let snapshot = try await hardware.snapshot()
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
@@ -77,6 +122,7 @@ public actor AgentControlService {
             rollbackLeaseID = lease.id
             activeLease = lease
             try store.saveActiveLease(lease)
+            scheduleMonitor(for: lease)
             appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
             return status()
         } catch {
@@ -104,10 +150,68 @@ public actor AgentControlService {
         if let lease {
             appendAudit(action: "restore-auto", leaseID: lease.id, message: reason)
         }
+        cancelScheduledExpiry()
         activeLease = nil
         try store.saveActiveLease(nil)
         lastErrorCode = nil
         return status()
+    }
+
+    public func clearActiveLease(reason: String) throws -> AgentControlStatus {
+        try beginOperation()
+        defer { endOperation() }
+
+        cancelScheduledExpiry()
+        if let lease = activeLease {
+            appendAudit(action: "clear-lease", leaseID: lease.id, message: reason)
+        }
+        activeLease = nil
+        try store.saveActiveLease(nil)
+        return status()
+    }
+
+    private func scheduleMonitor(for lease: AgentCoolingLease) {
+        cancelScheduledExpiry()
+        let delay = max(0, min(lease.expiresAt.timeIntervalSince(now()), monitorIntervalSeconds))
+        let leaseID = lease.id
+        scheduledExpiry = expiryScheduler(delay) { [weak self] in
+            await self?.monitorLease(id: leaseID)
+        }
+    }
+
+    private func monitorLease(id: String) async {
+        guard let lease = activeLease, lease.id == id else { return }
+
+        guard lease.isActive(at: now()) else {
+            await restoreFromMonitor(reason: "Agent cooling lease expired")
+            return
+        }
+
+        do {
+            let snapshot = try await hardware.snapshot()
+            guard let currentLease = activeLease, currentLease.id == id else { return }
+
+            if snapshot.temperatureSensors.isEmpty || thermalReader() == .critical {
+                _ = try await restoreAuto(reason: "Agent cooling safety monitor restored Auto")
+            } else {
+                scheduleMonitor(for: currentLease)
+            }
+        } catch {
+            await restoreFromMonitor(reason: "Agent cooling safety monitor restored Auto after monitor failure: \(error.localizedDescription)")
+        }
+    }
+
+    private func restoreFromMonitor(reason: String) async {
+        do {
+            _ = try await restoreAuto(reason: reason)
+        } catch {
+            _ = try? await restoreAuto(reason: "Agent cooling safety monitor restore failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func cancelScheduledExpiry() {
+        scheduledExpiry?.cancel()
+        scheduledExpiry = nil
     }
 
     private func beginOperation() throws {

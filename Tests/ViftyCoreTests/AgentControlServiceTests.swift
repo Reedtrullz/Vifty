@@ -120,6 +120,85 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertEqual(restoredAfterPrepareCompletes, [])
     }
 
+    func testDuplicateIdempotencyKeyReturnsExistingLeaseWithoutReapplying() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { UUID().uuidString }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
+        let firstStatus = try await service.prepare(request)
+        let secondStatus = try await service.prepare(request)
+
+        XCTAssertEqual(secondStatus.activeLease?.id, firstStatus.activeLease?.id)
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied.count, 1)
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
+    }
+
+    func testMonitorTickRestoresExpiredLeaseWithoutStatusPoll() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        clock.now = start.addingTimeInterval(61)
+        await scheduler.fireLastScheduledOperation()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        let status = await service.status()
+        XCTAssertNil(status.activeLease)
+    }
+
+    func testMonitorTickRestoresWhenSensorsDisappearDuringLease() async throws {
+        let scheduler = AgentControlManualScheduler()
+        let fan = Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [fan]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [fan],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+
+        await scheduler.fireLastScheduledOperation()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+    }
+
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vifty-agent-service-\(UUID().uuidString)", isDirectory: true)
     }
@@ -143,6 +222,51 @@ final class AgentControlServiceTests: XCTestCase {
     }
 }
 
+private final class AgentControlTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(now: Date) {
+        self.value = now
+    }
+
+    var now: Date {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+        set {
+            lock.lock()
+            value = newValue
+            lock.unlock()
+        }
+    }
+}
+
+private final class AgentControlManualScheduler: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latestOperation: (@Sendable () async -> Void)?
+
+    func schedule(after delay: TimeInterval, operation: @escaping @Sendable () async -> Void) -> AgentControlScheduledExpiry {
+        lock.lock()
+        latestOperation = operation
+        lock.unlock()
+        return AgentControlScheduledExpiry { }
+    }
+
+    func fireLastScheduledOperation() async {
+        let operation = lastScheduledOperation()
+        await operation?()
+    }
+
+    private func lastScheduledOperation() -> (@Sendable () async -> Void)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestOperation
+    }
+}
+
 private actor AgentServiceFakeHardware: HardwareService {
     enum Failure: Error, Equatable {
         case applyFailed
@@ -159,6 +283,10 @@ private actor AgentServiceFakeHardware: HardwareService {
     init(snapshot: HardwareSnapshot, failingApplyFanID: Int? = nil) {
         self.snapshotValue = snapshot
         self.failingApplyFanID = failingApplyFanID
+    }
+
+    func setSnapshot(_ snapshot: HardwareSnapshot) {
+        snapshotValue = snapshot
     }
 
     func blockNextSnapshot() {
