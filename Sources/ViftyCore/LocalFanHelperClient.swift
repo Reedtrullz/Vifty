@@ -21,13 +21,12 @@ public struct LocalFanHelperClient: Sendable {
         let smc = try SMCClient()
         // Common SMC convention: F{n}Md = 0 returns a fan to automatic mode.
         try smc.write("F\(fan.id)Md", dataType: "ui8 ", bytes: [0])
-        if let targetInfo = try? smc.read("F\(fan.id)Tg") {
-            try? smc.write(
-                "F\(fan.id)Tg",
-                dataType: targetInfo.dataType,
-                bytes: SMCDecoding.encodeRPM(fan.minimumRPM, dataType: targetInfo.dataType, size: targetInfo.bytes.count)
-            )
-        }
+        let targetInfo = try smc.read("F\(fan.id)Tg")
+        try smc.write(
+            "F\(fan.id)Tg",
+            dataType: targetInfo.dataType,
+            bytes: SMCDecoding.encodeRPM(fan.minimumRPM, dataType: targetInfo.dataType, size: targetInfo.bytes.count)
+        )
     }
 
     private func writeFixedRPM(_ rpm: Int, fanID: Int) throws {
