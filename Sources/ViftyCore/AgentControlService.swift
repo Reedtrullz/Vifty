@@ -90,6 +90,18 @@ public actor AgentControlService {
             return status()
         }
 
+        if let lease = activeLease,
+           lease.isActive(at: now()) {
+            let decision = AgentControlDecision.denied(
+                .policyDenied,
+                message: "Agent cooling lease already active. Restore Auto before starting a new lease."
+            )
+            lastDecision = decision
+            lastErrorCode = decision.errorCode
+            appendAudit(action: "prepare-denied", leaseID: lease.id, message: decision.message)
+            return status()
+        }
+
         let snapshot = try await hardware.snapshot()
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
         lastDecision = decision

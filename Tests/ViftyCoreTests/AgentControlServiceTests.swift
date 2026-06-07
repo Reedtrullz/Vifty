@@ -142,6 +142,60 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
     }
 
+    func testDifferentIdempotencyKeyIsDeniedWhileLeaseActiveAndMonitorStillRestoresOriginalLease() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-a" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let requestA = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build A", idempotencyKey: "key-a")
+        let requestB = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 80, reason: "Build B", idempotencyKey: "key-b")
+
+        let statusA = try await service.prepare(requestA)
+        XCTAssertEqual(statusA.activeLease?.id, "lease-a")
+        var applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
+        var snapshotCallCount = await hardware.snapshotCallCount
+        XCTAssertEqual(snapshotCallCount, 1)
+
+        let statusB = try await service.prepare(requestB)
+
+        XCTAssertEqual(statusB.activeLease?.id, "lease-a")
+        XCTAssertEqual(statusB.lastErrorCode, .policyDenied)
+        XCTAssertEqual(statusB.lastDecision?.errorCode, .policyDenied)
+        XCTAssertEqual(statusB.lastDecision?.message, "Agent cooling lease already active. Restore Auto before starting a new lease.")
+        applied = await hardware.appliedCommands
+        XCTAssertEqual(applied.count, 1)
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
+        snapshotCallCount = await hardware.snapshotCallCount
+        XCTAssertEqual(snapshotCallCount, 1)
+        let restoredBeforeExpiry = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredBeforeExpiry, [])
+        XCTAssertEqual(try store.loadActiveLease()?.id, "lease-a")
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"action\":\"prepare-denied\""))
+        XCTAssertTrue(audit.contains("Agent cooling lease already active. Restore Auto before starting a new lease."))
+
+        clock.now = start.addingTimeInterval(61)
+        await scheduler.fireLastScheduledOperation()
+
+        let restoredAfterExpiry = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredAfterExpiry, [0])
+        let finalStatus = await service.status()
+        XCTAssertNil(finalStatus.activeLease)
+        XCTAssertNil(try store.loadActiveLease())
+    }
+
     func testMonitorTickRestoresExpiredLeaseWithoutStatusPoll() async throws {
         let start = Date(timeIntervalSince1970: 1_000)
         let clock = AgentControlTestClock(now: start)
@@ -181,8 +235,8 @@ final class AgentControlServiceTests: XCTestCase {
         let oldLease = AgentCoolingLease(
             id: "old-lease",
             request: oldRequest,
-            createdAt: start,
-            expiresAt: start.addingTimeInterval(600),
+            createdAt: start.addingTimeInterval(-601),
+            expiresAt: start.addingTimeInterval(-1),
             targetRPMByFanID: [0: 3750]
         )
         try store.saveActiveLease(oldLease)
@@ -505,6 +559,7 @@ private actor AgentServiceFakeHardware: HardwareService {
     }
 
     var snapshotValue: HardwareSnapshot
+    var snapshotCallCount = 0
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
     var failingApplyFanID: Int?
@@ -554,6 +609,7 @@ private actor AgentServiceFakeHardware: HardwareService {
     }
 
     func snapshot() async throws -> HardwareSnapshot {
+        snapshotCallCount += 1
         if shouldBlockNextSnapshot {
             shouldBlockNextSnapshot = false
             let enteredContinuation = blockedSnapshotEnteredContinuation
