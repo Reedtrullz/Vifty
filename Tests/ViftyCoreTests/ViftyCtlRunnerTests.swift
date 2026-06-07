@@ -38,7 +38,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
     func testPrepareCallsAgentControlClient() async throws {
         let client = FakeAgentControlClient()
-        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner(exitCode: 0))
+        let processRunner = FakeProcessRunner(exitCode: 0)
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
         let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
 
         let result = try await runner.run(.prepare(request, json: true))
@@ -48,17 +49,20 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, [])
+        XCTAssertEqual(processRunner.runCallCount, 0)
     }
 
     func testRestoreAutoCallsAgentControlRestore() async throws {
         let client = FakeAgentControlClient()
-        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner(exitCode: 0))
+        let processRunner = FakeProcessRunner(exitCode: 0)
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
 
         let result = try await runner.run(.restoreAuto(reason: "done", idempotencyKey: nil, json: true))
 
         XCTAssertEqual(result.exitCode, 0)
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(restoreReasons, ["done"])
+        XCTAssertEqual(processRunner.runCallCount, 0)
     }
 }
 
@@ -109,10 +113,29 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
     }
 }
 
-private struct FakeProcessRunner: ViftyCtlProcessRunning {
-    var exitCode: Int32 = 0
+private final class FakeProcessRunner: ViftyCtlProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let exitCode: Int32
+    private var storedRunArguments: [[String]] = []
+
+    init(exitCode: Int32 = 0) {
+        self.exitCode = exitCode
+    }
+
+    var runCallCount: Int {
+        withLock { storedRunArguments.count }
+    }
 
     func run(_ arguments: [String]) throws -> Int32 {
-        exitCode
+        withLock {
+            storedRunArguments.append(arguments)
+            return exitCode
+        }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }
