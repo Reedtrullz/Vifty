@@ -4,10 +4,12 @@ cask "vifty" do
 
   url "https://github.com/Reedtrullz/Vifty/releases/download/v#{version}/Vifty-v#{version}.zip"
   name "Vifty"
-  desc "Native macOS menu-bar fan control and power monitor for Apple Silicon"
+  desc "Menu-bar fan control and power monitor for MacBook Pro"
   homepage "https://github.com/Reedtrullz/Vifty"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
+
+  signing_identity identity: "-"
 
   app "Vifty.app"
 
@@ -24,4 +26,6 @@ cask "vifty" do
       sudo rm /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
       sudo rm /Library/PrivilegedHelperTools/ViftyDaemon
   EOS
+
+  zap trash: "~/Library/Application Support/Vifty"
 end
