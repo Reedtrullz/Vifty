@@ -64,7 +64,8 @@ public enum ViftyCtlArguments {
 
         guard
             let percentValue = value(for: "--max-rpm-percent", in: arguments),
-            let maxRPMPercent = Int(percentValue)
+            let maxRPMPercent = Int(percentValue),
+            (1...100).contains(maxRPMPercent)
         else {
             throw ViftyCtlParseError.invalidRPMPercent
         }
@@ -80,14 +81,25 @@ public enum ViftyCtlArguments {
 
     private static func parseDurationSeconds(_ value: String) -> Int? {
         if value.hasSuffix("m") {
-            return parsePositiveInteger(String(value.dropLast())).map { $0 * 60 }
+            return parsePositiveInteger(String(value.dropLast()))
+                .flatMap { seconds in safeMultiply(seconds, by: 60) }
         }
 
         if value.hasSuffix("h") {
-            return parsePositiveInteger(String(value.dropLast())).map { $0 * 3_600 }
+            return parsePositiveInteger(String(value.dropLast()))
+                .flatMap { seconds in safeMultiply(seconds, by: 3_600) }
         }
 
         return parsePositiveInteger(value)
+    }
+
+    private static func safeMultiply(_ value: Int, by multiplier: Int) -> Int? {
+        let result = value.multipliedReportingOverflow(by: multiplier)
+        guard !result.overflow else {
+            return nil
+        }
+
+        return result.partialValue
     }
 
     private static func parsePositiveInteger(_ value: String) -> Int? {
@@ -108,7 +120,12 @@ public enum ViftyCtlArguments {
             return nil
         }
 
-        return arguments[valueIndex]
+        let value = arguments[valueIndex]
+        guard !value.hasPrefix("--") else {
+            return nil
+        }
+
+        return value
     }
 }
 
