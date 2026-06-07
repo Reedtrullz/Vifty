@@ -1,6 +1,7 @@
 .PHONY: app install pkg clean-app clean-pkg test help clean
 
 CONFIGURATION ?= debug
+SIGNING_IDENTITY ?= -
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -20,10 +21,10 @@ app: ## Build the release app bundle
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-	codesign --force --sign "Apple Development" --options runtime "$(MACOS)/ViftyHelper"
-	codesign --force --sign "Apple Development" --options runtime "$(MACOS)/ViftyDaemon"
-	codesign --force --sign "Apple Development" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
-	codesign --force --sign "Apple Development" --options runtime --entitlements Resources/Vifty.entitlements "$(APP_DIR)"
+	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime "$(MACOS)/ViftyHelper"
+	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime "$(MACOS)/ViftyDaemon"
+	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
+	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --entitlements Resources/Vifty.entitlements "$(APP_DIR)"
 	@echo "Built $(APP_DIR)"
 
 install: ## Build and install to /Applications
