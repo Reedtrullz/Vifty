@@ -118,11 +118,15 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
 private final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     private let service = DaemonService()
     private let identityExtractor = XPCConnectionIdentityExtractor()
-    // XPC clients must match both signing identifier and TeamID.
-    // Only binaries signed with the Apple Development identity are accepted.
+    // XPC clients must match signing identifier. TeamID is nil by default
+    // so anyone who clones and builds gets a working app (ad-hoc signed).
+    // Opt-in: set SIGNING_IDENTITY and teamIdentifier to your Apple Developer
+    // TeamID to prevent other ad-hoc binaries from connecting to the daemon.
+    // Run `codesign -dvvv .build/Vifty.app 2>&1 | grep TeamIdentifier`
+    // to find your embedded TeamIdentifier.
     private let validator = XPCClientValidator(allowedClients: [
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "X88J3853S2"),
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "X88J3853S2")
+        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil),
+        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)
     ])
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
