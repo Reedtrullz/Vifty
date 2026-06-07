@@ -48,6 +48,21 @@ V1 targets Apple Silicon MacBook Pro models on macOS 15+. It intentionally exclu
 
 ## Install and launch
 
+### Homebrew (recommended)
+
+```sh
+brew tap Reedtrullz/vifty https://github.com/Reedtrullz/Vifty
+brew install --cask vifty
+```
+
+Then launch Vifty from Spotlight, Launchpad, or:
+
+```sh
+open /Applications/Vifty.app
+```
+
+### From source
+
 For normal local use:
 
 1. Double-click **`Install Vifty.command`** in this repository. It builds a release app, installs it, registers it with Launch Services, and launches Vifty.
