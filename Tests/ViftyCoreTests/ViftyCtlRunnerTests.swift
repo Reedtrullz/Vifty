@@ -64,6 +64,40 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasons, ["done"])
         XCTAssertEqual(processRunner.runCallCount, 0)
     }
+
+    func testRunPreparesRunsChildRestoresAndReturnsChildExitCode() async throws {
+        let client = FakeAgentControlClient()
+        let processRunner = FakeProcessRunner(exitCode: 7)
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"]))
+
+        XCTAssertEqual(result.exitCode, 7)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 7"])
+    }
+
+    func testRunRestoresIfChildLaunchThrows() async throws {
+        let client = FakeAgentControlClient()
+        let launchError = ViftyError.helperRejected("launch failed")
+        let processRunner = FakeProcessRunner(error: launchError)
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
+        do {
+            _ = try await runner.run(.run(request, childArguments: ["missing-command"]))
+            XCTFail("Expected child launch error")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, launchError.localizedDescription)
+            let prepareRequests = await client.prepareRequests
+            let restoreReasons = await client.restoreReasons
+            XCTAssertEqual(prepareRequests, [request])
+            XCTAssertEqual(restoreReasons, ["viftyctl run failed to launch child: \(error.localizedDescription)"])
+        }
+    }
 }
 
 private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
@@ -116,10 +150,12 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
 private final class FakeProcessRunner: ViftyCtlProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private let exitCode: Int32
+    private let error: (any Error)?
     private var storedRunArguments: [[String]] = []
 
-    init(exitCode: Int32 = 0) {
+    init(exitCode: Int32 = 0, error: (any Error)? = nil) {
         self.exitCode = exitCode
+        self.error = error
     }
 
     var runCallCount: Int {
@@ -127,15 +163,18 @@ private final class FakeProcessRunner: ViftyCtlProcessRunning, @unchecked Sendab
     }
 
     func run(_ arguments: [String]) throws -> Int32 {
-        withLock {
+        try withLock {
             storedRunArguments.append(arguments)
+            if let error {
+                throw error
+            }
             return exitCode
         }
     }
 
-    private func withLock<T>(_ body: () -> T) -> T {
+    private func withLock<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock()
         defer { lock.unlock() }
-        return body()
+        return try body()
     }
 }

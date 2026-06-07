@@ -41,8 +41,13 @@ struct ViftyCtlMain {
 struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
     func run(_ arguments: [String]) throws -> Int32 {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: arguments[0])
-        process.arguments = Array(arguments.dropFirst())
+        if arguments[0].contains("/") {
+            process.executableURL = URL(fileURLWithPath: arguments[0])
+            process.arguments = Array(arguments.dropFirst())
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = arguments
+        }
         try process.run()
         process.waitUntilExit()
         return process.terminationStatus

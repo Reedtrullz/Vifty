@@ -69,8 +69,16 @@ public struct ViftyCtlRunner: Sendable {
             let status = try await client.restore(reason: reason)
             let stdout = try format(status, json: json)
             return ViftyCtlResult(stdout: stdout)
-        case .run:
-            return ViftyCtlResult(stderr: "Command not implemented yet\n", exitCode: 64)
+        case .run(let request, let childArguments):
+            _ = try await client.prepare(request)
+            do {
+                let exitCode = try processRunner.run(childArguments)
+                _ = try? await client.restore(reason: "viftyctl run child exited with \(exitCode)")
+                return ViftyCtlResult(exitCode: exitCode)
+            } catch {
+                _ = try? await client.restore(reason: "viftyctl run failed to launch child: \(error.localizedDescription)")
+                throw error
+            }
         }
     }
 
