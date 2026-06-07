@@ -10,6 +10,8 @@ Native macOS menu-bar fan control and charger-power monitoring for Apple Silicon
 
 Vifty is built for local signed distribution, not the App Store. It uses private macOS SMC/HID interfaces for fan and sensor access, keeps data on-device, and refuses manual control on unsupported hardware.
 
+![Vifty screenshot showing menu bar, fan controls, power telemetry, temperature sensors, and thermal history](docs/images/vifty-screenshot.png)
+
 ## Highlights
 
 - **Menu bar cockpit** — temperature, fan RPM, and power state at a glance.
