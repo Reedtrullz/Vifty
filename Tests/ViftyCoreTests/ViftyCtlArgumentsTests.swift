@@ -34,11 +34,41 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .invalidDuration)
     }
 
+    func testParsesDurationMinutesSuffix() throws {
+        let command = try ViftyCtlArguments.parse([
+            "prepare",
+            "--workload", "build",
+            "--duration", "5m",
+            "--max-rpm-percent", "75"
+        ])
+
+        guard case let .prepare(request, _) = command else {
+            return XCTFail("Expected prepare command")
+        }
+
+        XCTAssertEqual(request.durationSeconds, 300)
+    }
+
+    func testParsesDurationHoursSuffix() throws {
+        let command = try ViftyCtlArguments.parse([
+            "prepare",
+            "--workload", "build",
+            "--duration", "1h",
+            "--max-rpm-percent", "75"
+        ])
+
+        guard case let .prepare(request, _) = command else {
+            return XCTFail("Expected prepare command")
+        }
+
+        XCTAssertEqual(request.durationSeconds, 3_600)
+    }
+
     func testOverflowSuffixedDurationThrows() {
         assertParseError([
             "prepare",
             "--workload", "build",
-            "--duration", "\(Int.max)h",
+            "--duration", "999999999999999999m",
             "--max-rpm-percent", "75"
         ], equals: .invalidDuration)
     }
