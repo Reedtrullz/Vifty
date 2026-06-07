@@ -35,12 +35,37 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("status"))
         XCTAssertTrue(result.stdout.contains("prepare"))
     }
+
+    func testPrepareCallsAgentControlClient() async throws {
+        let client = FakeAgentControlClient()
+        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner(exitCode: 0))
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
+        let result = try await runner.run(.prepare(request, json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, [])
+    }
+
+    func testRestoreAutoCallsAgentControlRestore() async throws {
+        let client = FakeAgentControlClient()
+        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner(exitCode: 0))
+
+        let result = try await runner.run(.restoreAuto(reason: "done", idempotencyKey: nil, json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(restoreReasons, ["done"])
+    }
 }
 
 private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
     private let statusResponse: AgentControlStatus
-    private var prepareRequests: [AgentControlRequest] = []
-    private var restoreReasons: [String] = []
+    private var storedPrepareRequests: [AgentControlRequest] = []
+    private var storedRestoreReasons: [String] = []
 
     init(
         status: AgentControlStatus = AgentControlStatus(
@@ -54,11 +79,19 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
     }
 
     var prepareRequestCount: Int {
-        prepareRequests.count
+        storedPrepareRequests.count
     }
 
     var restoreReasonCount: Int {
-        restoreReasons.count
+        storedRestoreReasons.count
+    }
+
+    var prepareRequests: [AgentControlRequest] {
+        storedPrepareRequests
+    }
+
+    var restoreReasons: [String] {
+        storedRestoreReasons
     }
 
     func status() async throws -> AgentControlStatus {
@@ -66,18 +99,20 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
     }
 
     func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus {
-        prepareRequests.append(request)
+        storedPrepareRequests.append(request)
         return statusResponse
     }
 
     func restore(reason: String) async throws -> AgentControlStatus {
-        restoreReasons.append(reason)
+        storedRestoreReasons.append(reason)
         return statusResponse
     }
 }
 
 private struct FakeProcessRunner: ViftyCtlProcessRunning {
+    var exitCode: Int32 = 0
+
     func run(_ arguments: [String]) throws -> Int32 {
-        0
+        exitCode
     }
 }

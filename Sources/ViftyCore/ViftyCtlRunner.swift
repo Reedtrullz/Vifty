@@ -61,7 +61,15 @@ public struct ViftyCtlRunner: Sendable {
             let capabilities = ["status", "capabilities", "prepare", "restore-auto", "run"]
             let stdout = try format(capabilities, json: json)
             return ViftyCtlResult(stdout: stdout)
-        case .prepare, .restoreAuto, .run:
+        case .prepare(let request, let json):
+            let status = try await client.prepare(request)
+            let stdout = try format(status, json: json)
+            return ViftyCtlResult(stdout: stdout)
+        case .restoreAuto(let reason, _, let json):
+            let status = try await client.restore(reason: reason)
+            let stdout = try format(status, json: json)
+            return ViftyCtlResult(stdout: stdout)
+        case .run:
             return ViftyCtlResult(stderr: "Command not implemented yet\n", exitCode: 64)
         }
     }
