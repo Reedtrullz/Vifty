@@ -260,6 +260,32 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertNil(status.activeLease)
     }
 
+    func testMonitorRestoresExpiredLeaseWithoutExplicitStatusPoll() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        clock.now = start.addingTimeInterval(61)
+        await scheduler.fireLastScheduledOperation()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        XCTAssertNil(try store.loadActiveLease())
+    }
+
     func testStalePersistedLeaseSchedulingCannotCancelNewerLeaseMonitor() async throws {
         let start = Date(timeIntervalSince1970: 1_000)
         let clock = AgentControlTestClock(now: start)
