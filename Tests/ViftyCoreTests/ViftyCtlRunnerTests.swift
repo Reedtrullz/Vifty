@@ -69,7 +69,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let client = FakeAgentControlClient()
         let processRunner = FakeProcessRunner(exitCode: 7)
         let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
-        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
 
         let result = try await runner.run(.run(request, childArguments: ["swift", "test"]))
 
@@ -85,7 +85,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let launchError = ViftyError.helperRejected("launch failed")
         let processRunner = FakeProcessRunner(error: launchError)
         let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
-        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
 
         do {
             _ = try await runner.run(.run(request, childArguments: ["missing-command"]))
