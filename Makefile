@@ -20,10 +20,10 @@ app: ## Build the release app bundle
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-	codesign --force --sign - "$(MACOS)/ViftyHelper"
-	codesign --force --sign - "$(MACOS)/ViftyDaemon"
-	codesign --force --sign - --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
-	codesign --force --sign - "$(APP_DIR)"
+	codesign --force --sign "Apple Development" --options runtime "$(MACOS)/ViftyHelper"
+	codesign --force --sign "Apple Development" --options runtime "$(MACOS)/ViftyDaemon"
+	codesign --force --sign "Apple Development" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
+	codesign --force --sign "Apple Development" --options runtime --entitlements Resources/Vifty.entitlements "$(APP_DIR)"
 	@echo "Built $(APP_DIR)"
 
 install: ## Build and install to /Applications
