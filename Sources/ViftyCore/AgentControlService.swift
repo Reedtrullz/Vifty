@@ -139,7 +139,12 @@ public actor AgentControlService {
             return status()
         } catch {
             for fan in appliedFans {
-                try? await hardware.restoreAuto(fan: fan)
+                do {
+                    try await hardware.restoreAuto(fan: fan)
+                } catch {
+                    appendAudit(action: "prepare-rollback-failure", leaseID: rollbackLeaseID,
+                                 message: "Failed to restore fan \(fan.id) during rollback: \(error.localizedDescription)")
+                }
             }
             activeLease = nil
             try? store.saveActiveLease(nil)

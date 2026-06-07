@@ -81,6 +81,43 @@ final class AgentControlServiceTests: XCTestCase {
         }
     }
 
+    func testPrepareRollbackAuditsIndividualFanRestoreFailures() async throws {
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let hardware = AgentServiceFakeHardware(
+            snapshot: Self.snapshot(fans: [
+                Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500),
+                Self.fan(id: 1, minimumRPM: 1500, maximumRPM: 5500)
+            ]),
+            failingApplyFanID: 1
+        )
+        // Make restoreAuto fail during rollback for fan 0
+        await hardware.failNextRestoreAuto()
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
+        do {
+            _ = try await service.prepare(request)
+            XCTFail("Expected prepare to throw")
+        } catch AgentServiceFakeHardware.Failure.applyFailed {
+            let restored = await hardware.restoredFanIDs
+            XCTAssertEqual(restored, [])
+            XCTAssertNil(try store.loadActiveLease())
+            let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+            XCTAssertTrue(audit.contains("prepare-rollback-failure"))
+            XCTAssertTrue(audit.contains("Failed to restore fan 0"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testRestoreAutoRejectedWhilePrepareSnapshotInProgress() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         await hardware.blockNextSnapshot()
