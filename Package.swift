@@ -11,7 +11,8 @@ let package = Package(
         .library(name: "ViftyCore", targets: ["ViftyCore"]),
         .executable(name: "Vifty", targets: ["Vifty"]),
         .executable(name: "ViftyHelper", targets: ["ViftyHelper"]),
-        .executable(name: "ViftyDaemon", targets: ["ViftyDaemon"])
+        .executable(name: "ViftyDaemon", targets: ["ViftyDaemon"]),
+        .executable(name: "ViftyCtl", targets: ["ViftyCtl"])
     ],
     targets: [
         .target(
@@ -27,6 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "ViftyHelper",
+            dependencies: ["ViftyCore"]
+        ),
+        .executableTarget(
+            name: "ViftyCtl",
             dependencies: ["ViftyCore"]
         ),
         .executableTarget(

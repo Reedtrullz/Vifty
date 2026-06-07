@@ -43,11 +43,13 @@ jobs:
           test -x .build/Vifty.app/Contents/MacOS/Vifty
           test -x .build/Vifty.app/Contents/MacOS/ViftyHelper
           test -x .build/Vifty.app/Contents/MacOS/ViftyDaemon
+          test -x .build/Vifty.app/Contents/MacOS/viftyctl
           test -f .build/Vifty.app/Contents/Info.plist
           test -f .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
           plutil -lint .build/Vifty.app/Contents/Info.plist
           plutil -lint .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
           codesign --verify --deep --strict .build/Vifty.app
+          codesign -dvvv .build/Vifty.app/Contents/MacOS/viftyctl 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
 
       - name: Verify install script in temporary Applications directory
         env:
@@ -57,6 +59,7 @@ jobs:
           test -d "${VIFTY_INSTALL_DIR}/Vifty.app"
           codesign --verify --deep --strict "${VIFTY_INSTALL_DIR}/Vifty.app"
           cmp .build/Vifty.app/Contents/MacOS/Vifty "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/Vifty"
+          cmp .build/Vifty.app/Contents/MacOS/viftyctl "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/viftyctl"
 
       - name: Archive app bundle
         run: ditto -c -k --keepParent .build/Vifty.app "${RUNNER_TEMP}/Vifty.app.zip"

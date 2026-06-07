@@ -16,10 +16,14 @@ app:
 	mkdir -p "$(CONTENTS)/Library/LaunchDaemons"
 	cp ".build/$(CONFIGURATION)/Vifty" "$(MACOS)/Vifty"
 	cp ".build/$(CONFIGURATION)/ViftyHelper" "$(MACOS)/ViftyHelper"
+	cp ".build/$(CONFIGURATION)/ViftyCtl" "$(MACOS)/viftyctl"
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-	codesign --force --deep --sign - "$(APP_DIR)"
+	codesign --force --sign - "$(MACOS)/ViftyHelper"
+	codesign --force --sign - "$(MACOS)/ViftyDaemon"
+	codesign --force --sign - --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
+	codesign --force --sign - "$(APP_DIR)"
 	@echo "Built $(APP_DIR)"
 
 install:
