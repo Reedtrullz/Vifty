@@ -1,4 +1,4 @@
-.PHONY: app install pkg clean-app clean-pkg
+.PHONY: app install pkg clean-app clean-pkg test help clean
 
 CONFIGURATION ?= debug
 APP_NAME := Vifty
@@ -9,7 +9,7 @@ MACOS := $(CONTENTS)/MacOS
 install: CONFIGURATION = release
 pkg: CONFIGURATION = release
 
-app:
+app: ## Build the release app bundle
 	swift build -c $(CONFIGURATION)
 	rm -rf "$(APP_DIR)"
 	mkdir -p "$(MACOS)"
@@ -26,11 +26,21 @@ app:
 	codesign --force --sign - "$(APP_DIR)"
 	@echo "Built $(APP_DIR)"
 
-install:
+install: ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
 
-pkg:
+pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
+
+test: ## Run the XCTest suite
+	swift test
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+clean: clean-app ## Remove all build artifacts
+	rm -rf .build/
 
 clean-app:
 	rm -rf "$(APP_DIR)"
