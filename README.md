@@ -29,6 +29,17 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
 - **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
 
+## Why Vifty matters
+
+Mac fan control has been dominated by proprietary closed-source tools for years. Vifty is different:
+
+- **Open-source and auditable** — every SMC write path, RPM clamp, and safety check is visible. You can verify that fan control does exactly what it claims.
+- **Agent-safe by design** — the `viftyctl` agent CLI is the only open-source thermal management interface built for AI coding agents. Leases carry bounded durations, reasons, and idempotency keys; the daemon enforces expiry independently. No other Mac fan tool provides anything like this.
+- **Combined fan + power + telemetry** — instead of running separate tools for fan control, battery monitoring, and thermal pressure, Vifty gives you a single local-first utility with zero cloud dependencies.
+- **Privileged helper architecture** — the root daemon owns SMC writes so the app never needs repeated permission prompts, and unprivileged direct AppleSMC writes are refused (fail-closed).
+
+If you use Apple Silicon for builds, tests, or AI workloads, Vifty keeps your machine cool and your fan control auditable.
+
 ## Supported scope
 
 V1 targets Apple Silicon MacBook Pro models on macOS 15+. It intentionally excludes HDD/SSD S.M.A.R.T., Boot Camp, Windows support, analytics, cloud sync, and non-MacBook-Pro fan control. Unsupported Macs should remain under macOS automatic fan control.
