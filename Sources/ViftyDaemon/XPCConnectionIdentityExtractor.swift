@@ -4,15 +4,22 @@ import ViftyCore
 
 struct XPCConnectionIdentityExtractor {
     func identity(for connection: NSXPCConnection) -> XPCClientIdentity? {
-        // The public Foundation API available in this Swift SDK exposes the
-        // peer process identifier, not an audit token property. Keep the
-        // Security.framework lookup isolated here so listener code still
-        // rejects the connection whenever identity extraction fails.
-        identity(forProcessIdentifier: connection.processIdentifier)
+        // auditToken is available at runtime on macOS 13+ but not exposed as a
+        // public Swift property in all SDK versions. Use key-value access and
+        // bridge the Data bytes to an audit_token_t.
+        guard let tokenData = connection.value(forKey: "auditToken") as? Data,
+              tokenData.count == MemoryLayout<audit_token_t>.size else {
+            return nil
+        }
+        var token = audit_token_t()
+        _ = withUnsafeMutableBytes(of: &token) { tokenData.copyBytes(to: $0) }
+        return identity(forAuditToken: token)
     }
 
-    private func identity(forProcessIdentifier processIdentifier: pid_t) -> XPCClientIdentity? {
-        let attributes = [kSecGuestAttributePid as String: NSNumber(value: processIdentifier)] as CFDictionary
+    private func identity(forAuditToken auditToken: audit_token_t) -> XPCClientIdentity? {
+        var token = auditToken
+        let tokenData = Data(bytes: &token, count: MemoryLayout<audit_token_t>.size)
+        let attributes = [kSecGuestAttributeAudit as String: tokenData] as CFDictionary
 
         var dynamicCode: SecCode?
         guard SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &dynamicCode) == errSecSuccess,
