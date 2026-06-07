@@ -79,7 +79,7 @@ final class XPCClientValidatorTests: XCTestCase {
         XCTAssertTrue(validator.isAllowed(identity))
     }
 
-    func testRejectsNonNilTeamIdentifierWhenTeamRequirementIsNil() {
+    func testAllowsNonNilTeamIdentifierWhenTeamRequirementIsNil() {
         let validator = XPCClientValidator(
             allowedSigningIdentifier: allowedSigningIdentifier,
             allowedTeamIdentifier: nil
@@ -89,7 +89,7 @@ final class XPCClientValidatorTests: XCTestCase {
             teamIdentifier: "SOME_TEAM"
         )
 
-        XCTAssertFalse(validator.isAllowed(identity))
+        XCTAssertTrue(validator.isAllowed(identity))
     }
 
     func testLegacyAllowedClientPropertiesReturnSingleInitializerValues() {
@@ -151,10 +151,21 @@ final class XPCClientValidatorTests: XCTestCase {
 
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil)))
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)))
-        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "SOME_TEAM")))
-        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "SOME_TEAM")))
+        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "SOME_TEAM")))
+        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "SOME_TEAM")))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.anything", teamIdentifier: nil)))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: nil, teamIdentifier: nil)))
+    }
+
+    func testAllowsNonNilTeamIdentifierWhenAllowedClientHasNilTeamRequirement() {
+        let validator = XPCClientValidator(allowedClients: [
+            XPCAllowedClient(signingIdentifier: "com.example.app", teamIdentifier: nil)
+        ])
+        let identity = XPCClientIdentity(
+            signingIdentifier: "com.example.app",
+            teamIdentifier: "ABCDE12345"
+        )
+        XCTAssertTrue(validator.isAllowed(identity))
     }
 
     private func assertSendable<T: Sendable>(_ value: T) {

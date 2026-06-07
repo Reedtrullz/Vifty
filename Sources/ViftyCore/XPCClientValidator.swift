@@ -47,7 +47,7 @@ public struct XPCClientValidator: Sendable {
             if let allowedTeamIdentifier = allowedClient.teamIdentifier {
                 return identity.teamIdentifier == allowedTeamIdentifier
             }
-            return identity.teamIdentifier == nil
+            return true // nil team requirement → skip team check entirely
         }
     }
 }
