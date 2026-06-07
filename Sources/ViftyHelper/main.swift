@@ -92,5 +92,8 @@ private func awaitSnapshot() throws -> HardwareSnapshot {
         semaphore.signal()
     }
     semaphore.wait()
-    return try box.result!.get()
+    guard let result = box.result else {
+        fatalError("ViftyHelper internal error: snapshot result not set before semaphore signal")
+    }
+    return try result.get()
 }
