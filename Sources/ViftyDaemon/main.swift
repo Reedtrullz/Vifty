@@ -121,8 +121,8 @@ private final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     // XPC clients must match both signing identifier and TeamID.
     // Only binaries signed with the Apple Development identity are accepted.
     private let validator = XPCClientValidator(allowedClients: [
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "835WLRA27M"),
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "835WLRA27M")
+        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "X88J3853S2"),
+        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "X88J3853S2")
     ])
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
