@@ -23,8 +23,16 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout
+      - name: Check out
         uses: actions/checkout@v6
+
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
 
       - name: Show toolchain
         run: |
