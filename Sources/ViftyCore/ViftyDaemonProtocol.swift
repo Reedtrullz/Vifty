@@ -22,7 +22,7 @@ public enum ViftyDaemonConstants {
         _ fanID: Int,
         minimumRPM: Int,
         maximumRPM: Int,
-        reply: @escaping (Bool, String?) -> Void
+        reply: @escaping @Sendable (Bool, String?) -> Void
     )
 }
 

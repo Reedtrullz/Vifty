@@ -84,7 +84,7 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         _ fanID: Int,
         minimumRPM: Int,
         maximumRPM: Int,
-        reply: @escaping (Bool, String?) -> Void
+        reply: @escaping @Sendable (Bool, String?) -> Void
     ) {
         do {
             let fan = Fan(
@@ -98,9 +98,13 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
             try LocalFanHelperClient().restoreAuto(fan: fan)
             let agentControl = self.agentControl
             Task {
-                _ = try? await agentControl.clearActiveLease(reason: "User/app restored Auto through daemon restoreAuto")
+                do {
+                    _ = try await agentControl.clearActiveLease(reason: "User/app restored Auto through daemon restoreAuto")
+                    reply(true, nil)
+                } catch {
+                    reply(false, error.localizedDescription)
+                }
             }
-            reply(true, nil)
         } catch {
             reply(false, error.localizedDescription)
         }
