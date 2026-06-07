@@ -5,7 +5,8 @@ import XCTest
 final class AgentControlServiceTests: XCTestCase {
     func testPrepareAppliesTargetsStoresLeaseAndReportsStatus() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
-        let store = AgentControlStore(directory: temporaryDirectory())
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
         let service = AgentControlService(
             hardware: hardware,
             policy: AgentControlPolicy(enabled: true),
@@ -23,6 +24,8 @@ final class AgentControlServiceTests: XCTestCase {
         let applied = await hardware.appliedCommands
         XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
         XCTAssertEqual(try store.loadActiveLease()?.id, "lease-1")
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"message\":\"Build\""))
     }
 
     func testRestoreAutoRestoresFansAndClearsLease() async throws {

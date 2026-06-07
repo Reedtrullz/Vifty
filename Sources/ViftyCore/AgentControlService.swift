@@ -73,7 +73,7 @@ public actor AgentControlService {
             rollbackLeaseID = lease.id
             activeLease = lease
             try store.saveActiveLease(lease)
-            appendAudit(action: "prepare", leaseID: lease.id, message: decision.message)
+            appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
             return status()
         } catch {
             for fan in appliedFans {
