@@ -79,6 +79,29 @@ final class XPCClientValidatorTests: XCTestCase {
         XCTAssertTrue(validator.isAllowed(identity))
     }
 
+    func testRejectsNonNilTeamIdentifierWhenTeamRequirementIsNil() {
+        let validator = XPCClientValidator(
+            allowedSigningIdentifier: allowedSigningIdentifier,
+            allowedTeamIdentifier: nil
+        )
+        let identity = XPCClientIdentity(
+            signingIdentifier: allowedSigningIdentifier,
+            teamIdentifier: "SOME_TEAM"
+        )
+
+        XCTAssertFalse(validator.isAllowed(identity))
+    }
+
+    func testLegacyAllowedClientPropertiesReturnSingleInitializerValues() {
+        let validator = XPCClientValidator(
+            allowedSigningIdentifier: allowedSigningIdentifier,
+            allowedTeamIdentifier: allowedTeamIdentifier
+        )
+
+        XCTAssertEqual(validator.allowedSigningIdentifier, allowedSigningIdentifier)
+        XCTAssertEqual(validator.allowedTeamIdentifier, allowedTeamIdentifier)
+    }
+
     func testRejectsMissingTeamIdentifierWhenTeamIsRequired() {
         let validator = XPCClientValidator(
             allowedSigningIdentifier: allowedSigningIdentifier,
@@ -128,6 +151,8 @@ final class XPCClientValidatorTests: XCTestCase {
 
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil)))
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "SOME_TEAM")))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "SOME_TEAM")))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.anything", teamIdentifier: nil)))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: nil, teamIdentifier: nil)))
     }

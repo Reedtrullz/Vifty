@@ -23,6 +23,9 @@ public struct XPCAllowedClient: Equatable, Sendable {
 public struct XPCClientValidator: Sendable {
     public let allowedClients: [XPCAllowedClient]
 
+    public var allowedSigningIdentifier: String { allowedClients.first?.signingIdentifier ?? "" }
+    public var allowedTeamIdentifier: String? { allowedClients.first?.teamIdentifier }
+
     public init(allowedClients: [XPCAllowedClient]) {
         self.allowedClients = allowedClients
     }
@@ -44,7 +47,7 @@ public struct XPCClientValidator: Sendable {
             if let allowedTeamIdentifier = allowedClient.teamIdentifier {
                 return identity.teamIdentifier == allowedTeamIdentifier
             }
-            return true
+            return identity.teamIdentifier == nil
         }
     }
 }
