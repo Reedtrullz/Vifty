@@ -120,6 +120,18 @@ final class XPCClientValidatorTests: XCTestCase {
         assertSendable(validator)
     }
 
+    func testAllowsOnlyExplicitClientAllowlist() {
+        let validator = XPCClientValidator(allowedClients: [
+            XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil),
+            XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)
+        ])
+
+        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil)))
+        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.anything", teamIdentifier: nil)))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: nil, teamIdentifier: nil)))
+    }
+
     private func assertSendable<T: Sendable>(_ value: T) {
         _ = value
     }

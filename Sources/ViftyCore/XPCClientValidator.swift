@@ -10,21 +10,41 @@ public struct XPCClientIdentity: Equatable, Sendable {
     }
 }
 
+public struct XPCAllowedClient: Equatable, Sendable {
+    public let signingIdentifier: String
+    public let teamIdentifier: String?
+
+    public init(signingIdentifier: String, teamIdentifier: String?) {
+        self.signingIdentifier = signingIdentifier
+        self.teamIdentifier = teamIdentifier
+    }
+}
+
 public struct XPCClientValidator: Sendable {
-    public let allowedSigningIdentifier: String
-    public let allowedTeamIdentifier: String?
+    public let allowedClients: [XPCAllowedClient]
+
+    public init(allowedClients: [XPCAllowedClient]) {
+        self.allowedClients = allowedClients
+    }
 
     public init(allowedSigningIdentifier: String, allowedTeamIdentifier: String?) {
-        self.allowedSigningIdentifier = allowedSigningIdentifier
-        self.allowedTeamIdentifier = allowedTeamIdentifier
+        self.init(allowedClients: [
+            XPCAllowedClient(
+                signingIdentifier: allowedSigningIdentifier,
+                teamIdentifier: allowedTeamIdentifier
+            )
+        ])
     }
 
     public func isAllowed(_ identity: XPCClientIdentity?) -> Bool {
-        guard let identity else { return false }
-        guard identity.signingIdentifier == allowedSigningIdentifier else { return false }
-        if let allowedTeamIdentifier {
-            return identity.teamIdentifier == allowedTeamIdentifier
+        guard let identity, let signingIdentifier = identity.signingIdentifier else { return false }
+
+        return allowedClients.contains { allowedClient in
+            guard signingIdentifier == allowedClient.signingIdentifier else { return false }
+            if let allowedTeamIdentifier = allowedClient.teamIdentifier {
+                return identity.teamIdentifier == allowedTeamIdentifier
+            }
+            return true
         }
-        return true
     }
 }
