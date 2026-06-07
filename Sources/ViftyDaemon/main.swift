@@ -3,8 +3,8 @@ import ViftyCore
 
 private final class DaemonService: NSObject, ViftyDaemonProtocol {
     private let hardware = RealMacHardwareService(preferDaemon: false)
-    private let agentControl = AgentControlService(
-        hardware: RealMacHardwareService(preferDaemon: false),
+    private lazy var agentControl = AgentControlService(
+        hardware: hardware,
         policy: AgentControlPolicy(enabled: true)
     )
 
