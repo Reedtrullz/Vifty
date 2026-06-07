@@ -8,6 +8,9 @@ public enum ViftyDaemonConstants {
 @objc public protocol ViftyDaemonProtocol {
     func ping(reply: @escaping (Bool) -> Void)
     func snapshot(reply: @escaping (NSDictionary?, String?) -> Void)
+    func agentControlStatus(reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
+    func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
+    func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func setFixedRPM(
         _ fanID: Int,
         rpm: Int,

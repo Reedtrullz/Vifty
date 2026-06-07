@@ -39,6 +39,57 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         }
     }
 
+    public func agentControlStatus() async throws -> AgentControlStatus {
+        try await withProxy { proxy, finish in
+            proxy.agentControlStatus { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let status = XPCAgentControlCoding.decodeStatus(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid agent-control status.")))
+                    return
+                }
+                finish(.success(status))
+            }
+        }
+    }
+
+    public func prepareAgentControl(_ request: AgentControlRequest) async throws -> AgentControlStatus {
+        try await withProxy { proxy, finish in
+            proxy.prepareAgentControl(XPCAgentControlCoding.encode(request)) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let status = XPCAgentControlCoding.decodeStatus(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid agent-control prepare response.")))
+                    return
+                }
+                finish(.success(status))
+            }
+        }
+    }
+
+    public func restoreAgentControl(reason: String) async throws -> AgentControlStatus {
+        try await withProxy { proxy, finish in
+            proxy.restoreAgentControl(reason) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let status = XPCAgentControlCoding.decodeStatus(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid agent-control restore response.")))
+                    return
+                }
+                finish(.success(status))
+            }
+        }
+    }
+
     public func apply(_ command: FanCommand, fan: Fan) async throws {
         switch command.mode {
         case .fixedRPM(let rpm):
@@ -75,11 +126,15 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     private func withProxy<T: Sendable>(
-        _ operation: @escaping (ViftyDaemonProtocol, @escaping (Result<T, Error>) -> Void) -> Void
+        _ operation: @escaping (
+            ViftyDaemonProtocol,
+            @escaping @Sendable (Result<T, Error>) -> Void
+        ) -> Void
     ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             let state = CallbackState<T>()
             let connection = NSXPCConnection(machServiceName: serviceName, options: .privileged)
+            let connectionHandle = XPCConnectionHandle(connection)
             connection.remoteObjectInterface = NSXPCInterface(with: ViftyDaemonProtocol.self)
 
             connection.invalidationHandler = {
@@ -94,17 +149,17 @@ public final class ViftyDaemonClient: @unchecked Sendable {
             timer.schedule(deadline: .now() + timeout)
             timer.setEventHandler {
                 state.finish(.failure(ViftyError.helperRejected("Daemon request timed out.")), continuation: continuation)
-                connection.invalidate()
+                connectionHandle.invalidate()
             }
             timer.resume()
 
             guard let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
                 state.finish(.failure(ViftyError.helperRejected(error.localizedDescription)), continuation: continuation)
                 timer.cancel()
-                connection.invalidate()
+                connectionHandle.invalidate()
             }) as? ViftyDaemonProtocol else {
                 timer.cancel()
-                connection.invalidate()
+                connectionHandle.invalidate()
                 continuation.resume(throwing: ViftyError.helperRejected("Could not create daemon proxy."))
                 return
             }
@@ -112,9 +167,21 @@ public final class ViftyDaemonClient: @unchecked Sendable {
             operation(proxy) { result in
                 timer.cancel()
                 state.finish(result, continuation: continuation)
-                connection.invalidate()
+                connectionHandle.invalidate()
             }
         }
+    }
+}
+
+private final class XPCConnectionHandle: @unchecked Sendable {
+    private let connection: NSXPCConnection
+
+    init(_ connection: NSXPCConnection) {
+        self.connection = connection
+    }
+
+    func invalidate() {
+        connection.invalidate()
     }
 }
 

@@ -17,6 +17,18 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         }
     }
 
+    func agentControlStatus(reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
+        reply(XPCAgentControlCoding.encode(AgentControlStatus(enabled: false, activeLease: nil, lastDecision: nil, lastErrorCode: nil)), nil)
+    }
+
+    func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
+        reply(nil, "Agent control is not wired yet.")
+    }
+
+    func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
+        reply(XPCAgentControlCoding.encode(AgentControlStatus(enabled: false, activeLease: nil, lastDecision: nil, lastErrorCode: nil)), nil)
+    }
+
     func setFixedRPM(
         _ fanID: Int,
         rpm: Int,
