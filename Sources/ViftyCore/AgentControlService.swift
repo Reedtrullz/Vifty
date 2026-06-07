@@ -141,6 +141,10 @@ public actor AgentControlService {
         defer { endOperation() }
 
         let snapshot = try await hardware.snapshot()
+        return try await restoreAuto(reason: reason, snapshot: snapshot)
+    }
+
+    private func restoreAuto(reason: String, snapshot: HardwareSnapshot) async throws -> AgentControlStatus {
         let lease = activeLease
 
         for fan in snapshot.fans where fan.controllable {
@@ -171,8 +175,19 @@ public actor AgentControlService {
     }
 
     private func scheduleMonitor(for lease: AgentCoolingLease) {
+        guard activeLease?.id == lease.id else { return }
         cancelScheduledExpiry()
         let delay = max(0, min(lease.expiresAt.timeIntervalSince(now()), monitorIntervalSeconds))
+        let leaseID = lease.id
+        scheduledExpiry = expiryScheduler(delay) { [weak self] in
+            await self?.monitorLease(id: leaseID)
+        }
+    }
+
+    private func scheduleMonitorRetry(for lease: AgentCoolingLease) {
+        guard activeLease?.id == lease.id else { return }
+        cancelScheduledExpiry()
+        let delay = max(0.001, min(1, monitorIntervalSeconds))
         let leaseID = lease.id
         scheduledExpiry = expiryScheduler(delay) { [weak self] in
             await self?.monitorLease(id: leaseID)
@@ -183,7 +198,7 @@ public actor AgentControlService {
         guard let lease = activeLease, lease.id == id else { return }
 
         guard lease.isActive(at: now()) else {
-            await restoreFromMonitor(reason: "Agent cooling lease expired")
+            await restoreFromMonitor(reason: "Agent cooling lease expired", leaseID: id, snapshot: nil)
             return
         }
 
@@ -192,20 +207,40 @@ public actor AgentControlService {
             guard let currentLease = activeLease, currentLease.id == id else { return }
 
             if snapshot.temperatureSensors.isEmpty || thermalReader() == .critical {
-                _ = try await restoreAuto(reason: "Agent cooling safety monitor restored Auto")
+                await restoreFromMonitor(reason: "Agent cooling safety monitor restored Auto", leaseID: id, snapshot: snapshot)
             } else {
                 scheduleMonitor(for: currentLease)
             }
         } catch {
-            await restoreFromMonitor(reason: "Agent cooling safety monitor restored Auto after monitor failure: \(error.localizedDescription)")
+            await restoreFromMonitor(reason: "Agent cooling safety monitor restored Auto after monitor failure: \(error.localizedDescription)", leaseID: id, snapshot: nil)
         }
     }
 
-    private func restoreFromMonitor(reason: String) async {
+    private func restoreFromMonitor(reason: String, leaseID: String, snapshot: HardwareSnapshot?) async {
+        guard let lease = activeLease, lease.id == leaseID else { return }
+
         do {
-            _ = try await restoreAuto(reason: reason)
+            try beginOperation()
         } catch {
-            _ = try? await restoreAuto(reason: "Agent cooling safety monitor restore failed: \(error.localizedDescription)")
+            appendAudit(action: "restore-retry-scheduled", leaseID: leaseID, message: "Agent cooling safety monitor restore deferred; retry scheduled: \(error.localizedDescription)")
+            scheduleMonitorRetry(for: lease)
+            return
+        }
+        defer { endOperation() }
+
+        do {
+            let restoreSnapshot: HardwareSnapshot
+            if let snapshot {
+                restoreSnapshot = snapshot
+            } else {
+                restoreSnapshot = try await hardware.snapshot()
+            }
+            _ = try await restoreAuto(reason: reason, snapshot: restoreSnapshot)
+        } catch {
+            appendAudit(action: "restore-retry-scheduled", leaseID: leaseID, message: "Agent cooling safety monitor restore failed; retry scheduled: \(error.localizedDescription)")
+            if let currentLease = activeLease, currentLease.id == leaseID {
+                scheduleMonitorRetry(for: currentLease)
+            }
         }
     }
 
