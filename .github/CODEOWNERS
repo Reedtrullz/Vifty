@@ -1,0 +1,24 @@
+# Code owners — Vifty
+# Default owner for everything in the repo
+* @Reedtrullz
+
+# Security-sensitive paths — requires explicit review
+# Privileged daemon and XPC boundary
+Sources/ViftyDaemon/  @Reedtrullz
+Sources/ViftyCore/ViftyDaemonClient.swift  @Reedtrullz
+Sources/ViftyCore/ViftyDaemonProtocol.swift  @Reedtrullz
+
+# Agent control safety surface
+Sources/ViftyCore/AgentControlPolicy.swift  @Reedtrullz
+Sources/ViftyCore/AgentControlService.swift  @Reedtrullz
+Sources/ViftyCtl/  @Reedtrullz
+
+# IOKit / SMC surface
+Sources/ViftyCore/SMCClient.swift  @Reedtrullz
+Sources/ViftyCore/RealMacHardwareService.swift  @Reedtrullz
+Sources/ViftyPrivateIOKit/  @Reedtrullz
+
+# Installer and daemon plist
+scripts/  @Reedtrullz
+Resources/tech.reidar.vifty.daemon.plist  @Reedtrullz
+Install Vifty.command  @Reedtrullz
