@@ -135,6 +135,16 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
 - Power, thermal, and telemetry-history data stay on the Mac. The telemetry history is in-memory only; there are no analytics, accounts, network uploads, or cloud dependencies.
 
+### Optional: Harden XPC with your TeamID
+
+By default Vifty accepts any ad-hoc-signed binary with the correct signing identifier over XPC — this keeps the project buildable by anyone who clones it. If you have an Apple Developer account, you can lock the daemon to only accept binaries signed by your team:
+
+1. Find your TeamID: `make app CONFIGURATION=release SIGNING_IDENTITY="Apple Development"` then `codesign -dvvv .build/Vifty.app 2>&1 | grep TeamIdentifier`
+2. Edit `Sources/ViftyDaemon/main.swift` — change `teamIdentifier: nil` to your TeamID on both `XPCAllowedClient` lines.
+3. Build with your identity: `make app CONFIGURATION=release SIGNING_IDENTITY="Apple Development"`
+
+This prevents other processes on your Mac from impersonating Vifty or viftyctl on the XPC bus.
+
 ## Fail-safe recovery
 
 If manual fan control misbehaves, restore Auto before trying anything else:
