@@ -24,6 +24,7 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy helper fan data from helper errors, unreachable daemon state, and empty snapshots.
+- **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to request bounded temporary cooling for builds/tests, with visible state and automatic restore.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
 - **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
@@ -160,6 +161,33 @@ ViftyHelper setFixed <id> <rpm> <min> <max>
 ViftyHelper auto <id> <min> <max>
 ViftyHelper smcDiagnostics     # IOKit service discovery dump
 ```
+
+## viftyctl agent CLI
+
+`viftyctl` is bundled at:
+
+```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+It is designed for local AI/coding agents and shell automation. It exposes structured JSON and bounded workload leases rather than arbitrary raw SMC writes:
+
+```sh
+viftyctl status --json
+viftyctl capabilities --json
+viftyctl prepare --workload build --duration 45m --max-rpm-percent 75 --reason "Swift release build" --idempotency-key "$(uuidgen)" --json
+viftyctl restore-auto --reason "workload complete" --json
+viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift test" -- swift test
+```
+
+Safety rules:
+
+- Agent control is local-only through the signed CLI and privileged daemon.
+- Every prepare request requires a bounded duration and reason.
+- RPM targets are computed from each fan's min/max range and clamped by policy.
+- User Auto restore wins over an active agent lease.
+- `viftyctl run` restores Auto on normal child launch/exit; if the wrapper is killed or crashes, the daemon-owned lease monitor is the safety fallback.
+- Sensor loss, unsupported hardware, helper uncertainty, or critical thermal pressure refuses or restores control.
 
 ## Daemon installation
 

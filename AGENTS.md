@@ -25,6 +25,9 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 ## Key Files
 
 - `Sources/ViftyCore/Models.swift` — All data types: Fan, TemperatureSensor, HardwareSnapshot, FanCurve, CurveProfile, FanMode, FanCommand, ControlState, ViftyError.
+- `Sources/ViftyCore/AgentControlModels.swift` — Codable agent-control requests, leases, decisions, and status.
+- `Sources/ViftyCore/AgentControlPolicy.swift` — conservative policy for bounded workload leases.
+- `Sources/ViftyCore/AgentControlService.swift` — daemon-owned service that applies agent cooling targets and restores Auto.
 - `Sources/ViftyCore/HardwareService.swift` — `HardwareService` protocol + `FanControlCoordinator` actor + `ManualControlMarker`.
 - `Sources/ViftyCore/RealMacHardwareService.swift` — `RealMacHardwareService` (daemon-first SMC reads/writes, local fallback).
 - `Sources/ViftyCore/CurveProfileStore.swift` — JSON file persistence for saved curve profiles.
@@ -34,10 +37,13 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCore/PowerInfo.swift` — Local IOKit power telemetry parser (`IOPS`, `AppleSmartBattery`, adapter details) + UI formatters.
 - `Sources/ViftyCore/ThermalPressure.swift` — macOS thermal-pressure state model and display helpers.
 - `Sources/ViftyCore/TelemetryHistory.swift` — In-memory rolling telemetry sample buffer.
+- `Sources/ViftyCore/ViftyCtlArguments.swift` — pure parser for the bundled agent CLI.
+- `Sources/ViftyCore/ViftyCtlRunner.swift` — testable command runner used by `viftyctl`.
 - `Sources/ViftyCore/ViftyDaemonClient.swift` — XPC client that talks to the privileged daemon.
 - `Sources/ViftyCore/ViftyDaemonProtocol.swift` — `@objc` XPC protocol + `XPCSnapshotCoding` (NSDictionary ↔ HardwareSnapshot).
 - `Sources/ViftyDaemon/main.swift` — XPC listener with `DaemonService` exporting the protocol.
 - `Sources/ViftyHelper/main.swift` — CLI for `probe`, `readKey`, `setFixed`, `auto`, `smcDiagnostics`.
+- `Sources/ViftyCtl/main.swift` — thin `viftyctl` command entrypoint.
 - `Sources/Vifty/ViftyApp.swift` — `@main` SwiftUI app entry (menu bar extra + window scene).
 - `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
 - `.github/workflows/ci.yml` — GitHub Actions CI: Swift tests, release app build, plist/code-sign checks, temp install verification, and app artifact upload.
@@ -57,6 +63,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 9. **Power telemetry stays app-local** — `PowerInfoReader` reads IOKit power/battery dictionaries directly; it does not require the privileged fan daemon and should keep parser helpers testable with dictionary fixtures.
 10. **Fan hardware state is read-only telemetry** — SMC mode/target fields are surfaced on snapshots and round-tripped through XPC, but fan commands still go through `FanControlCoordinator` and daemon/helper paths.
 11. **Telemetry history is in-memory only** — do not persist rolling samples unless a future plan explicitly covers privacy and retention.
+12. **Agent control is lease-based** — agents request bounded workload cooling through `viftyctl`; never expose raw SMC writes or arbitrary fixed-low RPM to agent tools. The daemon/core service owns lease monitoring, expiry, and restore; UI state is visibility and user override.
 
 ## Testing
 
