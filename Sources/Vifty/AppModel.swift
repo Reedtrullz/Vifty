@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
     @Published var telemetryHistory = TelemetryHistory()
     @Published var manualRunLimit: ManualRunLimit = .indefinitely
     @Published var manualSessionExpiresAt: Date?
+    @Published var agentControlStatus: AgentControlStatus?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
@@ -32,6 +33,8 @@ final class AppModel: ObservableObject {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
     private let daemonPing: @Sendable () async -> Bool
+    private let agentStatusReader: @Sendable () async -> AgentControlStatus?
+    private let agentRestore: @Sendable (String) async -> AgentControlStatus?
     private let profileStore = CurveProfileStore()
     private var pollingTask: Task<Void, Never>?
 
@@ -40,13 +43,21 @@ final class AppModel: ObservableObject {
         powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
-        daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() }
+        daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
+        agentStatusReader: @escaping @Sendable () async -> AgentControlStatus? = {
+            try? await ViftyDaemonClient().agentControlStatus()
+        },
+        agentRestore: @escaping @Sendable (String) async -> AgentControlStatus? = { reason in
+            try? await ViftyDaemonClient().restoreAgentControl(reason: reason)
+        }
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
         self.thermalReader = thermalReader
         self.now = now
         self.daemonPing = daemonPing
+        self.agentStatusReader = agentStatusReader
+        self.agentRestore = agentRestore
         savedProfiles = profileStore.load()
     }
 
@@ -93,6 +104,7 @@ final class AppModel: ObservableObject {
             ))
             lastError = nil
             daemonReachable = await daemonPing()
+            agentControlStatus = await agentStatusReader()
             fanAccessMessage = nextSnapshot.fans.isEmpty
                 ? (daemonReachable ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
                 : nil
@@ -117,6 +129,9 @@ final class AppModel: ObservableObject {
         let mode = selectedFanMode()
         updateManualDeadline(for: mode)
         await coordinator.setMode(mode)
+        if mode == .auto {
+            await clearAgentLeaseForUserAutoIfNeeded()
+        }
         await pollOnce()
     }
 
@@ -124,6 +139,7 @@ final class AppModel: ObservableObject {
         selectedMode = .auto
         manualSessionExpiresAt = nil
         await coordinator.setMode(.auto)
+        await clearAgentLeaseForUserAutoIfNeeded()
         await pollOnce()
     }
 
@@ -184,15 +200,22 @@ final class AppModel: ObservableObject {
     }
 
     var menuTitle: String {
-        guard let snapshot else { return powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty" }
-        let temp = snapshot.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
-        let fan = snapshot.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
-        var parts = [temp, fan]
-        if let powerSnapshot {
-            parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
+        var parts: [String]
+        if let snapshot {
+            let temp = snapshot.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
+            let fan = snapshot.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
+            parts = [temp, fan]
+            if let powerSnapshot {
+                parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
+            }
+        } else {
+            parts = [powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty"]
         }
         if let thermal = thermalPressure.menuSummary {
             parts.append(thermal)
+        }
+        if agentControlStatus?.activeLease != nil {
+            parts.append("Agent cooling")
         }
         return parts.joined(separator: " | ")
     }
@@ -260,6 +283,12 @@ final class AppModel: ObservableObject {
         self.manualSessionExpiresAt = nil
         await coordinator.setMode(.auto)
         return true
+    }
+
+    private func clearAgentLeaseForUserAutoIfNeeded() async {
+        if agentControlStatus?.activeLease != nil {
+            agentControlStatus = await agentRestore("User selected Auto in Vifty")
+        }
     }
 
     private func syncCurveDefaultsIfNeeded(from snapshot: HardwareSnapshot) {

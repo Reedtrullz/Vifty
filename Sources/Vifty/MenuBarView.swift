@@ -56,6 +56,12 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let lease = model.agentControlStatus?.activeLease {
+                Label("Agent cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))", systemImage: "cpu")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+            }
+
             Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
                 .font(.caption)
                 .foregroundStyle(helperHealthMenuColor)

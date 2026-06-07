@@ -274,6 +274,79 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(restored, [0], "Explicit Auto must also issue a hardware restore")
     }
 
+    func testPollOnceRefreshesAgentControlStatus() async {
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+            },
+            agentRestore: { _ in
+                AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)
+            }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
+        XCTAssertTrue(model.menuTitle.contains("Agent cooling"))
+    }
+
+    func testRestoreAutoClearsDaemonOwnedAgentLease() async {
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let recorder = AgentRestoreRecorder(activeLease: lease)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: {
+                await recorder.status()
+            },
+            agentRestore: { reason in
+                await recorder.restore(reason: reason)
+            }
+        )
+
+        await model.pollOnce()
+        await model.restoreAutoNow()
+
+        let reasons = await recorder.reasons
+        XCTAssertEqual(reasons, ["User selected Auto in Vifty"])
+        XCTAssertNil(model.agentControlStatus?.activeLease)
+    }
+
+    private func agentLease() -> AgentCoolingLease {
+        AgentCoolingLease(
+            id: "lease-1",
+            request: AgentControlRequest(
+                workload: .build,
+                durationSeconds: 600,
+                maxRPMPercent: 75,
+                reason: "Build",
+                idempotencyKey: "key"
+            ),
+            createdAt: Date(timeIntervalSince1970: 1000),
+            expiresAt: Date(timeIntervalSince1970: 1600),
+            targetRPMByFanID: [0: 3600]
+        )
+    }
+
+    private func agentHardwareSnapshot() -> HardwareSnapshot {
+        HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+    }
+
     private func temporaryMarkerPath() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-app-model-tests")
@@ -318,4 +391,23 @@ private actor AppModelFakeHardware: HardwareService {
     func apply(_ command: FanCommand, fan: Fan) async throws {}
 
     func restoreAuto(fan: Fan) async throws { restoredFanIDs.append(fan.id) }
+}
+
+private actor AgentRestoreRecorder {
+    var reasons: [String] = []
+    private var currentStatus: AgentControlStatus
+
+    init(activeLease: AgentCoolingLease? = nil) {
+        self.currentStatus = AgentControlStatus(enabled: true, activeLease: activeLease, lastDecision: nil, lastErrorCode: nil)
+    }
+
+    func status() -> AgentControlStatus? {
+        currentStatus
+    }
+
+    func restore(reason: String) -> AgentControlStatus? {
+        reasons.append(reason)
+        currentStatus = AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)
+        return currentStatus
+    }
 }

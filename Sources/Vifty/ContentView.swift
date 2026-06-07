@@ -109,6 +109,22 @@ struct ContentView: View {
             .padding(10)
             .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
 
+            if let lease = model.agentControlStatus?.activeLease {
+                HStack(spacing: 8) {
+                    Image(systemName: "cpu").foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Agent cooling active").font(.caption.weight(.semibold))
+                        Text("\(lease.request.workload.displayName) · Auto restore at \(lease.expiresAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Auto") { model.restoreAuto() }.controlSize(.small)
+                }
+                .padding(10)
+                .background(Color.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+            }
+
             if model.selectedMode == .curve {
                 curveEditor
             } else if model.selectedMode == .fixed {
