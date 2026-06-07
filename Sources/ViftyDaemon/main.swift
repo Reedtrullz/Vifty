@@ -3,6 +3,10 @@ import ViftyCore
 
 private final class DaemonService: NSObject, ViftyDaemonProtocol {
     private let hardware = RealMacHardwareService(preferDaemon: false)
+    private let agentControl = AgentControlService(
+        hardware: RealMacHardwareService(preferDaemon: false),
+        policy: AgentControlPolicy(enabled: true)
+    )
 
     func ping(reply: @escaping (Bool) -> Void) {
         reply(true)
@@ -18,15 +22,39 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
     }
 
     func agentControlStatus(reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
-        reply(XPCAgentControlCoding.encode(AgentControlStatus(enabled: false, activeLease: nil, lastDecision: nil, lastErrorCode: nil)), nil)
+        let agentControl = self.agentControl
+        Task {
+            let status = await agentControl.status()
+            reply(XPCAgentControlCoding.encode(status), nil)
+        }
     }
 
     func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
-        reply(nil, "Agent control is not wired yet.")
+        guard let decoded = XPCAgentControlCoding.decodeRequest(request) else {
+            reply(nil, AgentControlErrorCode.invalidArguments.rawValue)
+            return
+        }
+        let agentControl = self.agentControl
+        Task {
+            do {
+                let status = try await agentControl.prepare(decoded)
+                reply(XPCAgentControlCoding.encode(status), nil)
+            } catch {
+                reply(nil, error.localizedDescription)
+            }
+        }
     }
 
     func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
-        reply(XPCAgentControlCoding.encode(AgentControlStatus(enabled: false, activeLease: nil, lastDecision: nil, lastErrorCode: nil)), nil)
+        let agentControl = self.agentControl
+        Task {
+            do {
+                let status = try await agentControl.restoreAuto(reason: reason)
+                reply(XPCAgentControlCoding.encode(status), nil)
+            } catch {
+                reply(nil, error.localizedDescription)
+            }
+        }
     }
 
     func setFixedRPM(
@@ -68,6 +96,10 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
                 controllable: true
             )
             try LocalFanHelperClient().restoreAuto(fan: fan)
+            let agentControl = self.agentControl
+            Task {
+                _ = try? await agentControl.clearActiveLease(reason: "User/app restored Auto through daemon restoreAuto")
+            }
             reply(true, nil)
         } catch {
             reply(false, error.localizedDescription)
