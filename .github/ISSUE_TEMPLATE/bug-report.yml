@@ -1,0 +1,82 @@
+name: Bug Report
+description: Report a bug in Vifty
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Which version of macOS are you running?
+      placeholder: e.g. 15.4
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mac-model
+    attributes:
+      label: Mac model
+      description: What kind of Mac are you using?
+      options:
+        - Apple Silicon (M1/M2/M3/M4)
+        - Intel
+    validations:
+      required: true
+
+  - type: input
+    id: vifty-version
+    attributes:
+      label: Vifty version
+      description: Which version of Vifty are you running?
+      placeholder: e.g. 1.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: smc-key-dump
+    attributes:
+      label: SMC key dump (optional)
+      description: |
+        If the bug involves fan speed or temperature readings, please attach the output of:
+        `viftyctl smcDiagnostics` or `viftyhelper smcDiagnostics`
+      placeholder: |
+        Key: F0Tg [flt ] (bytes: 0a 63 94) = 44.6 °C
+        Key: F0Ac [flt ] (bytes: 00 00 00) = 0.0 RPM
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Reproduction steps
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Open Vifty
+        2. Click on ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened.
+    validations:
+      required: true
