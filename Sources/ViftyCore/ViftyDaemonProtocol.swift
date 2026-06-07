@@ -107,3 +107,224 @@ public enum XPCSnapshotCoding {
         )
     }
 }
+
+public enum XPCAgentControlCoding {
+    public static func encode(_ request: AgentControlRequest) -> NSDictionary {
+        [
+            "workload": request.workload.rawValue,
+            "durationSeconds": request.durationSeconds,
+            "maxRPMPercent": request.maxRPMPercent,
+            "reason": request.reason,
+            "idempotencyKey": request.idempotencyKey
+        ] as NSDictionary
+    }
+
+    public static func decodeRequest(_ dictionary: NSDictionary) -> AgentControlRequest? {
+        guard let workloadRaw = dictionary["workload"] as? String,
+              let workload = AgentControlWorkload(rawValue: workloadRaw),
+              let durationSeconds = intValue(dictionary["durationSeconds"]),
+              let maxRPMPercent = intValue(dictionary["maxRPMPercent"]),
+              let reason = dictionary["reason"] as? String,
+              let idempotencyKey = dictionary["idempotencyKey"] as? String else {
+            return nil
+        }
+
+        return AgentControlRequest(
+            workload: workload,
+            durationSeconds: durationSeconds,
+            maxRPMPercent: maxRPMPercent,
+            reason: reason,
+            idempotencyKey: idempotencyKey
+        )
+    }
+
+    public static func encode(_ status: AgentControlStatus) -> NSDictionary {
+        var encoded: [String: Any] = [
+            "enabled": status.enabled
+        ]
+        if let activeLease = status.activeLease {
+            encoded["activeLease"] = encodeLease(activeLease)
+        }
+        if let lastDecision = status.lastDecision {
+            encoded["lastDecision"] = encodeDecision(lastDecision)
+        }
+        if let lastErrorCode = status.lastErrorCode {
+            encoded["lastErrorCode"] = lastErrorCode.rawValue
+        }
+        return encoded as NSDictionary
+    }
+
+    public static func decodeStatus(_ dictionary: NSDictionary) -> AgentControlStatus? {
+        guard let enabled = boolValue(dictionary["enabled"]) else {
+            return nil
+        }
+
+        var activeLease: AgentCoolingLease?
+        if let value = dictionary["activeLease"] {
+            guard let leaseDictionary = value as? NSDictionary,
+                  let decodedLease = decodeLease(leaseDictionary) else {
+                return nil
+            }
+            activeLease = decodedLease
+        }
+
+        var lastDecision: AgentControlDecision?
+        if let value = dictionary["lastDecision"] {
+            guard let decisionDictionary = value as? NSDictionary,
+                  let decodedDecision = decodeDecision(decisionDictionary) else {
+                return nil
+            }
+            lastDecision = decodedDecision
+        }
+
+        var lastErrorCode: AgentControlErrorCode?
+        if let value = dictionary["lastErrorCode"] {
+            guard let rawValue = value as? String,
+                  let decodedErrorCode = AgentControlErrorCode(rawValue: rawValue) else {
+                return nil
+            }
+            lastErrorCode = decodedErrorCode
+        }
+
+        return AgentControlStatus(
+            enabled: enabled,
+            activeLease: activeLease,
+            lastDecision: lastDecision,
+            lastErrorCode: lastErrorCode
+        )
+    }
+
+    private static func encodeLease(_ lease: AgentCoolingLease) -> NSDictionary {
+        var encoded: [String: Any] = [
+            "id": lease.id,
+            "request": encode(lease.request),
+            "createdAt": lease.createdAt.timeIntervalSince1970,
+            "expiresAt": lease.expiresAt.timeIntervalSince1970,
+            "targetRPMByFanID": encodeRPMMap(lease.targetRPMByFanID)
+        ]
+        if let restoredAt = lease.restoredAt {
+            encoded["restoredAt"] = restoredAt.timeIntervalSince1970
+        }
+        return encoded as NSDictionary
+    }
+
+    private static func decodeLease(_ dictionary: NSDictionary) -> AgentCoolingLease? {
+        guard let id = dictionary["id"] as? String,
+              let requestDictionary = dictionary["request"] as? NSDictionary,
+              let request = decodeRequest(requestDictionary),
+              let createdAt = doubleValue(dictionary["createdAt"]),
+              let expiresAt = doubleValue(dictionary["expiresAt"]),
+              let targetRPMByFanID = decodeRPMMap(dictionary["targetRPMByFanID"]) else {
+            return nil
+        }
+
+        var restoredAt: Date?
+        if let value = dictionary["restoredAt"] {
+            guard let timeInterval = doubleValue(value) else {
+                return nil
+            }
+            restoredAt = Date(timeIntervalSince1970: timeInterval)
+        }
+
+        return AgentCoolingLease(
+            id: id,
+            request: request,
+            createdAt: Date(timeIntervalSince1970: createdAt),
+            expiresAt: Date(timeIntervalSince1970: expiresAt),
+            targetRPMByFanID: targetRPMByFanID,
+            restoredAt: restoredAt
+        )
+    }
+
+    private static func encodeDecision(_ decision: AgentControlDecision) -> NSDictionary {
+        var encoded: [String: Any] = [
+            "allowed": decision.allowed,
+            "message": decision.message,
+            "targetRPMByFanID": encodeRPMMap(decision.targetRPMByFanID),
+            "warnings": decision.warnings
+        ]
+        if let errorCode = decision.errorCode {
+            encoded["errorCode"] = errorCode.rawValue
+        }
+        return encoded as NSDictionary
+    }
+
+    private static func decodeDecision(_ dictionary: NSDictionary) -> AgentControlDecision? {
+        guard let allowed = boolValue(dictionary["allowed"]),
+              let message = dictionary["message"] as? String,
+              let targetRPMByFanID = decodeRPMMap(dictionary["targetRPMByFanID"]),
+              let warnings = dictionary["warnings"] as? [String] else {
+            return nil
+        }
+
+        var errorCode: AgentControlErrorCode?
+        if let value = dictionary["errorCode"] {
+            guard let rawValue = value as? String,
+                  let decodedErrorCode = AgentControlErrorCode(rawValue: rawValue) else {
+                return nil
+            }
+            errorCode = decodedErrorCode
+        }
+
+        return AgentControlDecision(
+            allowed: allowed,
+            errorCode: errorCode,
+            message: message,
+            targetRPMByFanID: targetRPMByFanID,
+            warnings: warnings
+        )
+    }
+
+    private static func encodeRPMMap(_ map: [Int: Int]) -> NSDictionary {
+        Dictionary(uniqueKeysWithValues: map.map { fanID, rpm in
+            (String(fanID), rpm)
+        }) as NSDictionary
+    }
+
+    private static func decodeRPMMap(_ value: Any?) -> [Int: Int]? {
+        guard let dictionary = value as? NSDictionary else {
+            return nil
+        }
+
+        var decoded: [Int: Int] = [:]
+        for (key, value) in dictionary {
+            guard let key = key as? String,
+                  let fanID = Int(key),
+                  let rpm = intValue(value) else {
+                return nil
+            }
+            decoded[fanID] = rpm
+        }
+        return decoded
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        return nil
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        return nil
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        return nil
+    }
+}
