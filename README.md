@@ -106,6 +106,7 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 | `ViftyCore` | library | Models, SMC client, fan coordinator, power snapshots, daemon protocol |
 | `ViftyDaemon` | executable | Privileged XPC daemon that reads/writes fan SMC keys as root |
 | `ViftyHelper` | executable | CLI for direct SMC probing and emergency fan restoration |
+| `ViftyCtl` | executable | Agent-friendly JSON CLI for bounded cooling leases |
 | `ViftyPrivateIOKit` | library | C/IOKit bridge for HID temperature sensors |
 
 **Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles are persisted as JSON in `~/Library/Application Support/Vifty/`.
@@ -183,7 +184,7 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift
 Safety rules:
 
 - Agent control is local-only through the signed CLI and privileged daemon.
-- Every prepare request requires a bounded duration and reason.
+- Every prepare request carries a bounded duration and reason; the CLI supplies a default reason when one is omitted.
 - RPM targets are computed from each fan's min/max range and clamped by policy.
 - User Auto restore wins over an active agent lease.
 - `viftyctl run` restores Auto on normal child launch/exit; if the wrapper is killed or crashes, the daemon-owned lease monitor is the safety fallback.
@@ -214,6 +215,7 @@ Vifty/
 ├── Sources/
 │   ├── Vifty/                  # Main app target
 │   ├── ViftyCore/              # Shared models, fan control, SMC, power telemetry
+│   ├── ViftyCtl/               # Agent-friendly JSON CLI
 │   ├── ViftyDaemon/            # Privileged XPC daemon
 │   ├── ViftyHelper/            # CLI helper
 │   └── ViftyPrivateIOKit/      # C IOKit bridge

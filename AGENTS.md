@@ -17,6 +17,7 @@ AI coding instructions for working in this repository.
 | ViftyCore | library | ViftyPrivateIOKit |
 | ViftyDaemon | executable | ViftyCore |
 | ViftyHelper | executable | ViftyCore |
+| ViftyCtl | executable | ViftyCore |
 | ViftyPrivateIOKit | C target | IOKit framework |
 | ViftyCoreTests | test | ViftyCore, Vifty |
 
@@ -67,7 +68,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (73 tests).
+- `swift test` runs `ViftyCoreTests` (127 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `FanInfoReaderTests` tests pure fan hardware-mode/target parsing from synthetic SMC dictionaries.
