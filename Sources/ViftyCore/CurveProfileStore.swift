@@ -20,6 +20,8 @@ public final class CurveProfileStore: @unchecked Sendable {
     public func save(_ profiles: [CurveProfile]) {
         let directory = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var attr: [FileAttributeKey: Any] = [.posixPermissions: NSNumber(value: 0o700)]
+        try? FileManager.default.setAttributes(attr, ofItemAtPath: directory.path)
 
         // Write a backup before overwriting the main file.
         if FileManager.default.fileExists(atPath: url.path) {
@@ -30,6 +32,8 @@ public final class CurveProfileStore: @unchecked Sendable {
 
         guard let data = try? JSONEncoder().encode(profiles) else { return }
         try? data.write(to: url, options: .atomic)
+        attr = [.posixPermissions: NSNumber(value: 0o600)]
+        try? FileManager.default.setAttributes(attr, ofItemAtPath: url.path)
 
         // Always ensure a backup copy exists after saving.
         let backupURL = url.appendingPathExtension("bak")
