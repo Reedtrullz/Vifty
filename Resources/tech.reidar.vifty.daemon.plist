@@ -13,9 +13,19 @@
 	</dict>
 	<key>RunAtLoad</key>
 	<false/>
+	<key>LowPriorityIO</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>Nice</key>
+	<integer>10</integer>
+	<key>Umask</key>
+	<integer>63</integer>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
 	<key>StandardOutPath</key>
-	<string>/tmp/tech.reidar.vifty.daemon.out.log</string>
+	<string>/var/log/tech.reidar.vifty.daemon.out.log</string>
 	<key>StandardErrorPath</key>
-	<string>/tmp/tech.reidar.vifty.daemon.err.log</string>
+	<string>/var/log/tech.reidar.vifty.daemon.err.log</string>
 </dict>
 </plist>
