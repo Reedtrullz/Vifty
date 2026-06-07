@@ -11,6 +11,7 @@ public actor AgentControlService {
     private var activeLease: AgentCoolingLease?
     private var lastDecision: AgentControlDecision?
     private var lastErrorCode: AgentControlErrorCode?
+    private var operationInProgress = false
 
     public init(
         hardware: HardwareService,
@@ -41,6 +42,9 @@ public actor AgentControlService {
     }
 
     public func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus {
+        try beginOperation()
+        defer { endOperation() }
+
         let snapshot = try await hardware.snapshot()
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
         lastDecision = decision
@@ -87,6 +91,9 @@ public actor AgentControlService {
     }
 
     public func restoreAuto(reason: String) async throws -> AgentControlStatus {
+        try beginOperation()
+        defer { endOperation() }
+
         let snapshot = try await hardware.snapshot()
         let lease = activeLease
 
@@ -101,6 +108,17 @@ public actor AgentControlService {
         try store.saveActiveLease(nil)
         lastErrorCode = nil
         return status()
+    }
+
+    private func beginOperation() throws {
+        guard !operationInProgress else {
+            throw ViftyError.helperRejected("Agent control operation already in progress.")
+        }
+        operationInProgress = true
+    }
+
+    private func endOperation() {
+        operationInProgress = false
     }
 
     private func appendAudit(action: String, leaseID: String?, message: String) {

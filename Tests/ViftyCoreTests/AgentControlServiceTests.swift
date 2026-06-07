@@ -81,6 +81,45 @@ final class AgentControlServiceTests: XCTestCase {
         }
     }
 
+    func testRestoreAutoRejectedWhilePrepareSnapshotInProgress() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        await hardware.blockNextSnapshot()
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        let prepareTask = Task {
+            try await service.prepare(request)
+        }
+        await hardware.waitForBlockedSnapshot()
+
+        do {
+            _ = try await service.restoreAuto(reason: "done")
+            XCTFail("Expected restore to be rejected while prepare is in progress")
+        } catch ViftyError.helperRejected(let message) {
+            XCTAssertEqual(message, "Agent control operation already in progress.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        let restoredBeforePrepareCompletes = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredBeforePrepareCompletes, [])
+
+        await hardware.releaseBlockedSnapshot()
+        let status = try await prepareTask.value
+
+        XCTAssertEqual(status.activeLease?.id, "lease-1")
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
+        let restoredAfterPrepareCompletes = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredAfterPrepareCompletes, [])
+    }
+
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vifty-agent-service-\(UUID().uuidString)", isDirectory: true)
     }
@@ -113,14 +152,43 @@ private actor AgentServiceFakeHardware: HardwareService {
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
     var failingApplyFanID: Int?
+    private var shouldBlockNextSnapshot = false
+    private var blockedSnapshotContinuation: CheckedContinuation<Void, Never>?
+    private var blockedSnapshotEnteredContinuation: CheckedContinuation<Void, Never>?
 
     init(snapshot: HardwareSnapshot, failingApplyFanID: Int? = nil) {
         self.snapshotValue = snapshot
         self.failingApplyFanID = failingApplyFanID
     }
 
+    func blockNextSnapshot() {
+        shouldBlockNextSnapshot = true
+    }
+
+    func waitForBlockedSnapshot() async {
+        if blockedSnapshotContinuation != nil { return }
+        await withCheckedContinuation { continuation in
+            blockedSnapshotEnteredContinuation = continuation
+        }
+    }
+
+    func releaseBlockedSnapshot() {
+        let continuation = blockedSnapshotContinuation
+        blockedSnapshotContinuation = nil
+        continuation?.resume()
+    }
+
     func snapshot() async throws -> HardwareSnapshot {
-        snapshotValue
+        if shouldBlockNextSnapshot {
+            shouldBlockNextSnapshot = false
+            let enteredContinuation = blockedSnapshotEnteredContinuation
+            blockedSnapshotEnteredContinuation = nil
+            await withCheckedContinuation { continuation in
+                blockedSnapshotContinuation = continuation
+                enteredContinuation?.resume()
+            }
+        }
+        return snapshotValue
     }
 
     func apply(_ command: FanCommand, fan: Fan) async throws {
