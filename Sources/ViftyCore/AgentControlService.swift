@@ -42,6 +42,7 @@ public actor AgentControlService {
     private var lastErrorCode: AgentControlErrorCode?
     private var operationInProgress = false
     private var scheduledExpiry: AgentControlScheduledExpiry?
+    private var lastPrepareCompletedAt: Date?
     private let monitorIntervalSeconds: TimeInterval = 5
 
     public init(
@@ -102,6 +103,19 @@ public actor AgentControlService {
             return status()
         }
 
+        if let lastPrepare = lastPrepareCompletedAt,
+           now().timeIntervalSince(lastPrepare) < Double(policy.prepareCooldownSeconds) {
+            let remaining = policy.prepareCooldownSeconds - Int(now().timeIntervalSince(lastPrepare))
+            let decision = AgentControlDecision.denied(
+                .prepareRateLimited,
+                message: "Prepare rate-limited. Wait \(remaining)s between prepare calls."
+            )
+            lastDecision = decision
+            lastErrorCode = decision.errorCode
+            appendAudit(action: "prepare-rate-limited", leaseID: nil, message: decision.message)
+            return status()
+        }
+
         let snapshot = try await hardware.snapshot()
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
         lastDecision = decision
@@ -135,6 +149,7 @@ public actor AgentControlService {
             activeLease = lease
             try store.saveActiveLease(lease)
             scheduleMonitor(for: lease)
+            lastPrepareCompletedAt = now()
             appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
             return status()
         } catch {

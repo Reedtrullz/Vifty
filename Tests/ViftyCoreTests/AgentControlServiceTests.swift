@@ -464,6 +464,54 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertNil(status.activeLease)
     }
 
+    func testPrepareIsRateLimitedWithinCooldownWindow() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let policy = AgentControlPolicy(enabled: true, prepareCooldownSeconds: 30)
+        let clock = AgentControlTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware, policy: policy, store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { UUID().uuidString }
+        )
+
+        let request1 = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 70, reason: "first", idempotencyKey: "key-1")
+        _ = try await service.prepare(request1)
+        _ = try await service.restoreAuto(reason: "done")
+
+        clock.now = clock.now.addingTimeInterval(10) // only 10s, cooldown is 30s
+        let request2 = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 70, reason: "second", idempotencyKey: "key-2")
+        let status2 = try await service.prepare(request2)
+
+        XCTAssertNil(status2.activeLease)
+        XCTAssertEqual(status2.lastErrorCode, .prepareRateLimited)
+    }
+
+    func testPrepareAllowedAfterCooldownExpires() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let policy = AgentControlPolicy(enabled: true, prepareCooldownSeconds: 30)
+        let clock = AgentControlTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware, policy: policy, store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { UUID().uuidString }
+        )
+
+        let request1 = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 70, reason: "first", idempotencyKey: "key-1")
+        _ = try await service.prepare(request1)
+        _ = try await service.restoreAuto(reason: "done")
+
+        clock.now = clock.now.addingTimeInterval(31) // past 30s cooldown
+        let request2 = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 70, reason: "second", idempotencyKey: "key-2")
+        let status2 = try await service.prepare(request2)
+
+        XCTAssertNotNil(status2.activeLease)
+        XCTAssertNil(status2.lastErrorCode)
+    }
+
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vifty-agent-service-\(UUID().uuidString)", isDirectory: true)
     }
