@@ -42,7 +42,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--max-rpm-percent", "75"
         ])
 
-        guard case let .prepare(request, _) = command else {
+        guard case let .prepare(request, _, _) = command else {
             return XCTFail("Expected prepare command")
         }
 
@@ -57,7 +57,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--max-rpm-percent", "75"
         ])
 
-        guard case let .prepare(request, _) = command else {
+        guard case let .prepare(request, _, _) = command else {
             return XCTFail("Expected prepare command")
         }
 
@@ -119,7 +119,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--json"
         ])
 
-        guard case let .prepare(request, json) = command else {
+        guard case let .prepare(request, json, _) = command else {
             return XCTFail("Expected prepare command")
         }
 
@@ -139,7 +139,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--max-rpm-percent", "100"
         ])
 
-        guard case let .prepare(request, json) = command else {
+        guard case let .prepare(request, json, _) = command else {
             return XCTFail("Expected prepare command")
         }
 
@@ -157,7 +157,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--reason", "--json"
         ])
 
-        guard case let .prepare(request, json) = command else {
+        guard case let .prepare(request, json, _) = command else {
             return XCTFail("Expected prepare command")
         }
 
@@ -196,7 +196,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "swift", "test", "--json", "--filter", "ViftyCtlArgumentsTests"
         ])
 
-        guard case let .run(request, childArguments) = command else {
+        guard case let .run(request, childArguments, _) = command else {
             return XCTFail("Expected run command")
         }
 

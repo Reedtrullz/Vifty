@@ -3,9 +3,9 @@ import Foundation
 public enum ViftyCtlCommand: Equatable, Sendable {
     case status(json: Bool)
     case capabilities(json: Bool)
-    case prepare(AgentControlRequest, json: Bool)
+    case prepare(AgentControlRequest, json: Bool, force: Bool)
     case restoreAuto(reason: String, idempotencyKey: String?, json: Bool)
-    case run(AgentControlRequest, childArguments: [String])
+    case run(AgentControlRequest, childArguments: [String], force: Bool)
 }
 
 public enum ViftyCtlArguments {
@@ -22,7 +22,7 @@ public enum ViftyCtlArguments {
         case "capabilities":
             return .capabilities(json: rest.contains("--json"))
         case "prepare":
-            return .prepare(try parseRequest(rest), json: rest.contains("--json"))
+            return .prepare(try parseRequest(rest), json: rest.contains("--json"), force: rest.contains("--force"))
         case "restore-auto":
             return .restoreAuto(
                 reason: value(for: "--reason", in: rest) ?? "manual restore",
@@ -41,7 +41,7 @@ public enum ViftyCtlArguments {
                 throw ViftyCtlParseError.missingChildCommand
             }
 
-            return .run(try parseRequest(requestArguments), childArguments: childArguments)
+            return .run(try parseRequest(requestArguments), childArguments: childArguments, force: rest.contains("--force"))
         default:
             throw ViftyCtlParseError.unknownCommand(command)
         }

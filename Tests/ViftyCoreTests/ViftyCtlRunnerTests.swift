@@ -42,7 +42,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
         let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
 
-        let result = try await runner.run(.prepare(request, json: true))
+        let result = try await runner.run(.prepare(request, json: true, force: false))
 
         XCTAssertEqual(result.exitCode, 0)
         let prepareRequests = await client.prepareRequests
@@ -71,7 +71,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
         let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
 
-        let result = try await runner.run(.run(request, childArguments: ["swift", "test"]))
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], force: false))
 
         XCTAssertEqual(result.exitCode, 7)
         let prepareRequests = await client.prepareRequests
@@ -88,7 +88,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
 
         do {
-            _ = try await runner.run(.run(request, childArguments: ["missing-command"]))
+            _ = try await runner.run(.run(request, childArguments: ["missing-command"], force: false))
             XCTFail("Expected child launch error")
         } catch {
             XCTAssertEqual(error.localizedDescription, launchError.localizedDescription)

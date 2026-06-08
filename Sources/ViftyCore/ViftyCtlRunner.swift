@@ -61,16 +61,31 @@ public struct ViftyCtlRunner: Sendable {
             let capabilities = ["status", "capabilities", "prepare", "restore-auto", "run"]
             let stdout = try format(capabilities, json: json)
             return ViftyCtlResult(stdout: stdout)
-        case .prepare(let request, let json):
+        case .prepare(let request, let json, let force):
             let status = try await client.prepare(request)
+            if force, status.lastErrorCode == .prepareRateLimited {
+                // Retry once after sleeping for the cooldown
+                try? await Task.sleep(nanoseconds: 30_000_000_000) // 30s
+                let retryStatus = try await client.prepare(request)
+                let stdout = try format(retryStatus, json: json)
+                return ViftyCtlResult(stdout: stdout)
+            }
             let stdout = try format(status, json: json)
             return ViftyCtlResult(stdout: stdout)
         case .restoreAuto(let reason, _, let json):
             let status = try await client.restore(reason: reason)
             let stdout = try format(status, json: json)
             return ViftyCtlResult(stdout: stdout)
-        case .run(let request, let childArguments):
-            _ = try await client.prepare(request)
+        case .run(let request, let childArguments, let force):
+            var prepareStatus = try await client.prepare(request)
+            if force, prepareStatus.lastErrorCode == .prepareRateLimited {
+                try? await Task.sleep(nanoseconds: 30_000_000_000) // 30s
+                prepareStatus = try await client.prepare(request)
+            }
+            if prepareStatus.lastErrorCode == .prepareRateLimited {
+                let stderr = "viftyctl run: prepare rate-limited — \(prepareStatus.lastDecision?.message ?? "cooldown active")\n"
+                return ViftyCtlResult(stderr: stderr, exitCode: 1)
+            }
             do {
                 let exitCode = try processRunner.run(childArguments)
                 _ = try? await client.restore(reason: "viftyctl run child exited with \(exitCode)")
