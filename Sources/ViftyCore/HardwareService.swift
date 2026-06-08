@@ -172,6 +172,44 @@ public actor FanControlCoordinator {
             try await hardware.restoreAuto(fan: fan)
         }
     }
+
+    public func applyCurveWithOverrides(_ curve: FanCurve, fanOverrides: [FanCurveOverride], snapshot: HardwareSnapshot) async throws {
+        let sensor = selectedSensor(for: curve, snapshot: snapshot)
+        guard let sensor else {
+            try await restoreAuto(for: snapshot.fans)
+            throw ViftyError.noTemperatureSensors
+        }
+
+        let overridesByID = Dictionary(uniqueKeysWithValues: fanOverrides.map { ($0.fanID, $0) })
+
+        for fan in snapshot.fans where fan.controllable {
+            let target: Int
+            if let override = overridesByID[fan.id] {
+                let fanCurve = FanCurve(sensorID: curve.sensorID, points: [
+                    CurvePoint(temperatureCelsius: curve.points[0].temperatureCelsius, rpm: override.startRPM),
+                    CurvePoint(temperatureCelsius: curve.points[1].temperatureCelsius, rpm: override.midRPM),
+                    CurvePoint(temperatureCelsius: curve.points[2].temperatureCelsius, rpm: override.maxRPM)
+                ])
+                target = fanCurve.targetRPM(
+                    for: sensor.celsius,
+                    minimumRPM: fan.minimumRPM,
+                    maximumRPM: fan.maximumRPM
+                )
+            } else {
+                target = curve.targetRPM(
+                    for: sensor.celsius,
+                    minimumRPM: fan.minimumRPM,
+                    maximumRPM: fan.maximumRPM
+                )
+            }
+            guard shouldApply(target, to: fan.id) else { continue }
+            try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
+            state.lastAppliedRPM[fan.id] = target
+        }
+
+        state.selectedSensorID = sensor.id
+        state.statusMessage = "\(sensor.name) \(sensor.celsius.rounded()) C"
+    }
 }
 
 public struct ManualControlMarker: Sendable {
