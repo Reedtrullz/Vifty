@@ -31,6 +31,7 @@ public enum AgentControlErrorCode: String, Codable, Equatable, Sendable {
     case leaseNotFound = "LEASE_NOT_FOUND"
     case restoreFailed = "RESTORE_FAILED"
     case invalidArguments = "INVALID_ARGUMENTS"
+    case prepareRateLimited = "PREPARE_RATE_LIMITED"
 }
 
 public struct AgentControlRequest: Codable, Equatable, Sendable {

@@ -5,12 +5,14 @@ public struct AgentControlPolicy: Equatable, Sendable {
     public var minimumAgentRPMPercent: Int
     public var maximumAllowedRPMPercent: Int
     public var maxDurationSeconds: Int
+    public var prepareCooldownSeconds: Int
 
-    public init(enabled: Bool = false, minimumAgentRPMPercent: Int = 35, maximumAllowedRPMPercent: Int = 80, maxDurationSeconds: Int = 60 * 60) {
+    public init(enabled: Bool = false, minimumAgentRPMPercent: Int = 35, maximumAllowedRPMPercent: Int = 80, maxDurationSeconds: Int = 60 * 60, prepareCooldownSeconds: Int = 30) {
         self.enabled = enabled
         self.minimumAgentRPMPercent = minimumAgentRPMPercent
         self.maximumAllowedRPMPercent = maximumAllowedRPMPercent
         self.maxDurationSeconds = maxDurationSeconds
+        self.prepareCooldownSeconds = prepareCooldownSeconds
     }
 
     public func evaluate(_ request: AgentControlRequest, snapshot: HardwareSnapshot, thermalPressure: ThermalPressure) -> AgentControlDecision {
