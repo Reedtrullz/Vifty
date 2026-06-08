@@ -11,6 +11,7 @@ public actor FanControlCoordinator {
     private let uncleanMarker: ManualControlMarker
     private let significantRPMDelta: Int
     private var autoRestoreRequested = false
+    private var fanOverrides: [FanCurveOverride] = []
 
     public private(set) var state: ControlState
 
@@ -43,9 +44,6 @@ public actor FanControlCoordinator {
         state.mode = mode
         switch mode {
         case .auto:
-            // An explicit Auto selection is an SMC command, not just UI state:
-            // the hardware may still be in forced/manual mode even if our
-            // previous state was already cleared.
             autoRestoreRequested = true
             uncleanMarker.markActive()
         case .fixedRPM, .temperatureCurve:
@@ -53,6 +51,10 @@ public actor FanControlCoordinator {
             state.manualControlActive = true
             uncleanMarker.markActive()
         }
+    }
+
+    public func setFanOverrides(_ overrides: [FanCurveOverride]) {
+        fanOverrides = overrides
     }
 
     public func tick() async throws -> HardwareSnapshot {
@@ -83,7 +85,11 @@ public actor FanControlCoordinator {
             state.manualControlActive = true
             uncleanMarker.markActive()
         case .temperatureCurve(let curve):
-            try await applyCurve(curve, snapshot: snapshot)
+            if fanOverrides.isEmpty {
+                try await applyCurve(curve, snapshot: snapshot)
+            } else {
+                try await applyCurveWithOverrides(curve, fanOverrides: fanOverrides, snapshot: snapshot)
+            }
             state.manualControlActive = true
             uncleanMarker.markActive()
         }

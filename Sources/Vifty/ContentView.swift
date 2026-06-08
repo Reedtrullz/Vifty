@@ -265,6 +265,87 @@ struct ContentView: View {
             CurvePointEditor(title: "Ramp", temp: $model.curveMidTemp, rpm: $model.curveMidRPM, rpmRange: model.fanRange)
             CurvePointEditor(title: "High", temp: $model.curveMaxTemp, rpm: $model.curveMaxRPM, rpmRange: model.fanRange)
 
+            if let fans = model.snapshot?.fans, fans.count > 1 {
+                Toggle("Per-fan overrides", isOn: $model.usePerFanOverrides)
+                    .onChange(of: model.usePerFanOverrides) {
+                        if model.usePerFanOverrides && model.fanOverrides.isEmpty {
+                            // Initialize overrides with default RPMs for each extra fan
+                            model.fanOverrides = fans.map { fan in
+                                FanCurveOverride(
+                                    fanID: fan.id,
+                                    startRPM: Int(model.curveStartRPM.rounded()),
+                                    midRPM: Int(model.curveMidRPM.rounded()),
+                                    maxRPM: Int(model.curveMaxRPM.rounded())
+                                )
+                            }
+                        }
+                    }
+
+                if model.usePerFanOverrides {
+                    ForEach(Array(fans.enumerated()), id: \.element.id) { index, fan in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Fan \(fan.id): \(fan.name)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            if index < model.fanOverrides.count {
+                                HStack {
+                                    Text("Start")
+                                        .font(.caption)
+                                        .frame(width: 40)
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(model.fanOverrides[index].startRPM) },
+                                            set: { model.fanOverrides[index].startRPM = Int($0.rounded()) }
+                                        ),
+                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
+                                        step: 50
+                                    )
+                                    .onChange(of: model.fanOverrides[index].startRPM) { model.applyCurveOverrides() }
+                                    Text("\(model.fanOverrides[index].startRPM)")
+                                        .font(.caption.monospacedDigit())
+                                        .frame(width: 50)
+                                }
+                                HStack {
+                                    Text("Ramp")
+                                        .font(.caption)
+                                        .frame(width: 40)
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(model.fanOverrides[index].midRPM) },
+                                            set: { model.fanOverrides[index].midRPM = Int($0.rounded()) }
+                                        ),
+                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
+                                        step: 50
+                                    )
+                                    .onChange(of: model.fanOverrides[index].midRPM) { model.applyCurveOverrides() }
+                                    Text("\(model.fanOverrides[index].midRPM)")
+                                        .font(.caption.monospacedDigit())
+                                        .frame(width: 50)
+                                }
+                                HStack {
+                                    Text("High")
+                                        .font(.caption)
+                                        .frame(width: 40)
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(model.fanOverrides[index].maxRPM) },
+                                            set: { model.fanOverrides[index].maxRPM = Int($0.rounded()) }
+                                        ),
+                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
+                                        step: 50
+                                    )
+                                    .onChange(of: model.fanOverrides[index].maxRPM) { model.applyCurveOverrides() }
+                                    Text("\(model.fanOverrides[index].maxRPM)")
+                                        .font(.caption.monospacedDigit())
+                                        .frame(width: 50)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+
             if let sensor = model.selectedSensor {
                 Text("Live: \(sensor.celsius, specifier: "%.1f") C from \(sensor.name)")
                     .font(.caption)

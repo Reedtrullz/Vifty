@@ -14,6 +14,8 @@ final class AppModel: ObservableObject {
     @Published var curveStartRPM = 1400.0
     @Published var curveMidRPM = 3500.0
     @Published var curveMaxRPM = 6000.0
+    @Published var usePerFanOverrides = false
+    @Published var fanOverrides: [FanCurveOverride] = []
     @Published var selectedSensorID: String?
     @Published var lastError: String?
     @Published var fanAccessMessage: String?
@@ -152,7 +154,8 @@ final class AppModel: ObservableObject {
             midTemp: curveMidTemp,
             midRPM: Int(curveMidRPM.rounded()),
             maxTemp: curveMaxTemp,
-            maxRPM: Int(curveMaxRPM.rounded())
+            maxRPM: Int(curveMaxRPM.rounded()),
+            fanOverrides: usePerFanOverrides ? fanOverrides : []
         )
         if let existingIndex = savedProfiles.firstIndex(where: { $0.name == name }) {
             savedProfiles[existingIndex] = profile
@@ -170,6 +173,8 @@ final class AppModel: ObservableObject {
         curveMaxTemp = profile.maxTemp
         curveMaxRPM = Double(profile.maxRPM)
         selectedSensorID = profile.sensorID
+        fanOverrides = profile.fanOverrides
+        usePerFanOverrides = !profile.fanOverrides.isEmpty
         applyModeSelection()
     }
 
@@ -255,6 +260,13 @@ final class AppModel: ObservableObject {
             .fixedRPM(Int(fixedRPM.rounded()))
         case .curve:
             .temperatureCurve(currentCurve())
+        }
+    }
+
+    func applyCurveOverrides() {
+        Task {
+            await coordinator.setFanOverrides(usePerFanOverrides ? fanOverrides : [])
+            await applyCurrentModeSelection()
         }
     }
 
