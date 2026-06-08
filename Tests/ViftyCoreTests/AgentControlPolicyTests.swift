@@ -115,6 +115,14 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertEqual(policy.evaluate(tooHigh, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal).errorCode, .rpmOutOfRange)
     }
 
+    func testPolicyCooldownDefaultAndCustom() {
+        let defaultPolicy = AgentControlPolicy(enabled: true)
+        XCTAssertEqual(defaultPolicy.prepareCooldownSeconds, 30)
+
+        let customPolicy = AgentControlPolicy(enabled: true, prepareCooldownSeconds: 10)
+        XCTAssertEqual(customPolicy.prepareCooldownSeconds, 10)
+    }
+
     private static func request() -> AgentControlRequest {
         AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 70, reason: "Build", idempotencyKey: "key")
     }
