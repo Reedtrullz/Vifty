@@ -228,6 +228,17 @@ Safety rules:
 - `viftyctl run` restores Auto on normal child launch/exit; if the wrapper is killed or crashes, the daemon-owned lease monitor is the safety fallback.
 - Sensor loss, unsupported hardware, helper uncertainty, or critical thermal pressure refuses or restores control.
 
+### Rate limiting
+
+A 30-second cooldown (configurable via `prepareCooldownSeconds` in `AgentControlPolicy`) prevents rapid prepare/restore cycles from thrashing fan RPM. Repeated calls within the window return `prepareRateLimited` error with retry-after metadata.
+
+For human use, `--force` retries once after the cooldown expires:
+
+```sh
+viftyctl prepare --workload build --duration 45m --max-rpm-percent 75 --force --reason "build" --json
+viftyctl run --workload test --duration 20m --max-rpm-percent 70 --force -- swift test
+```
+
 ## Daemon installation
 
 The app bundles a LaunchDaemon plist. On first launch:
