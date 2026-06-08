@@ -62,4 +62,32 @@ final class CurveProfileTests: XCTestCase {
         XCTAssertEqual(profile.maxTemp, 85)
         XCTAssertEqual(profile.maxRPM, 6000)
     }
+
+    func testCurveProfileEncodesPerFanOverrides() throws {
+        let profile = CurveProfile(
+            name: "Custom",
+            startTemp: 40, startRPM: 2000,
+            midTemp: 60, midRPM: 4000,
+            maxTemp: 85, maxRPM: 5500,
+            fanOverrides: [FanCurveOverride(fanID: 1, startRPM: 2200, midRPM: 4200, maxRPM: 5800)]
+        )
+        XCTAssertEqual(profile.fanOverrides.count, 1)
+        XCTAssertEqual(profile.fanOverrides[0].fanID, 1)
+        XCTAssertEqual(profile.fanOverrides[0].maxRPM, 5800)
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = try encoder.encode(profile)
+        let decoded = try JSONDecoder().decode(CurveProfile.self, from: data)
+        XCTAssertEqual(decoded.fanOverrides.count, 1)
+        XCTAssertEqual(decoded.fanOverrides[0].startRPM, 2200)
+    }
+
+    func testCurveProfileDecodesWithoutFanOverrides() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","name":"Legacy","startTemp":40,"startRPM":2000,"midTemp":60,"midRPM":4000,"maxTemp":85,"maxRPM":5500}
+        """
+        let profile = try JSONDecoder().decode(CurveProfile.self, from: Data(json.utf8))
+        XCTAssertEqual(profile.fanOverrides, [])
+    }
 }

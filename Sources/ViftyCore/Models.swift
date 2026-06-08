@@ -231,6 +231,20 @@ public struct FanCurve: Equatable, Sendable {
     }
 }
 
+public struct FanCurveOverride: Codable, Equatable, Sendable {
+    public var fanID: Int
+    public var startRPM: Int
+    public var midRPM: Int
+    public var maxRPM: Int
+
+    public init(fanID: Int, startRPM: Int, midRPM: Int, maxRPM: Int) {
+        self.fanID = fanID
+        self.startRPM = startRPM
+        self.midRPM = midRPM
+        self.maxRPM = maxRPM
+    }
+}
+
 public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     public var name: String
@@ -241,6 +255,7 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
     public var midRPM: Int
     public var maxTemp: Double
     public var maxRPM: Int
+    public var fanOverrides: [FanCurveOverride]
 
     public init(
         id: UUID = UUID(),
@@ -251,7 +266,8 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
         midTemp: Double,
         midRPM: Int,
         maxTemp: Double,
-        maxRPM: Int
+        maxRPM: Int,
+        fanOverrides: [FanCurveOverride] = []
     ) {
         self.id = id
         self.name = name
@@ -271,6 +287,7 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
         self.midRPM    = points[1].rpm
         self.maxTemp   = points[2].temp
         self.maxRPM    = points[2].rpm
+        self.fanOverrides = fanOverrides
     }
 
     public func toFanCurve() -> FanCurve {
@@ -279,6 +296,20 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
             CurvePoint(temperatureCelsius: midTemp, rpm: midRPM),
             CurvePoint(temperatureCelsius: maxTemp, rpm: maxRPM)
         ])
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        sensorID = try container.decodeIfPresent(String.self, forKey: .sensorID)
+        startTemp = try container.decode(Double.self, forKey: .startTemp)
+        startRPM = try container.decode(Int.self, forKey: .startRPM)
+        midTemp = try container.decode(Double.self, forKey: .midTemp)
+        midRPM = try container.decode(Int.self, forKey: .midRPM)
+        maxTemp = try container.decode(Double.self, forKey: .maxTemp)
+        maxRPM = try container.decode(Int.self, forKey: .maxRPM)
+        fanOverrides = try container.decodeIfPresent([FanCurveOverride].self, forKey: .fanOverrides) ?? []
     }
 }
 
