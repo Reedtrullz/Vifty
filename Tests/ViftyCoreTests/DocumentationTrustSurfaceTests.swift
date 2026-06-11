@@ -405,6 +405,21 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("Do not edit these wrappers to call `sudo`, `ViftyHelper`, raw SMC tools"))
     }
 
+    func testStrategyWorkplanReflectsCurrentSourceFirstState() throws {
+        let workplan = try read("docs/plans/2026-06-11-vifty-strategy-workplan.md")
+
+        XCTAssertTrue(workplan.contains("Local hardening is on `main` for the `v1.1.0` source-first release"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 410 XCTest cases"))
+        XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
+        XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
+        XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
+        XCTAssertTrue(workplan.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
+        XCTAssertTrue(workplan.contains("do not retag it"))
+        XCTAssertTrue(workplan.contains("do not promote Homebrew until the future Developer ID lane passes"))
+        XCTAssertFalse(workplan.contains("401 XCTest cases"))
+        XCTAssertFalse(workplan.contains("Review the full dirty tree"))
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)

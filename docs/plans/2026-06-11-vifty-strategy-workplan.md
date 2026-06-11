@@ -4,9 +4,9 @@
 
 **Date:** 2026-06-11
 
-**Status:** Active. Local hardening is far along, and `v1.1.0` is now a source-first release because the project does not currently have Apple Developer Program credentials. Public binary trust still depends on a future Developer ID signed/notarized release, Homebrew release metadata, and real Apple Silicon MacBook Pro validation reports.
+**Status:** Active. Local hardening is on `main` for the `v1.1.0` source-first release, and the current local trust gate verifies 410 XCTest cases plus the release app bundle checks. Public binary trust still depends on a future Developer ID signed/notarized release, Homebrew release metadata, and real Apple Silicon MacBook Pro validation reports.
 
-**Current public-release audit:** On 2026-06-11, the published `v1.0.0` GitHub asset existed and its asset digest matched the then-current `Casks/vifty.rb`, but `scripts/verify-release-artifact.sh` failed because the extracted app bundle reported `CFBundleShortVersionString` `0.1.0` while the cask version was `1.0.0`. Treat the `v1.0.0` public artifact as not trust-complete. For `v1.1.0`, use the source-first release path as the recommended public path and do not promote Homebrew or a trusted binary install until Apple Developer Program credentials exist and the Developer ID release lane passes. [release-status.md](../release-status.md) is the current public status page for that distinction.
+**Current public-release audit:** On 2026-06-11, the published `v1.0.0` GitHub asset existed and its asset digest matched the then-current `Casks/vifty.rb`, but `scripts/verify-release-artifact.sh` failed because the extracted app bundle reported `CFBundleShortVersionString` `0.1.0` while the cask version was `1.0.0`. Treat the `v1.0.0` public artifact as not trust-complete. The `v1.1.0` GitHub Release is source-first and attaches only `Vifty-v1.1.0-unsigned-dev.zip` plus `Vifty-v1.1.0-unsigned-dev.zip.sha256` as tester convenience assets. Do not promote Homebrew or a trusted binary install until Apple Developer Program credentials exist and the Developer ID release lane passes. [release-status.md](../release-status.md) is the current public status page for that distinction.
 
 ## Executive Thesis
 
@@ -39,7 +39,7 @@ Sources checked on 2026-06-11:
 - Privileged helper architecture, so normal app use does not need repeated root prompts.
 - Agent lease model through `viftyctl`, which competitors do not appear to productize.
 - Local power telemetry, thermal pressure, fan hardware state, and in-memory history in one app.
-- Strong test posture: current local suite is 401 XCTest cases after the audit remediation, release/readiness evidence schemas, cask trust-metadata, cask checksum handoff, release secret/readiness/source-ref/source-CI/release-workflow/source-first preflights, GitHub Actions Node.js 24 runtime opt-in and cache-action versioning, release status trust documentation, release checklist/source-first note publication, release asset-publication checks, release TeamID build wiring checks, release tag/version identity checks, release verifier skip-flag checks, release-summary consistency review checks, release-summary capture-time consistency checks, release-checklist evidence collection/review checks, validation privacy-review checks including generated summaries, malformed review-result indexer rejection checks, guarded-run null-field normalization, force-retry opt-in, workload shortcut checks, real-process child-command resolution/signal-exit checks, non-directory executable validation checks, Auto-restore fan-shape/range preflight checks before SMC/XPC access, helper install/approve/repair action-copy checks, signal-handler restoration checks, fan-control ownership UI summary checks, developer workload preset checks, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, GitHub topic/label metadata checks, PR safety review, and CODEOWNERS safety-surface checks.
+- Strong test posture: current local suite is 410 XCTest cases after the audit remediation, release/readiness evidence schemas, cask trust-metadata, cask checksum handoff, release secret/readiness/source-ref/source-CI/release-workflow/source-first preflights, GitHub Actions Node.js 24 runtime opt-in and cache-action versioning, release status trust documentation, release checklist/source-first note publication, release asset-publication checks, release TeamID build wiring checks, release tag/version identity checks, release verifier skip-flag checks, release-summary consistency review checks, release-summary capture-time consistency checks, release-checklist evidence collection/review checks, validation privacy-review checks including generated summaries, malformed review-result indexer rejection checks, guarded-run null-field normalization, force-retry opt-in, workload shortcut checks, real-process child-command resolution/signal-exit checks, non-directory executable validation checks, Auto-restore fan-shape/range preflight checks before SMC/XPC access, helper install/approve/repair action-copy checks, signal-handler restoration checks, fan-control ownership UI summary checks, developer workload preset checks, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, GitHub topic/label metadata checks, PR safety review, and CODEOWNERS safety-surface checks.
 
 ### Vifty Weaknesses
 
@@ -87,9 +87,9 @@ That means agent-readable diagnostics, bounded leases, restore guarantees, trans
 
 ## Workstreams
 
-### 0. Finish Current Local Hardening
+### 0. Maintain Current Local Hardening
 
-**Objective:** Land the current broad audit remediation safely before increasing product surface.
+**Objective:** Keep the landed hardening trustworthy while product and validation work continues.
 
 Current local state:
 
@@ -99,13 +99,13 @@ Current local state:
 - Agent-control store/profile/marker persistence is private by default.
 - `viftyctl` JSON errors, readiness diagnostics, force retry behavior, run preflight, and Auto-restore reporting are tested.
 - App user Auto now reports daemon agent-lease clear failures instead of swallowing them during follow-up polling.
-- Local gates pass: `make verify` runs 401 XCTest cases with 0 failures after the release/readiness evidence schemas, cask trust-metadata, cask checksum handoff, release secret/readiness/source-ref/source-CI/release-workflow/source-first preflights, GitHub Actions Node.js 24 runtime opt-in and cache-action versioning, release status trust documentation, release checklist/source-first note publication, release asset-publication, release TeamID build-wiring, release tag/version identity, release verifier skip-flag, release-summary consistency review, release-summary capture-time consistency, release-checklist evidence collection/review, validation privacy-review checks including generated summaries, malformed review-result indexer, guarded-run null-field normalization, force-retry opt-in, workload shortcut coverage, real-process child-command resolution/signal-exit coverage, non-directory executable validation coverage, Auto-restore fan-shape/range preflight coverage before SMC/XPC access, helper install/approve/repair action-copy coverage, signal-handler restoration coverage, fan-control ownership UI summary, developer workload preset, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, GitHub topic/label metadata checks, PR safety review, and CODEOWNERS safety-surface increments, plus warnings-as-errors build, release app bundle, plist lint, and strict codesign verification without installing the app.
+- Agent-cooling, bug, hardware-validation, and release-trust issue templates now keep blocked readiness and source-first provenance on read-only evidence paths.
+- Local gates pass: `make verify` runs 410 XCTest cases with 0 failures after the release/readiness evidence schemas, cask trust-metadata, cask checksum handoff, release secret/readiness/source-ref/source-CI/release-workflow/source-first preflights, GitHub Actions Node.js 24 runtime opt-in and cache-action versioning, release status trust documentation, release checklist/source-first note publication, release asset-publication, release TeamID build-wiring, release tag/version identity, release verifier skip-flag, release-summary consistency review, release-summary capture-time consistency, release-checklist evidence collection/review, validation privacy-review checks including generated summaries, malformed review-result indexer, guarded-run null-field normalization, force-retry opt-in, workload shortcut coverage, real-process child-command resolution/signal-exit coverage, non-directory executable validation coverage, Auto-restore fan-shape/range preflight coverage before SMC/XPC access, helper install/approve/repair action-copy coverage, signal-handler restoration coverage, fan-control ownership UI summary, developer workload preset, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, GitHub topic/label metadata checks, PR safety review, and CODEOWNERS safety-surface increments, plus warnings-as-errors build, release app bundle, plist lint, and strict codesign verification without installing the app.
 
 Remaining local action:
 
-- Review the full dirty tree as one cohesive branch.
-- Split into reviewable commits or a PR series if needed.
 - Use `make verify` as the standard local pre-PR trust gate.
+- Keep the source-first `v1.1.0` release honest: do not retag it, do not rename unsigned-dev assets to the canonical notarized artifact name, and do not promote Homebrew until the future Developer ID lane passes.
 - Keep old historical plans untouched unless they block contributor understanding.
 
 ### 1. Public Trust and Release Hardening
@@ -193,7 +193,7 @@ Current progress:
 - The app/menu UI now summarizes the current fan-control owner for macOS Auto, Vifty Fixed/Curve, active agent cooling, expired agent leases, and unexpected Forced/System hardware modes, plus active agent workload and target RPMs so humans can see what local agents are doing.
 - Agent audit history is now local, private by default, capped to the most recent 2,000 events, and available through a bounded read-only `viftyctl audit` export so lease observability does not become unbounded local retention.
 - `docs/support-triage.md` routes release trust, hardware validation, unsupported hardware, helper install, SMC telemetry drift, agent-cooling, and UI reports to read-only evidence and escalation rules before maintainers ask for any fan-write tests.
-- `.github/ISSUE_TEMPLATE/agent-cooling.yml` collects exact `viftyctl` commands, diagnose/status/audit JSON, stdout/stderr, Auto-restore state, and no-raw-SMC safety confirmations for agent/build/test cooling failures.
+- `.github/ISSUE_TEMPLATE/agent-cooling.yml` collects exact `viftyctl` commands, diagnose/status/audit JSON, stdout/stderr, Auto-restore state, and no-raw-SMC safety confirmations for agent/build/test cooling failures; blocked readiness is explicitly evidence-only and tells reporters: do not retry `viftyctl prepare` or `viftyctl run` while diagnose says cooling is unsafe.
 
 Exit criteria:
 
