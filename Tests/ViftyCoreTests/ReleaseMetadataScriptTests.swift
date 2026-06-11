@@ -92,6 +92,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must opt GitHub JavaScript actions into Node.js 24"))
     }
 
+    func testValidatorRejectsCIWorkflowUsingNode20CacheAction() throws {
+        let harness = try ReleaseMetadataHarness(includeCINode24CacheAction: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must use actions/cache@v5 for native Node.js 24 support"))
+    }
+
     func testValidatorRejectsReleaseWorkflowWithoutNode24ActionsRuntime() throws {
         let harness = try ReleaseMetadataHarness(includeReleaseWorkflowNode24ActionsRuntime: false)
 
@@ -374,6 +383,7 @@ private final class ReleaseMetadataHarness {
         includeReleaseChecklist: Bool = true,
         includeVerifyTag: Bool = true,
         includeCIWorkflowNode24ActionsRuntime: Bool = true,
+        includeCINode24CacheAction: Bool = true,
         includeReleaseWorkflowNode24ActionsRuntime: Bool = true
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -399,7 +409,10 @@ private final class ReleaseMetadataHarness {
             includeAdHocSigningIdentity: includeAdHocSigningIdentity,
             privilegedHelperCleanupPath: privilegedHelperCleanupPath
         )
-        try writeCIWorkflow(includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime)
+        try writeCIWorkflow(
+            includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime,
+            includeNode24CacheAction: includeCINode24CacheAction
+        )
         try writeReleaseWorkflow(
             includeTagVersionDerivation: includeTagVersionDerivation,
             includeTagPrefixCheck: includeTagPrefixCheck,
@@ -760,7 +773,10 @@ private final class ReleaseMetadataHarness {
         )
     }
 
-    private func writeCIWorkflow(includeNode24ActionsRuntime: Bool) throws {
+    private func writeCIWorkflow(
+        includeNode24ActionsRuntime: Bool,
+        includeNode24CacheAction: Bool
+    ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
             ? """
         env:
@@ -768,13 +784,14 @@ private final class ReleaseMetadataHarness {
 
         """
             : ""
+        let cacheAction = includeNode24CacheAction ? "actions/cache@v5" : "actions/cache@v4"
         let contents = """
         name: CI
         \(node24RuntimeLines)jobs:
           swiftpm:
             steps:
               - name: Cache SPM build artifacts
-                uses: actions/cache@v4
+                uses: \(cacheAction)
         """
         try contents.write(
             to: rootURL.appendingPathComponent(".github/workflows/ci.yml"),

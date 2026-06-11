@@ -78,6 +78,11 @@ if ! grep -Fq 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' "${CI_WORKFLOW}"; the
   exit 1
 fi
 
+if grep -Fq 'uses: actions/cache@v4' "${CI_WORKFLOW}" || ! grep -Fq 'uses: actions/cache@v5' "${CI_WORKFLOW}"; then
+  echo "error: ${CI_WORKFLOW} must use actions/cache@v5 for native Node.js 24 support" >&2
+  exit 1
+fi
+
 if ! grep -Fq 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must opt GitHub JavaScript actions into Node.js 24" >&2
   exit 1
