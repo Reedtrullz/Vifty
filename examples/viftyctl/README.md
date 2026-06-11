@@ -18,8 +18,9 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
 
 The wrappers do not pass `--force` by default. For a supervised human workflow
 that should wait once for Vifty's `retryAfterSeconds` value and retry a
-rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. Leave it unset for
-local agents unless the user explicitly approved retrying.
+rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. The guarded
+wrapper still checks `supportsForceRetry` before passing `--force`. Leave it
+unset for local agents unless the user explicitly approved retrying.
 
 ## Scripts
 

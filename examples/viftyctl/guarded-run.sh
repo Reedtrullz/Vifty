@@ -69,11 +69,13 @@ auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
 cleanup_state_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.cleanupStateReportedOnLaunchFailure raw -o - - 2>/dev/null || printf '')"
 signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.signalsForwardedToChild json -o - - 2>/dev/null || printf '')"
+supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract supportsForceRetry raw -o - - 2>/dev/null || printf '')"
 
 [ "$run_child_preflight" = "null" ] && run_child_preflight=""
 [ "$auto_restore_after_child" = "null" ] && auto_restore_after_child=""
 [ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
+[ "$supports_force_retry" = "null" ] && supports_force_retry=""
 
 case "$signals_forwarded" in
   *'"INT"'*) forwards_int=1 ;;
@@ -98,6 +100,17 @@ if [ "$run_child_preflight" != "true" ] ||
    [ "$forwards_term" -ne 1 ] ||
    [ "$forwards_hup" -ne 1 ]; then
   echo "guarded-run: viftyctl capabilities does not advertise the safe run lifecycle; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$force_retry" -eq 1 ] && [ "$supports_force_retry" != "true" ]; then
+  echo "guarded-run: viftyctl capabilities does not advertise force retry support; refusing to pass --force." >&2
   if [ "$capabilities_status" -ne 0 ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi

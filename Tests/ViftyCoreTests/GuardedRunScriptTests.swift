@@ -89,6 +89,20 @@ final class GuardedRunScriptTests: XCTestCase {
         )
     }
 
+    func testGuardedRunForceRetryRequiresCapabilitySupport() throws {
+        let harness = try ScriptHarness(state: "ready", supportsForceRetry: false)
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            forceRetry: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("force retry support"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"supportsForceRetry\":false"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsInvalidForceRetryEnvironmentBeforeDiagnose() throws {
         let harness = try ScriptHarness(state: "ready")
 
@@ -330,6 +344,7 @@ private final class ScriptHarness {
         commandErrorOverride: String? = nil,
         capabilitiesExitCode: Int = 0,
         includeRunLifecycle: Bool = true,
+        supportsForceRetry: Bool = true,
         runLifecycleOverride: String? = nil,
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
@@ -351,6 +366,7 @@ private final class ScriptHarness {
                 commandErrorOverride: commandErrorOverride,
                 capabilitiesExitCode: capabilitiesExitCode,
                 includeRunLifecycle: includeRunLifecycle,
+                supportsForceRetry: supportsForceRetry,
                 runLifecycleOverride: runLifecycleOverride,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
@@ -411,6 +427,7 @@ private final class ScriptHarness {
         commandErrorOverride: String?,
         capabilitiesExitCode: Int,
         includeRunLifecycle: Bool,
+        supportsForceRetry: Bool,
         runLifecycleOverride: String?,
         capabilitiesOutputOverride: String?
     ) throws {
@@ -422,9 +439,10 @@ private final class ScriptHarness {
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
             ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
             : "")
+        let supportsForceRetryValue = supportsForceRetry ? "true" : "false"
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1}"#
-            : #"{"schemaVersion":1,\#(runLifecycle)}"#)
+            ? #"{"schemaVersion":1,"supportsForceRetry":\#(supportsForceRetryValue)}"#
+            : #"{"schemaVersion":1,"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle)}"#)
         let script = """
         #!/bin/sh
         set -eu
