@@ -221,8 +221,10 @@ The wrapper:
 - treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease case,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
-- then delegates to `viftyctl run --json --force`,
+- then delegates to `viftyctl run --json`,
 - and lets `viftyctl run` handle prepare, child launch, signal forwarding, and Auto restore.
+
+The wrapper does not pass `--force` by default. If a supervised human workflow wants the CLI to wait once for `retryAfterSeconds` and retry a rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. Local agents should leave that off unless the user explicitly asks them to retry after a rate limit.
 
 Set `VIFTYCTL` to point at a development bundle:
 
@@ -319,6 +321,7 @@ Recommended agent behavior:
 - On `RESTORE_REQUESTED`, assume the user intentionally chose Auto and do not retry automatically.
 - On `HELPER_UNREACHABLE`, ask the user to open Vifty and reinstall the helper rather than attempting direct SMC writes.
 - On `PREPARE_RATE_LIMITED`, wait for `retryAfterSeconds` before retrying.
+- Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a supervised human workflow explicitly wants the guarded wrapper to wait once and retry a rate-limited prepare.
 - After any unexpected wrapper failure, run `viftyctl status --json` and show the user whether an active lease remains.
 
 ## Safety Notes

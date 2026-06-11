@@ -11,6 +11,8 @@ Example:
 
 Environment:
   VIFTYCTL  Path to viftyctl. Defaults to /Applications/Vifty.app/Contents/MacOS/viftyctl.
+  VIFTY_GUARDED_RUN_FORCE_RETRY
+            Set to 1/true/yes to pass --force to viftyctl run. Defaults to off.
 USAGE
 }
 
@@ -37,11 +39,25 @@ if [ "$#" -eq 0 ]; then
 fi
 
 viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
+force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"
 
 if [ ! -x "$viftyctl" ]; then
   echo "guarded-run: viftyctl is not executable at $viftyctl" >&2
   exit 69
 fi
+
+case "$force_retry" in
+  1|true|yes)
+    force_retry=1
+    ;;
+  0|false|no|"")
+    force_retry=0
+    ;;
+  *)
+    echo "guarded-run: VIFTY_GUARDED_RUN_FORCE_RETRY must be 1/true/yes or 0/false/no." >&2
+    exit 64
+    ;;
+esac
 
 set +e
 diagnose_json="$("$viftyctl" diagnose --json)"
@@ -138,11 +154,21 @@ case "$recommended_action" in
     ;;
 esac
 
+if [ "$force_retry" -eq 1 ]; then
+  exec "$viftyctl" run \
+    --json \
+    --workload "$workload" \
+    --duration "$duration" \
+    --max-rpm-percent "$max_rpm_percent" \
+    --force \
+    --reason "$reason" \
+    -- "$@"
+fi
+
 exec "$viftyctl" run \
   --json \
   --workload "$workload" \
   --duration "$duration" \
   --max-rpm-percent "$max_rpm_percent" \
-  --force \
   --reason "$reason" \
   -- "$@"

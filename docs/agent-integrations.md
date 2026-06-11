@@ -38,6 +38,8 @@ examples/viftyctl/pytest.sh
 ```
 
 Use shorter durations and lower RPM percentages for degraded readiness. Never call raw SMC commands, `sudo ViftyHelper`, or arbitrary fan RPM writes. If Vifty reports `restoreAutoBeforeRequestingCooling`, ask the user before restoring Auto or retrying.
+
+Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once.
 ````
 
 ## Codex
@@ -106,5 +108,6 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
 - `HELPER_UNREACHABLE`: ask the user to open Vifty and reinstall or approve the helper.
 - `PREPARE_RATE_LIMITED`: wait for `retryAfterSeconds`; do not busy-loop retries.
+- Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

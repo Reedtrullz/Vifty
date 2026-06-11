@@ -35,6 +35,8 @@ VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
   /path/to/guarded-run.sh build 25m 75 "release build" -- swift build -c release
 ```
 
+The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. Agents should normally leave that unset and show the rate-limit JSON instead.
+
 For common workloads, use the audited shortcuts:
 
 ```sh
@@ -63,6 +65,7 @@ Decision table:
 | `state: "degraded"` and `safeToRequestCooling: true` | Use a shorter duration, lower RPM percent, and surface the warning to the user. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto or wait. |
 | `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that. |
+| `PREPARE_RATE_LIMITED` from `viftyctl run` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
 
 Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `safeToRequestCooling`, `checks`, and `agentControl`.
 

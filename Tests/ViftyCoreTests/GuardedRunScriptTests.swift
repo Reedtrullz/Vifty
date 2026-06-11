@@ -18,12 +18,49 @@ final class GuardedRunScriptTests: XCTestCase {
                 "--workload", "test",
                 "--duration", "20m",
                 "--max-rpm-percent", "70",
+                "--reason", "swift test",
+                "--",
+                "swift", "test"
+            ]
+        )
+    }
+
+    func testGuardedRunForceRetryIsOptIn() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            forceRetry: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(
+            try harness.loggedArguments(),
+            [
+                "run",
+                "--json",
+                "--workload", "test",
+                "--duration", "20m",
+                "--max-rpm-percent", "70",
                 "--force",
                 "--reason", "swift test",
                 "--",
                 "swift", "test"
             ]
         )
+    }
+
+    func testGuardedRunRejectsInvalidForceRetryEnvironmentBeforeDiagnose() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            forceRetry: "maybe"
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_FORCE_RETRY"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
     func testGuardedRunWarnsAndDelegatesWhenDegraded() throws {
@@ -161,42 +198,42 @@ final class GuardedRunScriptTests: XCTestCase {
             (
                 "examples/viftyctl/swift-test.sh",
                 ["--filter", "AgentTests"],
-                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "swift test", "--", "swift", "test", "--filter", "AgentTests"]
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "swift test", "--", "swift", "test", "--filter", "AgentTests"]
             ),
             (
                 "examples/viftyctl/swift-release-build.sh",
                 ["--product", "Vifty"],
-                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--force", "--reason", "swift release build", "--", "swift", "build", "-c", "release", "--product", "Vifty"]
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "swift release build", "--", "swift", "build", "-c", "release", "--product", "Vifty"]
             ),
             (
                 "examples/viftyctl/xcode-test.sh",
                 ["-scheme", "MyApp", "-destination", "platform=macOS"],
-                ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--force", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
+                ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
             ),
             (
                 "examples/viftyctl/npm-test.sh",
                 ["--", "--watch=false"],
-                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
             ),
             (
                 "examples/viftyctl/cargo-test.sh",
                 ["--locked"],
-                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "cargo test", "--", "cargo", "test", "--locked"]
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "cargo test", "--", "cargo", "test", "--locked"]
             ),
             (
                 "examples/viftyctl/pytest.sh",
                 ["Tests"],
-                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "pytest", "--", "python3", "-m", "pytest", "Tests"]
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "pytest", "--", "python3", "-m", "pytest", "Tests"]
             ),
             (
                 "examples/viftyctl/local-model.sh",
                 ["--", "./run-local-model.sh", "--prompt", "smoke"],
-                ["run", "--json", "--workload", "localModel", "--duration", "30m", "--max-rpm-percent", "75", "--force", "--reason", "local model run", "--", "./run-local-model.sh", "--prompt", "smoke"]
+                ["run", "--json", "--workload", "localModel", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "local model run", "--", "./run-local-model.sh", "--prompt", "smoke"]
             ),
             (
                 "examples/viftyctl/custom-workload.sh",
                 ["15m", "65", "project smoke test", "--", "./scripts/smoke-test.sh"],
-                ["run", "--json", "--workload", "custom", "--duration", "15m", "--max-rpm-percent", "65", "--force", "--reason", "project smoke test", "--", "./scripts/smoke-test.sh"]
+                ["run", "--json", "--workload", "custom", "--duration", "15m", "--max-rpm-percent", "65", "--reason", "project smoke test", "--", "./scripts/smoke-test.sh"]
             )
         ]
 
@@ -273,11 +310,11 @@ private final class ScriptHarness {
         }
     }
 
-    func runGuardedRun(_ arguments: [String]) throws -> ProcessResult {
-        try runScript("examples/viftyctl/guarded-run.sh", arguments: arguments)
+    func runGuardedRun(_ arguments: [String], forceRetry: String? = nil) throws -> ProcessResult {
+        try runScript("examples/viftyctl/guarded-run.sh", arguments: arguments, forceRetry: forceRetry)
     }
 
-    func runScript(_ relativePath: String, arguments: [String]) throws -> ProcessResult {
+    func runScript(_ relativePath: String, arguments: [String], forceRetry: String? = nil) throws -> ProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
@@ -289,6 +326,9 @@ private final class ScriptHarness {
         var environment = ProcessInfo.processInfo.environment
         environment["VIFTYCTL"] = fakeViftyCtlURL.path
         environment["FAKE_VIFTYCTL_LOG"] = logURL.path
+        if let forceRetry {
+            environment["VIFTY_GUARDED_RUN_FORCE_RETRY"] = forceRetry
+        }
         process.environment = environment
 
         let stdout = Pipe()
