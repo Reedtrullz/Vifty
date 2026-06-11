@@ -43,6 +43,8 @@ For common workloads, use the audited shortcuts:
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-test.sh
+examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-test.sh
 examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh
@@ -79,6 +81,7 @@ These are starting points, not rights to exceed daemon policy:
 | Swift/package tests | `20m` | `70` | `swift test` |
 | Release build | `25m` | `75` | `swift build -c release` |
 | Xcode test | `30m` | `75` | `xcodebuild test ...` |
+| Make test/verify | `20m`/`30m` | `70`/`75` | `make test`, `make verify` |
 | npm/cargo/pytest tests | `20m` | `70` | `npm test`, `cargo test`, `python3 -m pytest` |
 | Local model run | `20m` | `75` | local inference or eval command |
 | Unknown/custom workload | `10m` | `65` | only with a clear human-readable reason |

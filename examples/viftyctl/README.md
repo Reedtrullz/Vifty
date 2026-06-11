@@ -30,6 +30,8 @@ unset for local agents unless the user explicitly approved retrying.
 | `swift-test.sh [swift-test-args...]` | `guarded-run.sh test 20m 70 "swift test" -- swift test ...` |
 | `swift-release-build.sh [swift-build-args...]` | `guarded-run.sh build 25m 75 "swift release build" -- swift build -c release ...` |
 | `xcode-test.sh [xcodebuild-args...]` | `guarded-run.sh test 30m 75 "xcodebuild test" -- xcodebuild test ...` |
+| `make-test.sh [make-args...]` | `guarded-run.sh test 20m 70 "make test" -- make test ...` |
+| `make-verify.sh [make-args...]` | `guarded-run.sh test 30m 75 "make verify" -- make verify ...` |
 | `npm-test.sh [npm-test-args...]` | `guarded-run.sh test 20m 70 "npm test" -- npm test ...` |
 | `cargo-test.sh [cargo-test-args...]` | `guarded-run.sh test 20m 70 "cargo test" -- cargo test ...` |
 | `pytest.sh [pytest-args...]` | `guarded-run.sh test 20m 70 "pytest" -- python3 -m pytest ...` |

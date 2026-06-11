@@ -307,6 +307,16 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
             ),
             (
+                "examples/viftyctl/make-test.sh",
+                ["TEST_FILTER=AgentTests"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "make test", "--", "make", "test", "TEST_FILTER=AgentTests"]
+            ),
+            (
+                "examples/viftyctl/make-verify.sh",
+                ["RELEASE_VERSION=1.1.0"],
+                ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "make verify", "--", "make", "verify", "RELEASE_VERSION=1.1.0"]
+            ),
+            (
                 "examples/viftyctl/npm-test.sh",
                 ["--", "--watch=false"],
                 ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
@@ -349,7 +359,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let scripts = try FileManager.default.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "sh" }
 
-        XCTAssertGreaterThanOrEqual(scripts.count, 9)
+        XCTAssertGreaterThanOrEqual(scripts.count, 11)
 
         for script in scripts {
             XCTAssertTrue(FileManager.default.isExecutableFile(atPath: script.path), script.lastPathComponent)
@@ -466,7 +476,7 @@ private final class ScriptHarness {
     }
 
     private func writeFakeChildTools() throws {
-        for tool in ["swift", "xcodebuild", "npm", "cargo", "python3", "local-model-runner", "custom-runner"] {
+        for tool in ["swift", "xcodebuild", "make", "npm", "cargo", "python3", "local-model-runner", "custom-runner"] {
             try writeFakeExecutable(named: tool, in: binURL)
         }
 

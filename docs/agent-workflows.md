@@ -251,6 +251,8 @@ The [examples/viftyctl](../examples/viftyctl/README.md) directory also includes 
 examples/viftyctl/swift-test.sh --filter ViftyCoreTests
 examples/viftyctl/swift-release-build.sh --product Vifty
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-test.sh
+examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-test.sh -- --watch=false
 examples/viftyctl/cargo-test.sh --locked
 examples/viftyctl/pytest.sh Tests
@@ -276,6 +278,18 @@ Xcode test:
 
 ```sh
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+```
+
+Make test:
+
+```sh
+examples/viftyctl/make-test.sh
+```
+
+Make verify:
+
+```sh
+examples/viftyctl/make-verify.sh
 ```
 
 npm test:

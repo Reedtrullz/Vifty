@@ -32,6 +32,8 @@ For common local workloads, the shortcut scripts in `examples/viftyctl/` are equ
 ```sh
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
+examples/viftyctl/make-test.sh
+examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-test.sh
 examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh
@@ -51,6 +53,7 @@ For a repository-level `AGENTS.md`, add the shared rule and then use workload-sp
 ```sh
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
+examples/viftyctl/make-verify.sh
 ```
 
 If the repository is not Vifty itself, copy `examples/viftyctl/guarded-run.sh` into that project or call it from a known path. Set `VIFTYCTL` when testing a development bundle:
@@ -81,6 +84,7 @@ When running long local tests or builds, prefer:
 ```sh
 examples/viftyctl/npm-test.sh
 examples/viftyctl/cargo-test.sh
+examples/viftyctl/make-test.sh
 ```
 
 Do not request Vifty cooling when readiness is blocked, when `safeToRequestCooling` is false, or when the machine is not a supported Apple Silicon MacBook Pro.
