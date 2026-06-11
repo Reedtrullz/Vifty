@@ -211,6 +211,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var coolingLeasePrepared: Bool
     public var autoRestoreAttempted: Bool
     public var autoRestoreSucceeded: Bool?
+    public var retryAfterSeconds: Int?
     public var generatedAt: Date
 
     public init(
@@ -222,6 +223,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
         autoRestoreSucceeded: Bool? = nil,
+        retryAfterSeconds: Int? = nil,
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
@@ -232,6 +234,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         self.coolingLeasePrepared = coolingLeasePrepared
         self.autoRestoreAttempted = autoRestoreAttempted
         self.autoRestoreSucceeded = autoRestoreSucceeded
+        self.retryAfterSeconds = retryAfterSeconds
         self.generatedAt = generatedAt
     }
 
@@ -244,6 +247,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         case coolingLeasePrepared
         case autoRestoreAttempted
         case autoRestoreSucceeded
+        case retryAfterSeconds
         case generatedAt
     }
 
@@ -257,6 +261,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? false
         autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? false
         autoRestoreSucceeded = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreSucceeded)
+        retryAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
     }
 
@@ -274,6 +279,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         } else {
             try container.encodeNil(forKey: .autoRestoreSucceeded)
         }
+        try container.encodeIfPresent(retryAfterSeconds, forKey: .retryAfterSeconds)
         try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
@@ -320,6 +326,7 @@ public protocol ViftyCtlProcessRunning: Sendable {
 
 private struct ViftyCtlForceRetryWaitError: Error, LocalizedError, Sendable {
     var underlyingMessage: String
+    var retryAfterSeconds: Int?
 
     var errorDescription: String? {
         "Force retry wait was interrupted before retrying rate-limited prepare request: \(underlyingMessage)"
@@ -447,7 +454,8 @@ public struct ViftyCtlRunner: Sendable {
                         return try commandErrorResult(
                             command: command,
                             errorCode: prepareFailureCode(prepareStatus),
-                            message: message
+                            message: message,
+                            retryAfterSeconds: prepareRetryAfterSeconds(prepareStatus)
                         )
                     }
                     let stderr = "viftyctl run: prepare denied — \(message)\n"
@@ -505,7 +513,8 @@ public struct ViftyCtlRunner: Sendable {
             message: error.localizedDescription,
             coolingLeasePrepared: coolingLeasePrepared,
             autoRestoreAttempted: autoRestoreAttempted,
-            autoRestoreSucceeded: autoRestoreSucceeded
+            autoRestoreSucceeded: autoRestoreSucceeded,
+            retryAfterSeconds: commandRetryAfterSeconds(for: error)
         )
     }
 
@@ -515,7 +524,8 @@ public struct ViftyCtlRunner: Sendable {
         message: String,
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
-        autoRestoreSucceeded: Bool? = nil
+        autoRestoreSucceeded: Bool? = nil,
+        retryAfterSeconds: Int? = nil
     ) throws -> ViftyCtlResult {
         let report = ViftyCtlCommandErrorReport(
             command: commandName(for: command),
@@ -524,6 +534,7 @@ public struct ViftyCtlRunner: Sendable {
             coolingLeasePrepared: coolingLeasePrepared,
             autoRestoreAttempted: autoRestoreAttempted,
             autoRestoreSucceeded: autoRestoreSucceeded,
+            retryAfterSeconds: retryAfterSeconds,
             generatedAt: now()
         )
         return ViftyCtlResult(stdout: try encodeJSON(report) + "\n", exitCode: 1)
@@ -577,6 +588,13 @@ public struct ViftyCtlRunner: Sendable {
             return .helperUnreachable
         }
         return nil
+    }
+
+    private func commandRetryAfterSeconds(for error: any Error) -> Int? {
+        guard let waitError = error as? ViftyCtlForceRetryWaitError else {
+            return nil
+        }
+        return waitError.retryAfterSeconds
     }
 
     private func capabilitiesReport() async -> ViftyCtlCapabilities {
@@ -731,14 +749,25 @@ public struct ViftyCtlRunner: Sendable {
         do {
             try await sleep(retryDelayNanoseconds(for: status))
         } catch {
-            throw ViftyCtlForceRetryWaitError(underlyingMessage: error.localizedDescription)
+            throw ViftyCtlForceRetryWaitError(
+                underlyingMessage: error.localizedDescription,
+                retryAfterSeconds: rateLimitRetryAfterSeconds(for: status)
+            )
         }
         return try await client.prepare(request)
     }
 
     private func retryDelayNanoseconds(for status: AgentControlStatus) -> UInt64 {
+        UInt64(rateLimitRetryAfterSeconds(for: status)) * 1_000_000_000
+    }
+
+    private func prepareRetryAfterSeconds(_ status: AgentControlStatus) -> Int? {
+        prepareFailureCode(status) == .prepareRateLimited ? rateLimitRetryAfterSeconds(for: status) : nil
+    }
+
+    private func rateLimitRetryAfterSeconds(for status: AgentControlStatus) -> Int {
         let seconds = status.lastDecision?.retryAfterSeconds ?? status.policy?.prepareCooldownSeconds ?? 30
-        return UInt64(max(0, seconds)) * 1_000_000_000
+        return max(0, seconds)
     }
 
     private func restoreAfterRun(reason: String, childExitCode: Int32) async -> ViftyCtlResult {

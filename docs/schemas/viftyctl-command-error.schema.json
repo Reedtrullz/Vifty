@@ -72,6 +72,11 @@
         }
       ]
     },
+    "retryAfterSeconds": {
+      "description": "Present for PREPARE_RATE_LIMITED errors when Vifty can tell an agent how long to wait before retrying.",
+      "type": "integer",
+      "minimum": 0
+    },
     "generatedAt": {
       "description": "Swift JSONEncoder date value emitted by the CLI.",
       "type": "number"

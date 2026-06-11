@@ -89,6 +89,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertFalse(report.coolingLeasePrepared)
         XCTAssertFalse(report.autoRestoreAttempted)
         XCTAssertNil(report.autoRestoreSucceeded)
+        XCTAssertEqual(report.retryAfterSeconds, 20)
         XCTAssertTrue(report.message.contains("Wait 20s"))
     }
 
@@ -112,6 +113,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertFalse(report.coolingLeasePrepared)
         XCTAssertFalse(report.autoRestoreAttempted)
         XCTAssertNil(report.autoRestoreSucceeded)
+        XCTAssertNil(report.retryAfterSeconds)
     }
 
     func testRunCleanupCommandErrorExamplesDecodeAgainstCurrentModel() throws {
@@ -309,12 +311,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(commandErrorProperties["coolingLeasePrepared"] as? [String: Any])
         XCTAssertNotNil(commandErrorProperties["autoRestoreAttempted"] as? [String: Any])
         XCTAssertNotNil(commandErrorProperties["autoRestoreSucceeded"] as? [String: Any])
+        XCTAssertNotNil(commandErrorProperties["retryAfterSeconds"] as? [String: Any])
         XCTAssertEqual(oneOfEnumValues(named: "errorCode", in: commandErrorProperties), agentErrorCodeStrings)
         let commandErrorExample = try readJSON(fixtureURL("command-error.json"))
         XCTAssertEqual(commandErrorExample["safeToProceed"] as? Bool, false)
         XCTAssertEqual(commandErrorExample["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(commandErrorExample["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(commandErrorExample["autoRestoreSucceeded"] is NSNull)
+        XCTAssertEqual(commandErrorExample["retryAfterSeconds"] as? Int, 20)
 
         let auditSchema = try readJSON(schemaURL("viftyctl-audit.schema.json"))
         let auditProperties = try XCTUnwrap(auditSchema["properties"] as? [String: Any])

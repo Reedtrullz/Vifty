@@ -6,6 +6,7 @@
   "errorCode": "PREPARE_RATE_LIMITED",
   "generatedAt": 700000000,
   "message": "Prepare rate-limited. Wait 20s between prepare calls.",
+  "retryAfterSeconds": 20,
   "safeToProceed": false,
   "schemaVersion": 1
 }

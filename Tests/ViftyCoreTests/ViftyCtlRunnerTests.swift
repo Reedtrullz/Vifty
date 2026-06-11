@@ -1093,6 +1093,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertEqual(json["retryAfterSeconds"] as? Int, 2)
         XCTAssertTrue((json["message"] as? String)?.contains("Force retry wait was interrupted") == true)
     }
 
@@ -1156,7 +1157,46 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
+        XCTAssertEqual(json["retryAfterSeconds"] as? Int, 2)
         XCTAssertTrue((json["message"] as? String)?.contains("Force retry wait was interrupted") == true)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasonCount, 0)
+        XCTAssertEqual(processRunner.runCallCount, 0)
+    }
+
+    func testRunJSONReportsRetryAfterWhenPrepareIsRateLimited() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let rateLimited = AgentControlStatus(
+            enabled: true,
+            activeLease: nil,
+            lastDecision: .denied(.prepareRateLimited, message: "Wait", retryAfterSeconds: 12),
+            lastErrorCode: .prepareRateLimited,
+            policy: AgentControlPolicy(enabled: true, prepareCooldownSeconds: 30).snapshot
+        )
+        let client = FakeAgentControlClient(prepareResponses: [rateLimited])
+        let processRunner = FakeProcessRunner(resolvedArguments: ["/usr/bin/swift", "test"])
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["command"] as? String, "run")
+        XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.prepareRateLimited.rawValue)
+        XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
+        XCTAssertEqual(json["retryAfterSeconds"] as? Int, 12)
+        XCTAssertEqual(json["message"] as? String, "Wait")
         let prepareRequests = await client.prepareRequests
         let restoreReasonCount = await client.restoreReasonCount
         XCTAssertEqual(prepareRequests, [request])
