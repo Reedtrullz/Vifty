@@ -27,7 +27,7 @@ All of these must be true for the current public release:
    - `Vifty-v<version>-release-checklist.md`
 4. `Casks/vifty.rb` is updated with the checksum from the published release artifact using `scripts/update-cask-checksum.sh`.
 5. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
-6. A release-mode validation evidence bundle is collected and reviewed with `scripts/review-validation-evidence.sh --mode release`.
+6. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `scripts/review-validation-evidence.sh --mode release`.
 
 Until those checks pass, prefer source builds for development and do not describe the Homebrew path as a trusted public binary install.
 

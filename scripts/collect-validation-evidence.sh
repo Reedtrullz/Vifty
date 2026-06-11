@@ -12,6 +12,9 @@ Options:
   --output <dir>            Output directory (default: .build/vifty-validation-<timestamp>)
   --release-summary <path>  Copy a release artifact verification summary into
                             the evidence bundle and summarize its pass/fail state.
+  --release-checklist <path>
+                            Copy the GitHub Release checklist into the evidence
+                            bundle and summarize its version/follow-up coverage.
   --include-probe-local     Also run ViftyHelper probeLocal. Run the script with sudo if
                             direct SMC fan probe output is required.
   -h, --help                Show this help.
@@ -25,6 +28,7 @@ USAGE
 APP_PATH="${VIFTY_APP_PATH:-/Applications/Vifty.app}"
 OUTPUT_DIR="${VIFTY_VALIDATION_OUTPUT_DIR:-}"
 RELEASE_SUMMARY_PATH="${VIFTY_RELEASE_ARTIFACT_SUMMARY:-}"
+RELEASE_CHECKLIST_PATH="${VIFTY_RELEASE_CHECKLIST:-}"
 INCLUDE_PROBE_LOCAL=0
 
 while [[ $# -gt 0 ]]; do
@@ -51,6 +55,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       RELEASE_SUMMARY_PATH="$2"
+      shift 2
+      ;;
+    --release-checklist)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --release-checklist requires a path" >&2
+        exit 64
+      fi
+      RELEASE_CHECKLIST_PATH="$2"
       shift 2
       ;;
     --include-probe-local)
@@ -84,6 +96,11 @@ fi
 
 if [[ -n "${RELEASE_SUMMARY_PATH}" && ! -f "${RELEASE_SUMMARY_PATH}" ]]; then
   echo "error: release summary not found: ${RELEASE_SUMMARY_PATH}" >&2
+  exit 66
+fi
+
+if [[ -n "${RELEASE_CHECKLIST_PATH}" && ! -f "${RELEASE_CHECKLIST_PATH}" ]]; then
+  echo "error: release checklist not found: ${RELEASE_CHECKLIST_PATH}" >&2
   exit 66
 fi
 
@@ -509,6 +526,93 @@ capture_release_artifact_summary() {
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
 }
 
+capture_release_checklist() {
+  if [[ -z "${RELEASE_CHECKLIST_PATH}" ]]; then
+    return
+  fi
+
+  local name="release-checklist"
+  local stdout_name="release-checklist.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local markdown_name="release-checklist.md"
+  local markdown_path="${OUTPUT_DIR}/${markdown_name}"
+  local installed_app_version=""
+  local status
+
+  : > "${stderr_path}"
+  if ! /bin/cp "${RELEASE_CHECKLIST_PATH}" "${markdown_path}" 2> "${stderr_path}"; then
+    status=1
+    printf 'field\tvalue\n' > "${stdout_path}"
+  else
+    if ! installed_app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}" 2>> "${stderr_path}")"; then
+      installed_app_version=""
+    fi
+
+    set +e
+    ruby -e '
+      source_path, copied_path, installed_app_version = ARGV
+      text = File.read(copied_path)
+
+      title_version = text[/^# Vifty ([^\s]+) Release Checklist\s*$/, 1].to_s
+      checks = {
+        "hasWorkflowSection" => text.include?("## Verified By The Release Workflow"),
+        "hasFollowUpSection" => text.include?("## Required Post-Publication Follow-Up"),
+        "hasCaskChecksumFollowUp" => text.include?("scripts/update-cask-checksum.sh"),
+        "hasPublicVerifierFollowUp" => text.include?("scripts/verify-release-artifact.sh"),
+        "hasEvidenceReviewFollowUp" => text.include?("scripts/review-validation-evidence.sh"),
+        "hasCompatibilityGate" => text.include?("manualSmokeTestResult: \"passed-auto-restored\""),
+        "hasTrustedHomebrewWarning" => text.include?("do not describe the Homebrew path as a fully trusted public binary install")
+      }
+
+      puts "field\tvalue"
+      puts "sourcePath\t#{source_path}"
+      puts "copiedFile\t#{File.basename(copied_path)}"
+      puts "titleVersion\t#{title_version}"
+      puts "installedAppBundleVersion\t#{installed_app_version}"
+      checks.each { |field, value| puts "#{field}\t#{value}" }
+
+      ok = true
+      if title_version.empty?
+        warn "release checklist title must be # Vifty <version> Release Checklist"
+        ok = false
+      elsif installed_app_version.to_s.empty?
+        warn "installed app bundle version could not be read from Info.plist"
+        ok = false
+      elsif title_version != installed_app_version
+        warn "release checklist title version #{title_version.inspect} did not match installed app bundle version #{installed_app_version.inspect}"
+        ok = false
+      end
+
+      checks.each do |field, value|
+        unless value
+          warn "release checklist is missing #{field}"
+          ok = false
+        end
+      end
+
+      expected_zip = "Vifty-v#{title_version}.zip"
+      expected_checksum = "Vifty-v#{title_version}.zip.sha256"
+      expected_summary = "Vifty-v#{title_version}-artifact-summary.json"
+      [expected_zip, expected_checksum, expected_summary].each do |token|
+        unless title_version.empty? || text.include?(token)
+          warn "release checklist is missing #{token}"
+          ok = false
+        end
+      end
+
+      exit(ok ? 0 : 1)
+    ' "${RELEASE_CHECKLIST_PATH}" "${markdown_path}" "${installed_app_version}" > "${stdout_path}" 2>> "${stderr_path}"
+    status=$?
+    set -e
+  fi
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
 write_review_summary() {
   printf 'name\tstatus\texpected\tscope\tnote\n' > "${SUMMARY_PATH}"
   SUMMARY_JSON_FIRST_ROW=1
@@ -534,6 +638,9 @@ write_review_summary() {
     printf '  "releaseArtifactSummaryPath": '
     json_string "${RELEASE_SUMMARY_PATH}"
     printf ',\n'
+    printf '  "releaseChecklistPath": '
+    json_string "${RELEASE_CHECKLIST_PATH}"
+    printf ',\n'
     printf '  "checks": [\n'
   } > "${SUMMARY_JSON_PATH}"
 
@@ -541,6 +648,7 @@ write_review_summary() {
   summary_row "app-info-plist" "0" "release-and-hardware" "Bundle metadata identifies the tested app version."
   summary_row "bundle-executables" "0" "release-and-hardware" "Bundled app/helper/daemon/CLI executables should be present, executable, and hashed."
   summary_row "release-artifact-summary" "0 or skipped" "release-trust" "Optional verifier summary should pass and match the installed app version when supplied."
+  summary_row "release-checklist" "0 or skipped" "release-trust" "Optional release checklist should match the installed app version and include post-publication trust follow-up when supplied."
   summary_row "schema-resources" "0" "agent-contract" "Bundled viftyctl JSON Schemas should be present and hashed."
   summary_row "launchdaemon-lint" "0" "release-trust" "Bundled LaunchDaemon plist should be valid."
   summary_row "launchdaemon-teamid" "0 for public release" "release-trust" "Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty."
@@ -576,6 +684,9 @@ identify exactly what
 app/helper/daemon/CLI contract was tested. If --release-summary was supplied,
 release-artifact-summary.json is a copy of the verifier output and
 release-artifact-summary.tsv summarizes its pass/fail state. If
+--release-checklist was supplied, release-checklist.md is a copy of the GitHub
+Release checklist and release-checklist.tsv summarizes its version and follow-up
+coverage. If
 viftyhelper-probeLocal.txt is present, it was collected only because
 --include-probe-local was requested. review-summary.tsv highlights the key
 captured statuses for reviewers, review-summary.json provides the same status
@@ -594,6 +705,7 @@ README
   echo "daemonPlist=${DAEMON_PLIST}"
   echo "daemonLabel=${DAEMON_LABEL}"
   echo "releaseArtifactSummaryPath=${RELEASE_SUMMARY_PATH}"
+  echo "releaseChecklistPath=${RELEASE_CHECKLIST_PATH}"
   echo "includeProbeLocal=${INCLUDE_PROBE_LOCAL}"
   echo "readOnly=true"
   echo "coolingCommandsRun=false"
@@ -606,6 +718,7 @@ run_capture "system-hw-model" "system-hw-model.txt" /usr/sbin/sysctl -n hw.model
 run_capture "app-info-plist" "app-info-plist.txt" /usr/libexec/PlistBuddy -c Print "${INFO_PLIST}"
 capture_bundle_executables
 capture_release_artifact_summary
+capture_release_checklist
 capture_schema_resources
 run_capture "launchdaemon-plist" "launchdaemon-plist.txt" /usr/bin/plutil -p "${DAEMON_PLIST}"
 run_capture "launchdaemon-lint" "launchdaemon-lint.txt" /usr/bin/plutil -lint "${DAEMON_PLIST}"

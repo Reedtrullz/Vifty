@@ -83,7 +83,7 @@ This checklist is prepended to the GitHub Release notes and uploaded as a releas
 
 - [ ] Update \`Casks/vifty.rb\` with the published \`Vifty-v${VERSION}.zip.sha256\` using \`scripts/update-cask-checksum.sh --version ${VERSION}\`.
 - [ ] Run \`scripts/verify-release-artifact.sh --team-id "\$APPLE_TEAM_ID"\` against the public cask artifact after the checksum update.
-- [ ] Collect a release-mode evidence bundle with \`scripts/collect-validation-evidence.sh --release-summary ./Vifty-v${VERSION}-artifact-summary.json\`.
+- [ ] Collect a release-mode evidence bundle with \`scripts/collect-validation-evidence.sh --release-summary ./Vifty-v${VERSION}-artifact-summary.json --release-checklist ./Vifty-v${VERSION}-release-checklist.md\`.
 - [ ] Review that bundle with \`scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json\`.
 - [ ] Update \`docs/release-status.md\` after the signed artifact, checksum, verifier summary, and cask SHA are aligned.
 - [ ] Keep compatibility claims gated on reviewed hardware reports with \`manualSmokeTestResult: "passed-auto-restored"\`.

@@ -40,6 +40,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewAcceptsInstalledReleaseTrustEvidenceBundle() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0"
         )
 
@@ -52,6 +53,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewRejectsReleaseEvidenceWhenReleaseSummaryCheckWasSkipped() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0",
             releaseSummaryCheckStatus: "skipped"
         )
@@ -65,6 +67,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewRejectsReleaseEvidenceWhenReleaseSummaryChecksumMismatches() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0",
             releaseSummaryActualSHA: String(repeating: "b", count: 64)
         )
@@ -78,6 +81,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewRejectsReleaseEvidenceWhenReleaseSummaryArtifactNameDrifts() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0",
             releaseSummaryExpectedArtifactName: "Vifty-v9.9.9.zip"
         )
@@ -91,6 +95,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewRejectsReleaseEvidenceWhenNotarizationWasSkipped() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0",
             notarizationChecksSkipped: true
         )
@@ -104,6 +109,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
     func testReviewRejectsReleaseEvidenceWhenReleaseSummarySchemaIDDrifts() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
+            includeReleaseChecklist: true,
             releaseArtifactStatus: "0",
             releaseSummarySchemaID: "https://vifty.local/schemas/old-release-summary.schema.json"
         )
@@ -112,6 +118,35 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("release-artifact-summary.json schemaID must be https://vifty.local/schemas/release-artifact-summary.schema.json"))
+    }
+
+    func testReviewRejectsReleaseEvidenceWithoutReleaseChecklist() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: false,
+            releaseArtifactStatus: "0"
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("missing required file for release mode: release-checklist.md"))
+        XCTAssertTrue(result.stderr.contains("release mode requires review-summary.json releaseChecklistPath"))
+    }
+
+    func testReviewRejectsReleaseEvidenceWhenReleaseChecklistVersionDrifts() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseChecklistVersion: "9.9.9"
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("release checklist titleVersion must match release caskVersion"))
+        XCTAssertTrue(result.stderr.contains("release checklist installedAppBundleVersion must match release bundleVersion"))
     }
 
     func testReviewWritesPassingMachineReadableSummary() throws {
@@ -277,6 +312,7 @@ private final class ValidationEvidenceReviewHarness {
         probeLocalStatus: String = "0",
         probeLocalText: String = "fan[0] id=0 name=\"Left Fan\" currentRPM=2200 minimumRPM=1400 maximumRPM=6800 hardwareMode=Auto hardwareModeRawValue=0 targetRPM=nil",
         includeReleaseSummary: Bool = false,
+        includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
         signatureChecksSkipped: Bool = false,
         notarizationChecksSkipped: Bool = false,
@@ -285,6 +321,7 @@ private final class ValidationEvidenceReviewHarness {
         releaseSummaryExpectedSHA: String = String(repeating: "a", count: 64),
         releaseSummaryActualSHA: String = String(repeating: "a", count: 64),
         releaseSummaryCheckStatus: String = "passed",
+        releaseChecklistVersion: String = "1.2.3",
         launchDaemonTeamID: String = "TEAMID1234"
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -304,6 +341,7 @@ private final class ValidationEvidenceReviewHarness {
             "viftyctl-audit": "0",
             "viftyhelper-probeLocal": probeLocalStatus,
             "release-artifact-summary": releaseArtifactStatus,
+            "release-checklist": includeReleaseChecklist ? "0" : "skipped",
             "launchdaemon-teamid": "0",
             "launchctl-print-daemon": "0",
             "codesign-verify-app": "0",
@@ -319,7 +357,8 @@ private final class ValidationEvidenceReviewHarness {
 
         try writeReviewSummary(
             statuses: statuses,
-            releaseArtifactSummaryPath: includeReleaseSummary ? "/tmp/Vifty-v1.2.3-artifact-summary.json" : ""
+            releaseArtifactSummaryPath: includeReleaseSummary ? "/tmp/Vifty-v1.2.3-artifact-summary.json" : "",
+            releaseChecklistPath: includeReleaseChecklist ? "/tmp/Vifty-v\(releaseChecklistVersion)-release-checklist.md" : ""
         )
         try writeText("review-summary.tsv", contents: tsvSummary(statuses))
         try writeText("manifest.tsv", contents: "name\tstatus\tstdout\tstderr\n")
@@ -354,6 +393,9 @@ private final class ValidationEvidenceReviewHarness {
                 actualSHA: releaseSummaryActualSHA,
                 checkStatus: releaseSummaryCheckStatus
             )
+        }
+        if includeReleaseChecklist {
+            try writeReleaseChecklist(version: releaseChecklistVersion)
         }
     }
 
@@ -406,7 +448,8 @@ private final class ValidationEvidenceReviewHarness {
 
     private func writeReviewSummary(
         statuses: [String: String],
-        releaseArtifactSummaryPath: String
+        releaseArtifactSummaryPath: String,
+        releaseChecklistPath: String
     ) throws {
         let checks = statuses
             .keys
@@ -428,6 +471,7 @@ private final class ValidationEvidenceReviewHarness {
             "coolingCommandsRun": false,
             "includeProbeLocal": true,
             "releaseArtifactSummaryPath": releaseArtifactSummaryPath,
+            "releaseChecklistPath": releaseChecklistPath,
             "checks": checks
         ]
         try writeJSON("review-summary.json", json)
@@ -570,6 +614,42 @@ private final class ValidationEvidenceReviewHarness {
             installedAppBundleVersion\t1.2.3
             caskVersion\t1.2.3
             bundleVersion\t1.2.3
+            """
+        )
+    }
+
+    private func writeReleaseChecklist(version: String) throws {
+        try writeText(
+            "release-checklist.md",
+            contents: """
+            # Vifty \(version) Release Checklist
+
+            ## Verified By The Release Workflow
+
+            - [x] Release workflow checks passed.
+
+            ## Required Post-Publication Follow-Up
+
+            - [ ] Update `Casks/vifty.rb` with the published checksum using `scripts/update-cask-checksum.sh`.
+            - [ ] Run `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"`.
+            - [ ] Review evidence with `scripts/review-validation-evidence.sh --mode release`.
+            - [ ] Keep compatibility claims gated on `manualSmokeTestResult: "passed-auto-restored"`.
+            - [ ] Do not describe the Homebrew path as a fully trusted public binary install until checks pass.
+            """
+        )
+        try writeText(
+            "release-checklist.tsv",
+            contents: """
+            field\tvalue
+            titleVersion\t\(version)
+            installedAppBundleVersion\t\(version)
+            hasWorkflowSection\ttrue
+            hasFollowUpSection\ttrue
+            hasCaskChecksumFollowUp\ttrue
+            hasPublicVerifierFollowUp\ttrue
+            hasEvidenceReviewFollowUp\ttrue
+            hasCompatibilityGate\ttrue
+            hasTrustedHomebrewWarning\ttrue
             """
         )
     }

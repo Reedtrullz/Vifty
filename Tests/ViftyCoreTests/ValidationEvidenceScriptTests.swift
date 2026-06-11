@@ -28,6 +28,8 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("review-summary.json"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-artifact-summary.json"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-artifact-summary.tsv"))
+        XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.md"))
+        XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("bundled executable hashes"))
         XCTAssertTrue(try harness.read("README.txt").contains("checksums.tsv"))
         let bundleExecutables = try harness.read("bundle-executables.tsv")
@@ -74,6 +76,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewSummary.contains("app-info-plist\t0\t0\trelease-and-hardware"))
         XCTAssertTrue(reviewSummary.contains("bundle-executables\t0\t0\trelease-and-hardware"))
         XCTAssertTrue(reviewSummary.contains("release-artifact-summary\tskipped\t0 or skipped\trelease-trust"))
+        XCTAssertTrue(reviewSummary.contains("release-checklist\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("capabilities-schema-resources\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("launchdaemon-teamid\t0\t0 for public release\trelease-trust"))
@@ -89,9 +92,16 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewSummaryJSON["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(reviewSummaryJSON["includeProbeLocal"] as? Bool, false)
         XCTAssertEqual(reviewSummaryJSON["releaseArtifactSummaryPath"] as? String, "")
+        XCTAssertEqual(reviewSummaryJSON["releaseChecklistPath"] as? String, "")
         let checks = try XCTUnwrap(reviewSummaryJSON["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "release-artifact-summary"
+                && check["status"] as? String == "skipped"
+                && check["expected"] as? String == "0 or skipped"
+                && check["scope"] as? String == "release-trust"
+        })
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "release-checklist"
                 && check["status"] as? String == "skipped"
                 && check["expected"] as? String == "0 or skipped"
                 && check["scope"] as? String == "release-trust"
@@ -142,6 +152,8 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\treview-summary.json"))
         XCTAssertFalse(checksums.contains("\trelease-artifact-summary.json"))
         XCTAssertFalse(checksums.contains("\trelease-artifact-summary.tsv"))
+        XCTAssertFalse(checksums.contains("\trelease-checklist.md"))
+        XCTAssertFalse(checksums.contains("\trelease-checklist.tsv"))
         XCTAssertTrue(checksums.contains("\tviftyctl-capabilities.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-status.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-diagnose.json"))
@@ -295,6 +307,70 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let checksums = try harness.read("checksums.tsv")
         XCTAssertTrue(checksums.contains("\trelease-artifact-summary.json"))
         XCTAssertTrue(checksums.contains("\trelease-artifact-summary.tsv"))
+        XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
+    }
+
+    func testCollectorCopiesPassingReleaseChecklist() throws {
+        let harness = try ValidationEvidenceHarness()
+        let checklistURL = try harness.writeReleaseChecklist(version: "1.2.3")
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path,
+            "--release-checklist", checklistURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("metadata.txt").contains("releaseChecklistPath=\(checklistURL.path)"))
+        XCTAssertTrue(try harness.read("release-checklist.md").contains("# Vifty 1.2.3 Release Checklist"))
+
+        let releaseChecklist = try harness.read("release-checklist.tsv")
+        XCTAssertTrue(releaseChecklist.contains("field\tvalue"))
+        XCTAssertTrue(releaseChecklist.contains("sourcePath\t\(checklistURL.path)"))
+        XCTAssertTrue(releaseChecklist.contains("copiedFile\trelease-checklist.md"))
+        XCTAssertTrue(releaseChecklist.contains("titleVersion\t1.2.3"))
+        XCTAssertTrue(releaseChecklist.contains("installedAppBundleVersion\t1.2.3"))
+        XCTAssertTrue(releaseChecklist.contains("hasWorkflowSection\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasFollowUpSection\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasCaskChecksumFollowUp\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasPublicVerifierFollowUp\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasEvidenceReviewFollowUp\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasCompatibilityGate\ttrue"))
+        XCTAssertTrue(releaseChecklist.contains("hasTrustedHomebrewWarning\ttrue"))
+
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("release-checklist\t0\trelease-checklist.tsv"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("release-checklist\t0\t0 or skipped\trelease-trust"))
+        let reviewSummaryJSON = try harness.readJSON("review-summary.json")
+        XCTAssertEqual(reviewSummaryJSON["releaseChecklistPath"] as? String, checklistURL.path)
+        let checks = try XCTUnwrap(reviewSummaryJSON["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "release-checklist"
+                && check["status"] as? String == "0"
+                && check["expected"] as? String == "0 or skipped"
+                && check["scope"] as? String == "release-trust"
+        })
+
+        let checksums = try harness.read("checksums.tsv")
+        XCTAssertTrue(checksums.contains("\trelease-checklist.md"))
+        XCTAssertTrue(checksums.contains("\trelease-checklist.tsv"))
+        XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
+    }
+
+    func testCollectorRecordsReleaseChecklistVersionMismatchWithoutRunningCoolingCommands() throws {
+        let harness = try ValidationEvidenceHarness()
+        let checklistURL = try harness.writeReleaseChecklist(version: "9.9.9")
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path,
+            "--release-checklist", checklistURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("release-checklist.tsv").contains("titleVersion\t9.9.9"))
+        XCTAssertTrue(try harness.read("release-checklist.stderr").contains("did not match installed app bundle version"))
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("release-checklist\t1\trelease-checklist.tsv"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("release-checklist\t1\t0 or skipped\trelease-trust"))
         XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
     }
 
@@ -623,6 +699,35 @@ private final class ValidationEvidenceHarness {
 
         let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: url)
+        return url
+    }
+
+    func writeReleaseChecklist(version: String, includeFollowUp: Bool = true) throws -> URL {
+        let url = rootURL.appendingPathComponent("Vifty-v\(version)-release-checklist.md")
+        let followUp = includeFollowUp
+            ? """
+
+            ## Required Post-Publication Follow-Up
+
+            - [ ] Update `Casks/vifty.rb` with the published `Vifty-v\(version).zip.sha256` using `scripts/update-cask-checksum.sh --version \(version)`.
+            - [ ] Run `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` against the public cask artifact after the checksum update.
+            - [ ] Collect a release-mode evidence bundle with `scripts/collect-validation-evidence.sh --release-summary ./Vifty-v\(version)-artifact-summary.json --release-checklist ./Vifty-v\(version)-release-checklist.md`.
+            - [ ] Review that bundle with `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`.
+            - [ ] Keep compatibility claims gated on reviewed hardware reports with `manualSmokeTestResult: "passed-auto-restored"`.
+
+            Until the post-publication checks pass, do not describe the Homebrew path as a fully trusted public binary install.
+            """
+            : ""
+        let contents = """
+        # Vifty \(version) Release Checklist
+
+        ## Verified By The Release Workflow
+
+        - [x] `Vifty-v\(version).zip` and `Vifty-v\(version).zip.sha256` were generated.
+        - [x] `scripts/verify-release-artifact.sh` passed before publication and wrote `Vifty-v\(version)-artifact-summary.json`.
+        \(followUp)
+        """
+        try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
 

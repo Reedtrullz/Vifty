@@ -164,6 +164,7 @@ ruby -rjson -rcsv -rfileutils -e '
 
   RELEASE_ZERO_CHECKS = %w[
     release-artifact-summary
+    release-checklist
     launchdaemon-teamid
     launchctl-print-daemon
     codesign-verify-app
@@ -244,6 +245,7 @@ ruby -rjson -rcsv -rfileutils -e '
       "coolingCommandsRun" => false,
       "appPath" => review_summary["appPath"],
       "releaseArtifactSummaryPath" => review_summary["releaseArtifactSummaryPath"],
+      "releaseChecklistPath" => review_summary["releaseChecklistPath"],
       "diagnoseState" => diagnose["state"],
       "recommendedAgentAction" => diagnose["recommendedAgentAction"],
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
@@ -414,7 +416,13 @@ ruby -rjson -rcsv -rfileutils -e '
 
   when "release"
     REQUIRED_COMMON_FILES.each { |_| }
-    %w[release-artifact-summary.json release-artifact-summary.tsv launchdaemon-teamid.txt].each do |relative_path|
+    %w[
+      release-artifact-summary.json
+      release-artifact-summary.tsv
+      release-checklist.md
+      release-checklist.tsv
+      launchdaemon-teamid.txt
+    ].each do |relative_path|
       failures << "missing required file for release mode: #{relative_path}" unless File.file?(bundle_path(bundle, relative_path))
     end
     RELEASE_ZERO_CHECKS.each do |name|
@@ -424,6 +432,9 @@ ruby -rjson -rcsv -rfileutils -e '
 
     if summary["releaseArtifactSummaryPath"].to_s.empty?
       failures << "release mode requires review-summary.json releaseArtifactSummaryPath"
+    end
+    if summary["releaseChecklistPath"].to_s.empty?
+      failures << "release mode requires review-summary.json releaseChecklistPath"
     end
 
     release_summary = parse_json(bundle, "release-artifact-summary.json", failures) || {}
@@ -488,6 +499,32 @@ ruby -rjson -rcsv -rfileutils -e '
       failures << "release-artifact-summary.tsv must include installedAppBundleVersion"
     elsif !release_summary["bundleVersion"].to_s.empty? && installed_version != release_summary["bundleVersion"].to_s
       failures << "installedAppBundleVersion must match release bundleVersion"
+    end
+
+    release_checklist_rows = parse_tsv(bundle, "release-checklist.tsv", failures)
+    release_checklist_fields = release_checklist_rows.to_h { |row| [row["field"], row["value"]] }
+    checklist_version = release_checklist_fields["titleVersion"].to_s
+    if checklist_version.empty?
+      failures << "release-checklist.tsv must include titleVersion"
+    elsif !release_summary["caskVersion"].to_s.empty? && checklist_version != release_summary["caskVersion"].to_s
+      failures << "release checklist titleVersion must match release caskVersion"
+    end
+    checklist_installed_version = release_checklist_fields["installedAppBundleVersion"].to_s
+    if checklist_installed_version.empty?
+      failures << "release-checklist.tsv must include installedAppBundleVersion"
+    elsif !release_summary["bundleVersion"].to_s.empty? && checklist_installed_version != release_summary["bundleVersion"].to_s
+      failures << "release checklist installedAppBundleVersion must match release bundleVersion"
+    end
+    %w[
+      hasWorkflowSection
+      hasFollowUpSection
+      hasCaskChecksumFollowUp
+      hasPublicVerifierFollowUp
+      hasEvidenceReviewFollowUp
+      hasCompatibilityGate
+      hasTrustedHomebrewWarning
+    ].each do |field|
+      failures << "release-checklist.tsv #{field} must be true" unless release_checklist_fields[field].to_s == "true"
     end
 
     team_id = read_file(bundle, "launchdaemon-teamid.txt", failures).to_s.strip
