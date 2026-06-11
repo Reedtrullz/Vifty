@@ -18,7 +18,7 @@ Agents and scripts must not:
 - request cooling when `diagnose --json` reports `state: "blocked"`;
 - request cooling when `safeToRequestCooling` is `false`;
 - prepare cooling before the child command has been resolved and validated;
-- ignore `restoreAutoBeforeRequestingCooling`, `doNotRequestCooling`, `THERMAL_CRITICAL`, `HELPER_UNREACHABLE`, or `UNSUPPORTED_HARDWARE`.
+- ignore `restoreAutoBeforeRequestingCooling`, `doNotRequestCooling`, `THERMAL_CRITICAL`, `HELPER_UNREACHABLE`, `CHILD_COMMAND_FAILED`, `PREPARE_RATE_LIMITED`, or `UNSUPPORTED_HARDWARE`.
 
 ## Preferred Command
 

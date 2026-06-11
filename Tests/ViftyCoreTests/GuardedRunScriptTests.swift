@@ -130,6 +130,20 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRejectsMissingChildPathBeforeViftyRun() throws {
+        let harness = try ScriptHarness(state: "ready")
+        let missingPath = harness.rootURL.appendingPathComponent("missing-child").path
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "missing child path", "--", missingPath
+        ])
+
+        XCTAssertEqual(result.exitCode, 127)
+        XCTAssertTrue(result.stderr.contains("child command path does not exist"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(missingPath), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsNonExecutableChildPathBeforeViftyRun() throws {
         let harness = try ScriptHarness(state: "ready")
         let childURL = harness.rootURL.appendingPathComponent("not-executable")

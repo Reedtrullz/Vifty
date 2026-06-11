@@ -369,6 +369,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(guide.contains("call `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or arbitrary fan RPM writes"))
         XCTAssertTrue(guide.contains("request cooling when `diagnose --json` reports `state: \"blocked\"`"))
         XCTAssertTrue(guide.contains("prepare cooling before the child command has been resolved and validated"))
+        XCTAssertTrue(guide.contains("`CHILD_COMMAND_FAILED`"))
+        XCTAssertTrue(guide.contains("`PREPARE_RATE_LIMITED`"))
         XCTAssertTrue(guide.contains("recommendedAgentAction"))
         XCTAssertTrue(guide.contains("safeToRequestCooling"))
         XCTAssertTrue(guide.contains("VIFTY_GUARDED_RUN_FORCE_RETRY=1"))
@@ -416,7 +418,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let workplan = try read("docs/plans/2026-06-11-vifty-strategy-workplan.md")
 
         XCTAssertTrue(workplan.contains("Local hardening is on `main` for the `v1.1.0` source-first release"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 431 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 432 XCTest cases"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
