@@ -10,6 +10,8 @@ body:
 
         Please collect read-only evidence first. Do not run raw SMC commands, `sudo ViftyHelper setFixed`, or manual fan-write tests when readiness is blocked.
 
+        If `diagnose --json` reports `state: "blocked"` or `safeToRequestCooling: false`, do not retry `viftyctl prepare` or `viftyctl run`; paste the blocked diagnose JSON plus `status --json` and `audit --limit 20 --json` instead.
+
         Maintainers triage these reports with docs/support-triage.md and docs/safe-agent-cooling.md.
 
   - type: input
@@ -50,6 +52,7 @@ body:
         - viftyctl restore-auto
         - examples/viftyctl/guarded-run.sh
         - Agent integration snippet
+        - Readiness blocked before cooling request
         - Other
     validations:
       required: true
@@ -58,7 +61,7 @@ body:
     id: exact-command
     attributes:
       label: Exact command
-      description: Paste the exact command that was run.
+      description: Paste the exact command that was run. If readiness blocked before any cooling command, paste the diagnose command that blocked instead.
       render: shell
       placeholder: |
         /Applications/Vifty.app/Contents/MacOS/viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift test" -- swift test
@@ -157,7 +160,7 @@ body:
       options:
         - label: "I did not run raw SMC commands, `sudo ViftyHelper setFixed`, or arbitrary fan RPM writes for this report."
           required: true
-        - label: "I did not request cooling again while `diagnose --json` reported `safeToRequestCooling: false` or `restoreAutoBeforeRequestingCooling`."
+        - label: "I did not request or retry cooling while `diagnose --json` reported `state: \"blocked\"`, `safeToRequestCooling: false`, or `restoreAutoBeforeRequestingCooling`."
           required: true
         - label: "I captured `status --json` and `audit --limit 20 --json` after the failure before retrying when possible."
           required: true

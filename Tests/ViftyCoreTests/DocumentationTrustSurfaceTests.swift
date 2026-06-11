@@ -73,6 +73,18 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("passed-auto-restored"))
     }
 
+    func testAgentCoolingTemplateKeepsBlockedReadinessEvidenceOnly() throws {
+        let agentCoolingTemplate = try read(".github/ISSUE_TEMPLATE/agent-cooling.yml")
+
+        XCTAssertTrue(agentCoolingTemplate.contains("state: \"blocked\""))
+        XCTAssertTrue(agentCoolingTemplate.contains("safeToRequestCooling: false"))
+        XCTAssertTrue(agentCoolingTemplate.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
+        XCTAssertTrue(agentCoolingTemplate.contains("paste the blocked diagnose JSON plus `status --json` and `audit --limit 20 --json` instead"))
+        XCTAssertTrue(agentCoolingTemplate.contains("Readiness blocked before cooling request"))
+        XCTAssertTrue(agentCoolingTemplate.contains("paste the diagnose command that blocked instead"))
+        XCTAssertTrue(agentCoolingTemplate.contains("I did not request or retry cooling while"))
+    }
+
     func testSecurityPolicyLinksTrustModel() throws {
         let security = try read("SECURITY.md")
 
