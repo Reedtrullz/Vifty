@@ -51,6 +51,11 @@ set -e
 state="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract state raw -o - - 2>/dev/null || printf '')"
 recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedAgentAction raw -o - - 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
+
+[ "$state" = "null" ] && state=""
+[ "$recommended_action" = "null" ] && recommended_action=""
+[ "$safe_to_request" = "null" ] && safe_to_request=""
+
 if [ "$diagnose_status" -ne 0 ] && [ -z "$state" ]; then
   echo "guarded-run: Vifty diagnose failed; refusing to request cooling." >&2
   if [ -n "$diagnose_json" ]; then

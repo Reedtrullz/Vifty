@@ -98,6 +98,39 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunTreatsNullAgentDecisionFieldsAsMissing() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            decisionFieldsOverride: #","recommendedAgentAction":null,"safeToRequestCooling":null"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("missing agent decision fields"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunTreatsNullStateAsDiagnoseFailureWhenDiagnoseFails() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            diagnoseExitCode: 1,
+            commandErrorOverride: #"{"state":null,"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("diagnose failed"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"command\":\"diagnose\""), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"safeToProceed\":false"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunFailsClosedAndPreservesDiagnoseJSONWhenDiagnoseFails() throws {
         let harness = try ScriptHarness(state: "ready", diagnoseExitCode: 1)
 
@@ -142,6 +175,8 @@ private final class ScriptHarness {
         diagnoseExitCode: Int = 0,
         emitReadinessOnDiagnoseFailure: Bool = false,
         includeDecisionFields: Bool = true,
+        decisionFieldsOverride: String? = nil,
+        commandErrorOverride: String? = nil,
         createFakeViftyCtl: Bool = true
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -156,7 +191,9 @@ private final class ScriptHarness {
                 safeToRequestCooling: safeToRequestCooling ?? Self.defaultSafeToRequestCooling(for: state),
                 diagnoseExitCode: diagnoseExitCode,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
-                includeDecisionFields: includeDecisionFields
+                includeDecisionFields: includeDecisionFields,
+                decisionFieldsOverride: decisionFieldsOverride,
+                commandErrorOverride: commandErrorOverride
             )
         }
     }
@@ -203,12 +240,15 @@ private final class ScriptHarness {
         safeToRequestCooling: Bool,
         diagnoseExitCode: Int,
         emitReadinessOnDiagnoseFailure: Bool,
-        includeDecisionFields: Bool
+        includeDecisionFields: Bool,
+        decisionFieldsOverride: String?,
+        commandErrorOverride: String?
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
-        let decisionFields = includeDecisionFields
+        let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
             ? #","recommendedAgentAction":"\#(recommendedAction)","safeToRequestCooling":\#(safeToRequestCooling)"#
-            : ""
+            : "")
+        let commandError = commandErrorOverride ?? #"{"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let script = """
         #!/bin/sh
         set -eu
@@ -217,7 +257,7 @@ private final class ScriptHarness {
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then
             printf '{"state":"\(state)"\(decisionFields),"checks":[]}\n'
           else
-            printf '{"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}\n'
+            printf '\(commandError)\n'
           fi
           exit \(diagnoseExitCode)
         fi
