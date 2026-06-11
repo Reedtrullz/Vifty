@@ -273,7 +273,7 @@ Exit criteria:
 
 - Finish review of the current audit remediation branch.
 - Get Developer ID signing and notarization working.
-- Ship the corrected notarized `v1.1.0` release with checksum, Homebrew cask update, and passing release-artifact verification.
+- Ship a future corrected notarized release with checksum, Homebrew cask update, and passing release-artifact verification after Apple Developer Program credentials exist. Do not retag `v1.1.0`; it is the source-first release.
 - Validate at least 3 Apple Silicon MacBook Pro models.
 - Publish the compatibility-report workflow.
 
@@ -305,7 +305,7 @@ Exit criteria:
 
 ## Success Metrics
 
-- 100% public releases notarized and checksum-published.
+- 100% trusted binary public releases notarized and checksum-published. Source-first releases must instead be clearly labeled, checksum their unsigned-dev tester artifacts if present, and recommend building from source.
 - 5+ validated Apple Silicon MacBook Pro model reports.
 - 0 known paths where unprivileged app writes SMC directly.
 - 0 known agent paths that prepare cooling before child-command validation.

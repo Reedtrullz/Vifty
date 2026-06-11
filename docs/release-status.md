@@ -14,8 +14,10 @@ Release lanes:
 
 Current facts:
 
-- `main` and the `v1.1.0` source tag should pass the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
-- `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json` is the source-first release preflight. It requires source/ref/CI readiness and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
+- The `v1.1.0` source tag should pass the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
+- `main` may move after `v1.1.0` is published. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
+- `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json` is the published source-first release preflight. It requires source-tag CI readiness and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
+- Before tagging a source-first candidate, maintainers may add `--require-source-ref <candidate-ref-or-sha>` to reject a stale tag. After publication, use the immutable release commit SHA if a source-ref check is still needed.
 - `scripts/check-release-readiness.sh --mode developer-id ...` remains the strict future trusted-binary preflight. It still requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
 - No unsigned build may use `Vifty-v1.1.0.zip` or `Vifty-v1.1.0.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
 - Do not update the Homebrew cask for this source-first release, and do not point Homebrew at the unsigned-dev artifact.
@@ -30,8 +32,10 @@ git fetch origin main --tags
 make verify
 scripts/write-release-checklist.sh --mode source-first --version 1.1.0 --output .build/Vifty-v1.1.0-source-first-release-notes.md
 make unsigned-dev-artifact
-scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json
 ```
+
+If this check is being run before the release tag is pushed, add `--require-source-ref <candidate-ref-or-sha>` so a stale local tag cannot be promoted. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
 Expected source-first release notes must include:
 

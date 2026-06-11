@@ -47,8 +47,7 @@ Source-first checklist:
 
    Do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
 
-4. Push the source tag and create or update the GitHub Release with the source-first notes. The unsigned-dev zip/checksum are optional tester convenience assets only.
-5. Confirm source-first readiness:
+4. Before pushing the source tag, optionally confirm that the tag or candidate commit matches the intended source ref:
 
    ```sh
    git fetch origin main --tags
@@ -56,11 +55,27 @@ Source-first checklist:
      --mode source-first \
      --version <version> \
      --repo Reedtrullz/Vifty \
-     --require-source-ref origin/main \
+     --require-source-ref <candidate-ref-or-sha> \
      --json
    ```
 
-6. Do not update `Casks/vifty.rb` for the source-first release and do not point the cask at the unsigned-dev artifact.
+   Use a moving branch such as `origin/main` only while it is intentionally the release candidate. After publication, `main` may move on; do not compare an already-published source-first tag to `origin/main` unless that is still the intended release commit.
+
+5. Push the source tag and create or update the GitHub Release with the source-first notes. The unsigned-dev zip/checksum are optional tester convenience assets only.
+6. Confirm published source-first readiness:
+
+   ```sh
+   git fetch origin main --tags
+   scripts/check-release-readiness.sh \
+     --mode source-first \
+     --version <version> \
+     --repo Reedtrullz/Vifty \
+     --json
+   ```
+
+   If you need an immutable source-ref check after publication, use the release commit SHA rather than a moving branch.
+
+7. Do not update `Casks/vifty.rb` for the source-first release and do not point the cask at the unsigned-dev artifact.
 
 ## Developer ID Release Mode
 

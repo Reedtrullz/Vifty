@@ -79,7 +79,7 @@ body:
       placeholder: |
         brew install --cask vifty
         git fetch origin main --tags
-        scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+        scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json
         scripts/check-release-readiness.sh --mode developer-id --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
         scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
     validations:
@@ -89,7 +89,7 @@ body:
     id: release-readiness-json
     attributes:
       label: Release readiness JSON
-      description: Paste `scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` for source-first releases, or `--mode developer-id` for future notarized releases.
+      description: Paste `scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --json` for published source-first releases, or `--mode developer-id --require-source-ref origin/main` for future notarized release candidates. For unpublished source-first candidates, use `--require-source-ref <candidate-ref-or-sha>` only when the ref is intentionally the release commit.
       render: json
       placeholder: |
         {
