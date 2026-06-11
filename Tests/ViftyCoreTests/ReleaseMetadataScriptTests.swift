@@ -137,6 +137,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must write a release artifact verification summary"))
     }
 
+    func testValidatorRejectsWorkflowWithoutReleaseChecklistPublication() throws {
+        let harness = try ReleaseMetadataHarness(includeReleaseChecklist: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("release checklist"))
+    }
+
     func testValidatorRejectsWorkflowWithoutReleaseTeamIDEnvironment() throws {
         let harness = try ReleaseMetadataHarness(includeReleaseTeamIDEnvironment: false)
 
@@ -282,6 +291,37 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("Missing required release secret: DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD"))
         XCTAssertTrue(result.stderr.contains("docs/release.md"))
     }
+
+    func testReleaseChecklistWriterCreatesChecklistForVersion() throws {
+        let harness = try ReleaseMetadataHarness()
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-release-checklist.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--version", "1.2.3",
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Wrote"))
+
+        let checklist = try String(contentsOf: output, encoding: .utf8)
+        XCTAssertTrue(checklist.contains("# Vifty 1.2.3 Release Checklist"))
+        XCTAssertTrue(checklist.contains("Verified By The Release Workflow"))
+        XCTAssertTrue(checklist.contains("Required Post-Publication Follow-Up"))
+        XCTAssertTrue(checklist.contains("Vifty-v1.2.3.zip"))
+        XCTAssertTrue(checklist.contains("scripts/update-cask-checksum.sh --version 1.2.3"))
+        XCTAssertTrue(checklist.contains("manualSmokeTestResult: \"passed-auto-restored\""))
+        XCTAssertTrue(checklist.contains("do not describe the Homebrew path as a fully trusted public binary install"))
+    }
+
+    func testReleaseChecklistWriterRejectsMalformedVersion() throws {
+        let harness = try ReleaseMetadataHarness()
+
+        let result = try harness.runReleaseChecklistWriter(["--version", "1.x"])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("release version must be a SemVer-like value"))
+    }
 }
 
 private struct ReleaseMetadataProcessResult {
@@ -313,6 +353,7 @@ private final class ReleaseMetadataHarness {
         includeLaunchDaemonTeamIDVerification: Bool = true,
         includePublishedZip: Bool = true,
         includePublishedChecksum: Bool = true,
+        includeReleaseChecklist: Bool = true,
         includeVerifyTag: Bool = true
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -354,6 +395,7 @@ private final class ReleaseMetadataHarness {
             includeLaunchDaemonTeamIDVerification: includeLaunchDaemonTeamIDVerification,
             includePublishedZip: includePublishedZip,
             includePublishedChecksum: includePublishedChecksum,
+            includeReleaseChecklist: includeReleaseChecklist,
             includeVerifyTag: includeVerifyTag
         )
     }
@@ -416,6 +458,34 @@ private final class ReleaseMetadataHarness {
     func runReleaseSecretChecker(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/check-release-secrets.sh")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
+
+        let process = Process()
+        process.executableURL = scriptURL
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
+            uniquingKeysWith: { _, new in new }
+        )
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        return ReleaseMetadataProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+    }
+
+    func runReleaseChecklistWriter(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("scripts/write-release-checklist.sh")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
 
         let process = Process()
@@ -526,6 +596,7 @@ private final class ReleaseMetadataHarness {
         includeLaunchDaemonTeamIDVerification: Bool,
         includePublishedZip: Bool,
         includePublishedChecksum: Bool,
+        includeReleaseChecklist: Bool,
         includeVerifyTag: Bool
     ) throws {
         let tagVersionDerivationLine = includeTagVersionDerivation
@@ -581,6 +652,19 @@ private final class ReleaseMetadataHarness {
         let publishArtifactSummaryLine = includeReleaseArtifactSummary
             ? "\"${SUMMARY_PATH}#Vifty ${VERSION} release artifact verification summary\" \\"
             : ""
+        let releaseChecklistLines = includeReleaseChecklist
+            ? """
+              RELEASE_CHECKLIST_PATH=".build/Vifty-v${VERSION}-release-checklist.md"
+              scripts/write-release-checklist.sh --version "${VERSION}" --output "${RELEASE_CHECKLIST_PATH}"
+              echo "RELEASE_CHECKLIST_PATH=${RELEASE_CHECKLIST_PATH}" >> "${GITHUB_ENV}"
+            """
+            : ""
+        let publishReleaseChecklistLine = includeReleaseChecklist
+            ? "\"${RELEASE_CHECKLIST_PATH}#Vifty ${VERSION} release checklist\" \\"
+            : ""
+        let releaseChecklistNotesLine = includeReleaseChecklist
+            ? "--notes \"$(cat \"${RELEASE_CHECKLIST_PATH}\")\" \\"
+            : ""
         let publishZipLine = includePublishedZip
             ? "\"${ZIP_PATH}#Vifty ${VERSION} notarized app\" \\"
             : ""
@@ -623,6 +707,7 @@ private final class ReleaseMetadataHarness {
                   ZIP_PATH=".build/Vifty-v${VERSION}.zip"
                   CHECKSUM_PATH="${ZIP_PATH}.sha256"
                   \(artifactSummaryLine)
+                  \(releaseChecklistLines)
                   \(notarizationLines)
                   \(gatekeeperLine)
                   \(artifactVerificationLines)
@@ -632,7 +717,10 @@ private final class ReleaseMetadataHarness {
                     \(publishZipLine)
                     \(publishChecksumLine)
                     \(publishArtifactSummaryLine)
+                    \(publishReleaseChecklistLine)
                     --title "Vifty ${VERSION}"
+                    \(releaseChecklistNotesLine)
+                    --generate-notes \\
         \(verifyTagLine)
         """
         try contents.write(

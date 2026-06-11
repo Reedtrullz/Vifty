@@ -87,6 +87,21 @@ if ! grep -Fq 'SUMMARY_PATH=".build/Vifty-v${VERSION}-artifact-summary.json"' "$
   exit 1
 fi
 
+if ! grep -Fq 'RELEASE_CHECKLIST_PATH=".build/Vifty-v${VERSION}-release-checklist.md"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must write a release checklist for GitHub Release notes" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'scripts/write-release-checklist.sh --version "${VERSION}" --output "${RELEASE_CHECKLIST_PATH}"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must generate the release checklist from the validated VERSION" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'echo "RELEASE_CHECKLIST_PATH=${RELEASE_CHECKLIST_PATH}" >> "${GITHUB_ENV}"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must export the release checklist path before publishing" >&2
+  exit 1
+fi
+
 if ! grep -Fq 'VIFTY_XPC_ALLOWED_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must build releases with VIFTY_XPC_ALLOWED_TEAM_ID from APPLE_TEAM_ID" >&2
   exit 1
@@ -169,6 +184,16 @@ fi
 
 if ! grep -Fq '"${SUMMARY_PATH}#Vifty ${VERSION} release artifact verification summary"' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must publish the release artifact verification summary" >&2
+  exit 1
+fi
+
+if ! grep -Fq '"${RELEASE_CHECKLIST_PATH}#Vifty ${VERSION} release checklist"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must publish the release checklist asset" >&2
+  exit 1
+fi
+
+if ! grep -Fq -- '--notes "$(cat "${RELEASE_CHECKLIST_PATH}")"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must prepend the release checklist to GitHub Release notes" >&2
   exit 1
 fi
 

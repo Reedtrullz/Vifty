@@ -66,7 +66,9 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    - zip `Vifty.app` as `Vifty-v<version>.zip`;
    - verify the generated zip artifact against its just-created checksum, signing TeamID, stapling, Gatekeeper state, and bundled schema resources;
    - write `Vifty-v<version>-artifact-summary.json`;
-   - publish the zip, SHA-256 checksum, and verification summary to the GitHub Release.
+   - write `Vifty-v<version>-release-checklist.md`;
+   - publish the zip, SHA-256 checksum, verification summary, and release checklist to the GitHub Release;
+   - prepend the release checklist to generated GitHub Release notes.
 
 8. Update `Casks/vifty.rb` with the SHA-256 checksum from the release artifact:
 

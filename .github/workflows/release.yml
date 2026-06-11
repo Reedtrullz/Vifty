@@ -158,6 +158,13 @@ jobs:
             --team-id "${APPLE_TEAM_ID}" \
             --summary "${SUMMARY_PATH}"
 
+      - name: Write release checklist
+        run: |
+          set -euo pipefail
+          RELEASE_CHECKLIST_PATH=".build/Vifty-v${VERSION}-release-checklist.md"
+          scripts/write-release-checklist.sh --version "${VERSION}" --output "${RELEASE_CHECKLIST_PATH}"
+          echo "RELEASE_CHECKLIST_PATH=${RELEASE_CHECKLIST_PATH}" >> "${GITHUB_ENV}"
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -167,6 +174,8 @@ jobs:
             "${ZIP_PATH}#Vifty ${VERSION} notarized app" \
             "${CHECKSUM_PATH}#Vifty ${VERSION} SHA-256 checksum" \
             "${SUMMARY_PATH}#Vifty ${VERSION} release artifact verification summary" \
+            "${RELEASE_CHECKLIST_PATH}#Vifty ${VERSION} release checklist" \
             --title "Vifty ${VERSION}" \
+            --notes "$(cat "${RELEASE_CHECKLIST_PATH}")" \
             --generate-notes \
             --verify-tag
