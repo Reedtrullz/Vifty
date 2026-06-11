@@ -123,9 +123,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
 
         switch command.mode {
         case .fixedRPM(let rpm):
-            guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
-                throw ViftyError.noControllableFans
-            }
+            try validateWritableFan(fan)
             try await setFixedRPM(fanID: fan.id, rpm: rpm, minimumRPM: fan.minimumRPM, maximumRPM: fan.maximumRPM)
         case .auto:
             try await restoreAuto(fan: fan)
@@ -136,6 +134,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
 
     public func restoreAuto(fan: Fan) async throws {
         try validateFanID(fan.id)
+        try validateWritableFan(fan)
         try await withProxy { proxy, finish in
             proxy.restoreAuto(fan.id, minimumRPM: fan.minimumRPM, maximumRPM: fan.maximumRPM) { ok, error in
                 if ok {
@@ -150,6 +149,12 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     private func validateFanID(_ fanID: Int) throws {
         guard SMCFanControlKeys.isValidFanID(fanID) else {
             throw ViftyError.helperRejected("Invalid fan ID \(fanID); SMC fan IDs must be 0 through 9.")
+        }
+    }
+
+    private func validateWritableFan(_ fan: Fan) throws {
+        guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
+            throw ViftyError.noControllableFans
         }
     }
 

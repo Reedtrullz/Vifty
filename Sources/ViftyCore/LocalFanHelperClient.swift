@@ -30,9 +30,7 @@ public struct LocalFanHelperClient: Sendable {
 
     public func apply(_ command: FanCommand, fan: Fan) throws {
         try validateFanID(fan.id)
-        guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
-            throw ViftyError.noControllableFans
-        }
+        try validateWritableFan(fan)
         guard command.fanID == fan.id else {
             throw ViftyError.helperRejected("Fan command ID \(command.fanID) does not match hardware fan ID \(fan.id)")
         }
@@ -50,6 +48,7 @@ public struct LocalFanHelperClient: Sendable {
 
     public func restoreAuto(fan: Fan) throws {
         try validateFanID(fan.id)
+        try validateWritableFan(fan)
         let smc = try smcFactory()
         let modeKey = try resolveModeKey(fanID: fan.id, smc: smc)
         // Common SMC convention: F{n}Md = 0 returns a fan to automatic mode.
@@ -84,6 +83,12 @@ public struct LocalFanHelperClient: Sendable {
     private func validateFanID(_ fanID: Int) throws {
         guard SMCFanControlKeys.isValidFanID(fanID) else {
             throw ViftyError.helperRejected("Invalid fan ID \(fanID); SMC fan IDs must be 0 through 9.")
+        }
+    }
+
+    private func validateWritableFan(_ fan: Fan) throws {
+        guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
+            throw ViftyError.noControllableFans
         }
     }
 

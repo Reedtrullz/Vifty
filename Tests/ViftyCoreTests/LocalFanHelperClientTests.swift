@@ -97,6 +97,28 @@ final class LocalFanHelperClientTests: XCTestCase {
         XCTAssertTrue(smc.writes.isEmpty)
     }
 
+    func testRestoreAutoRejectsInvalidRPMRangeBeforeSMCAccess() {
+        let smc = FakeSMCConnection(values: [:])
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        XCTAssertThrowsError(try client.restoreAuto(fan: Self.fan(minimumRPM: 6000, maximumRPM: 1400))) { error in
+            XCTAssertEqual(error as? ViftyError, .noControllableFans)
+        }
+        XCTAssertTrue(smc.reads.isEmpty)
+        XCTAssertTrue(smc.writes.isEmpty)
+    }
+
+    func testRestoreAutoRejectsUncontrollableFanBeforeSMCAccess() {
+        let smc = FakeSMCConnection(values: [:])
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        XCTAssertThrowsError(try client.restoreAuto(fan: Self.fan(controllable: false))) { error in
+            XCTAssertEqual(error as? ViftyError, .noControllableFans)
+        }
+        XCTAssertTrue(smc.reads.isEmpty)
+        XCTAssertTrue(smc.writes.isEmpty)
+    }
+
     func testApplyRejectsInvalidRPMRangeBeforeSMCAccess() {
         let smc = FakeSMCConnection(values: [:])
         let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
@@ -141,14 +163,19 @@ final class LocalFanHelperClientTests: XCTestCase {
         XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "F0Tg"])
     }
 
-    private static func fan(id: Int = 0, minimumRPM: Int = 1400, maximumRPM: Int = 6000) -> Fan {
+    private static func fan(
+        id: Int = 0,
+        minimumRPM: Int = 1400,
+        maximumRPM: Int = 6000,
+        controllable: Bool = true
+    ) -> Fan {
         Fan(
             id: id,
             name: "Left Fan",
             currentRPM: minimumRPM,
             minimumRPM: minimumRPM,
             maximumRPM: maximumRPM,
-            controllable: true
+            controllable: controllable
         )
     }
 }

@@ -153,14 +153,51 @@ final class ViftyDaemonClientTests: XCTestCase {
         XCTAssertEqual(connection.invalidateCount, 0)
     }
 
-    private static func fan(id: Int, minimumRPM: Int = 1400, maximumRPM: Int = 6000) -> Fan {
+    func testRestoreAutoRejectsInvalidRPMRangeBeforeXPC() async {
+        let connection = FakeDaemonConnection(proxy: FakeDaemonProxy())
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+
+        do {
+            try await client.restoreAuto(fan: Self.fan(id: 0, minimumRPM: 6000, maximumRPM: 1400))
+            XCTFail("Expected invalid fan range rejection")
+        } catch ViftyError.noControllableFans {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(connection.resumeCount, 0)
+        XCTAssertEqual(connection.invalidateCount, 0)
+    }
+
+    func testRestoreAutoRejectsUncontrollableFanBeforeXPC() async {
+        let connection = FakeDaemonConnection(proxy: FakeDaemonProxy())
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+
+        do {
+            try await client.restoreAuto(fan: Self.fan(id: 0, controllable: false))
+            XCTFail("Expected uncontrollable fan rejection")
+        } catch ViftyError.noControllableFans {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(connection.resumeCount, 0)
+        XCTAssertEqual(connection.invalidateCount, 0)
+    }
+
+    private static func fan(
+        id: Int,
+        minimumRPM: Int = 1400,
+        maximumRPM: Int = 6000,
+        controllable: Bool = true
+    ) -> Fan {
         Fan(
             id: id,
             name: "Fan \(id)",
             currentRPM: minimumRPM,
             minimumRPM: minimumRPM,
             maximumRPM: maximumRPM,
-            controllable: true
+            controllable: controllable
         )
     }
 }
