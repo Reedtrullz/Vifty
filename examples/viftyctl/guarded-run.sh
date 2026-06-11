@@ -56,7 +56,7 @@ safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract saf
 [ "$recommended_action" = "null" ] && recommended_action=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 
-if [ "$diagnose_status" -ne 0 ] && [ -z "$state" ]; then
+if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
   echo "guarded-run: Vifty diagnose failed; refusing to request cooling." >&2
   if [ -n "$diagnose_json" ]; then
     printf '%s\n' "$diagnose_json" >&2
@@ -88,6 +88,26 @@ if [ -z "$recommended_action" ] || [ -z "$safe_to_request" ]; then
   printf '%s\n' "$diagnose_json" >&2
   exit 75
 fi
+
+case "$safe_to_request" in
+  true|false)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    printf '%s\n' "$diagnose_json" >&2
+    exit 75
+    ;;
+esac
+
+case "$recommended_action" in
+  requestCooling|requestCoolingWithCaution|restoreAutoBeforeRequestingCooling|doNotRequestCooling)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    printf '%s\n' "$diagnose_json" >&2
+    exit 75
+    ;;
+esac
 
 if [ "$safe_to_request" != "true" ]; then
   case "$recommended_action" in
