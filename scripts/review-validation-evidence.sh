@@ -122,7 +122,7 @@ if [[ ! -d "${BUNDLE_DIR}" ]]; then
   exit 66
 fi
 
-ruby -rjson -rcsv -rfileutils -e '
+ruby -rjson -rcsv -rdigest -rfileutils -e '
   bundle = File.expand_path(ARGV.fetch(0))
   mode = ARGV.fetch(1)
   summary_path = ARGV.fetch(2, "")
@@ -287,6 +287,60 @@ ruby -rjson -rcsv -rfileutils -e '
     end
   end
 
+  def require_checksums_match_bundle(bundle, checksum_rows, failures)
+    if checksum_rows.empty?
+      failures << "checksums.tsv must include evidence rows"
+      return
+    end
+
+    missing_headers = %w[sha256 bytes file].reject { |header| checksum_rows.first.key?(header) }
+    unless missing_headers.empty?
+      failures << "checksums.tsv is missing required header(s): #{missing_headers.join(", ")}"
+      return
+    end
+
+    seen_files = {}
+    checksum_rows.each do |row|
+      relative_path = row["file"].to_s
+      if relative_path.empty?
+        failures << "checksums.tsv has a row with an empty file"
+        next
+      end
+      if relative_path == "checksums.tsv"
+        failures << "checksums.tsv must not include itself"
+        next
+      end
+      if relative_path.include?("/") || relative_path.start_with?(".")
+        failures << "checksums.tsv file #{relative_path.inspect} must be a bundle-local filename"
+        next
+      end
+      if seen_files.key?(relative_path)
+        failures << "checksums.tsv has duplicate file #{relative_path}"
+        next
+      end
+      seen_files[relative_path] = true
+
+      require_sha256(row["sha256"], "checksums.tsv #{relative_path} sha256", failures)
+      declared_bytes = row["bytes"].to_s
+      require_positive_integer(declared_bytes, "checksums.tsv #{relative_path} bytes", failures)
+
+      path = bundle_path(bundle, relative_path)
+      unless File.file?(path)
+        failures << "checksums.tsv references missing file #{relative_path}"
+        next
+      end
+
+      actual_sha256 = Digest::SHA256.file(path).hexdigest
+      actual_bytes = File.size(path).to_s
+      unless row["sha256"].to_s == actual_sha256
+        failures << "checksums.tsv #{relative_path} sha256 #{row["sha256"].to_s.inspect} did not match actual #{actual_sha256.inspect}"
+      end
+      unless declared_bytes == actual_bytes
+        failures << "checksums.tsv #{relative_path} bytes #{declared_bytes.inspect} did not match actual #{actual_bytes.inspect}"
+      end
+    end
+  end
+
   def require_positive_integer(value, field, failures)
     integer = Integer(value)
     failures << "#{field} must be greater than zero" unless integer.positive?
@@ -366,6 +420,8 @@ ruby -rjson -rcsv -rfileutils -e '
   end
   review_summary_rows = parse_tsv(bundle, "review-summary.tsv", failures)
   require_review_summary_tsv_matches_json(review_summary_rows, checks, failures)
+  checksum_rows = parse_tsv(bundle, "checksums.tsv", failures)
+  require_checksums_match_bundle(bundle, checksum_rows, failures)
 
   COMMON_ZERO_CHECKS.each do |name|
     require_status(checks, name, ["0"], failures)

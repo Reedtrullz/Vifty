@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import XCTest
 
 final class ValidationEvidenceReviewScriptTests: XCTestCase {
@@ -75,6 +76,20 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("review-summary.tsv capabilities-contract status \"1\" did not match review-summary.json \"0\""))
+    }
+
+    func testReviewRejectsChecksumDriftForCapturedEvidenceFiles() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        try "readOnly=true\ncoolingCommandsRun=false\ntampered=true\n".write(
+            to: harness.bundleURL.appendingPathComponent("metadata.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("checksums.tsv metadata.txt sha256"))
     }
 
     func testReviewRejectsSupportedHardwareEvidenceWithoutProbeLocal() throws {
@@ -453,7 +468,6 @@ private final class ValidationEvidenceReviewHarness {
         try writeText("review-summary.tsv", contents: tsvSummary(reviewSummaryTSVStatuses))
         try writeText("manifest.tsv", contents: "name\tstatus\tstdout\tstderr\n")
         try writeText("metadata.txt", contents: "readOnly=true\ncoolingCommandsRun=false\n")
-        try writeText("checksums.tsv", contents: "sha256\tbytes\tfile\n")
         try writeText("bundle-executables.tsv", contents: bundleExecutablesTSV)
         try writeText("privacy-review.tsv", contents: privacyReviewText)
         try writeText("schema-resources.tsv", contents: schemaResourcesText ?? Self.defaultSchemaResourcesTSV)
@@ -492,6 +506,7 @@ private final class ValidationEvidenceReviewHarness {
         if includeReleaseChecklist {
             try writeReleaseChecklist(version: releaseChecklistVersion)
         }
+        try writeChecksums()
     }
 
     func runReview(
@@ -760,6 +775,28 @@ private final class ValidationEvidenceReviewHarness {
             atomically: true,
             encoding: .utf8
         )
+    }
+
+    private func writeChecksums() throws {
+        let files = try FileManager.default.contentsOfDirectory(
+            at: bundleURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        var lines = ["sha256\tbytes\tfile"]
+        for fileURL in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard fileURL.lastPathComponent != "checksums.tsv" else {
+                continue
+            }
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else {
+                continue
+            }
+            let data = try Data(contentsOf: fileURL)
+            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            lines.append("\(digest)\t\(data.count)\t\(fileURL.lastPathComponent)")
+        }
+        try writeText("checksums.tsv", contents: lines.joined(separator: "\n") + "\n")
     }
 
     private var bundleExecutablesTSV: String {
