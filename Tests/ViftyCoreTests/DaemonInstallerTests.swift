@@ -3,6 +3,28 @@ import XCTest
 
 @MainActor
 final class DaemonInstallerTests: XCTestCase {
+    func testHelperActionCopyMatchesInstallerStatus() {
+        let installer = DaemonInstaller()
+        let cases: [(status: String, canInstall: Bool, title: String, help: String)] = [
+            ("Checking helper", true, "Install Helper", "Install the privileged fan helper"),
+            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper"),
+            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper"),
+            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
+            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
+            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper"),
+            ("Fan helper plist not found in app bundle", true, "Repair Helper", "Repair the privileged fan helper"),
+            ("macOS 13 or newer is required for bundled daemon install", false, "Helper Unavailable", "macOS 13 or newer is required for bundled daemon install")
+        ]
+
+        for testCase in cases {
+            installer.statusText = testCase.status
+            installer.canInstall = testCase.canInstall
+
+            XCTAssertEqual(installer.actionTitle, testCase.title, testCase.status)
+            XCTAssertEqual(installer.actionHelp, testCase.help, testCase.status)
+        }
+    }
+
     func testAdministratorInstallScriptRestrictsDaemonAndPlistPermissionsBeforeBootstrap() {
         let installer = DaemonInstaller()
         let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"

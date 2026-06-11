@@ -109,7 +109,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (400 tests).
+- `swift test` runs `ViftyCoreTests` (401 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.
@@ -129,7 +129,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `XPCAgentControlCodingTests` tests agent lease, policy, decision, retry metadata, and audit event round trips plus older status compatibility.
 - `XPCAuditTokenCodingTests` tests the daemon XPC audit-token byte bridge without requiring a live connection.
 - `ViftyDaemonClientTests` tests XPC proxy response decoding for snapshots and audit events, proxy creation failures, timeout invalidation, late callback one-shot behavior, and invalid fan-input rejection before XPC for fixed-RPM and Auto restore paths without a live daemon.
-- `DaemonInstallerTests` tests the administrator fallback install script quotes paths and sets root-owned LaunchDaemon/helper/log permissions before bootstrap.
+- `DaemonInstallerTests` tests helper install/approve/repair action copy and the administrator fallback install script quotes paths and sets root-owned LaunchDaemon/helper/log permissions before bootstrap.
 - `ViftyCtlArgumentsTests` tests agent CLI parsing, audit limit parsing, parse-error helpers, JSON flag detection, unknown wrapper-option rejection, wrapper-vs-child flag separation for `run`, and wrapper `run --json` parsing.
 - `ViftyCtlJSONExampleTests` decodes canonical `docs/examples/viftyctl/` JSON examples against current Swift models and keeps the audit/diagnose JSON Schemas aligned with implementation enums/check IDs.
 - `AgentControlServiceTests` tests lease prepare/restore, rollback, monitor restore/retry, expired-lease status visibility/prepare blocking, post-Auto error-state cleanup, cooldown, and user Auto preemption of in-flight prepare.

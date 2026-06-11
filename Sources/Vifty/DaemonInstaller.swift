@@ -11,6 +11,37 @@ final class DaemonInstaller: ObservableObject {
         SMAppService.daemon(plistName: ViftyDaemonConstants.plistName)
     }
 
+    var actionTitle: String {
+        guard canInstall else { return "Helper Unavailable" }
+
+        let status = statusText.lowercased()
+        if status.contains("approve") {
+            return "Approve Helper"
+        }
+        if status.contains("not installed") || status == "checking helper" {
+            return "Install Helper"
+        }
+        if status.contains("enabled") || status == "fan helper installed" {
+            return "Reinstall Helper"
+        }
+        return "Repair Helper"
+    }
+
+    var actionHelp: String {
+        guard canInstall else { return statusText }
+
+        switch actionTitle {
+        case "Approve Helper":
+            return "Open Login Items approval for the fan helper"
+        case "Install Helper":
+            return "Install the privileged fan helper"
+        case "Reinstall Helper":
+            return "Reinstall or repair the privileged fan helper"
+        default:
+            return "Repair the privileged fan helper"
+        }
+    }
+
     func refresh() {
         if #available(macOS 13.0, *) {
             switch service.status {

@@ -64,11 +64,13 @@ struct ContentView: View {
             Button {
                 daemonInstaller.installOrOpenApproval()
             } label: {
-                Label("Reinstall Helper", systemImage: "lock.shield")
+                Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .disabled(!daemonInstaller.canInstall)
+            .help(daemonInstaller.actionHelp)
             if let error = model.lastError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
@@ -121,12 +123,12 @@ struct ContentView: View {
                     }
                 }
                 Spacer()
-                Button("Repair") {
+                Button(daemonInstaller.actionTitle) {
                     daemonInstaller.installOrOpenApproval()
                 }
                 .controlSize(.small)
-                .disabled(!helperNeedsAttention)
-                .help(helperNeedsAttention ? "Open helper repair or approval flow" : "Fan helper is healthy")
+                .disabled(!helperNeedsAttention || !daemonInstaller.canInstall)
+                .help(helperNeedsAttention ? daemonInstaller.actionHelp : "Fan helper is healthy")
             }
             .padding(10)
             .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
@@ -175,11 +177,12 @@ struct ContentView: View {
                     Button {
                         daemonInstaller.installOrOpenApproval()
                     } label: {
-                        Label(daemonInstaller.statusText == "Fan helper enabled" ? "Reinstall Fan Helper" : "Install Fan Helper", systemImage: "lock.shield")
+                        Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
                             .frame(maxWidth: 260)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!daemonInstaller.canInstall)
+                    .help(daemonInstaller.actionHelp)
                     Text(daemonInstaller.statusText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
