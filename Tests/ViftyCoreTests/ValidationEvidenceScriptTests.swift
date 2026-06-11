@@ -31,6 +31,8 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.md"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("bundled executable hashes"))
+        XCTAssertTrue(try harness.read("README.txt").contains("manifest.tsv records each captured command"))
+        XCTAssertTrue(try harness.read("README.txt").contains("<command>.status"))
         XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("checksums.tsv"))
         XCTAssertLessThanOrEqual(try harness.read("system-uname.txt").split(separator: " ").count, 3)
@@ -191,6 +193,40 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(invocations.contains { invocation in
             ["prepare", "run", "restore-auto", "setFixed", "auto"].contains { invocation.hasPrefix($0) }
         })
+    }
+
+    func testCollectorManifestRowsReferenceCapturedStatusAndChecksumFiles() throws {
+        let harness = try ValidationEvidenceHarness()
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+
+        let manifestRows = try harness.readTSV("manifest.tsv")
+        XCTAssertFalse(manifestRows.isEmpty)
+        let checksumFiles = Set(try harness.readTSV("checksums.tsv").compactMap { $0["file"] })
+
+        for row in manifestRows {
+            let name = try XCTUnwrap(row["name"])
+            let status = try XCTUnwrap(row["status"])
+            let stdout = try XCTUnwrap(row["stdout"])
+            let stderr = try XCTUnwrap(row["stderr"])
+            let statusFile = "\(name).status"
+
+            XCTAssertFalse(name.isEmpty)
+            XCTAssertFalse(status.isEmpty)
+            for filename in [stdout, stderr, statusFile] {
+                XCTAssertFalse(filename.isEmpty)
+                XCTAssertFalse(filename.contains("/"))
+                XCTAssertFalse(filename.hasPrefix("."))
+                XCTAssertTrue(FileManager.default.fileExists(atPath: harness.outputURL.appendingPathComponent(filename).path))
+                XCTAssertTrue(checksumFiles.contains(filename), "\(filename) should be listed in checksums.tsv")
+            }
+            XCTAssertEqual(try harness.read(statusFile).trimmingCharacters(in: .whitespacesAndNewlines), status)
+        }
     }
 
     func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {
@@ -746,6 +782,22 @@ private final class ValidationEvidenceHarness {
     func readJSON(_ filename: String) throws -> [String: Any] {
         let data = try Data(contentsOf: outputURL.appendingPathComponent(filename))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    func readTSV(_ filename: String) throws -> [[String: String]] {
+        let lines = try read(filename)
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+        guard let headerLine = lines.first else {
+            return []
+        }
+        let headers = headerLine.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+        return lines.dropFirst().map { line in
+            let values = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            return Dictionary(uniqueKeysWithValues: headers.enumerated().map { index, header in
+                (header, index < values.count ? values[index] : "")
+            })
+        }
     }
 
     func writeReleaseArtifactSummary(

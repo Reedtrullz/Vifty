@@ -832,10 +832,12 @@ release-artifact-summary.tsv summarizes its pass/fail state. If
 Release checklist and release-checklist.tsv summarizes its version and follow-up
 coverage. If
 viftyhelper-probeLocal.txt is present, it was collected only because
---include-probe-local was requested. review-summary.tsv highlights the key
-captured statuses for reviewers, review-summary.json provides the same status
-rows for automation, and checksums.tsv contains SHA-256 digests and byte counts
-for the captured evidence files.
+--include-probe-local was requested. manifest.tsv records each captured command,
+its exit status, and the stdout/stderr files written for that command; each
+manifest row also has a matching <command>.status file. review-summary.tsv
+highlights the key captured statuses for reviewers, review-summary.json provides
+the same status rows for automation, and checksums.tsv contains SHA-256 digests
+and byte counts for the captured evidence files.
 README
 
 {
