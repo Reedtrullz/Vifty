@@ -253,7 +253,11 @@ else
 fi
 
 if metadata_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/validate-release-metadata.sh" 2>&1)"; then
-  add_check "release-metadata" "passed" "${metadata_output}"
+  if [ "${RELEASE_MODE}" = "source-first" ]; then
+    add_check "release-metadata" "passed" "Developer ID release metadata remains internally aligned for a future notarized release; source-first mode does not publish or require Vifty-v${VERSION}.zip."
+  else
+    add_check "release-metadata" "passed" "${metadata_output}"
+  fi
 else
   add_check "release-metadata" "blocked" "${metadata_output}"
 fi

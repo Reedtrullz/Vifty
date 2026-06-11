@@ -560,10 +560,13 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "release-mode", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("source-first mode does not publish or require Vifty-v1.0.0.zip") == true)
+        XCTAssertFalse(checkMessage(named: "release-metadata", in: checks)?.contains("artifact Vifty-v1.0.0.zip") == true)
         XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("does not require") == true)
         XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("does not require Apple Developer Program secrets") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("unsigned tester assets") == true)
