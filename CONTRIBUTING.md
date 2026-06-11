@@ -79,4 +79,4 @@ Repository topics and triage labels are part of the contributor surface. When ch
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/Reedtrullz/Vifty/discussions) for questions, or open an issue for bugs and feature requests.
+Start with [SUPPORT.md](SUPPORT.md). Open a [GitHub Discussion](https://github.com/Reedtrullz/Vifty/discussions) for questions, or open an issue for bugs and feature requests.
