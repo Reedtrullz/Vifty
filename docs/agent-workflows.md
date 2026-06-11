@@ -208,6 +208,8 @@ Each event includes `timestamp`, `action`, optional `leaseID`, and `message`. Us
 
 For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures, daemon prepare denial, and child launch failures after a cooling lease was prepared. When a lease was prepared before launch failed, `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` tell agents whether Vifty reached the cleanup path and whether Auto restore succeeded. Canonical examples for both cleanup-success and cleanup-failure launch errors live in [docs/examples/viftyctl](examples/viftyctl). Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
 
+If `--force` is waiting for a `PREPARE_RATE_LIMITED` cooldown retry and the wait is interrupted before a lease is prepared, JSON callers receive `errorCode: PREPARE_RATE_LIMITED`, `coolingLeasePrepared: false`, and `autoRestoreAttempted: false`.
+
 Unknown wrapper options and unexpected positional arguments fail with `INVALID_ARGUMENTS` instead of being ignored. For `viftyctl run`, only arguments before `--` are parsed as Vifty wrapper options; child arguments after `--` are passed through to the child command.
 
 ## Preferred Wrapper

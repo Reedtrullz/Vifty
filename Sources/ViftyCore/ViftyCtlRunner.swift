@@ -318,6 +318,14 @@ public protocol ViftyCtlProcessRunning: Sendable {
     func run(_ arguments: [String]) throws -> Int32
 }
 
+private struct ViftyCtlForceRetryWaitError: Error, LocalizedError, Sendable {
+    var underlyingMessage: String
+
+    var errorDescription: String? {
+        "Force retry wait was interrupted before retrying rate-limited prepare request: \(underlyingMessage)"
+    }
+}
+
 public extension ViftyCtlProcessRunning {
     func resolve(_ arguments: [String]) throws -> [String] {
         arguments
@@ -420,11 +428,7 @@ public struct ViftyCtlRunner: Sendable {
                 }
                 return ViftyCtlResult(stdout: formatHumanReadable(report) + "\n")
             case .prepare(let request, let json, let force):
-                var status = try await client.prepare(request)
-                if force, status.lastErrorCode == .prepareRateLimited {
-                    try await sleep(retryDelayNanoseconds(for: status))
-                    status = try await client.prepare(request)
-                }
+                let status = try await prepareWithOptionalForceRetry(request, force: force)
                 let stdout = try format(status, json: json)
                 return ViftyCtlResult(
                     stdout: stdout,
@@ -436,11 +440,7 @@ public struct ViftyCtlRunner: Sendable {
                 return ViftyCtlResult(stdout: stdout)
             case .run(let request, let childArguments, let json, let force):
                 let resolvedChildArguments = try processRunner.resolve(childArguments)
-                var prepareStatus = try await client.prepare(request)
-                if force, prepareStatus.lastErrorCode == .prepareRateLimited {
-                    try await sleep(retryDelayNanoseconds(for: prepareStatus))
-                    prepareStatus = try await client.prepare(request)
-                }
+                let prepareStatus = try await prepareWithOptionalForceRetry(request, force: force)
                 guard prepareSucceeded(prepareStatus, request: request) else {
                     let message = prepareFailureMessage(prepareStatus, request: request)
                     if json {
@@ -564,6 +564,9 @@ public struct ViftyCtlRunner: Sendable {
     }
 
     private func commandErrorCode(for error: any Error) -> AgentControlErrorCode? {
+        if error is ViftyCtlForceRetryWaitError {
+            return .prepareRateLimited
+        }
         if error is ViftyCtlParseError {
             return .invalidArguments
         }
@@ -717,6 +720,20 @@ public struct ViftyCtlRunner: Sendable {
 
     private func diagnoseExitCode(for report: ViftyCtlReadinessReport) -> Int32 {
         report.state == .blocked ? 75 : 0
+    }
+
+    private func prepareWithOptionalForceRetry(_ request: AgentControlRequest, force: Bool) async throws -> AgentControlStatus {
+        let status = try await client.prepare(request)
+        guard force, status.lastErrorCode == .prepareRateLimited else {
+            return status
+        }
+
+        do {
+            try await sleep(retryDelayNanoseconds(for: status))
+        } catch {
+            throw ViftyCtlForceRetryWaitError(underlyingMessage: error.localizedDescription)
+        }
+        return try await client.prepare(request)
     }
 
     private func retryDelayNanoseconds(for status: AgentControlStatus) -> UInt64 {
