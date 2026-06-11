@@ -137,6 +137,23 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(compatibility.contains("Do not add a README compatibility badge or broad marketing claim until the status table has real report links."))
     }
 
+    func testAgentWorkflowDocsKeepDirectPrepareTrapBounded() throws {
+        let agentWorkflows = try read("docs/agent-workflows.md")
+        let safeAgentCooling = try read("docs/safe-agent-cooling.md")
+
+        for document in [agentWorkflows, safeAgentCooling] {
+            XCTAssertTrue(document.contains("PREPARED=0"))
+            XCTAssertTrue(document.contains("trap cleanup EXIT INT TERM HUP"))
+            XCTAssertTrue(document.contains("restore-auto \\"))
+            XCTAssertTrue(document.contains("|| status=70"))
+            XCTAssertTrue(document.contains("PREPARED=1"))
+        }
+
+        XCTAssertTrue(agentWorkflows.contains("This pattern still has more moving parts than `viftyctl run`"))
+        XCTAssertTrue(safeAgentCooling.contains("Direct prepare is the exception because the shell now owns cleanup"))
+        XCTAssertFalse(agentWorkflows.contains("show what Vifty actually did without requesting cooling or reading raw SMC state.\n- `generatedAt`"))
+    }
+
     func testUnsupportedHardwarePolicyDefinesSafeBlocks() throws {
         let readme = try read("README.md")
         let compatibility = try read("docs/compatibility.md")

@@ -109,19 +109,38 @@ The app's menu and main window also show the current fan-control owner. If the U
 Use direct `prepare` only for a supervised workflow that cannot fit inside one child process:
 
 ```sh
-viftyctl prepare \
+#!/bin/sh
+set -eu
+
+VIFTYCTL=${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}
+LEASE_KEY="$(uuidgen)"
+PREPARED=0
+
+cleanup() {
+  status=$?
+  trap - EXIT INT TERM HUP
+
+  if [ "$PREPARED" = "1" ]; then
+    "$VIFTYCTL" restore-auto \
+      --reason "supervised multi-step build complete" \
+      --json || status=70
+  fi
+
+  exit "$status"
+}
+
+trap cleanup EXIT INT TERM HUP
+
+"$VIFTYCTL" prepare \
   --workload build \
   --duration 20m \
   --max-rpm-percent 70 \
   --reason "supervised multi-step build" \
-  --idempotency-key "$(uuidgen)" \
+  --idempotency-key "$LEASE_KEY" \
   --json
+PREPARED=1
+
+# Run supervised multi-step work here.
 ```
 
-Then restore Auto in a `trap` or equivalent cleanup path:
-
-```sh
-viftyctl restore-auto --reason "supervised multi-step build complete" --json
-```
-
-For normal build/test/model commands, prefer `viftyctl run` or `guarded-run.sh` so child validation, cooling lease creation, signal forwarding, and Auto restore remain one lifecycle.
+For normal build/test/model commands, prefer `viftyctl run` or `guarded-run.sh` so child validation, cooling lease creation, signal forwarding, and Auto restore remain one lifecycle. Direct prepare is the exception because the shell now owns cleanup; keep the restore trap in the same script as the prepare call.

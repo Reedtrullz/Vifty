@@ -197,7 +197,6 @@ For JSON command/parse/transport failures, Vifty emits:
 - `events[]`
 
 Each event includes `timestamp`, `action`, optional `leaseID`, and `message`. Use `--limit <count>` to request a smaller or larger recent window; the daemon-backed store remains capped to the most recent 2,000 events by default. Agents can use this after a failed restore, blocked readiness, or user report to show what Vifty actually did without requesting cooling or reading raw SMC state.
-- `generatedAt`
 
 For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures and daemon prepare denial. Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
 
@@ -295,19 +294,41 @@ examples/viftyctl/local-model.sh -- ./run-local-model.sh
 Prefer `run`. Use direct prepare/restore only when the workload lifecycle is managed by another process:
 
 ```sh
+#!/bin/sh
+set -eu
+
+VIFTYCTL=${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}
 LEASE_KEY="$(uuidgen)"
-viftyctl prepare \
+PREPARED=0
+
+cleanup() {
+  status=$?
+  trap - EXIT INT TERM HUP
+
+  if [ "$PREPARED" = "1" ]; then
+    "$VIFTYCTL" restore-auto \
+      --reason "external build coordinator complete" \
+      --json || status=70
+  fi
+
+  exit "$status"
+}
+
+trap cleanup EXIT INT TERM HUP
+
+"$VIFTYCTL" prepare \
   --workload build \
   --duration 20m \
   --max-rpm-percent 70 \
   --reason "external build coordinator" \
   --idempotency-key "$LEASE_KEY" \
   --json
+PREPARED=1
 
-# Run external work here.
-
-viftyctl restore-auto --reason "external build coordinator complete" --json
+# Run external coordinated work here.
 ```
+
+This pattern still has more moving parts than `viftyctl run`, so use it only when a single child command cannot model the workload. Keep the trap installed for `EXIT`, `INT`, `TERM`, and `HUP`; do not put more fan-control commands inside the work section.
 
 If prepare returns `PREPARE_RATE_LIMITED`, use `lastDecision.retryAfterSeconds` or call again with `--force` for human-driven workflows. Agents should prefer the explicit retry value so they do not hide repeated thermal thrashing.
 
