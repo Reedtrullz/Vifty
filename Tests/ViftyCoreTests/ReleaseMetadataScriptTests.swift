@@ -355,6 +355,63 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
     }
 
+    func testReleaseReadinessAcceptsMatchingRequiredSourceRef() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--require-source-ref", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "ready")
+        XCTAssertEqual(summary["blockers"] as? [String], [])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-source-ref", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-source-ref", in: checks)?.contains("matches required source ref") == true)
+    }
+
+    func testReleaseReadinessBlocksStaleRequiredSourceRef() throws {
+        let harness = try ReleaseMetadataHarness()
+        let tagSHA = String(repeating: "b", count: 40)
+        let requiredSHA = String(repeating: "c", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: tagSHA)
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", tagSHA,
+            "--require-source-ref", requiredSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-source-ref"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-source-ref", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-source-ref", in: checks)?.contains("points to \(tagSHA)") == true)
+        XCTAssertTrue(checkMessage(named: "release-source-ref", in: checks)?.contains("resolves to \(requiredSHA)") == true)
+    }
+
     func testReleaseReadinessReportsMissingSecretsAsBlocker() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)

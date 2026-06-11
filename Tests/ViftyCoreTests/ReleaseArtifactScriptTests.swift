@@ -253,6 +253,7 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
         let checkName = try XCTUnwrap(defs["checkName"] as? [String: Any])
         let checkNames = try XCTUnwrap(checkName["enum"] as? [String])
+        XCTAssertTrue(checkNames.contains("release-source-ref"))
         XCTAssertTrue(checkNames.contains("source-ci"))
     }
 }

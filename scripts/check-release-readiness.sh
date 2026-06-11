@@ -12,11 +12,12 @@ SECRET_LIST_FILE=""
 RELEASE_VIEW_FILE=""
 CI_RUN_LIST_FILE=""
 SOURCE_SHA=""
+REQUIRE_SOURCE_REF=""
 JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--secret-list-file path] [--ci-run-list-file path] [--release-view-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-view-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
 metadata, verifies source CI for the release tag commit, checks required GitHub
@@ -27,6 +28,8 @@ Options:
   --version version          Release version to check. Defaults to Info.plist.
   --repo owner/name          Repository to inspect. Defaults to gh's current repo.
   --source-sha sha           Override the release tag commit SHA, mainly for tests.
+  --require-source-ref ref   Block if the release tag commit does not match this
+                             ref or commit SHA, such as origin/main.
   --secret-list-file path    Read pre-captured `gh secret list` output for tests.
   --ci-run-list-file path    Read pre-captured `gh run list --json ...` output.
   --release-view-file path   Read pre-captured `gh release view --json ...` output.
@@ -59,6 +62,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       SOURCE_SHA="$2"
+      shift 2
+      ;;
+    --require-source-ref)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --require-source-ref requires a value" >&2
+        exit 64
+      fi
+      REQUIRE_SOURCE_REF="$2"
       shift 2
       ;;
     --secret-list-file)
@@ -210,6 +221,27 @@ fi
 if [[ ! "${resolved_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
   add_check "source-ci" "blocked" "Could not resolve release tag ${TAG} to a commit SHA. Run from a git checkout with the tag fetched or pass --source-sha."
 else
+  if [ -n "${REQUIRE_SOURCE_REF}" ]; then
+    required_source_sha=""
+    if [[ "${REQUIRE_SOURCE_REF}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+      required_source_sha="${REQUIRE_SOURCE_REF}"
+    elif command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      if required_source_sha="$(git rev-parse "${REQUIRE_SOURCE_REF}^{commit}" 2>&1)"; then
+        :
+      else
+        required_source_sha=""
+      fi
+    fi
+
+    if [[ ! "${required_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+      add_check "release-source-ref" "blocked" "Could not resolve required source ref ${REQUIRE_SOURCE_REF}. Fetch the ref first or pass a commit SHA."
+    elif [ "$(printf '%s' "${resolved_source_sha}" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "${required_source_sha}" | tr '[:upper:]' '[:lower:]')" ]; then
+      add_check "release-source-ref" "passed" "Release tag ${TAG} matches required source ref ${REQUIRE_SOURCE_REF} (${required_source_sha})."
+    else
+      add_check "release-source-ref" "blocked" "Release tag ${TAG} points to ${resolved_source_sha}, but required source ref ${REQUIRE_SOURCE_REF} resolves to ${required_source_sha}."
+    fi
+  fi
+
   ci_run_json=""
   ci_output=""
   if [ -n "${CI_RUN_LIST_FILE}" ]; then
