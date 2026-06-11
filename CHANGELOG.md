@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/viftyctl/guarded-run.sh` now leaves force retry off by default and requires explicit `VIFTY_GUARDED_RUN_FORCE_RETRY=1` opt-in before passing `--force` to `viftyctl run`.
 - Canonical `viftyctl run --json` command-error examples now cover child-launch failures after a prepared cooling lease, including both Auto-restore-success and Auto-restore-failure cleanup states.
 
+### Changed
+- The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
+
 ## [1.1.0] — 2026-06-11
 
 ### Added

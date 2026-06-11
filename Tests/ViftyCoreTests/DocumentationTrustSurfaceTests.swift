@@ -182,6 +182,26 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(policy.contains("must not be used as proof that fan control is supported"))
     }
 
+    func testHardwareValidationTemplateKeepsUnsupportedReportsReadOnly() throws {
+        let compatibility = try read("docs/compatibility.md")
+        let issueTemplate = try read(".github/ISSUE_TEMPLATE/hardware-validation.yml")
+
+        XCTAssertTrue(compatibility.contains("Always capture `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal` for supported MacBook Pro validation"))
+        XCTAssertTrue(compatibility.contains("Follow [unsupported-hardware.md](unsupported-hardware.md) for unsupported-hardware safe-block reports."))
+        XCTAssertTrue(issueTemplate.contains("ViftyHelper probeLocal output (supported hardware)"))
+        XCTAssertTrue(issueTemplate.contains("supported Apple Silicon MacBook Pro validation"))
+        XCTAssertTrue(issueTemplate.contains("Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only."))
+        XCTAssertTrue(issueTemplate.contains("A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported safe-block reports."))
+        XCTAssertTrue(issueTemplate.contains("Unsupported safe-block reports may leave this blank"))
+        XCTAssertTrue(issueTemplate.contains("Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware"))
+
+        let probeLocalSection = try XCTUnwrap(issueTemplate.range(of: "id: probe-local"))
+        let manualSmokeSection = try XCTUnwrap(issueTemplate.range(of: "id: manual-smoke"))
+        let section = String(issueTemplate[probeLocalSection.lowerBound..<manualSmokeSection.lowerBound])
+        XCTAssertTrue(section.contains("required: false"))
+        XCTAssertFalse(section.contains("required: true"))
+    }
+
     func testPullRequestTemplateRequiresSafetyReview() throws {
         let contributing = try read("CONTRIBUTING.md")
         let template = try read(".github/PULL_REQUEST_TEMPLATE.md")

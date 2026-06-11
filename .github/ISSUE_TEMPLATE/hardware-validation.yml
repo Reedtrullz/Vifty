@@ -17,11 +17,12 @@ body:
         Or run these commands manually:
 
         ```sh
+        # Required for supported Apple Silicon MacBook Pro validation:
         /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
         sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
         ```
 
-        Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware, and restore Auto afterward. Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only.
+        Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only. A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported safe-block reports. Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware, and restore Auto afterward.
 
   - type: input
     id: vifty-version
@@ -111,15 +112,15 @@ body:
   - type: textarea
     id: probe-local
     attributes:
-      label: ViftyHelper probeLocal output
-      description: Paste the output of `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal`.
+      label: ViftyHelper probeLocal output (supported hardware)
+      description: Paste this for supported Apple Silicon MacBook Pro validation. Unsupported safe-block reports may leave this blank when `viftyctl diagnose --json` already shows the hardware gate.
       render: text
       placeholder: |
         model=MacBookPro18,3 appleSilicon=true macBookPro=true
         fans=2
         fan[0] name="Left Fan" rpm=2100 min=1400 max=6000 controllable=true
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: manual-smoke
