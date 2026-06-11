@@ -287,7 +287,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
-  def require_checksums_match_bundle(bundle, checksum_rows, failures)
+  def require_checksums_match_bundle(bundle, checksum_rows, summary_path, failures)
     if checksum_rows.empty?
       failures << "checksums.tsv must include evidence rows"
       return
@@ -338,6 +338,17 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless declared_bytes == actual_bytes
         failures << "checksums.tsv #{relative_path} bytes #{declared_bytes.inspect} did not match actual #{actual_bytes.inspect}"
       end
+    end
+
+    excluded_paths = [bundle_path(bundle, "checksums.tsv")]
+    excluded_paths << File.expand_path(summary_path) unless summary_path.to_s.empty?
+
+    Dir.children(bundle).sort.each do |name|
+      path = bundle_path(bundle, name)
+      next unless File.file?(path)
+      next if excluded_paths.include?(File.expand_path(path))
+
+      failures << "checksums.tsv is missing file #{name}" unless seen_files.key?(name)
     end
   end
 
@@ -421,7 +432,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   review_summary_rows = parse_tsv(bundle, "review-summary.tsv", failures)
   require_review_summary_tsv_matches_json(review_summary_rows, checks, failures)
   checksum_rows = parse_tsv(bundle, "checksums.tsv", failures)
-  require_checksums_match_bundle(bundle, checksum_rows, failures)
+  require_checksums_match_bundle(bundle, checksum_rows, summary_path, failures)
 
   COMMON_ZERO_CHECKS.each do |name|
     require_status(checks, name, ["0"], failures)

@@ -92,6 +92,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("checksums.tsv metadata.txt sha256"))
     }
 
+    func testReviewRejectsMissingChecksumEntryForCapturedEvidenceFile() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        try harness.removeChecksumEntry(for: "metadata.txt")
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("checksums.tsv is missing file metadata.txt"))
+    }
+
+    func testReviewAllowsExistingReviewerSummaryWithoutChecksumEntry() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let summaryURL = harness.bundleURL.appendingPathComponent("review-result.json")
+        try "{\"status\":\"old\"}\n".write(to: summaryURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runReview(mode: "supported-hardware", summaryURL: summaryURL)
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode supported-hardware"))
+    }
+
     func testReviewRejectsSupportedHardwareEvidenceWithoutProbeLocal() throws {
         let harness = try ValidationEvidenceReviewHarness(
             probeLocalStatus: "skipped",
@@ -554,6 +575,15 @@ private final class ValidationEvidenceReviewHarness {
     func readJSON(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    func removeChecksumEntry(for filename: String) throws {
+        let checksumURL = bundleURL.appendingPathComponent("checksums.tsv")
+        let lines = try String(contentsOf: checksumURL, encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.hasSuffix("\t\(filename)") }
+            .map(String.init)
+        try lines.joined(separator: "\n").appending("\n").write(to: checksumURL, atomically: true, encoding: .utf8)
     }
 
     private func writeReviewSummary(
