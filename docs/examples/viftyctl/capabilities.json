@@ -25,6 +25,17 @@
     "prepareCooldownSeconds": 30
   },
   "policySource": "daemonStatus",
+  "runLifecycle": {
+    "autoRestoreAfterChildExit": true,
+    "childCommandPreflightBeforeCooling": true,
+    "cleanupStateReportedOnLaunchFailure": true,
+    "signalsForwardedToChild": [
+      "INT",
+      "TERM",
+      "HUP"
+    ],
+    "structuredPreChildFailures": true
+  },
   "schemaVersion": 1,
   "schemaIDs": {
     "audit": "https://vifty.local/schemas/viftyctl-audit.schema.json",

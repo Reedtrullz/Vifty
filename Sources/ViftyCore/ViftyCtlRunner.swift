@@ -12,6 +12,28 @@ public struct ViftyCtlResult: Equatable, Sendable {
     }
 }
 
+public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
+    public var childCommandPreflightBeforeCooling: Bool
+    public var signalsForwardedToChild: [String]
+    public var autoRestoreAfterChildExit: Bool
+    public var structuredPreChildFailures: Bool
+    public var cleanupStateReportedOnLaunchFailure: Bool
+
+    public init(
+        childCommandPreflightBeforeCooling: Bool = true,
+        signalsForwardedToChild: [String] = ["INT", "TERM", "HUP"],
+        autoRestoreAfterChildExit: Bool = true,
+        structuredPreChildFailures: Bool = true,
+        cleanupStateReportedOnLaunchFailure: Bool = true
+    ) {
+        self.childCommandPreflightBeforeCooling = childCommandPreflightBeforeCooling
+        self.signalsForwardedToChild = signalsForwardedToChild
+        self.autoRestoreAfterChildExit = autoRestoreAfterChildExit
+        self.structuredPreChildFailures = structuredPreChildFailures
+        self.cleanupStateReportedOnLaunchFailure = cleanupStateReportedOnLaunchFailure
+    }
+}
+
 public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var commands: [String]
@@ -24,6 +46,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var daemonStatusAvailable: Bool
     public var agentControlStatusError: String?
     public var supportsForceRetry: Bool
+    public var runLifecycle: ViftyCtlRunLifecycleCapabilities
     public var exitCodes: ViftyCtlExitCodes
 
     public init(
@@ -38,6 +61,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         daemonStatusAvailable: Bool = true,
         agentControlStatusError: String? = nil,
         supportsForceRetry: Bool = true,
+        runLifecycle: ViftyCtlRunLifecycleCapabilities = ViftyCtlRunLifecycleCapabilities(),
         exitCodes: ViftyCtlExitCodes = ViftyCtlExitCodes()
     ) {
         self.schemaVersion = schemaVersion
@@ -51,7 +75,65 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.daemonStatusAvailable = daemonStatusAvailable
         self.agentControlStatusError = agentControlStatusError
         self.supportsForceRetry = supportsForceRetry
+        self.runLifecycle = runLifecycle
         self.exitCodes = exitCodes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case commands
+        case workloads
+        case schemas
+        case schemaResources
+        case schemaIDs
+        case policy
+        case policySource
+        case daemonStatusAvailable
+        case agentControlStatusError
+        case supportsForceRetry
+        case runLifecycle
+        case exitCodes
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        commands = try container.decode([String].self, forKey: .commands)
+        workloads = try container.decode([String].self, forKey: .workloads)
+        schemas = try container.decode(ViftyCtlSchemaReferences.self, forKey: .schemas)
+        schemaResources = try container.decode(ViftyCtlSchemaReferences.self, forKey: .schemaResources)
+        schemaIDs = try container.decode(ViftyCtlSchemaReferences.self, forKey: .schemaIDs)
+        policy = try container.decode(AgentControlPolicySnapshot.self, forKey: .policy)
+        policySource = try container.decode(ViftyCtlPolicySource.self, forKey: .policySource)
+        daemonStatusAvailable = try container.decode(Bool.self, forKey: .daemonStatusAvailable)
+        agentControlStatusError = try container.decodeIfPresent(String.self, forKey: .agentControlStatusError)
+        supportsForceRetry = try container.decode(Bool.self, forKey: .supportsForceRetry)
+        runLifecycle = try container.decodeIfPresent(
+            ViftyCtlRunLifecycleCapabilities.self,
+            forKey: .runLifecycle
+        ) ?? ViftyCtlRunLifecycleCapabilities()
+        exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(commands, forKey: .commands)
+        try container.encode(workloads, forKey: .workloads)
+        try container.encode(schemas, forKey: .schemas)
+        try container.encode(schemaResources, forKey: .schemaResources)
+        try container.encode(schemaIDs, forKey: .schemaIDs)
+        try container.encode(policy, forKey: .policy)
+        try container.encode(policySource, forKey: .policySource)
+        try container.encode(daemonStatusAvailable, forKey: .daemonStatusAvailable)
+        if let agentControlStatusError {
+            try container.encode(agentControlStatusError, forKey: .agentControlStatusError)
+        } else {
+            try container.encodeNil(forKey: .agentControlStatusError)
+        }
+        try container.encode(supportsForceRetry, forKey: .supportsForceRetry)
+        try container.encode(runLifecycle, forKey: .runLifecycle)
+        try container.encode(exitCodes, forKey: .exitCodes)
     }
 }
 

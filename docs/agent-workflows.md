@@ -133,13 +133,18 @@ The capabilities report has `schemaVersion: 1` and includes:
 - `daemonStatusAvailable`
 - `agentControlStatusError`
 - `supportsForceRetry`
+- `runLifecycle.childCommandPreflightBeforeCooling`
+- `runLifecycle.signalsForwardedToChild`
+- `runLifecycle.autoRestoreAfterChildExit`
+- `runLifecycle.structuredPreChildFailures`
+- `runLifecycle.cleanupStateReportedOnLaunchFailure`
 - `exitCodes.success`
 - `exitCodes.commandFailure`
 - `exitCodes.usage`
 - `exitCodes.unavailable`
 - `exitCodes.blockedReadiness`
 
-Use this output rather than hardcoding policy limits, schema paths/resource paths/IDs, or shell exit-code meanings in an agent. `schemas` points at source-tree documentation paths, `schemaResources` points at the installed app bundle paths under `Vifty.app/Contents/Resources/schemas`, and `schemaIDs` gives stable IDs for validators. If daemon status is unavailable, `capabilities --json` still prints the static command contract, but returns `exitCodes.unavailable`, sets `daemonStatusAvailable: false`, sets `policySource: "fallbackUnavailable"`, and reports a disabled fallback policy. Treat that as discovery-only; run `diagnose --json` or ask the user to repair the helper before requesting cooling.
+Use this output rather than hardcoding policy limits, schema paths/resource paths/IDs, shell exit-code meanings, or `viftyctl run` wrapper guarantees in an agent. `schemas` points at source-tree documentation paths, `schemaResources` points at the installed app bundle paths under `Vifty.app/Contents/Resources/schemas`, and `schemaIDs` gives stable IDs for validators. `runLifecycle` tells agents whether the wrapper validates the child command before cooling, forwards handled signals, restores Auto after child exit, uses structured pre-child JSON failures, and reports cleanup state after launch failures. If daemon status is unavailable, `capabilities --json` still prints the static command contract, but returns `exitCodes.unavailable`, sets `daemonStatusAvailable: false`, sets `policySource: "fallbackUnavailable"`, and reports a disabled fallback policy. Treat that as discovery-only; run `diagnose --json` or ask the user to repair the helper before requesting cooling.
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 

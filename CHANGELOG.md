@@ -12,13 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub repository topics and triage labels are now captured in `.github/repo-metadata.json`, checked by `scripts/check-github-metadata.sh`, and covered by fixture-backed tests so the contributor/reporting surface stays reproducible.
 - `examples/viftyctl/guarded-run.sh` now leaves force retry off by default and requires explicit `VIFTY_GUARDED_RUN_FORCE_RETRY=1` opt-in before passing `--force` to `viftyctl run`.
 - Canonical `viftyctl run --json` command-error examples now cover child-launch failures after a prepared cooling lease, including both Auto-restore-success and Auto-restore-failure cleanup states.
+- `viftyctl capabilities --json` now includes `runLifecycle` metadata so agents can discover child-command preflight, forwarded signals, Auto restore, structured pre-child failures, and cleanup-state reporting without scraping docs.
 
 ### Changed
 - The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
 - Hardware validation docs and the issue template now distinguish source builds, source-first unsigned-dev zips, future notarized releases, and Homebrew installs so `v1.1.0` compatibility reports do not imply trusted binary distribution.
 - The Bug Report template now steers unsupported or blocked fan reports to `viftyctl diagnose --json` first and keeps helper probe output optional unless supported hardware or maintainer follow-up needs it.
 - The Agent Cooling Report template now treats blocked readiness as evidence-only, adds a blocked-before-cooling command path, and warns reporters not to retry `viftyctl prepare` or `viftyctl run` while diagnose says cooling is unsafe.
-- The strategy workplan now reflects the landed `main` hardening state, 411-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
+- The strategy workplan now reflects the landed `main` hardening state, 412-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
 
 ## [1.1.0] — 2026-06-11
 

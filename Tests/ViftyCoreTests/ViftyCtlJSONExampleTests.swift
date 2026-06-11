@@ -16,6 +16,11 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(capabilities.agentControlStatusError)
         XCTAssertEqual(capabilities.policy.prepareCooldownSeconds, 30)
         XCTAssertTrue(capabilities.supportsForceRetry)
+        XCTAssertEqual(capabilities.runLifecycle.childCommandPreflightBeforeCooling, true)
+        XCTAssertEqual(capabilities.runLifecycle.signalsForwardedToChild, ["INT", "TERM", "HUP"])
+        XCTAssertEqual(capabilities.runLifecycle.autoRestoreAfterChildExit, true)
+        XCTAssertEqual(capabilities.runLifecycle.structuredPreChildFailures, true)
+        XCTAssertEqual(capabilities.runLifecycle.cleanupStateReportedOnLaunchFailure, true)
         XCTAssertEqual(capabilities.exitCodes.blockedReadiness, 75)
         XCTAssertEqual(capabilities.schemas.capabilities, "docs/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemas.audit, "docs/schemas/viftyctl-audit.schema.json")
@@ -32,6 +37,16 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaIDs.diagnose, "https://vifty.local/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.status, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.commandError, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
+    }
+
+    func testLegacyCapabilitiesPayloadDecodesWithRunLifecycleDefaults() throws {
+        var payload = try readJSON(fixtureURL("capabilities.json"))
+        payload.removeValue(forKey: "runLifecycle")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
+
+        XCTAssertEqual(capabilities.runLifecycle, ViftyCtlRunLifecycleCapabilities())
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -248,6 +263,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             in: capabilitiesDefinitions,
             arePresentIn: capabilitiesExample["exitCodes"] as? [String: Any],
             context: "capabilities exitCodes"
+        )
+        try assertRequiredFields(
+            definition: "runLifecycle",
+            in: capabilitiesDefinitions,
+            arePresentIn: capabilitiesExample["runLifecycle"] as? [String: Any],
+            context: "capabilities runLifecycle"
         )
         try assertRequiredFields(
             definition: "schemaPathReferences",

@@ -16,6 +16,7 @@
     "daemonStatusAvailable",
     "agentControlStatusError",
     "supportsForceRetry",
+    "runLifecycle",
     "exitCodes"
   ],
   "properties": {
@@ -71,6 +72,9 @@
     },
     "supportsForceRetry": {
       "type": "boolean"
+    },
+    "runLifecycle": {
+      "$ref": "#/$defs/runLifecycle"
     },
     "exitCodes": {
       "$ref": "#/$defs/exitCodes"
@@ -224,6 +228,46 @@
         },
         "blockedReadiness": {
           "type": "integer"
+        }
+      }
+    },
+    "runLifecycle": {
+      "type": "object",
+      "description": "Machine-readable viftyctl run lifecycle guarantees that agents can depend on before deciding how much wrapper logic to add around a workload.",
+      "required": [
+        "childCommandPreflightBeforeCooling",
+        "signalsForwardedToChild",
+        "autoRestoreAfterChildExit",
+        "structuredPreChildFailures",
+        "cleanupStateReportedOnLaunchFailure"
+      ],
+      "properties": {
+        "childCommandPreflightBeforeCooling": {
+          "type": "boolean",
+          "description": "True when viftyctl run resolves and validates the child executable before preparing a cooling lease."
+        },
+        "signalsForwardedToChild": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "INT",
+              "TERM",
+              "HUP"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "autoRestoreAfterChildExit": {
+          "type": "boolean",
+          "description": "True when viftyctl run attempts to restore Auto after child launch failure, normal child exit, or handled signal exit."
+        },
+        "structuredPreChildFailures": {
+          "type": "boolean",
+          "description": "True when viftyctl run --json emits structured command-error reports before the child process starts."
+        },
+        "cleanupStateReportedOnLaunchFailure": {
+          "type": "boolean",
+          "description": "True when launch failures after a prepared lease report whether cleanup was attempted and whether Auto restore succeeded."
         }
       }
     }
