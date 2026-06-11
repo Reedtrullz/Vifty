@@ -119,6 +119,24 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("scripts/check-release-readiness.sh --mode developer-id --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json"))
     }
 
+    func testHardwareValidationPreservesSourceFirstInstallProvenance() throws {
+        let compatibility = try read("docs/compatibility.md")
+        let hardwareValidation = try read("docs/hardware-validation.md")
+        let issueTemplate = try read(".github/ISSUE_TEMPLATE/hardware-validation.yml")
+
+        XCTAssertTrue(compatibility.contains("Install source matters."))
+        XCTAssertTrue(compatibility.contains("source builds from the tag and `Vifty-v1.1.0-unsigned-dev.zip` reports can contribute hardware compatibility evidence"))
+        XCTAssertTrue(compatibility.contains("Treat those as compatibility-only evidence, not release-trust evidence."))
+        XCTAssertTrue(hardwareValidation.contains("For `v1.1.0`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.0-unsigned-dev.zip` tester artifact."))
+        XCTAssertTrue(hardwareValidation.contains("Source-first and unsigned-dev `v1.1.0` hardware reports may leave release-artifact verifier evidence skipped or absent."))
+        XCTAssertTrue(issueTemplate.contains("For `v1.1.0`, choose **Source build from tag**"))
+        XCTAssertTrue(issueTemplate.contains("Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release."))
+        XCTAssertTrue(issueTemplate.contains("description: How did you install this build? For v1.1.0, prefer Source build from tag or Source-first unsigned-dev zip"))
+        XCTAssertTrue(issueTemplate.contains("- Source build from tag"))
+        XCTAssertTrue(issueTemplate.contains("- Source-first unsigned-dev zip"))
+        XCTAssertTrue(issueTemplate.contains("Source-first source builds and unsigned-dev reports may skip release-artifact-summary evidence"))
+    }
+
     func testCompatibilityPageRequiresReportBackedEvidence() throws {
         let compatibility = try read("docs/compatibility.md")
 

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
+- Hardware validation docs and the issue template now distinguish source builds, source-first unsigned-dev zips, future notarized releases, and Homebrew installs so `v1.1.0` compatibility reports do not imply trusted binary distribution.
 
 ## [1.1.0] — 2026-06-11
 

@@ -14,6 +14,8 @@ body:
 
         The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, Gatekeeper, and privacy-review evidence for the app, CLI, helper, and daemon. Check privacy-review.tsv before posting publicly; redact files it flags or share them privately with maintainers.
 
+        For `v1.1.0`, choose **Source build from tag** when you built from source, or **Source-first unsigned-dev zip** when you used the tester convenience artifact. Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release.
+
         Or run these commands manually:
 
         ```sh
@@ -37,8 +39,10 @@ body:
     id: install-source
     attributes:
       label: Install source
-      description: How did you install this build?
+      description: How did you install this build? For v1.1.0, prefer Source build from tag or Source-first unsigned-dev zip; do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
       options:
+        - Source build from tag
+        - Source-first unsigned-dev zip
         - Notarized GitHub Release
         - Homebrew cask
         - Local Developer ID build
@@ -153,7 +157,7 @@ body:
     id: release-trust-evidence
     attributes:
       label: Release trust evidence
-      description: Paste review-summary.tsv rows, attach review-summary.json, privacy-review.tsv, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The privacy-review row should be 0 before public sharing; redact or share privately if it names hostnames, /Users/... paths, serial-number labels, or hardware UUID labels. The release-artifact-summary row should be 0 for release reports so the verifier result passed and matched the installed app version.
+      description: Paste review-summary.tsv rows, attach review-summary.json, privacy-review.tsv, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The privacy-review row should be 0 before public sharing; redact or share privately if it names hostnames, /Users/... paths, serial-number labels, or hardware UUID labels. Source-first source builds and unsigned-dev reports may skip release-artifact-summary evidence; trusted binary release reports should include it and the row should be 0 so the verifier result passed and matched the installed app version.
       render: text
       placeholder: |
         name	status	expected	scope	note

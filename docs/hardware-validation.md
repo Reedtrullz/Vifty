@@ -6,6 +6,8 @@ Contributor reports should use the GitHub **Hardware Validation Report** issue t
 
 The public compatibility status is tracked in [compatibility.md](compatibility.md). Do not treat the intended support scope as broad validation until the compatibility page links to real reports. Unsupported machines should follow [unsupported-hardware.md](unsupported-hardware.md): collect read-only evidence, expect a blocked report, and do not run manual fan-write smoke tests.
 
+For `v1.1.0`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.0-unsigned-dev.zip` tester artifact. Those reports can still prove hardware behavior, but they do not prove Developer ID signing, notarization, Homebrew trust, or trusted binary distribution. Future Developer ID or Homebrew reports should choose the corresponding install source only after that trusted-binary lane exists.
+
 ## Evidence Collector
 
 For release candidates and contributor reports, the easiest read-only collection path is:
@@ -33,6 +35,8 @@ sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --incl
 Review the bundle before sharing it publicly, especially any files named by `privacy-review.tsv`, then paste or attach the relevant files to the GitHub **Hardware Validation Report** issue template.
 
 The helper probe fan rows include `hardwareMode`, `hardwareModeRawValue`, and `targetRPM` fields in addition to current/min/max RPM. Use those fields to confirm whether Vifty and macOS agree about Auto, Forced, or System-managed fan state before and after a smoke test.
+
+Source-first and unsigned-dev `v1.1.0` hardware reports may leave release-artifact verifier evidence skipped or absent. Do not use those reports as proof of public binary trust; use them only for hardware behavior, agent readiness, helper telemetry, and manual smoke-test evidence.
 
 Maintainers can review a captured bundle without rerunning any diagnostics:
 
