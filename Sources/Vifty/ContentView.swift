@@ -89,6 +89,22 @@ struct ContentView: View {
             modePicker
 
             HStack(spacing: 8) {
+                Image(systemName: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
+                    .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fan Control Owner")
+                        .font(.caption.weight(.semibold))
+                    Text(model.controlOwnershipSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background((model.controlOwnershipNeedsAttention ? Color.orange : Color.green).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+
+            HStack(spacing: 8) {
                 Image(systemName: helperHealthSystemImage)
                     .foregroundStyle(helperHealthColor)
                 VStack(alignment: .leading, spacing: 2) {
@@ -97,6 +113,12 @@ struct ContentView: View {
                     Text(model.helperHealthSummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let suggestion = model.helperRecoverySuggestion {
+                        Text(suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
                 Spacer()
                 Button("Repair") {
@@ -145,7 +167,11 @@ struct ContentView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    ContentUnavailableView("Fan Access Unavailable", systemImage: "fan.slash", description: Text(model.fanAccessMessage ?? daemonInstaller.statusText))
+                    ContentUnavailableView(
+                        "Fan Access Unavailable",
+                        systemImage: "fan.slash",
+                        description: Text(model.helperRecoverySuggestion ?? model.fanAccessMessage ?? daemonInstaller.statusText)
+                    )
                     Button {
                         daemonInstaller.installOrOpenApproval()
                     } label: {
@@ -220,8 +246,26 @@ struct ContentView: View {
 
     private var curveEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Temperature Curve")
-                .font(.headline)
+            HStack {
+                Text("Temperature Curve")
+                    .font(.headline)
+                Spacer()
+                Menu {
+                    ForEach(DeveloperFanPreset.allCases) { preset in
+                        Button {
+                            model.loadDeveloperPreset(preset)
+                            selectedProfileID = nil
+                            model.applyModeSelection()
+                        } label: {
+                            Label(preset.displayName, systemImage: preset.systemImage)
+                        }
+                    }
+                } label: {
+                    Label("Developer Presets", systemImage: "slider.horizontal.3")
+                }
+                .controlSize(.small)
+                .help("Apply a conservative fan curve for common developer workloads")
+            }
 
             if !model.savedProfiles.isEmpty {
                 HStack {

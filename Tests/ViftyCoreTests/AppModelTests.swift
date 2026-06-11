@@ -68,6 +68,50 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.fanOverride(for: 1)?.maxRPM, 4500)
     }
 
+    func testDeveloperPresetUsesFanRangeSelectsSensorAndClearsOverrides() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1000, maximumRPM: 5000, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1200, maximumRPM: 5200, controllable: true)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.usePerFanOverrides = true
+        model.fanOverrides = [
+            FanCurveOverride(fanID: 0, startRPM: 4800, midRPM: 4900, maxRPM: 5000)
+        ]
+
+        model.loadDeveloperPreset(.build)
+
+        XCTAssertEqual(model.selectedMode, .curve)
+        XCTAssertEqual(model.selectedSensorID, "Tp09")
+        XCTAssertEqual(model.curveStartTemp, 52)
+        XCTAssertEqual(model.curveMidTemp, 68)
+        XCTAssertEqual(model.curveMaxTemp, 84)
+        XCTAssertEqual(Int(model.curveStartRPM), 2600)
+        XCTAssertEqual(Int(model.curveMidRPM), 3400)
+        XCTAssertEqual(Int(model.curveMaxRPM), 4000)
+        XCTAssertFalse(model.usePerFanOverrides)
+        XCTAssertTrue(model.fanOverrides.isEmpty)
+        XCTAssertTrue(model.curveDefaultsSynced)
+    }
+
+    func testDeveloperPresetRPMCapsStayWithinDefaultAgentPolicyCeiling() {
+        let policy = AgentControlPolicy()
+
+        for preset in DeveloperFanPreset.allCases {
+            XCTAssertLessThanOrEqual(preset.startRPMPercent, policy.maximumAllowedRPMPercent)
+            XCTAssertLessThanOrEqual(preset.midRPMPercent, policy.maximumAllowedRPMPercent)
+            XCTAssertLessThanOrEqual(preset.maxRPMPercent, policy.maximumAllowedRPMPercent)
+        }
+    }
+
     func testSaveProfileReportsProfileStoreFailure() throws {
         let parentFile = FileManager.default
             .temporaryDirectory
@@ -114,6 +158,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
+        XCTAssertNil(model.helperRecoverySuggestion)
     }
 
     func testHelperHealthSummaryReportsHelperErrorBeforeHealthyState() {
@@ -129,6 +174,7 @@ final class AppModelTests: XCTestCase {
         model.lastError = "The fan helper rejected the command"
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
     }
 
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
@@ -143,6 +189,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Do not start manual or agent cooling until fans appear.")
     }
 
     func testHelperHealthSummaryPluralizesFanCount() {
@@ -168,6 +215,67 @@ final class AppModelTests: XCTestCase {
         model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair or Reinstall Helper; fan writes stay blocked until the daemon responds.")
+    }
+
+    func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.controlState = ControlState(mode: .auto)
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "macOS Auto owns fan control")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipSummaryWarnsWhenAutoSelectedButHardwareIsForced() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.controlState = ControlState(mode: .auto)
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 3200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 3200)
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Hardware reports Forced mode while Vifty is Auto · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipSummaryReportsViftyManualModes() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 3200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 3200)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.selectedSensorID = "Tp09"
+
+        model.controlState = ControlState(mode: .fixedRPM(3200), manualControlActive: true)
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3200 RPM")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+
+        model.controlState = ControlState(mode: .temperatureCurve(FanCurve.defaultCurve(sensorID: "Tp09")), manualControlActive: true)
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Curve owns fan targets · CPU Proximity")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
     }
 
     func testMenuTitleIncludesPowerSummaryWhenPowerSnapshotAvailable() {
@@ -362,6 +470,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.agentCoolingNeedsAttention)
         XCTAssertTrue(model.agentCoolingSummary?.contains("Agent Build cooling until") == true)
         XCTAssertTrue(model.agentCoolingSummary?.contains("F0 3600 RPM, F1 3700 RPM") == true)
+        XCTAssertTrue(model.controlOwnershipSummary.contains("Agent Build owns cooling until"))
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
     }
 
     func testAgentCoolingSummaryWarnsWhenLeaseExpiredButUnrestored() {
@@ -378,6 +488,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.agentCoolingNeedsAttention)
         XCTAssertTrue(model.agentCoolingSummary?.contains("expired; waiting for Auto restore") == true)
         XCTAssertTrue(model.menuTitle.contains("Agent restore pending"))
+        XCTAssertEqual(model.controlOwnershipSummary, "Agent Build lease expired; restore Auto to clear daemon control")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
     func testRestoreAutoClearsDaemonOwnedAgentLease() async {

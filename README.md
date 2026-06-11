@@ -17,6 +17,7 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Menu bar cockpit** — temperature, fan RPM, and power state at a glance.
 - **Three fan modes** — Auto, Fixed RPM, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
+- **Developer presets** — conservative curve presets for tests, builds, and local model runs.
 - **Hardware fan state** — shows actual SMC Auto/Forced/System mode and target RPM when available.
 - **Live temperature panel** — all SMC and HID sensors with source labels and highest-temperature tracking.
 - **Live power tracking** — battery percentage, charge/drain watts, signed battery current, adapter wattage, negotiated USB-C voltage/current, health, cycle count, battery temperature, and USB-C PD profiles from local IOKit data.
@@ -25,7 +26,7 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
 - **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
-- **Helper health summary** — distinguishes healthy helper fan data from helper errors, unreachable daemon state, and empty snapshots.
+- **Helper health summary** — distinguishes healthy helper fan data from helper errors, unreachable daemon state, and empty snapshots, with recovery guidance when fan control is not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible state and daemon-owned expiry.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
@@ -46,7 +47,9 @@ If you use Apple Silicon for builds, tests, or AI workloads, Vifty keeps your ma
 
 V1 targets Apple Silicon MacBook Pro models on macOS 15+. Compatibility claims are evidence-based; see [docs/compatibility.md](docs/compatibility.md) for the current validation status and [docs/hardware-validation.md](docs/hardware-validation.md) for the report procedure.
 
-Vifty intentionally excludes HDD/SSD S.M.A.R.T., Boot Camp, Windows support, analytics, cloud sync, and non-MacBook-Pro fan control. Unsupported Macs should remain under macOS automatic fan control.
+Vifty intentionally excludes HDD/SSD S.M.A.R.T., Boot Camp, Windows support, analytics, cloud sync, and non-MacBook-Pro fan control. Unsupported Macs should remain under macOS automatic fan control; see [docs/unsupported-hardware.md](docs/unsupported-hardware.md) for the safe-block policy.
+
+Maintainers should triage reports with [docs/support-triage.md](docs/support-triage.md) so release, hardware, helper, SMC telemetry, agent-cooling, and UI issues stay evidence-based.
 
 ## Install and launch
 
@@ -63,7 +66,7 @@ Then launch Vifty from Spotlight, Launchpad, or:
 open /Applications/Vifty.app
 ```
 
-For public trust, the cask artifact should pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the release checksum is published. That verifies the cask SHA, bundle version, bundled agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. Corrected public releases should include the verifier's `Vifty-v<version>-artifact-summary.json` asset, installed-release evidence bundles should pass `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`, and reviewed hardware reports can be indexed with `scripts/summarize-validation-reports.sh`. Supported hardware reports count as validated only after the issue-template smoke test records Auto restore and the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
+For public trust, the cask artifact should pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the release checksum is published. That verifies the cask SHA, bundle version, bundled agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. Corrected public releases should include the verifier's `Vifty-v<version>-artifact-summary.json` asset, installed-release evidence bundles should pass `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`, and reviewed hardware reports can be indexed with `scripts/summarize-validation-reports.sh`. The indexer rejects malformed, non-read-only, or cooling-mutating review results, and supported hardware reports count as validated only after the issue-template smoke test records Auto restore and the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
 
 ### From source
 
@@ -203,7 +206,7 @@ If manual fan control misbehaves, restore Auto before trying anything else:
 
 4. If fan state is still unclear, reboot macOS so the firmware/system controller and launchd return to normal startup state.
 
-Do not run manual fan control on unsupported hardware.
+Do not run manual fan control on unsupported hardware. Follow [docs/unsupported-hardware.md](docs/unsupported-hardware.md) instead.
 
 ## ViftyHelper CLI
 
@@ -238,11 +241,11 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift
 
 `capabilities --json` returns the supported commands, supported workload names, source schema paths, installed bundle schema resource paths, stable schema IDs, shell exit-code meanings, and daemon policy limits such as max lease duration, allowed RPM percent range, and prepare cooldown. If the daemon status cannot be read, it still prints the static command contract with `daemonStatusAvailable: false`, `policySource: "fallbackUnavailable"`, a disabled fallback policy, and exits with `exitCodes.unavailable`. Rate-limited decisions include `retryAfterSeconds` so agents can wait without parsing human text.
 
-`diagnose --json` is a read-only readiness report for agents, release testers, and hardware validation. It combines daemon snapshot telemetry, thermal pressure, fan hardware mode/target data, agent policy/status, explicit `ready` / `degraded` / `blocked` checks, and machine-readable `recommendedAgentAction` / `safeToRequestCooling` fields, including invalid or duplicate controllable fan IDs. If the daemon snapshot or agent-control status cannot be read, the command still emits a structured `blocked` report with `daemonSnapshotAvailable` / `agentControlStatusAvailable` failure checks and exits 75 after printing JSON. See [docs/hardware-validation.md](docs/hardware-validation.md) for the release-test matrix and use the GitHub Hardware Validation Report issue template when contributing compatibility evidence.
+`diagnose --json` is a read-only readiness report for agents, release testers, and hardware validation. It combines daemon snapshot telemetry, thermal pressure, fan hardware mode/target data, agent policy/status, explicit `ready` / `degraded` / `blocked` checks, and machine-readable `recommendedAgentAction` / `safeToRequestCooling` fields, including invalid or duplicate controllable fan IDs. If the daemon snapshot or agent-control status cannot be read, the command still emits a structured `blocked` report with `daemonSnapshotAvailable` / `agentControlStatusAvailable` failure checks and exits 75 after printing JSON. See [docs/hardware-validation.md](docs/hardware-validation.md) for the release-test matrix, [docs/unsupported-hardware.md](docs/unsupported-hardware.md) for blocked unsupported Macs, and use the GitHub Hardware Validation Report issue template when contributing compatibility evidence.
 
 `audit --json` is a read-only local audit export for recent agent lease events. It returns `readOnly: true`, `coolingCommandsRun: false`, the requested `limit`, `eventCount`, and timestamped events with action, optional lease ID, and message. Use it after blocked readiness or restore failures to show what Vifty actually did without requesting cooling.
 
-For a fuller contract, decision rules, canonical JSON examples, and copy/paste wrappers for Swift, Xcode, npm, cargo, pytest, and local model workloads, see [docs/agent-workflows.md](docs/agent-workflows.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
+For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and copy/paste wrappers for Swift, Xcode, npm, cargo, pytest, and local model workloads, see [docs/agent-workflows.md](docs/agent-workflows.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
 
 For commands with `--json`, daemon/transport failures return a structured error object with `command`, `errorCode`, `message`, and `safeToProceed: false` instead of plain stderr text. For `viftyctl run --json`, wrapper failures before the child starts, such as child-command resolution or prepare denial, use the same structured error shape; child output and post-child restore errors keep the normal wrapper exit/stderr behavior. Human-readable invocations keep the normal stderr failure path.
 

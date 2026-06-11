@@ -1,0 +1,171 @@
+name: Agent Cooling Report
+description: Report a viftyctl prepare/run/restore-auto or local build/test cooling issue
+title: "[Agent Cooling]: "
+labels: ["agent-cooling"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for local agent, build, test, or script cooling issues involving `viftyctl prepare`, `viftyctl run`, `viftyctl restore-auto`, `guarded-run.sh`, rate limits, expired leases, or Auto-restore failures.
+
+        Please collect read-only evidence first. Do not run raw SMC commands, `sudo ViftyHelper setFixed`, or manual fan-write tests when readiness is blocked.
+
+        Maintainers triage these reports with docs/support-triage.md and docs/safe-agent-cooling.md.
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Which version of macOS are you running?
+      placeholder: e.g. 15.5
+    validations:
+      required: true
+
+  - type: input
+    id: model-identifier
+    attributes:
+      label: Model identifier
+      description: Paste the exact model identifier from diagnose JSON or System Information.
+      placeholder: e.g. MacBookPro18,3
+    validations:
+      required: true
+
+  - type: input
+    id: vifty-version
+    attributes:
+      label: Vifty version
+      description: Which Vifty release, build, or commit did you install?
+      placeholder: e.g. 1.0.1 or git commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: command-kind
+    attributes:
+      label: Command path
+      description: Which path failed or behaved unexpectedly?
+      options:
+        - viftyctl run
+        - viftyctl prepare
+        - viftyctl restore-auto
+        - examples/viftyctl/guarded-run.sh
+        - Agent integration snippet
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: exact-command
+    attributes:
+      label: Exact command
+      description: Paste the exact command that was run.
+      render: shell
+      placeholder: |
+        /Applications/Vifty.app/Contents/MacOS/viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift test" -- swift test
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnose-json
+    attributes:
+      label: viftyctl diagnose --json
+      description: Paste the full read-only readiness JSON from immediately before the cooling request if possible.
+      render: json
+      placeholder: |
+        {
+          "state": "ready",
+          "recommendedAgentAction": "requestCooling",
+          "safeToRequestCooling": true,
+          "checks": []
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: status-json
+    attributes:
+      label: viftyctl status --json
+      description: Paste status JSON after the failure or unexpected behavior.
+      render: json
+      placeholder: |
+        {
+          "enabled": true,
+          "activeLease": null,
+          "lastDecision": null,
+          "lastErrorCode": null
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: audit-json
+    attributes:
+      label: viftyctl audit --limit 20 --json
+      description: Paste the bounded read-only audit export after the failure or unexpected behavior.
+      render: json
+      placeholder: |
+        {
+          "readOnly": true,
+          "coolingCommandsRun": false,
+          "events": []
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: stdout-stderr
+    attributes:
+      label: Command stdout/stderr and exit code
+      description: Paste command output, stderr, and exit status. Include child exit status for `viftyctl run`.
+      render: text
+      placeholder: |
+        exit code: 1
+        stdout:
+        stderr:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: restore-state
+    attributes:
+      label: Auto restore state
+      description: What was the final restore state after the command?
+      options:
+        - Auto restored
+        - Restore pending
+        - Restore failed
+        - No lease was prepared
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual behavior
+      description: What did you expect, and what happened instead?
+      placeholder: |
+        Expected:
+        Actual:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety-confirmations
+    attributes:
+      label: Safety confirmations
+      options:
+        - label: "I did not run raw SMC commands, `sudo ViftyHelper setFixed`, or arbitrary fan RPM writes for this report."
+          required: true
+        - label: "I did not request cooling again while `diagnose --json` reported `safeToRequestCooling: false` or `restoreAutoBeforeRequestingCooling`."
+          required: true
+        - label: "I captured `status --json` and `audit --limit 20 --json` after the failure before retrying when possible."
+          required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Include agent name, wrapper script, repository type, workload size, screenshots, or anything else useful.
+    validations:
+      required: false

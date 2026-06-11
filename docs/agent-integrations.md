@@ -2,6 +2,8 @@
 
 Use these snippets when a local coding agent can run shell commands on a supported Mac. They all point at the same safe path: read-only readiness first, then `examples/viftyctl/guarded-run.sh`, which delegates to `viftyctl run --json` only when Vifty says cooling is safe to request.
 
+For the short operational runbook and failure-handling table, see [safe-agent-cooling.md](safe-agent-cooling.md).
+
 Do not give agents permission to call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, or `viftyctl prepare` unless a human is supervising a workflow that cannot be represented by `viftyctl run`.
 
 ## Shared Rule

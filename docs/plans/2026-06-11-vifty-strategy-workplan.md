@@ -6,7 +6,7 @@
 
 **Status:** Active. Local hardening is far along, but public trust still depends on Developer ID signing/notarization, Homebrew release metadata, and real Apple Silicon MacBook Pro validation reports.
 
-**Current public-release audit:** On 2026-06-11, the published `v1.0.0` GitHub asset existed and its asset digest matched `Casks/vifty.rb`, but `scripts/verify-release-artifact.sh` failed because the extracted app bundle reported `CFBundleShortVersionString` `0.1.0` while the cask version is `1.0.0`. Treat the current public artifact as not trust-complete; cut a corrected notarized patch release before promoting Homebrew as the trusted install path.
+**Current public-release audit:** On 2026-06-11, the published `v1.0.0` GitHub asset existed and its asset digest matched the then-current `Casks/vifty.rb`, but `scripts/verify-release-artifact.sh` failed because the extracted app bundle reported `CFBundleShortVersionString` `0.1.0` while the cask version was `1.0.0`. Treat the `v1.0.0` public artifact as not trust-complete; use the corrected `v1.1.0` release path before promoting Homebrew as the trusted install path.
 
 ## Executive Thesis
 
@@ -39,7 +39,7 @@ Sources checked on 2026-06-11:
 - Privileged helper architecture, so normal app use does not need repeated root prompts.
 - Agent lease model through `viftyctl`, which competitors do not appear to productize.
 - Local power telemetry, thermal pressure, fan hardware state, and in-memory history in one app.
-- Strong test posture: current local suite is 339 XCTest cases after the audit remediation, release-evidence schema, cask trust-metadata, cask checksum handoff, release asset-publication checks, release TeamID build wiring checks, release tag/version identity checks, release verifier skip-flag checks, release-summary consistency review checks, and release-summary capture-time consistency checks.
+- Strong test posture: current local suite is 352 XCTest cases after the audit remediation, release-evidence schema, cask trust-metadata, cask checksum handoff, release asset-publication checks, release TeamID build wiring checks, release tag/version identity checks, release verifier skip-flag checks, release-summary consistency review checks, release-summary capture-time consistency checks, malformed review-result indexer rejection checks, fan-control ownership UI summary checks, developer workload preset checks, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, PR safety review, and CODEOWNERS safety-surface checks.
 
 ### Vifty Weaknesses
 
@@ -99,7 +99,7 @@ Current local state:
 - Agent-control store/profile/marker persistence is private by default.
 - `viftyctl` JSON errors, readiness diagnostics, force retry behavior, run preflight, and Auto-restore reporting are tested.
 - App user Auto now reports daemon agent-lease clear failures instead of swallowing them during follow-up polling.
-- Local gates pass: `make verify` runs 339 XCTest cases with 0 failures after the release-evidence schema, cask trust-metadata, cask checksum handoff, release asset-publication, release TeamID build-wiring, release tag/version identity, release verifier skip-flag, release-summary consistency review, and release-summary capture-time consistency increments, plus warnings-as-errors build, release app bundle, plist lint, and strict codesign verification without installing the app.
+- Local gates pass: `make verify` runs 352 XCTest cases with 0 failures after the release-evidence schema, cask trust-metadata, cask checksum handoff, release asset-publication, release TeamID build-wiring, release tag/version identity, release verifier skip-flag, release-summary consistency review, release-summary capture-time consistency, malformed review-result indexer, fan-control ownership UI summary, developer workload preset, validation-report hardening, safe-agent-cooling guidance, support-triage, unsupported-hardware policy, PR safety review, and CODEOWNERS safety-surface increments, plus warnings-as-errors build, release app bundle, plist lint, and strict codesign verification without installing the app.
 
 Remaining local action:
 
@@ -171,6 +171,7 @@ Current progress:
 
 - `docs/agent-workflows.md` defines the `viftyctl` JSON contract, readiness decision rules, common workload invocations, and direct prepare/restore guidance.
 - `docs/agent-integrations.md` provides copy/paste guarded-run instructions for Codex, Claude Code, Cursor, and shell runners, including explicit "do not call raw SMC or sudo helper" guardrails.
+- `docs/safe-agent-cooling.md` provides a short operational runbook for local agents and scripts: read-only readiness first, guarded-run preference, conservative duration/RPM starting points, blocked/restore-failure handling, and direct-prepare guardrails.
 - `docs/schemas/` gives local agents stable schemas for capabilities discovery, required readiness safety fields, read-only audit export, status/lease state, structured command errors, actions, fan telemetry, agent-control status, and check IDs; `viftyctl capabilities --json` now advertises source schema paths, installed bundle schema resource paths, and IDs at runtime, and release artifacts are checked for bundled schema resources, valid JSON, and expected schema IDs.
 - `examples/viftyctl/guarded-run.sh` provides a shell-friendly preflight plus `viftyctl run --json` wrapper for Swift, Xcode, npm, cargo, pytest, local model, and custom workloads, with XCTest coverage proving ready/degraded/blocked behavior, restore-first decision blocking, missing-decision fail-closed behavior, diagnose failure preservation, and structured pre-child failures.
 - `viftyctl` rejects unknown wrapper options and unexpected positional arguments so agent typos fail closed instead of silently changing the intended command.
@@ -179,13 +180,15 @@ Current progress:
 - `docs/examples/viftyctl/` provides canonical JSON examples for capabilities, readiness, read-only audit export, active lease status, and structured command errors, with XCTest decoding coverage.
 - `scripts/collect-validation-evidence.sh` makes release and hardware reports repeatable without requesting cooling or writing fan state, and now captures bundle plist, installed executable hashes, installed schema resource hashes, advertised schema resource paths from capabilities output, optional release-artifact verifier summaries with schema identity, pass/fail, installed-app version matching, skipped/failed check detection, SHA consistency, and artifact-name consistency, LaunchDaemon TeamID, per-binary signing, notarization, and Gatekeeper evidence alongside `viftyctl` JSON plus reviewer-oriented `review-summary.tsv` and automation-oriented `review-summary.json`.
 - `scripts/review-validation-evidence.sh` reviews captured evidence bundles in `release`, `supported-hardware`, or `unsupported-hardware` modes and can write `review-result.json`, so maintainers can mechanically reject missing helper probes, skipped notarization, release summaries with a missing/drifted schema contract, release summaries with skipped/failed checks, checksum mismatches, artifact-name drift, unsupported-hardware reports that only prove daemon failure rather than a safe hardware block, or failed supported-hardware smoke tests.
-- `scripts/summarize-validation-reports.sh` builds JSON/TSV indexes from reviewed `review-result.json` files, keeping candidate supported-hardware rows labeled as manual-smoke-required until the review result records `manualSmokeTestResult: "passed-auto-restored"`, then promoting them to `validated-hardware-evidence`.
+- `scripts/summarize-validation-reports.sh` builds JSON/TSV indexes from valid reviewed `review-result.json` files, rejects malformed or non-read-only review outputs before they become claims, keeps candidate supported-hardware rows labeled as manual-smoke-required until the review result records `manualSmokeTestResult: "passed-auto-restored"`, then promotes them to `validated-hardware-evidence`.
 - `scripts/verify-release-artifact.sh` audits a generated release zip before publication and the public cask artifact after publication, verifying checksum, bundle version, required executables, bundled schema JSON/IDs, plist validity, Developer ID TeamID, LaunchDaemon TeamID allowlist, stapled notarization, and Gatekeeper assessment, with passed or failed JSON summary evidence that declares `https://vifty.local/schemas/release-artifact-summary.schema.json` for release reviewers.
 - `scripts/validate-release-metadata.sh` now rejects casks that regress to ad-hoc `signing_identity identity: "-"`, reference the old `/Library/PrivilegedHelperTools/ViftyDaemon` cleanup path, omit the real `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon` cleanup path, release workflows that fail to publish the notarized zip, checksum, and verification summary assets, release workflows that fail to build and verify the bundled LaunchDaemon with `VIFTY_XPC_ALLOWED_TEAM_ID`, release workflows that disable public release verifier signature/notarization checks, or release workflows that fail to derive and verify the release version from a `v<version>` tag before publishing.
 - `scripts/update-cask-checksum.sh` now applies the release workflow checksum to `Casks/vifty.rb` only when the checksum is well-formed, the checksum artifact matches the cask version, and release metadata validates before and after the edit.
 - `ViftyHelper probe` / `probeLocal` now share a tested formatter that includes fan `hardwareMode`, `hardwareModeRawValue`, and `targetRPM`, making before/after smoke-test evidence easier to audit.
-- The app/menu UI now summarizes active agent workload, target RPMs, and expired-but-unrestored lease state so humans can see what local agents are doing.
+- The app/menu UI now summarizes the current fan-control owner for macOS Auto, Vifty Fixed/Curve, active agent cooling, expired agent leases, and unexpected Forced/System hardware modes, plus active agent workload and target RPMs so humans can see what local agents are doing.
 - Agent audit history is now local, private by default, capped to the most recent 2,000 events, and available through a bounded read-only `viftyctl audit` export so lease observability does not become unbounded local retention.
+- `docs/support-triage.md` routes release trust, hardware validation, unsupported hardware, helper install, SMC telemetry drift, agent-cooling, and UI reports to read-only evidence and escalation rules before maintainers ask for any fan-write tests.
+- `.github/ISSUE_TEMPLATE/agent-cooling.yml` collects exact `viftyctl` commands, diagnose/status/audit JSON, stdout/stderr, Auto-restore state, and no-raw-SMC safety confirmations for agent/build/test cooling failures.
 
 Exit criteria:
 
@@ -201,9 +204,13 @@ Tasks:
 - Clarify menu-bar state when hardware mode differs from selected Vifty mode.
 - Make active agent leases unmistakable in the UI.
 - Provide one-click Auto restore and clear error reporting for failed lease cleanup.
-- Add safe default profiles for common developer workloads, with conservative RPM percentages.
 - Improve first-run helper install messaging and recovery instructions.
 - Add a screenshot or short demo GIF showing fan/power/agent state.
+
+Current progress:
+
+- The curve editor includes safe developer presets for tests, builds, and local model runs; preset RPM percentages stay under the default agent policy ceiling and loading a preset clears stale per-fan overrides.
+- Helper health surfaces now include recovery guidance for helper errors, unreachable daemon state, and reachable helpers with no fan data, so users see when to repair/reinstall and when not to start manual or agent cooling.
 
 Exit criteria:
 
@@ -236,9 +243,16 @@ Tasks:
 - Finish GitHub community files and issue templates.
 - Add a release checklist to every tagged release.
 - Add GitHub topics: `macos`, `swift`, `apple-silicon`, `fan-control`, `thermal`, `menubar`, `smc`, `developer-tools`.
-- Publish a clear "unsupported hardware" policy.
+- Keep the "unsupported hardware" policy clear and linked from compatibility, validation, triage, and trust docs.
 - Invite validation reports before asking for broad adoption.
 - Keep Homebrew tap/cask metadata aligned with release artifacts.
+- Use [support-triage.md](../support-triage.md) to sort incoming reports into release trust, hardware validation, unsupported hardware, helper install, SMC telemetry, agent-cooling, and UI buckets.
+
+Current progress:
+
+- `docs/unsupported-hardware.md` defines unsupported-machine safe-block behavior for Intel Macs, Apple Silicon non-MacBook-Pro machines, unknown fan topology, and untrustworthy telemetry, with read-only evidence commands, reviewer mode, and explicit no-bypass rules.
+- `.github/PULL_REQUEST_TEMPLATE.md` now requires contributors to identify safety impact across fan/SMC writes, daemon/helper/XPC boundaries, agent leases, release trust, hardware validation, UI restore/ownership state, and local persistence before review.
+- `.github/CODEOWNERS` now explicitly calls out agent-facing contracts, JSON Schemas, release workflows, cask metadata, validation docs, issue templates, and repo safety process files as safety-sensitive review surfaces.
 
 Exit criteria:
 
@@ -251,7 +265,7 @@ Exit criteria:
 
 - Finish review of the current audit remediation branch.
 - Get Developer ID signing and notarization working.
-- Ship a corrected notarized patch release with checksum, Homebrew cask update, and passing release-artifact verification.
+- Ship the corrected notarized `v1.1.0` release with checksum, Homebrew cask update, and passing release-artifact verification.
 - Validate at least 3 Apple Silicon MacBook Pro models.
 - Publish the compatibility-report workflow.
 
@@ -260,7 +274,7 @@ Exit criteria:
 - Add practical `viftyctl run` examples and agent integration snippets.
 - Collect reports from M3/M4 Pro/Max users.
 - Tighten UI copy around active leases, failed restores, and helper state.
-- Publish a short "safe local agent cooling" guide.
+- Keep the short "safe local agent cooling" guide current as the CLI contract evolves.
 
 ### Days 61-90: Adoption Loop
 
@@ -294,7 +308,7 @@ Exit criteria:
 ## Decisions Needed
 
 1. Apple Developer TeamID and signing identity for public release hardening.
-2. Whether the corrected public release should be `1.0.1` or a later patch version.
+2. Whether the corrected public release should be `1.0.1` or a later patch version. Decision: use `v1.1.0` for the expanded agent-safety and release-trust surface.
 3. Minimum hardware evidence required before public announcement.
 4. Whether the primary public headline is "open-source Apple Silicon fan control" or the sharper "agent-safe fan control for developer workloads".
 5. Whether to prioritize MCP/Shortcuts after the CLI stabilizes, or keep integrations script-first for now.

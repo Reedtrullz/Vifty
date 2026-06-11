@@ -10,6 +10,8 @@ body:
 
         For fan, sensor, helper, or agent-cooling bugs, start with read-only diagnostics where possible.
 
+        Maintainers triage reports using docs/support-triage.md so helper, hardware, SMC telemetry, release-trust, and agent-cooling issues get the right evidence.
+
   - type: input
     id: macos-version
     attributes:

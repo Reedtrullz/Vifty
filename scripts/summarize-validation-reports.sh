@@ -110,6 +110,62 @@ ruby -rjson -rcsv -rfileutils -e '
     nil
   end
 
+  def validate_result(path, result, failures)
+    valid = true
+
+    unless result["schemaVersion"] == 1
+      failures << "#{path} schemaVersion must be 1"
+      valid = false
+    end
+
+    unless result["readOnly"] == true
+      failures << "#{path} must declare readOnly=true"
+      valid = false
+    end
+
+    unless result["coolingCommandsRun"] == false
+      failures << "#{path} must declare coolingCommandsRun=false"
+      valid = false
+    end
+
+    unless %w[passed failed].include?(result["status"].to_s)
+      failures << "#{path} status must be passed or failed"
+      valid = false
+    end
+
+    unless %w[release supported-hardware unsupported-hardware].include?(result["mode"].to_s)
+      failures << "#{path} mode must be release, supported-hardware, or unsupported-hardware"
+      valid = false
+    end
+
+    unless %w[not-recorded passed-auto-restored skipped-blocked skipped-unsupported failed].include?(result.fetch("manualSmokeTestResult", "").to_s)
+      failures << "#{path} manualSmokeTestResult is not a supported value"
+      valid = false
+    end
+
+    unless result["failures"].is_a?(Array)
+      failures << "#{path} failures must be an array"
+      valid = false
+    end
+
+    unless result["warnings"].is_a?(Array)
+      failures << "#{path} warnings must be an array"
+      valid = false
+    end
+
+    if result["status"].to_s == "passed" && result["failures"].is_a?(Array) && !result["failures"].empty?
+      failures << "#{path} passed review results must not contain failures"
+      valid = false
+    end
+
+    if result["status"].to_s == "failed" && result["failures"].is_a?(Array) && result["failures"].empty?
+      failures << "#{path} failed review results must include at least one failure"
+      valid = false
+    end
+
+    valid
+  end
+
   def claim_for(result)
     return "rejected" unless result["status"].to_s == "passed"
 
@@ -149,6 +205,7 @@ ruby -rjson -rcsv -rfileutils -e '
   paths.each do |path|
     result = read_result(path, failures)
     next if result.nil?
+    next unless validate_result(path, result, failures)
 
     warnings = result["warnings"].is_a?(Array) ? result["warnings"] : []
     failures_list = result["failures"].is_a?(Array) ? result["failures"] : []

@@ -4,7 +4,7 @@ Vifty should earn trust with repeatable hardware evidence, not guesses. Use this
 
 Contributor reports should use the GitHub **Hardware Validation Report** issue template. The template asks for the exact readiness JSON, local helper fan probe output, model identifier, install source, and manual smoke-test result so compatibility claims remain auditable.
 
-The public compatibility status is tracked in [compatibility.md](compatibility.md). Do not treat the intended support scope as broad validation until the compatibility page links to real reports.
+The public compatibility status is tracked in [compatibility.md](compatibility.md). Do not treat the intended support scope as broad validation until the compatibility page links to real reports. Unsupported machines should follow [unsupported-hardware.md](unsupported-hardware.md): collect read-only evidence, expect a blocked report, and do not run manual fan-write smoke tests.
 
 ## Evidence Collector
 
@@ -41,7 +41,7 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
   --summary .build/vifty-validation-<timestamp>/review-result.json
 ```
 
-Use `--mode release` for installed public-release trust evidence and `--mode unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract. When `--summary` is supplied, it writes `review-result.json` with the review mode, pass/fail status, key diagnose decision fields, explicit manual smoke-test evidence, and any failures or warnings.
+Use `--mode release` for installed public-release trust evidence and `--mode unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `--summary` is supplied, it writes `review-result.json` with the review mode, pass/fail status, key diagnose decision fields, explicit manual smoke-test evidence, and any failures or warnings.
 
 For a supported-hardware report, leave the default `--manual-smoke-result not-recorded` until the GitHub issue template says **Passed and Auto restore confirmed**. After that, rerun the review with the issue URL or note:
 
@@ -63,7 +63,7 @@ scripts/summarize-validation-reports.sh --input .build/validation-reports \
   --output-tsv .build/validation-reports/compatibility-index.tsv
 ```
 
-The index reads `review-result.json` files only. It can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
+The index reads `review-result.json` files only. It rejects malformed review results, non-read-only review results, review results that declare cooling commands ran, unsupported modes/statuses, and contradictory passed results with failures. Valid index rows can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
 
 ## Readiness Report
 

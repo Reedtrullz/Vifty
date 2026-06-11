@@ -54,13 +54,18 @@ For full conventions, see [AGENTS.md](AGENTS.md).
 ## Pull Request Process
 
 1. **Open an issue first** for significant changes — discuss the approach before writing code.
-2. **Run `swift test`** — all tests must pass.
-3. **Add tests** for new functionality or bug fixes.
-4. **Keep changes focused** — one concern per PR.
-5. **Update documentation** if you change public APIs, CLI flags, or architecture rules.
-6. **Sign your commits** — we prefer signed commits.
+2. **Fill out the PR safety impact section** — call out fan/SMC writes, daemon/helper/XPC changes, agent leases, release trust, hardware validation, UI ownership/restore state, and local persistence changes explicitly.
+3. **Run `make verify`** — it is the standard local trust gate. If you cannot run it, explain every skipped gate and the narrower evidence you did run.
+4. **Add tests** for new functionality or bug fixes.
+5. **Keep changes focused** — one concern per PR.
+6. **Update documentation** if you change public APIs, CLI flags, architecture rules, JSON contracts, release behavior, compatibility claims, or safety policy.
+7. **Sign your commits** — we prefer signed commits.
 
 Tagged public releases follow [docs/release.md](docs/release.md) and require Developer ID signing plus notarization.
+
+## Issue Triage
+
+Use [docs/support-triage.md](docs/support-triage.md) to sort reports into release trust, hardware validation, unsupported hardware, helper install, SMC telemetry, agent-cooling, or UI buckets. Ask for read-only evidence first and do not suggest manual fan-write tests when readiness is blocked. For machines outside the Apple Silicon MacBook Pro scope, follow [docs/unsupported-hardware.md](docs/unsupported-hardware.md). For `viftyctl run`, `prepare`, `restore-auto`, guarded wrapper, expired-lease, rate-limit, or restore-failure reports, use the **Agent Cooling Report** issue template.
 
 ## Code Conventions
 

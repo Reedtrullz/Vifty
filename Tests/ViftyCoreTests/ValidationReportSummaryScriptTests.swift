@@ -107,6 +107,73 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("input not found"))
     }
+
+    func testSummarizerRejectsNonReadOnlyReviewResult() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "mutating-review.json",
+            status: "passed",
+            mode: "release",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            readOnly: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("must declare readOnly=true"))
+    }
+
+    func testSummarizerRejectsReviewResultThatRanCoolingCommands() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "cooling-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            coolingCommandsRun: true
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("must declare coolingCommandsRun=false"))
+    }
+
+    func testSummarizerRejectsPassedReviewResultWithFailures() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "contradictory-review.json",
+            status: "passed",
+            mode: "release",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            failures: ["release-artifact-summary status \"1\" was not one of 0"]
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("passed review results must not contain failures"))
+    }
+
+    func testSummarizerRejectsUnsupportedReviewMode() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "unknown-mode-review.json",
+            status: "passed",
+            mode: "marketing-claim",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("mode must be release, supported-hardware, or unsupported-hardware"))
+    }
 }
 
 private struct ValidationReportSummaryProcessResult {
@@ -134,7 +201,9 @@ private final class ValidationReportSummaryHarness {
         manualSmokeTestResult: String = "not-recorded",
         manualSmokeTestSource: String = "",
         failures: [String] = [],
-        warnings: [String] = []
+        warnings: [String] = [],
+        readOnly: Bool = true,
+        coolingCommandsRun: Bool = false
     ) throws -> URL {
         let url = rootURL.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
@@ -147,8 +216,8 @@ private final class ValidationReportSummaryHarness {
             "status": status,
             "mode": mode,
             "bundlePath": url.deletingLastPathComponent().path,
-            "readOnly": true,
-            "coolingCommandsRun": false,
+            "readOnly": readOnly,
+            "coolingCommandsRun": coolingCommandsRun,
             "appPath": "/Applications/Vifty.app",
             "diagnoseState": mode == "unsupported-hardware" ? "blocked" : "ready",
             "recommendedAgentAction": mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling",

@@ -9,16 +9,56 @@ Sources/ViftyCore/ViftyDaemonClient.swift  @Reedtrullz
 Sources/ViftyCore/ViftyDaemonProtocol.swift  @Reedtrullz
 
 # Agent control safety surface
+Sources/ViftyCore/AgentControlModels.swift  @Reedtrullz
 Sources/ViftyCore/AgentControlPolicy.swift  @Reedtrullz
 Sources/ViftyCore/AgentControlService.swift  @Reedtrullz
+Sources/ViftyCore/AgentControlStore.swift  @Reedtrullz
+Sources/ViftyCore/ViftyCtlArguments.swift  @Reedtrullz
+Sources/ViftyCore/ViftyCtlReadinessReport.swift  @Reedtrullz
+Sources/ViftyCore/ViftyCtlRunner.swift  @Reedtrullz
 Sources/ViftyCtl/  @Reedtrullz
 
+# Agent-facing contracts and examples
+docs/agent-workflows.md  @Reedtrullz
+docs/agent-integrations.md  @Reedtrullz
+docs/safe-agent-cooling.md  @Reedtrullz
+docs/examples/viftyctl/  @Reedtrullz
+docs/schemas/  @Reedtrullz
+examples/viftyctl/  @Reedtrullz
+.github/ISSUE_TEMPLATE/agent-cooling.yml  @Reedtrullz
+
 # IOKit / SMC surface
+Sources/ViftyCore/HardwareService.swift  @Reedtrullz
+Sources/ViftyCore/LocalFanHelperClient.swift  @Reedtrullz
 Sources/ViftyCore/SMCClient.swift  @Reedtrullz
 Sources/ViftyCore/RealMacHardwareService.swift  @Reedtrullz
 Sources/ViftyPrivateIOKit/  @Reedtrullz
 
-# Installer and daemon plist
+# Release, installer, and daemon plist
+.github/workflows/release.yml  @Reedtrullz
+.github/workflows/ci.yml  @Reedtrullz
+Casks/vifty.rb  @Reedtrullz
+Resources/Info.plist  @Reedtrullz
+Resources/Vifty.entitlements  @Reedtrullz
+Resources/ViftyDaemon.entitlements  @Reedtrullz
 scripts/  @Reedtrullz
 Resources/tech.reidar.vifty.daemon.plist  @Reedtrullz
 Install Vifty.command  @Reedtrullz
+
+# Compatibility, validation, and policy surfaces
+docs/compatibility.md  @Reedtrullz
+docs/hardware-validation.md  @Reedtrullz
+docs/release.md  @Reedtrullz
+docs/support-triage.md  @Reedtrullz
+docs/trust-model.md  @Reedtrullz
+docs/unsupported-hardware.md  @Reedtrullz
+.github/ISSUE_TEMPLATE/hardware-validation.yml  @Reedtrullz
+.github/ISSUE_TEMPLATE/bug-report.yml  @Reedtrullz
+.github/ISSUE_TEMPLATE/config.yml  @Reedtrullz
+
+# Repo safety process
+.github/CODEOWNERS  @Reedtrullz
+.github/PULL_REQUEST_TEMPLATE.md  @Reedtrullz
+AGENTS.md  @Reedtrullz
+CONTRIBUTING.md  @Reedtrullz
+SECURITY.md  @Reedtrullz

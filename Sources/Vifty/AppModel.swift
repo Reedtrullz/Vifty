@@ -192,6 +192,22 @@ final class AppModel: ObservableObject {
         applyModeSelection()
     }
 
+    func loadDeveloperPreset(_ preset: DeveloperFanPreset) {
+        selectedMode = .curve
+        curveStartTemp = preset.startTemperatureCelsius
+        curveMidTemp = preset.midTemperatureCelsius
+        curveMaxTemp = preset.maxTemperatureCelsius
+        curveStartRPM = Double(rpm(forPercent: preset.startRPMPercent))
+        curveMidRPM = Double(rpm(forPercent: preset.midRPMPercent))
+        curveMaxRPM = Double(rpm(forPercent: preset.maxRPMPercent))
+        if selectedSensorID == nil {
+            selectedSensorID = selectedSensor?.id
+        }
+        usePerFanOverrides = false
+        fanOverrides = []
+        curveDefaultsSynced = true
+    }
+
     func deleteProfile(_ profile: CurveProfile) {
         savedProfiles.removeAll { $0.id == profile.id }
         persistProfiles()
@@ -305,6 +321,39 @@ final class AppModel: ObservableObject {
         return !lease.isActive(at: now())
     }
 
+    var controlOwnershipSummary: String {
+        if let lease = agentControlStatus?.activeLease {
+            if lease.isActive(at: now()) {
+                return "Agent \(lease.request.workload.displayName) owns cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))"
+            }
+            return "Agent \(lease.request.workload.displayName) lease expired; restore Auto to clear daemon control"
+        }
+
+        switch controlState.mode {
+        case .auto:
+            return autoControlOwnershipSummary
+        case .fixedRPM(let rpm):
+            return "Vifty Fixed owns fan targets · \(rpm) RPM"
+        case .temperatureCurve:
+            if let sensor = selectedSensor {
+                return "Vifty Curve owns fan targets · \(sensor.name)"
+            }
+            return "Vifty Curve owns fan targets"
+        }
+    }
+
+    var controlOwnershipNeedsAttention: Bool {
+        if let lease = agentControlStatus?.activeLease {
+            return !lease.isActive(at: now())
+        }
+
+        guard controlState.mode == .auto else { return false }
+        return !autoSystemModeFans.isEmpty
+            || !autoForcedModeFans.isEmpty
+            || !autoUnknownModeFans.isEmpty
+            || !autoMissingModeFans.isEmpty
+    }
+
     var helperHealthSummary: String {
         if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
             return "Fan helper error"
@@ -319,9 +368,87 @@ final class AppModel: ObservableObject {
         return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
     }
 
+    var helperRecoverySuggestion: String? {
+        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
+            return "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck."
+        }
+        guard daemonReachable else {
+            return "Use Repair or Reinstall Helper; fan writes stay blocked until the daemon responds."
+        }
+        let fanCount = snapshot?.fans.count ?? 0
+        guard fanCount > 0 else {
+            return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+        }
+        return nil
+    }
+
+    private var autoControlOwnershipSummary: String {
+        guard let fans = snapshot?.fans, !fans.isEmpty else {
+            return daemonReachable
+                ? "Auto selected · fan hardware state unavailable"
+                : "Auto selected · fan helper unreachable"
+        }
+
+        if !autoSystemModeFans.isEmpty {
+            return "macOS System/protected owns fan control · \(fanIDList(autoSystemModeFans))"
+        }
+        if !autoForcedModeFans.isEmpty {
+            return "Hardware reports Forced mode while Vifty is Auto · \(fanIDList(autoForcedModeFans))"
+        }
+        if !autoUnknownModeFans.isEmpty {
+            return "Auto selected · unknown hardware mode on \(fanIDList(autoUnknownModeFans))"
+        }
+        if !autoMissingModeFans.isEmpty {
+            return "Auto selected · hardware mode unavailable on \(fanIDList(autoMissingModeFans))"
+        }
+        return "macOS Auto owns fan control"
+    }
+
+    private var autoSystemModeFans: [Fan] {
+        guard controlState.mode == .auto else { return [] }
+        return snapshot?.fans.filter { $0.hardwareMode == .system } ?? []
+    }
+
+    private var autoForcedModeFans: [Fan] {
+        guard controlState.mode == .auto else { return [] }
+        return snapshot?.fans.filter { $0.hardwareMode == .forced } ?? []
+    }
+
+    private var autoUnknownModeFans: [Fan] {
+        guard controlState.mode == .auto else { return [] }
+        return snapshot?.fans.filter { fan in
+            if case .unknown = fan.hardwareMode {
+                return true
+            }
+            return false
+        } ?? []
+    }
+
+    private var autoMissingModeFans: [Fan] {
+        guard controlState.mode == .auto else { return [] }
+        return snapshot?.fans.filter { $0.hardwareMode == nil } ?? []
+    }
+
+    private func fanIDList(_ fans: [Fan]) -> String {
+        fans.map { "F\($0.id)" }.joined(separator: ", ")
+    }
+
     var fanRange: ClosedRange<Double> {
         guard let fan = snapshot?.fans.first else { return 1200...6500 }
         return Double(fan.minimumRPM)...Double(fan.maximumRPM)
+    }
+
+    private func rpm(forPercent percent: Int) -> Int {
+        guard let fan = snapshot?.fans.first else {
+            let lower = Int(fanRange.lowerBound.rounded())
+            let upper = Int(fanRange.upperBound.rounded())
+            let span = upper - lower
+            return FanCurve.clamp(lower + Int((Double(span) * Double(percent) / 100.0).rounded()), lower, upper)
+        }
+
+        let span = fan.maximumRPM - fan.minimumRPM
+        let rpm = fan.minimumRPM + Int((Double(span) * Double(percent) / 100.0).rounded())
+        return FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
     }
 
     private func currentCurve() -> FanCurve {
@@ -457,4 +584,100 @@ enum ManualRunLimit: Equatable, Hashable, Identifiable {
     }
 
     static let presets: [ManualRunLimit] = [.indefinitely, .minutes(10), .minutes(30), .minutes(60)]
+}
+
+enum DeveloperFanPreset: String, CaseIterable, Identifiable {
+    case tests
+    case build
+    case localModel
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .tests:
+            "Tests"
+        case .build:
+            "Build"
+        case .localModel:
+            "Local Model"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .tests:
+            "checkmark.seal"
+        case .build:
+            "hammer"
+        case .localModel:
+            "cpu"
+        }
+    }
+
+    var startTemperatureCelsius: Double {
+        switch self {
+        case .tests:
+            55
+        case .build:
+            52
+        case .localModel:
+            50
+        }
+    }
+
+    var midTemperatureCelsius: Double {
+        switch self {
+        case .tests:
+            70
+        case .build:
+            68
+        case .localModel:
+            66
+        }
+    }
+
+    var maxTemperatureCelsius: Double {
+        switch self {
+        case .tests:
+            85
+        case .build:
+            84
+        case .localModel:
+            82
+        }
+    }
+
+    var startRPMPercent: Int {
+        switch self {
+        case .tests:
+            35
+        case .build:
+            40
+        case .localModel:
+            45
+        }
+    }
+
+    var midRPMPercent: Int {
+        switch self {
+        case .tests:
+            55
+        case .build:
+            60
+        case .localModel:
+            65
+        }
+    }
+
+    var maxRPMPercent: Int {
+        switch self {
+        case .tests:
+            70
+        case .build:
+            75
+        case .localModel:
+            78
+        }
+    }
 }

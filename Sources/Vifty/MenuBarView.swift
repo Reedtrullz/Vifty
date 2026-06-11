@@ -27,6 +27,11 @@ struct MenuBarView: View {
             Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
 
+            Label(model.controlOwnershipSummary, systemImage: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
+                .font(.caption)
+                .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .secondary)
+                .lineLimit(2)
+
             if let power = model.powerSnapshot {
                 Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
                 if let flow = PowerDisplayFormatter.batteryFlow(for: power) {
@@ -66,6 +71,13 @@ struct MenuBarView: View {
             Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
                 .font(.caption)
                 .foregroundStyle(helperHealthMenuColor)
+
+            if let helperRecoverySuggestion = model.helperRecoverySuggestion {
+                Label(helperRecoverySuggestion, systemImage: "wrench.and.screwdriver")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
 
             Divider()
 

@@ -21,7 +21,7 @@ body:
         sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
         ```
 
-        Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware, and restore Auto afterward.
+        Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware, and restore Auto afterward. Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only.
 
   - type: input
     id: vifty-version

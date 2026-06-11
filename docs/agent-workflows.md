@@ -2,6 +2,8 @@
 
 Vifty's agent surface is the bundled `viftyctl` CLI. It is designed for local coding agents, build scripts, and shell automation that need temporary cooling for a bounded workload without gaining arbitrary SMC write access.
 
+For the short operational runbook, see [safe-agent-cooling.md](safe-agent-cooling.md).
+
 Installed path:
 
 ```sh
