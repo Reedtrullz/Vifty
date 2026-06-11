@@ -115,6 +115,8 @@ Public releases should be:
 
 Ad-hoc CI artifacts and local builds are useful for development, but they are not a substitute for signed, notarized public releases.
 
+The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
+
 ## What To Report Privately
 
 Please use GitHub Security Advisories for any path that would allow:

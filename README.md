@@ -53,6 +53,10 @@ Maintainers should triage reports with [docs/support-triage.md](docs/support-tri
 
 ## Install and launch
 
+### Current release trust status
+
+The `v1.1.0` source tag is prepared, but the public signed/notarized binary release is not trust-complete until the GitHub Release workflow publishes `Vifty-v1.1.0.zip`, its checksum, and the verifier summary. Before treating Homebrew as a trusted binary install path, check [docs/release-status.md](docs/release-status.md) and verify the artifact with `scripts/verify-release-artifact.sh --team-id <TEAMID>`.
+
 ### Homebrew
 
 ```sh
@@ -66,7 +70,7 @@ Then launch Vifty from Spotlight, Launchpad, or:
 open /Applications/Vifty.app
 ```
 
-For public trust, the cask artifact should pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the release checksum is published. That verifies the cask SHA, bundle version, bundled agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. Corrected public releases should include the verifier's `Vifty-v<version>-artifact-summary.json` asset, installed-release evidence bundles should pass `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`, and reviewed hardware reports can be indexed with `scripts/summarize-validation-reports.sh`. The indexer rejects malformed, non-read-only, or cooling-mutating review results, and supported hardware reports count as validated only after the issue-template smoke test records Auto restore and the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
+For public trust, the cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the release checksum is published. That verifies the cask SHA, bundle version, bundled agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. Corrected public releases should include the verifier's `Vifty-v<version>-artifact-summary.json` asset, installed-release evidence bundles should pass `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`, and reviewed hardware reports can be indexed with `scripts/summarize-validation-reports.sh`. The indexer rejects malformed, non-read-only, or cooling-mutating review results, and supported hardware reports count as validated only after the issue-template smoke test records Auto restore and the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
 
 ### From source
 

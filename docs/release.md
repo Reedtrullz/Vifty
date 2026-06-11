@@ -2,6 +2,8 @@
 
 Vifty release artifacts should be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
 
+For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
+
 ## Required GitHub Secrets
 
 Configure these repository secrets before running the `Release` workflow:

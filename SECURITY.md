@@ -2,9 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| Version | Supported |
+| ------- | --------- |
+| 1.1.x source/tag | Supported, public binary release pending signed/notarized artifact |
+| 1.0.x public asset | Not trust-complete; use source or a corrected 1.1.x release path |
 
 ## Reporting a Vulnerability
 
@@ -21,6 +22,8 @@ Instead, report vulnerabilities privately via GitHub Security Advisories:
 ## Security Model
 
 For the detailed privileged-helper, SMC write, release-signing, and agent-control trust boundaries, see [docs/trust-model.md](docs/trust-model.md).
+
+For the current public binary trust state, see [docs/release-status.md](docs/release-status.md). A source tag, CI artifact, or ad-hoc local build is not a substitute for a Developer ID signed, notarized, stapled release artifact with a verified cask checksum.
 
 Vifty's trust boundaries:
 

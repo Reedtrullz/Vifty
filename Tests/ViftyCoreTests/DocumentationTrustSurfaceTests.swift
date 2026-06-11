@@ -9,6 +9,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("[docs/hardware-validation.md](docs/hardware-validation.md)"))
         XCTAssertTrue(readme.contains("[docs/support-triage.md](docs/support-triage.md)"))
         XCTAssertTrue(readme.contains("[docs/trust-model.md](docs/trust-model.md)"))
+        XCTAssertTrue(readme.contains("[docs/release-status.md](docs/release-status.md)"))
         XCTAssertTrue(readme.contains("[docs/safe-agent-cooling.md](docs/safe-agent-cooling.md)"))
         XCTAssertTrue(readme.contains("[docs/unsupported-hardware.md](docs/unsupported-hardware.md)"))
         XCTAssertTrue(readme.contains("[docs/agent-integrations.md](docs/agent-integrations.md)"))
@@ -52,6 +53,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let security = try read("SECURITY.md")
 
         XCTAssertTrue(security.contains("[docs/trust-model.md](docs/trust-model.md)"))
+        XCTAssertTrue(security.contains("[docs/release-status.md](docs/release-status.md)"))
+        XCTAssertTrue(security.contains("not a substitute for a Developer ID signed, notarized, stapled release artifact"))
     }
 
     func testTrustModelNamesPrivilegedBoundariesAndWriteAllowlist() throws {
@@ -65,6 +68,23 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(trustModel.contains("Ftst"))
         XCTAssertTrue(trustModel.contains("Agents request bounded cooling intent. They do not get raw SMC write access."))
         XCTAssertTrue(trustModel.contains("Public releases should be Developer ID signed, notarized, stapled, and TeamID-gated over XPC."))
+        XCTAssertTrue(trustModel.contains("[release-status.md](release-status.md)"))
+    }
+
+    func testReleaseStatusKeepsHomebrewInstallClaimsHonest() throws {
+        let readme = try read("README.md")
+        let releaseStatus = try read("docs/release-status.md")
+        let release = try read("docs/release.md")
+
+        XCTAssertTrue(readme.contains("The `v1.1.0` source tag is prepared"))
+        XCTAssertTrue(readme.contains("public signed/notarized binary release is not trust-complete"))
+        XCTAssertTrue(release.contains("[release-status.md](release-status.md)"))
+        XCTAssertTrue(releaseStatus.contains("the public binary release is not trust-complete yet"))
+        XCTAssertTrue(releaseStatus.contains("No `v1.1.0` GitHub Release artifact should be treated as published or trusted"))
+        XCTAssertTrue(releaseStatus.contains("Homebrew install instructions are release-path documentation"))
+        XCTAssertTrue(releaseStatus.contains("scripts/check-release-secrets.sh --repo Reedtrullz/Vifty"))
+        XCTAssertTrue(releaseStatus.contains("gh release view v1.1.0 --repo Reedtrullz/Vifty"))
+        XCTAssertTrue(releaseStatus.contains("scripts/verify-release-artifact.sh --team-id \"$APPLE_TEAM_ID\""))
     }
 
     func testCompatibilityPageRequiresReportBackedEvidence() throws {
@@ -177,6 +197,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(codeowners.contains("docs/compatibility.md"))
         XCTAssertTrue(codeowners.contains("docs/hardware-validation.md"))
         XCTAssertTrue(codeowners.contains("docs/release.md"))
+        XCTAssertTrue(codeowners.contains("docs/release-status.md"))
         XCTAssertTrue(codeowners.contains("docs/support-triage.md"))
         XCTAssertTrue(codeowners.contains("docs/trust-model.md"))
         XCTAssertTrue(codeowners.contains("docs/unsupported-hardware.md"))
