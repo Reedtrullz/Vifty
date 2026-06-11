@@ -443,7 +443,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let workplan = try read("docs/plans/2026-06-11-vifty-strategy-workplan.md")
 
         XCTAssertTrue(workplan.contains("Local hardening is on `main` for the `v1.1.0` source-first release"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 432 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 435 XCTest cases"))
+        XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))

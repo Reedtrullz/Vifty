@@ -102,8 +102,9 @@ Do not use Homebrew as the recommended or trusted `v1.1.0` install path. The Hom
 Requires macOS 15, Xcode 16, and Swift 6.
 
 ```sh
-# Run local trust gates: metadata, tests, warnings-as-errors, release bundle,
-# plist lint, codesign verification, and viftyctl identifier check
+# Run local trust gates: community/support surface, release metadata, tests,
+# warnings-as-errors, release bundle, plist lint, codesign verification,
+# and viftyctl identifier check
 make verify
 
 # Run the XCTest suite

@@ -8,6 +8,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
+        XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh"))
         XCTAssertTrue(makefile.contains("swift test"))
         XCTAssertTrue(makefile.contains("swift build -Xswiftc -warnings-as-errors"))

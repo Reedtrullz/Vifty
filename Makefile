@@ -47,6 +47,7 @@ test: ## Run the XCTest suite
 
 verify: ## Run local trust gates without installing
 	/bin/bash -n scripts/*.sh examples/viftyctl/*.sh
+	scripts/check-community-standards.sh
 	scripts/validate-release-metadata.sh
 	swift test
 	swift build -Xswiftc -warnings-as-errors
