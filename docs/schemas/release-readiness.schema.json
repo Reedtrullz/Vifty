@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/release-readiness.schema.json",
+  "title": "Vifty release readiness preflight report",
+  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, required secret names, and GitHub Release asset presence; it does not replace artifact signing, notarization, checksum, or hardware validation.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "version",
+    "tag",
+    "status",
+    "knownReadinessBlockersClear",
+    "checks",
+    "blockers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/release-readiness.schema.json"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+([.][0-9]+){1,2}([-.][0-9A-Za-z]+)?$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^v[0-9]+([.][0-9]+){1,2}([-.][0-9A-Za-z]+)?$"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ]
+    },
+    "knownReadinessBlockersClear": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/checkName"
+      }
+    }
+  },
+  "$defs": {
+    "checkName": {
+      "enum": [
+        "release-metadata",
+        "release-secrets",
+        "github-release"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/checkName"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 cd "${ROOT_DIR}"
 
+RELEASE_READINESS_SCHEMA_ID="https://vifty.local/schemas/release-readiness.schema.json"
 REPO=""
 VERSION=""
 SECRET_LIST_FILE=""
@@ -121,6 +122,7 @@ emit_json() {
 
   printf '{\n'
   printf '  "schemaVersion": 1,\n'
+  printf '  "schemaID": %s,\n' "$(json_string "${RELEASE_READINESS_SCHEMA_ID}")"
   printf '  "version": %s,\n' "$(json_string "${VERSION}")"
   printf '  "tag": %s,\n' "$(json_string "${TAG}")"
   printf '  "status": %s,\n' "$(json_string "${status}")"

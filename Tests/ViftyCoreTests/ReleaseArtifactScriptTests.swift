@@ -226,6 +226,29 @@ final class ReleaseArtifactScriptTests: XCTestCase {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
         }
     }
+
+    func testReleaseReadinessSchemaDocumentsPreflightContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/release-readiness.schema.json")
+        let schema = try ReleaseArtifactHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(schema["$id"] as? String, "https://vifty.local/schemas/release-readiness.schema.json")
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "version",
+            "tag",
+            "status",
+            "knownReadinessBlockersClear",
+            "checks",
+            "blockers"
+        ] {
+            XCTAssertTrue(required.contains(field), "schema should require \(field)")
+        }
+    }
 }
 
 private struct ReleaseArtifactProcessResult {
@@ -352,6 +375,7 @@ private final class ReleaseArtifactHarness {
     private static func writeSchemaResources(at schemasURL: URL, overrides: [String: String]) throws {
         let schemaIDs = [
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
+            "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "viftyctl-audit.schema.json": "https://vifty.local/schemas/viftyctl-audit.schema.json",
             "viftyctl-capabilities.schema.json": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
             "viftyctl-command-error.schema.json": "https://vifty.local/schemas/viftyctl-command-error.schema.json",

@@ -44,7 +44,7 @@ scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
 
 Expected current result before secrets are configured:
 
-- `scripts/check-release-readiness.sh` reports `status: "blocked"`, with `release-metadata` passed and `release-secrets` / `github-release` blocked.
+- `scripts/check-release-readiness.sh` reports `schemaID: "https://vifty.local/schemas/release-readiness.schema.json"` and `status: "blocked"`, with `release-metadata` passed and `release-secrets` / `github-release` blocked.
 - `scripts/check-release-secrets.sh` reports the missing Developer ID and notarization secret names.
 - `gh release view v1.1.0` reports that the release is not found.
 - `scripts/verify-release-artifact.sh` cannot pass for `v1.1.0` until the release asset and cask checksum exist.

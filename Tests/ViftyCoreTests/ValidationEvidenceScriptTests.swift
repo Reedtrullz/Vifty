@@ -42,6 +42,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let schemaResources = try harness.read("schema-resources.tsv")
         XCTAssertTrue(schemaResources.contains("schema\tsha256\tbytes\tbundlePath"))
         XCTAssertTrue(schemaResources.contains("release-artifact-summary.schema.json"))
+        XCTAssertTrue(schemaResources.contains("release-readiness.schema.json"))
         XCTAssertTrue(schemaResources.contains("viftyctl-audit.schema.json"))
         XCTAssertTrue(schemaResources.contains("viftyctl-capabilities.schema.json"))
         XCTAssertTrue(schemaResources.contains("Contents/Resources/schemas/viftyctl-capabilities.schema.json"))
@@ -77,7 +78,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewSummary.contains("bundle-executables\t0\t0\trelease-and-hardware"))
         XCTAssertTrue(reviewSummary.contains("release-artifact-summary\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("release-checklist\tskipped\t0 or skipped\trelease-trust"))
-        XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\tagent-contract"))
+        XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\trelease-and-agent-contract"))
         XCTAssertTrue(reviewSummary.contains("capabilities-schema-resources\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("launchdaemon-teamid\t0\t0 for public release\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("spctl-assess-app\t"))
@@ -116,7 +117,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
             check["name"] as? String == "schema-resources"
                 && check["status"] as? String == "0"
                 && check["expected"] as? String == "0"
-                && check["scope"] as? String == "agent-contract"
+                && check["scope"] as? String == "release-and-agent-contract"
         })
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "capabilities-schema-resources"
@@ -800,6 +801,7 @@ private final class ValidationEvidenceHarness {
     private func writeSchemaResources(at schemasURL: URL) throws {
         let schemaIDs = [
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
+            "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "viftyctl-audit.schema.json": "https://vifty.local/schemas/viftyctl-audit.schema.json",
             "viftyctl-capabilities.schema.json": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
             "viftyctl-command-error.schema.json": "https://vifty.local/schemas/viftyctl-command-error.schema.json",

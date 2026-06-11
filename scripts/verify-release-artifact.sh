@@ -354,6 +354,7 @@ done
 
 for schema_reference in \
   "release-artifact-summary.schema.json|https://vifty.local/schemas/release-artifact-summary.schema.json" \
+  "release-readiness.schema.json|https://vifty.local/schemas/release-readiness.schema.json" \
   "viftyctl-audit.schema.json|https://vifty.local/schemas/viftyctl-audit.schema.json" \
   "viftyctl-capabilities.schema.json|https://vifty.local/schemas/viftyctl-capabilities.schema.json" \
   "viftyctl-command-error.schema.json|https://vifty.local/schemas/viftyctl-command-error.schema.json" \
@@ -440,7 +441,7 @@ write_summary() {
   write_check 1 "artifact-sha" "passed" "release-trust" "Artifact SHA-256 matched ${EXPECTED_SHA_SOURCE}."
   write_check 0 "app-bundle-present" "passed" "release-trust" "Zip contained Vifty.app at the root."
   write_check 0 "required-executables" "passed" "release-trust" "App bundle contained Vifty, ViftyHelper, ViftyDaemon, and viftyctl executables."
-  write_check 0 "schema-resources" "passed" "release-trust" "App bundle contained valid viftyctl JSON Schemas with expected IDs in Contents/Resources/schemas."
+  write_check 0 "schema-resources" "passed" "release-trust" "App bundle contained valid release and viftyctl JSON Schemas with expected IDs in Contents/Resources/schemas."
   write_check 0 "plist-lint" "passed" "release-trust" "Info.plist and bundled LaunchDaemon plist were valid."
   write_check 0 "bundle-version" "passed" "release-trust" "Bundle version matched the cask version."
   if [[ "${SKIP_SIGNATURE_CHECKS}" == "1" ]]; then

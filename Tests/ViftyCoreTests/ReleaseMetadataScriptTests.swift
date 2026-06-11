@@ -333,6 +333,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 0)
         let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(
+            summary["schemaID"] as? String,
+            "https://vifty.local/schemas/release-readiness.schema.json"
+        )
         XCTAssertEqual(summary["version"] as? String, "1.0.0")
         XCTAssertEqual(summary["tag"] as? String, "v1.0.0")
         XCTAssertEqual(summary["status"] as? String, "ready")
