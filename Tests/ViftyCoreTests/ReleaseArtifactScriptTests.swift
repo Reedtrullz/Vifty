@@ -241,6 +241,7 @@ final class ReleaseArtifactScriptTests: XCTestCase {
             "schemaID",
             "version",
             "tag",
+            "releaseMode",
             "sourceCommit",
             "status",
             "knownReadinessBlockersClear",
@@ -254,8 +255,15 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         let checkName = try XCTUnwrap(defs["checkName"] as? [String: Any])
         let checkNames = try XCTUnwrap(checkName["enum"] as? [String])
         XCTAssertTrue(checkNames.contains("release-source-ref"))
+        XCTAssertTrue(checkNames.contains("release-mode"))
         XCTAssertTrue(checkNames.contains("source-ci"))
         XCTAssertTrue(checkNames.contains("release-workflow"))
+
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let releaseMode = try XCTUnwrap(properties["releaseMode"] as? [String: Any])
+        let releaseModes = try XCTUnwrap(releaseMode["enum"] as? [String])
+        XCTAssertTrue(releaseModes.contains("developer-id"))
+        XCTAssertTrue(releaseModes.contains("source-first"))
     }
 }
 

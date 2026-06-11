@@ -1,4 +1,4 @@
-.PHONY: app install pkg clean-app clean-pkg test verify help clean
+.PHONY: app install pkg unsigned-dev-artifact clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -38,6 +38,9 @@ install: ## Build and install to /Applications
 
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
+
+unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum
+	./scripts/build-unsigned-dev-artifact.sh
 
 test: ## Run the XCTest suite
 	swift test

@@ -1,8 +1,68 @@
 # Release Process
 
-Vifty release artifacts should be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
+Vifty has two release modes:
+
+- **Source-first release:** used for `v1.1.0` because the project does not currently have Apple Developer Program credentials. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
+- **Developer ID release:** future trusted binary lane. Artifacts should be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
+
+## Source-First Release Mode
+
+Use this mode when Apple Developer Program credentials are unavailable. It does not create a trusted public binary and must not claim Developer ID signing, notarization, stapling, Gatekeeper approval, or Homebrew trust.
+
+The required `v1.1.0` release-note warning is:
+
+> This is a source-first release. Vifty v1.1.0 does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
+>
+> A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
+
+Source-first checklist:
+
+1. Run the local verification suite:
+
+   ```sh
+   make verify
+   ```
+
+2. Generate source-first release notes:
+
+   ```sh
+   scripts/write-release-checklist.sh \
+     --mode source-first \
+     --version <version> \
+     --output .build/Vifty-v<version>-source-first-release-notes.md
+   ```
+
+3. Optionally build the unsigned tester artifact:
+
+   ```sh
+   make unsigned-dev-artifact
+   ```
+
+   The only acceptable unsigned tester names are:
+
+   - `Vifty-v<version>-unsigned-dev.zip`
+   - `Vifty-v<version>-unsigned-dev.zip.sha256`
+
+   Do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
+
+4. Push the source tag and create or update the GitHub Release with the source-first notes. The unsigned-dev zip/checksum are optional tester convenience assets only.
+5. Confirm source-first readiness:
+
+   ```sh
+   git fetch origin main --tags
+   scripts/check-release-readiness.sh \
+     --mode source-first \
+     --version <version> \
+     --repo Reedtrullz/Vifty \
+     --require-source-ref origin/main \
+     --json
+   ```
+
+6. Do not update `Casks/vifty.rb` for the source-first release and do not point the cask at the unsigned-dev artifact.
+
+## Developer ID Release Mode
 
 ## Required GitHub Secrets
 
@@ -27,7 +87,7 @@ The release workflow fails if the tag-derived release version, bundle version, c
 
 The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` must point at the same name.
 
-## Release Checklist
+## Developer ID Release Checklist
 
 1. Confirm the release secrets are configured:
 
@@ -42,12 +102,13 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    ```sh
    git fetch origin main --tags
    scripts/check-release-readiness.sh \
+     --mode developer-id \
      --version <version> \
      --repo Reedtrullz/Vifty \
      --require-source-ref origin/main
    ```
 
-   This validates local release metadata, optionally checks that the release tag commit matches the intended source ref, checks source CI for the release commit, checks the Release workflow result for the tag, checks required release secret names, and inspects the GitHub Release asset list. Its JSON output declares `schemaID: https://vifty.local/schemas/release-readiness.schema.json` so release evidence can reject drift. Before the tag exists, this may report a missing source-CI/tag check; before publication it may still report a missing or failed Release workflow and missing GitHub Release. If `--require-source-ref` is supplied and the tag points at an older commit than the intended release branch, the preflight blocks with `release-source-ref` before anyone promotes a stale source candidate. After publication it should pass only when source-ref alignment, source CI, Release workflow status, release secrets, and the zip, checksum, artifact summary, and release checklist assets are present.
+   This validates local release metadata, optionally checks that the release tag commit matches the intended source ref, checks source CI for the release commit, checks the Release workflow result for the tag, checks required release secret names, and inspects the GitHub Release asset list. Its JSON output declares `schemaID: https://vifty.local/schemas/release-readiness.schema.json` and `releaseMode: "developer-id"` so release evidence can reject drift. Before the tag exists, this may report a missing source-CI/tag check; before publication it may still report a missing or failed Release workflow and missing GitHub Release. If `--require-source-ref` is supplied and the tag points at an older commit than the intended release branch, the preflight blocks with `release-source-ref` before anyone promotes a stale source candidate. After publication it should pass only when source-ref alignment, source CI, Release workflow status, release secrets, and the zip, checksum, artifact summary, and release checklist assets are present.
 
 3. Confirm the local tree is clean and tests pass:
 
@@ -102,7 +163,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 
    If this fails after an artifact has already been published, cut a corrected patch release instead of treating the Homebrew cask as trusted.
 
-11. After publication, run `git fetch origin main --tags` and `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` again, then keep the passed schema-backed JSON with release notes or validation evidence. The final JSON should show `release-source-ref`, `source-ci`, `release-workflow`, `release-secrets`, and `github-release` all passed.
+11. After publication, run `git fetch origin main --tags` and `scripts/check-release-readiness.sh --mode developer-id --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` again, then keep the passed schema-backed JSON with release notes or validation evidence. The final JSON should show `releaseMode: "developer-id"` plus `release-source-ref`, `source-ci`, `release-workflow`, `release-secrets`, and `github-release` all passed.
 12. After publication, verify on hardware with [hardware-validation.md](hardware-validation.md). Prefer `scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json --release-checklist ./Vifty-v<version>-release-checklist.md` so release reports include the same read-only evidence bundle, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `viftyctl-audit.json`, `release-artifact-summary.json`, `release-artifact-summary.tsv`, `release-checklist.md`, `release-checklist.tsv`, bundle plist, LaunchDaemon TeamID, per-binary signing, notarization, Gatekeeper files, the release verifier result, and the release checklist. The collector marks the release-summary row nonzero if the verifier result does not pass or if its version does not match the installed app being tested; it marks the release-checklist row nonzero if the checklist title version does not match the installed app or if required follow-up sections are missing. Before treating the installed release as trusted, run `scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json` on the captured bundle and keep `review-result.json` with the report.
 13. Update [compatibility.md](compatibility.md) only with report-backed results. Use `scripts/summarize-validation-reports.sh --input <reports-dir> --output-json <reports-dir>/compatibility-index.json --output-tsv <reports-dir>/compatibility-index.tsv` to index valid reviewed `review-result.json` files; the indexer rejects malformed, non-read-only, cooling-mutating, unsupported-mode, or contradictory passed review outputs. Leave model families as "needs validation" until supported-hardware rows are indexed as `validated-hardware-evidence` from `manualSmokeTestResult: "passed-auto-restored"`.
 
@@ -119,4 +180,4 @@ codesign --verify --deep --strict .build/Vifty.app
 codesign -dvvv .build/Vifty.app 2>&1 | grep TeamIdentifier
 ```
 
-Ad-hoc builds remain supported for local development, but public releases should use the workflow above.
+Ad-hoc builds remain supported for local development and source-first tester convenience, but they are not trusted public binaries.

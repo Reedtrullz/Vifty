@@ -55,22 +55,9 @@ Maintainers should triage reports with [docs/support-triage.md](docs/support-tri
 
 ### Current release trust status
 
-The `v1.1.0` source tag is prepared and source CI has passed for the tag commit, but the public signed/notarized binary release is not trust-complete until the GitHub Release workflow succeeds and publishes `Vifty-v1.1.0.zip`, its checksum, the verifier summary, and the release checklist. Before treating Homebrew as a trusted binary install path, check [docs/release-status.md](docs/release-status.md), run `git fetch origin main --tags` and `scripts/check-release-readiness.sh --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main`, and verify the artifact with `scripts/verify-release-artifact.sh --team-id <TEAMID>`.
+Vifty `v1.1.0` is a source-first release because the project does not currently have Apple Developer Program credentials. The recommended path is to build from source. There is no Developer ID signed or notarized public binary for `v1.1.0`, and the canonical notarized artifact name `Vifty-v1.1.0.zip` is reserved for a future Developer ID release.
 
-### Homebrew
-
-```sh
-brew tap Reedtrullz/vifty https://github.com/Reedtrullz/Vifty
-brew install --cask vifty
-```
-
-Then launch Vifty from Spotlight, Launchpad, or:
-
-```sh
-open /Applications/Vifty.app
-```
-
-For public trust, the cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the release checksum is published. That verifies the cask SHA, bundle version, bundled release and agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. Corrected public releases should include the verifier's `Vifty-v<version>-artifact-summary.json` asset, installed-release evidence bundles should pass `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`, and reviewed hardware reports can be indexed with `scripts/summarize-validation-reports.sh`. The indexer rejects malformed, non-read-only, or cooling-mutating review results, and supported hardware reports count as validated only after the issue-template smoke test records Auto restore and the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
+An optional `Vifty-v1.1.0-unsigned-dev.zip` convenience app may be attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
 ### From source
 
@@ -79,9 +66,9 @@ For normal local use:
 1. Double-click **`Install Vifty.command`** in this repository. It builds a release app, installs it, registers it with Launch Services, and launches Vifty.
 2. Or run:
 
-   ```sh
-   make install
-   ```
+```sh
+make install
+```
 
 After installation, start Vifty from Spotlight, Launchpad, Finder, or Terminal:
 
@@ -90,6 +77,25 @@ open /Applications/Vifty.app
 ```
 
 `make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
+
+### Unsigned tester zip
+
+For v1.1.0 tester convenience only:
+
+```sh
+make unsigned-dev-artifact
+```
+
+This creates `.build/Vifty-v1.1.0-unsigned-dev.zip` and `.build/Vifty-v1.1.0-unsigned-dev.zip.sha256`. Do not rename this artifact to `Vifty-v1.1.0.zip`; that name is reserved for a future signed and notarized release.
+
+### Homebrew
+
+```sh
+brew tap Reedtrullz/vifty https://github.com/Reedtrullz/Vifty
+brew install --cask vifty
+```
+
+Do not use Homebrew as the recommended or trusted `v1.1.0` install path. The Homebrew cask is for the future Developer ID/notarized release lane and should not be updated to point at the unsigned-dev artifact. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
 
 ## Build and verify
 
@@ -106,6 +112,9 @@ swift test
 # Build an ad-hoc-signed app bundle at .build/Vifty.app
 make app CONFIGURATION=release
 
+# Build the optional source-first unsigned tester zip and checksum
+make unsigned-dev-artifact
+
 # Install the release app bundle
 make install
 
@@ -117,7 +126,7 @@ GitHub Actions runs the same verification on every push to `main`, every pull re
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.
 
-Tagged public releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
+Source-first releases use `scripts/check-release-readiness.sh --mode source-first` and may attach only clearly named `Vifty-v<version>-unsigned-dev.zip` convenience builds. Tagged public Developer ID releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
 
 After a public release artifact and cask checksum are published, `scripts/verify-release-artifact.sh --team-id <TEAMID>` verifies the cask SHA, bundle version, bundled release and agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. The release workflow publishes a JSON artifact summary and release checklist for reviewer evidence, and `scripts/collect-validation-evidence.sh --release-summary <path> --release-checklist <path>` can copy those files into hardware-validation bundles while marking the release-summary row nonzero for skipped or failed verifier checks, checksum mismatches, artifact-name drift, schema drift, or version mismatch, and marking the release-checklist row nonzero for version drift or missing follow-up sections.
 

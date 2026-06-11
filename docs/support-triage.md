@@ -24,10 +24,12 @@ For release-trust reports, use the dedicated **Release Trust Report** issue temp
 
 ```sh
 git fetch origin main --tags
-scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json
 ```
+
+For `v1.1.0`, source-first release issues should focus on source tag/CI readiness, release-note warnings, and unsigned-dev artifact naming/checksum. Do not ask users to verify Developer ID signing, notarization, stapling, or Homebrew trust for `v1.1.0`; those checks apply only to a future `--mode developer-id` release.
 
 Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A nonzero `privacy-review` row means the named files may contain a hostname, `/Users/...` path, serial-number label, or hardware UUID label and should be redacted or shared privately.
 
@@ -35,7 +37,7 @@ Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A
 
 | Bucket | Typical signal | Evidence to request | Safe next action |
 | --- | --- | --- | --- |
-| Release trust | Gatekeeper, notarization, cask SHA, TeamID, missing release assets, release-readiness blocker, stale release tag, or bundle-version mismatch | Release Trust Report issue, `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json`, `scripts/verify-release-artifact.sh --team-id <TEAMID>`, collector bundle, `review-result.json` | Do not promote the release or cask until readiness, verifier, and reviewer pass. |
+| Release trust | Source-first warning drift, unsigned-dev artifact naming/checksum, Gatekeeper, notarization, cask SHA, TeamID, missing release assets, release-readiness blocker, stale release tag, or bundle-version mismatch | Release Trust Report issue, `scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json`, future Developer ID `--mode developer-id` readiness, `scripts/verify-release-artifact.sh --team-id <TEAMID>`, collector bundle, `review-result.json` | Do not promote the release or cask until the correct mode's readiness passes; do not treat unsigned-dev artifacts as trusted binaries. |
 | Hardware validation | New Apple Silicon MacBook Pro model, missing compatibility row, or smoke-test report | Hardware Validation Report issue, `diagnose --json`, `probeLocal`, collector bundle | Keep the model as needs validation until review passes and manual smoke records Auto restore. |
 | Unsupported hardware safe block | Non-MacBook-Pro, Intel, or unsupported Apple Silicon reports `blocked` | `diagnose --json`, optional collector bundle, [unsupported-hardware.md](unsupported-hardware.md) | Treat safe blocking as expected behavior; do not suggest bypasses. |
 | Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, Login Items approval, empty fan snapshot | `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper, approve Login Items, then rerun read-only diagnostics. |
@@ -65,7 +67,7 @@ Use `security` only for public non-sensitive tracking. For vulnerabilities invol
 
 Use the dedicated **Agent Cooling Report** issue template for `viftyctl run`, `prepare`, `restore-auto`, guarded wrapper, rate-limit, expired-lease, and restore-failure reports.
 
-Use the dedicated **Release Trust Report** issue template for GitHub Release asset, Homebrew cask SHA, Gatekeeper, notarization, stapling, Developer ID TeamID, LaunchDaemon TeamID allowlist, bundle-version, release-readiness, and release verifier/reviewer failures. Do not treat a source tag, CI artifact, or local ad-hoc build as a trusted public binary release.
+Use the dedicated **Release Trust Report** issue template for source-first release-note warnings, unsigned-dev asset naming/checksum, GitHub Release asset, Homebrew cask SHA, Gatekeeper, notarization, stapling, Developer ID TeamID, LaunchDaemon TeamID allowlist, bundle-version, release-readiness, and release verifier/reviewer failures. Do not treat a source tag, CI artifact, unsigned-dev convenience zip, or local ad-hoc build as a trusted public binary release.
 
 ## Escalation Rules
 

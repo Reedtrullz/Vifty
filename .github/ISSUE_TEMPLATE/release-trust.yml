@@ -6,11 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for public release trust issues: failed Release workflow runs, missing GitHub Release assets, checksum or cask drift, Gatekeeper failures, notarization/stapling failures, TeamID/XPC allowlist mismatches, bundle-version drift, or release-readiness blockers.
+        Use this template for public release trust issues: source-first release-note warnings, unsigned-dev asset naming, failed Release workflow runs, missing GitHub Release assets, checksum or cask drift, Gatekeeper failures, notarization/stapling failures, TeamID/XPC allowlist mismatches, bundle-version drift, or release-readiness blockers.
 
         Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
 
-        A source tag, passing CI run, local ad-hoc build, or CI artifact is not a trusted public binary release. Public trust requires the signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
+        Vifty v1.1.0 is source-first because the project does not currently have Apple Developer Program credentials. A source tag, passing CI run, unsigned-dev convenience build, local ad-hoc build, or CI artifact is not a trusted public binary release. Future public binary trust requires signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
 
   - type: input
     id: release-version
@@ -28,6 +28,7 @@ body:
       description: How did you obtain the app or artifact?
       options:
         - GitHub Release
+        - Source-first unsigned-dev zip
         - Homebrew cask
         - Release workflow artifact
         - Local Developer ID build
@@ -44,6 +45,9 @@ body:
       options:
         - Release readiness blocked
         - Release workflow failed
+        - Source-first release notes missing warning
+        - Unsigned-dev artifact mislabeled
+        - Unsigned-dev checksum missing
         - GitHub Release asset missing
         - Homebrew cask SHA mismatch
         - Bundle version mismatch
@@ -75,7 +79,8 @@ body:
       placeholder: |
         brew install --cask vifty
         git fetch origin main --tags
-        scripts/check-release-readiness.sh --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+        scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+        scripts/check-release-readiness.sh --mode developer-id --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
         scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
     validations:
       required: true
@@ -84,12 +89,13 @@ body:
     id: release-readiness-json
     attributes:
       label: Release readiness JSON
-      description: Paste `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` when available.
+      description: Paste `scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` for source-first releases, or `--mode developer-id` for future notarized releases.
       render: json
       placeholder: |
         {
           "schemaID": "https://vifty.local/schemas/release-readiness.schema.json",
           "version": "1.1.0",
+          "releaseMode": "source-first",
           "sourceCommit": "...",
           "status": "blocked",
           "checks": []
@@ -101,9 +107,11 @@ body:
     id: release-assets
     attributes:
       label: GitHub Release assets
-      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Trusted releases should include the zip, checksum, verifier summary, and release checklist.
+      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Source-first v1.1.0 may include only the unsigned-dev zip/checksum convenience assets; trusted Developer ID releases should include the canonical zip, checksum, verifier summary, and release checklist.
       render: text
       placeholder: |
+        Vifty-v<version>-unsigned-dev.zip
+        Vifty-v<version>-unsigned-dev.zip.sha256
         Vifty-v<version>.zip
         Vifty-v<version>.zip.sha256
         Vifty-v<version>-artifact-summary.json
@@ -171,6 +179,8 @@ body:
         - label: "I did not bypass Gatekeeper, manually edit the Homebrew cask SHA, or disable release verifier signature/notarization checks."
           required: true
         - label: "I understand that source tags, CI artifacts, and local ad-hoc builds are not trusted public binary releases."
+          required: true
+        - label: "I understand that source-first unsigned-dev app zips are tester convenience artifacts, not Developer ID signed or notarized trusted binaries."
           required: true
         - label: "I did not run manual fan-write smoke tests or raw SMC commands to investigate this release-trust issue."
           required: true

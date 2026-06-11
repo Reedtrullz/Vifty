@@ -14,19 +14,28 @@ CI_RUN_LIST_FILE=""
 RELEASE_RUN_LIST_FILE=""
 SOURCE_SHA=""
 REQUIRE_SOURCE_REF=""
+RELEASE_MODE="developer-id"
 JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--mode developer-id|source-first] [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
-metadata, verifies source CI for the release tag commit, checks required GitHub
-Actions release secret names, verifies the Release workflow result for the tag
-commit, and verifies that the GitHub Release has the required public trust
-assets.
+metadata, verifies source CI for the release tag commit, and inspects GitHub
+Release state for the selected release mode.
+
+Developer ID mode is the default and keeps the strict signed/notarized release
+checks: required GitHub Actions release secret names, successful Release
+workflow, and canonical trusted release assets.
+
+Source-first mode is for releases without Apple Developer Program credentials.
+It requires source/tag/CI checks and honest GitHub Release labeling, allows an
+optional unsigned-dev tester zip, and rejects canonical trusted binary asset
+names.
 
 Options:
+  --mode mode                developer-id (default) or source-first.
   --version version          Release version to check. Defaults to Info.plist.
   --repo owner/name          Repository to inspect. Defaults to gh's current repo.
   --source-sha sha           Override the release tag commit SHA, mainly for tests.
@@ -51,6 +60,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       VERSION="$2"
+      shift 2
+      ;;
+    --mode)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --mode requires a value" >&2
+        exit 64
+      fi
+      RELEASE_MODE="$2"
       shift 2
       ;;
     --repo)
@@ -134,6 +151,15 @@ if [[ ! "${VERSION}" =~ ^[0-9]+([.][0-9]+){1,2}([-.][0-9A-Za-z]+)?$ ]]; then
   exit 64
 fi
 
+case "${RELEASE_MODE}" in
+  developer-id|source-first)
+    ;;
+  *)
+    echo "error: --mode must be developer-id or source-first" >&2
+    exit 64
+    ;;
+esac
+
 TAG="v${VERSION}"
 
 check_names=()
@@ -170,6 +196,7 @@ emit_json() {
   printf '  "schemaID": %s,\n' "$(json_string "${RELEASE_READINESS_SCHEMA_ID}")"
   printf '  "version": %s,\n' "$(json_string "${VERSION}")"
   printf '  "tag": %s,\n' "$(json_string "${TAG}")"
+  printf '  "releaseMode": %s,\n' "$(json_string "${RELEASE_MODE}")"
   printf '  "sourceCommit": %s,\n' "$(json_string "${resolved_source_sha}")"
   printf '  "status": %s,\n' "$(json_string "${status}")"
   printf '  "knownReadinessBlockersClear": %s,\n' "${known_readiness_blockers_clear}"
@@ -203,16 +230,27 @@ emit_text() {
   fi
 
   echo "Release readiness for ${TAG}: ${status}"
+  echo "Release mode: ${RELEASE_MODE}"
   for index in "${!check_names[@]}"; do
     printf '[%s] %s - %s\n' "${check_statuses[$index]}" "${check_names[$index]}" "${check_messages[$index]}"
   done
 
   if [ "${status}" = "blocked" ]; then
-    echo "Do not describe ${TAG} as a trusted public binary release until the blockers are cleared."
+    if [ "${RELEASE_MODE}" = "source-first" ]; then
+      echo "Do not publish ${TAG} as a source-first release until the blockers are cleared."
+    else
+      echo "Do not describe ${TAG} as a trusted public binary release until the blockers are cleared."
+    fi
   else
     echo "${TAG} has no known release-readiness blockers from this preflight."
   fi
 }
+
+if [ "${RELEASE_MODE}" = "source-first" ]; then
+  add_check "release-mode" "passed" "Source-first mode: Developer ID signing/notarization is unavailable; source is the recommended v${VERSION} path and any unsigned-dev zip is tester convenience only."
+else
+  add_check "release-mode" "passed" "Developer ID mode: require signed, notarized, stapled canonical release assets and Apple release credentials."
+fi
 
 if metadata_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/validate-release-metadata.sh" 2>&1)"; then
   add_check "release-metadata" "passed" "${metadata_output}"
@@ -233,7 +271,11 @@ fi
 
 if [[ ! "${resolved_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
   add_check "source-ci" "blocked" "Could not resolve release tag ${TAG} to a commit SHA. Run from a git checkout with the tag fetched or pass --source-sha."
-  add_check "release-workflow" "blocked" "Could not inspect Release workflow for ${TAG} because the release tag commit SHA is unavailable."
+  if [ "${RELEASE_MODE}" = "developer-id" ]; then
+    add_check "release-workflow" "blocked" "Could not inspect Release workflow for ${TAG} because the release tag commit SHA is unavailable."
+  else
+    add_check "release-workflow" "passed" "Source-first mode does not require the Developer ID Release workflow; the notarized workflow remains strict for future developer-id releases."
+  fi
 else
   if [ -n "${REQUIRE_SOURCE_REF}" ]; then
     required_source_sha=""
@@ -306,30 +348,31 @@ else
     add_check "source-ci" "blocked" "${ci_output}"
   fi
 
-  release_run_json=""
-  release_run_output=""
-  if [ -n "${RELEASE_RUN_LIST_FILE}" ]; then
-    if [ ! -f "${RELEASE_RUN_LIST_FILE}" ]; then
-      release_run_output="Release workflow run list file does not exist: ${RELEASE_RUN_LIST_FILE}"
+  if [ "${RELEASE_MODE}" = "developer-id" ]; then
+    release_run_json=""
+    release_run_output=""
+    if [ -n "${RELEASE_RUN_LIST_FILE}" ]; then
+      if [ ! -f "${RELEASE_RUN_LIST_FILE}" ]; then
+        release_run_output="Release workflow run list file does not exist: ${RELEASE_RUN_LIST_FILE}"
+      else
+        release_run_json="$(cat "${RELEASE_RUN_LIST_FILE}")"
+      fi
+    elif command -v gh >/dev/null 2>&1; then
+      release_run_args=(--workflow "Release" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch,databaseId,createdAt")
+      if [ -n "${REPO}" ]; then
+        release_run_args+=(--repo "${REPO}")
+      fi
+      if ! release_run_json="$(gh run list "${release_run_args[@]}" 2>&1)"; then
+        release_run_output="${release_run_json}"
+        release_run_json=""
+      fi
     else
-      release_run_json="$(cat "${RELEASE_RUN_LIST_FILE}")"
+      release_run_output="gh CLI is required unless --release-run-list-file is supplied"
     fi
-  elif command -v gh >/dev/null 2>&1; then
-    release_run_args=(--workflow "Release" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch,databaseId,createdAt")
-    if [ -n "${REPO}" ]; then
-      release_run_args+=(--repo "${REPO}")
-    fi
-    if ! release_run_json="$(gh run list "${release_run_args[@]}" 2>&1)"; then
-      release_run_output="${release_run_json}"
-      release_run_json=""
-    fi
-  else
-    release_run_output="gh CLI is required unless --release-run-list-file is supplied"
-  fi
 
-  if [ -z "${release_run_json}" ]; then
-    add_check "release-workflow" "blocked" "Release workflow status for ${TAG} (${resolved_source_sha}) is not available: ${release_run_output}"
-  elif release_run_output="$(ruby -rjson -e '
+    if [ -z "${release_run_json}" ]; then
+      add_check "release-workflow" "blocked" "Release workflow status for ${TAG} (${resolved_source_sha}) is not available: ${release_run_output}"
+    elif release_run_output="$(ruby -rjson -e '
     tag = ARGV.fetch(0)
     source_sha = ARGV.fetch(1).downcase
     runs = JSON.parse(STDIN.read)
@@ -353,24 +396,31 @@ else
       exit 1
     end
   ' "${TAG}" "${resolved_source_sha}" <<< "${release_run_json}" 2>&1)"; then
-    add_check "release-workflow" "passed" "${release_run_output}"
+      add_check "release-workflow" "passed" "${release_run_output}"
+    else
+      add_check "release-workflow" "blocked" "${release_run_output}"
+    fi
   else
-    add_check "release-workflow" "blocked" "${release_run_output}"
+    add_check "release-workflow" "passed" "Source-first mode does not require a successful Developer ID Release workflow; keep the workflow strict for future notarized releases."
   fi
 fi
 
-secret_args=()
-if [ -n "${REPO}" ]; then
-  secret_args+=(--repo "${REPO}")
-fi
-if [ -n "${SECRET_LIST_FILE}" ]; then
-  secret_args+=(--secret-list-file "${SECRET_LIST_FILE}")
-fi
+if [ "${RELEASE_MODE}" = "developer-id" ]; then
+  secret_args=()
+  if [ -n "${REPO}" ]; then
+    secret_args+=(--repo "${REPO}")
+  fi
+  if [ -n "${SECRET_LIST_FILE}" ]; then
+    secret_args+=(--secret-list-file "${SECRET_LIST_FILE}")
+  fi
 
-if secret_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/check-release-secrets.sh" "${secret_args[@]}" 2>&1)"; then
-  add_check "release-secrets" "passed" "${secret_output}"
+  if secret_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/check-release-secrets.sh" "${secret_args[@]}" 2>&1)"; then
+    add_check "release-secrets" "passed" "${secret_output}"
+  else
+    add_check "release-secrets" "blocked" "${secret_output}"
+  fi
 else
-  add_check "release-secrets" "blocked" "${secret_output}"
+  add_check "release-secrets" "passed" "Source-first mode does not require Apple Developer Program secrets; developer-id mode still requires them before trusted binary publication."
 fi
 
 release_json=""
@@ -383,7 +433,7 @@ if [ -n "${RELEASE_VIEW_FILE}" ]; then
   fi
 else
   if command -v gh >/dev/null 2>&1; then
-    release_args=("${TAG}" --json tagName,isDraft,isPrerelease,assets)
+    release_args=("${TAG}" --json tagName,isDraft,isPrerelease,assets,body)
     if [ -n "${REPO}" ]; then
       release_args+=(--repo "${REPO}")
     fi
@@ -401,28 +451,68 @@ if [ -z "${release_json}" ]; then
 else
   if release_output="$(ruby -rjson -e '
     version = ARGV.fetch(0)
+    mode = ARGV.fetch(1)
     tag = "v#{version}"
     data = JSON.parse(STDIN.read)
-    required = [
-      "Vifty-v#{version}.zip",
-      "Vifty-v#{version}.zip.sha256",
-      "Vifty-v#{version}-artifact-summary.json",
-      "Vifty-v#{version}-release-checklist.md"
-    ]
     assets = Array(data["assets"]).map { |asset| asset["name"].to_s }
     problems = []
     problems << "tagName #{data["tagName"].inspect} does not match #{tag}" if data["tagName"] != tag
     problems << "release is draft" if data["isDraft"]
     problems << "release is marked prerelease" if data["isPrerelease"]
-    missing = required - assets
-    problems << "missing assets: #{missing.join(", ")}" unless missing.empty?
-    if problems.empty?
-      puts "GitHub Release #{tag} has required public trust assets: #{required.join(", ")}"
+    if mode == "developer-id"
+      required = [
+        "Vifty-v#{version}.zip",
+        "Vifty-v#{version}.zip.sha256",
+        "Vifty-v#{version}-artifact-summary.json",
+        "Vifty-v#{version}-release-checklist.md"
+      ]
+      missing = required - assets
+      problems << "missing assets: #{missing.join(", ")}" unless missing.empty?
+      if problems.empty?
+        puts "GitHub Release #{tag} has required public trust assets: #{required.join(", ")}"
+      else
+        warn "GitHub Release #{tag} is not trust-complete: #{problems.join("; ")}"
+        exit 1
+      end
     else
-      warn "GitHub Release #{tag} is not trust-complete: #{problems.join("; ")}"
-      exit 1
+      canonical = [
+        "Vifty-v#{version}.zip",
+        "Vifty-v#{version}.zip.sha256",
+        "Vifty-v#{version}-artifact-summary.json",
+        "Vifty-v#{version}-release-checklist.md"
+      ]
+      forbidden = canonical & assets
+      problems << "source-first release must not publish canonical trusted binary assets: #{forbidden.join(", ")}" unless forbidden.empty?
+
+      unsigned_zip = "Vifty-v#{version}-unsigned-dev.zip"
+      unsigned_checksum = "#{unsigned_zip}.sha256"
+      has_unsigned_zip = assets.include?(unsigned_zip)
+      has_unsigned_checksum = assets.include?(unsigned_checksum)
+      problems << "#{unsigned_zip} is present without #{unsigned_checksum}" if has_unsigned_zip && !has_unsigned_checksum
+      problems << "#{unsigned_checksum} is present without #{unsigned_zip}" if has_unsigned_checksum && !has_unsigned_zip
+
+      body = data["body"].to_s
+      [
+        "This is a source-first release",
+        "does not yet include a Developer ID signed or notarized public binary",
+        "For the most trusted path, build from source",
+        "Gatekeeper warnings"
+      ].each do |needle|
+        problems << "release notes must include #{needle.inspect}" unless body.include?(needle)
+      end
+
+      if problems.empty?
+        if has_unsigned_zip
+          puts "GitHub Release #{tag} is source-first and has unsigned tester assets: #{unsigned_zip}, #{unsigned_checksum}"
+        else
+          puts "GitHub Release #{tag} is source-first with no canonical trusted binary assets; unsigned-dev tester assets are optional."
+        end
+      else
+        warn "GitHub Release #{tag} is not a valid source-first release: #{problems.join("; ")}"
+        exit 1
+      end
     end
-  ' "${VERSION}" <<< "${release_json}" 2>&1)"; then
+  ' "${VERSION}" "${RELEASE_MODE}" <<< "${release_json}" 2>&1)"; then
     add_check "github-release" "passed" "${release_output}"
   else
     add_check "github-release" "blocked" "${release_output}"

@@ -6,6 +6,7 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh"))
         XCTAssertTrue(makefile.contains("swift test"))
@@ -22,8 +23,9 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install pkg unsigned-dev-artifact clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
     }
 
     private func read(_ relativePath: String) throws -> String {

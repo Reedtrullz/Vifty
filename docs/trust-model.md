@@ -113,7 +113,9 @@ Public releases should be:
 6. published as `Vifty-v<version>.zip` with a SHA-256 checksum;
 7. validated on real hardware through `scripts/collect-validation-evidence.sh`, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `viftyctl-audit.json`, optional `release-artifact-summary.json` / `release-artifact-summary.tsv` with installed-app version matching, optional `release-checklist.md` / `release-checklist.tsv` with checklist version/follow-up checks, app/CLI/helper/daemon signing evidence, bundled LaunchDaemon TeamID evidence, and the release verifier result when available.
 
-Ad-hoc CI artifacts and local builds are useful for development, but they are not a substitute for signed, notarized public releases.
+Ad-hoc CI artifacts, local builds, and source-first unsigned-dev convenience zips are useful for development and tester convenience, but they are not a substitute for signed, notarized public releases.
+
+Vifty `v1.1.0` is source-first because the project does not currently have Apple Developer Program credentials. Its recommended trust path is building from source. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and should not use the canonical `Vifty-v<version>.zip` release artifact name.
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 

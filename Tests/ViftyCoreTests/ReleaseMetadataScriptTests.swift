@@ -345,12 +345,14 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         )
         XCTAssertEqual(summary["version"] as? String, "1.0.0")
         XCTAssertEqual(summary["tag"] as? String, "v1.0.0")
+        XCTAssertEqual(summary["releaseMode"] as? String, "developer-id")
         XCTAssertEqual(summary["sourceCommit"] as? String, sourceSHA)
         XCTAssertEqual(summary["status"] as? String, "ready")
         XCTAssertEqual(summary["knownReadinessBlockersClear"] as? Bool, true)
         XCTAssertEqual(summary["blockers"] as? [String], [])
 
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-mode", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
@@ -523,6 +525,113 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("https://github.com/Reedtrullz/Vifty/actions/runs/2") == true)
     }
 
+    func testSourceFirstReadinessAcceptsUnsignedDevAssetsWithoutAppleSecretsOrReleaseWorkflow() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(
+            sourceSHA: sourceSHA,
+            status: "completed",
+            conclusion: "failure"
+        )
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["releaseMode"] as? String, "source-first")
+        XCTAssertEqual(summary["status"] as? String, "ready")
+        XCTAssertEqual(summary["blockers"] as? [String], [])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-mode", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("does not require") == true)
+        XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("does not require Apple Developer Program secrets") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("unsigned tester assets") == true)
+    }
+
+    func testSourceFirstReadinessRejectsCanonicalTrustedBinaryAssets() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0.zip",
+                "Vifty-v1.0.0.zip.sha256",
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["releaseMode"] as? String, "source-first")
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("must not publish canonical trusted binary assets") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0.zip") == true)
+    }
+
+    func testSourceFirstReadinessRejectsUnsignedDevZipWithoutChecksum() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("is present without Vifty-v1.0.0-unsigned-dev.zip.sha256") == true)
+    }
+
     func testReleaseReadinessBlocksFailedSourceCI() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
@@ -579,6 +688,29 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checklist.contains("do not describe the Homebrew path as a fully trusted public binary install"))
     }
 
+    func testReleaseChecklistWriterCreatesSourceFirstReleaseNotes() throws {
+        let harness = try ReleaseMetadataHarness()
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Wrote"))
+
+        let notes = try String(contentsOf: output, encoding: .utf8)
+        XCTAssertTrue(notes.contains("# Vifty 1.2.3 Source-First Release Notes"))
+        XCTAssertTrue(notes.contains("This is a source-first release. Vifty v1.2.3 does not yet include a Developer ID signed or notarized public binary"))
+        XCTAssertTrue(notes.contains("For the most trusted path, build from source."))
+        XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip"))
+        XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip.sha256"))
+        XCTAssertTrue(notes.contains("Do not use `Vifty-v1.2.3.zip` for the unsigned build"))
+        XCTAssertTrue(notes.contains("Do not update the Homebrew cask for this source-first release."))
+    }
+
     func testReleaseChecklistWriterRejectsMalformedVersion() throws {
         let harness = try ReleaseMetadataHarness()
 
@@ -599,6 +731,14 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
     private func checkMessage(named name: String, in checks: [[String: Any]]) -> String? {
         checks.first { $0["name"] as? String == name }?["message"] as? String
+    }
+
+    private func sourceFirstReleaseNotes(version: String) -> String {
+        """
+        This is a source-first release. Vifty v\(version) does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
+
+        A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
+        """
     }
 }
 
@@ -903,7 +1043,8 @@ private final class ReleaseMetadataHarness {
         version: String = "1.0.0",
         tagName: String? = nil,
         isDraft: Bool = false,
-        assetNames: [String]? = nil
+        assetNames: [String]? = nil,
+        body: String = ""
     ) throws -> URL {
         let assets = assetNames ?? [
             "Vifty-v\(version).zip",
@@ -912,11 +1053,16 @@ private final class ReleaseMetadataHarness {
             "Vifty-v\(version)-release-checklist.md"
         ]
         let assetEntries = assets.map { #"{"name": "\#($0)"}"# }.joined(separator: ", ")
+        let escapedBody = body
+            .replacingOccurrences(of: #"\"#, with: #"\\"#)
+            .replacingOccurrences(of: #"""#, with: #"\""#)
+            .replacingOccurrences(of: "\n", with: #"\\n"#)
         let contents = """
         {
           "tagName": "\(tagName ?? "v\(version)")",
           "isDraft": \(isDraft ? "true" : "false"),
           "isPrerelease": false,
+          "body": "\(escapedBody)",
           "assets": [\(assetEntries)]
         }
         """
