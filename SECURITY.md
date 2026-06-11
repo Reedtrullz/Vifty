@@ -20,15 +20,17 @@ Instead, report vulnerabilities privately via GitHub Security Advisories:
 
 ## Security Model
 
+For the detailed privileged-helper, SMC write, release-signing, and agent-control trust boundaries, see [docs/trust-model.md](docs/trust-model.md).
+
 Vifty's trust boundaries:
 
 | Boundary | Description |
 |---|---|
-| **App ↔ Daemon (XPC)** | The unprivileged SwiftUI app communicates with the root daemon via XPC. The daemon validates and clamps all fan RPM targets before writing. |
-| **Agent CLI ↔ Daemon (XPC)** | `viftyctl` sends bounded workload cooling leases through the daemon. Every lease carries a mandatory duration, reason, and idempotency key. The daemon enforces expiry independently. |
-| **Daemon ↔ SMC (IOKit)** | Only the root daemon writes SMC keys. The app never attempts direct AppleSMC writes (fail-closed). |
-| **Local filesystem** | Curve profiles and manual-control markers are stored in `~/Library/Application Support/Vifty/` with restricted permissions. No data leaves the device. |
-| **Agent lease safety** | User Auto-restore always wins over an active agent lease. Sensor loss, unsupported hardware, helper uncertainty, or critical thermal pressure refuses or restores control. |
+| **App ↔ Daemon (XPC)** | The unprivileged SwiftUI app communicates with the root daemon via XPC. The daemon validates client signing identifiers, optionally requires a release TeamID, clamps all fan RPM targets, and the SMC client only permits Vifty's fan-control write keys. |
+| **Agent CLI ↔ Daemon (XPC)** | `viftyctl` sends bounded workload cooling leases through the daemon. Every lease carries a mandatory duration, reason, and idempotency key; the default policy caps leases at 30 minutes. The daemon enforces expiry independently. |
+| **Daemon ↔ SMC (IOKit)** | Only the root daemon writes SMC keys, and low-level writes are allowlisted to fan mode, fan target, and guarded force-test keys. The app never attempts direct AppleSMC writes (fail-closed). |
+| **Local filesystem** | Curve profiles, manual-control markers, and agent-control lease/audit files are stored locally with restricted permissions. No data leaves the device. |
+| **Agent lease safety** | User Auto-restore always wins over active and in-flight agent cooling. Sensor loss, unsupported hardware, helper uncertainty, or critical thermal pressure refuses or restores control. |
 
 ## Scope
 
@@ -40,7 +42,7 @@ In-scope for security reports:
 - Information disclosure from local storage
 
 Out of scope:
-- Denial-of-service via excessive lease requests (rate-limiting is on the roadmap, not yet implemented)
+- Denial-of-service via excessive local lease requests beyond the built-in prepare cooldown/rate limit
 - Physical access attacks
 - Issues in dependencies (report upstream)
 - Social engineering

@@ -84,6 +84,8 @@ final class DaemonInstaller: ObservableObject {
             .path
         let helperTarget = "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon"
         let plistTarget = "/Library/LaunchDaemons/\(ViftyDaemonConstants.plistName)"
+        let stdoutLogTarget = "/var/log/tech.reidar.vifty.daemon.out.log"
+        let stderrLogTarget = "/var/log/tech.reidar.vifty.daemon.err.log"
 
         guard FileManager.default.fileExists(atPath: daemonSource),
               FileManager.default.fileExists(atPath: plistSource) else {
@@ -91,12 +93,16 @@ final class DaemonInstaller: ObservableObject {
             return
         }
 
+        let shellScript = administratorInstallShellScript(
+            daemonSource: daemonSource,
+            plistSource: plistSource,
+            helperTarget: helperTarget,
+            plistTarget: plistTarget,
+            stdoutLogTarget: stdoutLogTarget,
+            stderrLogTarget: stderrLogTarget
+        )
         let script = """
-        set daemonSource to "\(escapeForAppleScript(daemonSource))"
-        set plistSource to "\(escapeForAppleScript(plistSource))"
-        set helperTarget to "\(helperTarget)"
-        set plistTarget to "\(plistTarget)"
-        set shellCommand to "mkdir -p /Library/PrivilegedHelperTools && cp " & quoted form of daemonSource & " " & quoted form of helperTarget & " && chmod 755 " & quoted form of helperTarget & " && chown root:wheel " & quoted form of helperTarget & " && cp " & quoted form of plistSource & " " & quoted form of plistTarget & " && /usr/libexec/PlistBuddy -c 'Delete :BundleProgram' " & quoted form of plistTarget & " 2>/dev/null || true && /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' " & quoted form of plistTarget & " 2>/dev/null || true && /usr/libexec/PlistBuddy -c 'Add :ProgramArguments:0 string /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' " & quoted form of plistTarget & " 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :ProgramArguments:0 /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' " & quoted form of plistTarget & " && launchctl bootout system " & quoted form of plistTarget & " 2>/dev/null || true && launchctl bootstrap system " & quoted form of plistTarget
+        set shellCommand to \(appleScriptMultilineString(shellScript))
         do shell script shellCommand with administrator privileges
         """
 
@@ -125,5 +131,52 @@ final class DaemonInstaller: ObservableObject {
     private func escapeForAppleScript(_ value: String) -> String {
         value.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private func appleScriptMultilineString(_ value: String) -> String {
+        value.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "\"\(escapeForAppleScript(String($0)))\"" }
+            .joined(separator: " & linefeed & ")
+    }
+
+    func administratorInstallShellScript(
+        daemonSource: String,
+        plistSource: String,
+        helperTarget: String,
+        plistTarget: String,
+        stdoutLogTarget: String = "/var/log/tech.reidar.vifty.daemon.out.log",
+        stderrLogTarget: String = "/var/log/tech.reidar.vifty.daemon.err.log"
+    ) -> String {
+        let addProgramArgumentCommand = shellQuote("Add :ProgramArguments:0 string \(helperTarget)")
+        let setProgramArgumentCommand = shellQuote("Set :ProgramArguments:0 \(helperTarget)")
+        return """
+        set -e
+        mkdir -p /Library/PrivilegedHelperTools
+        cp \(shellQuote(daemonSource)) \(shellQuote(helperTarget))
+        chmod 755 \(shellQuote(helperTarget))
+        chown root:wheel \(shellQuote(helperTarget))
+        cp \(shellQuote(plistSource)) \(shellQuote(plistTarget))
+        chmod 644 \(shellQuote(plistTarget))
+        chown root:wheel \(shellQuote(plistTarget))
+        /usr/libexec/PlistBuddy -c 'Delete :BundleProgram' \(shellQuote(plistTarget)) 2>/dev/null || true
+        if ! /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' \(shellQuote(plistTarget)) 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c 'Delete :ProgramArguments' \(shellQuote(plistTarget)) 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' \(shellQuote(plistTarget))
+        fi
+        if ! /usr/libexec/PlistBuddy -c \(addProgramArgumentCommand) \(shellQuote(plistTarget)) 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c \(setProgramArgumentCommand) \(shellQuote(plistTarget))
+        fi
+        for log_path in \(shellQuote(stdoutLogTarget)) \(shellQuote(stderrLogTarget)); do
+          touch "$log_path"
+          chmod 600 "$log_path"
+          chown root:wheel "$log_path"
+        done
+        launchctl bootout system \(shellQuote(plistTarget)) 2>/dev/null || true
+        launchctl bootstrap system \(shellQuote(plistTarget))
+        """
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

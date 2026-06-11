@@ -1,0 +1,41 @@
+{
+  "activeLease": {
+    "createdAt": 700000000,
+    "expiresAt": 700001200,
+    "id": "lease-example-test",
+    "request": {
+      "durationSeconds": 1200,
+      "idempotencyKey": "example-test-001",
+      "maxRPMPercent": 70,
+      "reason": "swift test",
+      "workload": "test"
+    },
+    "restoredAt": null,
+    "targetRPMByFanID": {
+      "0": 3600,
+      "1": 3700
+    }
+  },
+  "enabled": true,
+  "lastDecision": {
+    "allowed": true,
+    "errorCode": null,
+    "message": "Allowed",
+    "retryAfterSeconds": null,
+    "targetRPMByFanID": {
+      "0": 3600,
+      "1": 3700
+    },
+    "warnings": [
+      "Thermal pressure is fair; monitor workload."
+    ]
+  },
+  "lastErrorCode": null,
+  "policy": {
+    "enabled": true,
+    "maxDurationSeconds": 1800,
+    "maximumAllowedRPMPercent": 80,
+    "minimumAgentRPMPercent": 45,
+    "prepareCooldownSeconds": 30
+  }
+}

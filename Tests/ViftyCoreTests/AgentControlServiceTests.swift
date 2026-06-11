@@ -45,9 +45,33 @@ final class AgentControlServiceTests: XCTestCase {
         let status = try await service.restoreAuto(reason: "done")
 
         XCTAssertNil(status.activeLease)
+        XCTAssertNil(status.lastDecision)
+        XCTAssertNil(status.lastErrorCode)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0])
         XCTAssertNil(try store.loadActiveLease())
+    }
+
+    func testRestoreAutoClearsStalePrepareDenialState() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: AgentControlStore(directory: temporaryDirectory()),
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+        let denied = try await service.prepare(AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 75, reason: "Test", idempotencyKey: "other-key"))
+        XCTAssertEqual(denied.lastErrorCode, .policyDenied)
+
+        let status = try await service.restoreAuto(reason: "done")
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertNil(status.lastDecision)
+        XCTAssertNil(status.lastErrorCode)
     }
 
     func testPrepareRestoresAlreadyAppliedFansWhenLaterApplyFails() async throws {
@@ -118,7 +142,7 @@ final class AgentControlServiceTests: XCTestCase {
         }
     }
 
-    func testRestoreAutoRejectedWhilePrepareSnapshotInProgress() async throws {
+    func testRestoreAutoPreemptsPrepareSnapshotInProgress() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         await hardware.blockNextSnapshot()
         let store = AgentControlStore(directory: temporaryDirectory())
@@ -136,25 +160,112 @@ final class AgentControlServiceTests: XCTestCase {
         }
         await hardware.waitForBlockedSnapshot()
 
+        let restoreStatus = try await service.restoreAuto(reason: "done")
+        XCTAssertNil(restoreStatus.activeLease)
+        let restoredBeforePrepareCompletes = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredBeforePrepareCompletes, [0])
+
+        await hardware.releaseBlockedSnapshot()
+        let status = try await prepareTask.value
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertEqual(status.lastErrorCode, .restoreRequested)
+        XCTAssertEqual(status.lastDecision?.message, "Prepare cancelled because Auto restore was requested.")
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [])
+        let restoredAfterPrepareCompletes = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredAfterPrepareCompletes, [0])
+        XCTAssertNil(try store.loadActiveLease())
+    }
+
+    func testClearActiveLeasePreemptsPrepareSnapshotInProgress() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        await hardware.blockNextSnapshot()
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        let prepareTask = Task {
+            try await service.prepare(request)
+        }
+        await hardware.waitForBlockedSnapshot()
+
+        let clearStatus = try await service.clearActiveLease(reason: "User/app restored Auto through daemon restoreAuto")
+        XCTAssertNil(clearStatus.activeLease)
+
+        await hardware.releaseBlockedSnapshot()
+        let status = try await prepareTask.value
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertEqual(status.lastErrorCode, .restoreRequested)
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [])
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [])
+        XCTAssertNil(try store.loadActiveLease())
+    }
+
+    func testClearActiveLeaseClearsStalePrepareDenialState() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: AgentControlStore(directory: temporaryDirectory()),
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+        let denied = try await service.prepare(AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 75, reason: "Test", idempotencyKey: "other-key"))
+        XCTAssertEqual(denied.lastErrorCode, .policyDenied)
+
+        let status = try await service.clearActiveLease(reason: "User/app restored Auto through daemon restoreAuto")
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertNil(status.lastDecision)
+        XCTAssertNil(status.lastErrorCode)
+    }
+
+    func testPrepareRejectedWhileRestoreAutoInProgress() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        await hardware.blockNextSnapshot()
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: AgentControlStore(directory: temporaryDirectory()),
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let restoreTask = Task {
+            try await service.restoreAuto(reason: "user auto")
+        }
+        await hardware.waitForBlockedSnapshot()
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+
         do {
-            _ = try await service.restoreAuto(reason: "done")
-            XCTFail("Expected restore to be rejected while prepare is in progress")
+            _ = try await service.prepare(request)
+            XCTFail("Expected prepare to be rejected while Auto restore is in progress")
         } catch ViftyError.helperRejected(let message) {
             XCTAssertEqual(message, "Agent control operation already in progress.")
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
-        let restoredBeforePrepareCompletes = await hardware.restoredFanIDs
-        XCTAssertEqual(restoredBeforePrepareCompletes, [])
 
         await hardware.releaseBlockedSnapshot()
-        let status = try await prepareTask.value
-
-        XCTAssertEqual(status.activeLease?.id, "lease-1")
+        let restoreStatus = try await restoreTask.value
+        XCTAssertNil(restoreStatus.activeLease)
         let applied = await hardware.appliedCommands
-        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
-        let restoredAfterPrepareCompletes = await hardware.restoredFanIDs
-        XCTAssertEqual(restoredAfterPrepareCompletes, [])
+        XCTAssertEqual(applied, [])
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
     }
 
     func testDuplicateIdempotencyKeyReturnsExistingLeaseWithoutReapplying() async throws {
@@ -260,6 +371,106 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertNil(status.activeLease)
     }
 
+    func testStatusKeepsExpiredUnrestoredLeaseVisibleUntilMonitorRestoresAuto() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        clock.now = start.addingTimeInterval(61)
+        let expiredButUnrestoredStatus = await service.status()
+
+        XCTAssertEqual(expiredButUnrestoredStatus.activeLease?.id, "lease-1")
+        XCTAssertFalse(try XCTUnwrap(expiredButUnrestoredStatus.activeLease).isActive(at: clock.now))
+        let restoredBeforeMonitor = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredBeforeMonitor, [])
+
+        await scheduler.fireLastScheduledOperation()
+
+        let restoredAfterMonitor = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredAfterMonitor, [0])
+        let restoredStatus = await service.status()
+        XCTAssertNil(restoredStatus.activeLease)
+    }
+
+    func testPrepareDeniedWhenPreviousLeaseExpiredButMonitorHasNotRestoredAuto() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        clock.now = start.addingTimeInterval(61)
+        let nextRequest = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 75, reason: "Test", idempotencyKey: "next-key")
+        let denied = try await service.prepare(nextRequest)
+
+        XCTAssertEqual(denied.activeLease?.id, "lease-1")
+        XCTAssertEqual(denied.lastErrorCode, .policyDenied)
+        XCTAssertEqual(denied.lastDecision?.message, "Agent cooling lease expired but Auto restore has not completed. Restore Auto before starting a new lease.")
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3750))])
+        let snapshotCallCount = await hardware.snapshotCallCount
+        XCTAssertEqual(snapshotCallCount, 1)
+        let restoredBeforeMonitor = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredBeforeMonitor, [])
+
+        await scheduler.fireLastScheduledOperation()
+
+        let restoredAfterMonitor = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredAfterMonitor, [0])
+        let restoredStatus = await service.status()
+        XCTAssertNil(restoredStatus.activeLease)
+    }
+
+    func testExpiredUnrestoredLeaseWithSameIdempotencyKeyIsNotTreatedAsSuccessfulPrepare() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let clock = AgentControlTestClock(now: start)
+        let scheduler = AgentControlManualScheduler()
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: AgentControlStore(directory: temporaryDirectory()),
+            thermalReader: { .nominal },
+            now: { clock.now },
+            leaseID: { "lease-1" },
+            expiryScheduler: { delay, operation in scheduler.schedule(after: delay, operation: operation) }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 60, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        clock.now = start.addingTimeInterval(61)
+        let status = try await service.prepare(request)
+
+        XCTAssertEqual(status.activeLease?.id, "lease-1")
+        XCTAssertFalse(try XCTUnwrap(status.activeLease).isActive(at: clock.now))
+        XCTAssertEqual(status.lastErrorCode, .policyDenied)
+        XCTAssertEqual(status.lastDecision?.message, "Agent cooling lease expired but Auto restore has not completed. Restore Auto before starting a new lease.")
+    }
+
     func testMonitorRestoresExpiredLeaseWithoutExplicitStatusPoll() async throws {
         let start = Date(timeIntervalSince1970: 1_000)
         let clock = AgentControlTestClock(now: start)
@@ -327,12 +538,13 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertNil(status.activeLease)
     }
 
-    func testMonitorRestoreRejectedByConcurrentMutationRetriesAndRestoresOnNextFire() async throws {
+    func testMonitorRestoreRejectedByConcurrentUserRestoreSchedulesRetryAndThenNoOps() async throws {
         let start = Date(timeIntervalSince1970: 1_000)
         let clock = AgentControlTestClock(now: start)
         let scheduler = AgentControlManualScheduler()
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
-        let store = AgentControlStore(directory: temporaryDirectory())
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
         let service = AgentControlService(
             hardware: hardware,
             policy: AgentControlPolicy(enabled: true),
@@ -346,9 +558,8 @@ final class AgentControlServiceTests: XCTestCase {
         _ = try await service.prepare(request)
         clock.now = start.addingTimeInterval(61)
         await hardware.blockNextSnapshot()
-        let deniedRequest = AgentControlRequest(workload: .test, durationSeconds: 99_999, maxRPMPercent: 75, reason: "Denied", idempotencyKey: "denied-key")
-        let prepareTask = Task {
-            try await service.prepare(deniedRequest)
+        let restoreTask = Task {
+            try await service.restoreAuto(reason: "user auto")
         }
         await hardware.waitForBlockedSnapshot()
 
@@ -356,8 +567,10 @@ final class AgentControlServiceTests: XCTestCase {
 
         var restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [])
+        let auditBeforeRestoreCompletes = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(auditBeforeRestoreCompletes.contains("\"action\":\"restore-retry-scheduled\""))
         await hardware.releaseBlockedSnapshot()
-        _ = try await prepareTask.value
+        _ = try await restoreTask.value
 
         await scheduler.fireLastScheduledOperation()
 
@@ -486,6 +699,8 @@ final class AgentControlServiceTests: XCTestCase {
 
         XCTAssertNil(status2.activeLease)
         XCTAssertEqual(status2.lastErrorCode, .prepareRateLimited)
+        XCTAssertEqual(status2.lastDecision?.retryAfterSeconds, 20)
+        XCTAssertEqual(status2.policy?.prepareCooldownSeconds, 30)
     }
 
     func testPrepareAllowedAfterCooldownExpires() async throws {

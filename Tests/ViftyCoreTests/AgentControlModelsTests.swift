@@ -37,15 +37,17 @@ final class AgentControlModelsTests: XCTestCase {
         let status = AgentControlStatus(
             enabled: true,
             activeLease: nil,
-            lastDecision: AgentControlDecision.allowed(targetRPMByFanID: [0: 3600], warnings: ["Using capped RPM policy"]),
-            lastErrorCode: nil
+            lastDecision: AgentControlDecision.denied(.prepareRateLimited, message: "Wait", retryAfterSeconds: 20),
+            lastErrorCode: .prepareRateLimited,
+            policy: AgentControlPolicy(enabled: true, prepareCooldownSeconds: 30).snapshot
         )
 
         let data = try JSONEncoder().encode(status)
         let decoded = try JSONDecoder().decode(AgentControlStatus.self, from: data)
 
         XCTAssertEqual(decoded.enabled, true)
-        XCTAssertEqual(decoded.lastDecision?.allowed, true)
-        XCTAssertEqual(decoded.lastDecision?.targetRPMByFanID[0], 3600)
+        XCTAssertEqual(decoded.lastDecision?.allowed, false)
+        XCTAssertEqual(decoded.lastDecision?.retryAfterSeconds, 20)
+        XCTAssertEqual(decoded.policy?.prepareCooldownSeconds, 30)
     }
 }

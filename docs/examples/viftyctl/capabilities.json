@@ -1,0 +1,58 @@
+{
+  "commands": [
+    "status",
+    "capabilities",
+    "diagnose",
+    "audit",
+    "prepare",
+    "restore-auto",
+    "run"
+  ],
+  "daemonStatusAvailable": true,
+  "agentControlStatusError": null,
+  "exitCodes": {
+    "blockedReadiness": 75,
+    "commandFailure": 1,
+    "success": 0,
+    "unavailable": 69,
+    "usage": 64
+  },
+  "policy": {
+    "enabled": true,
+    "maxDurationSeconds": 1800,
+    "maximumAllowedRPMPercent": 80,
+    "minimumAgentRPMPercent": 45,
+    "prepareCooldownSeconds": 30
+  },
+  "policySource": "daemonStatus",
+  "schemaVersion": 1,
+  "schemaIDs": {
+    "audit": "https://vifty.local/schemas/viftyctl-audit.schema.json",
+    "capabilities": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+    "commandError": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+    "diagnose": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+    "status": "https://vifty.local/schemas/viftyctl-status.schema.json"
+  },
+  "schemaResources": {
+    "audit": "Contents/Resources/schemas/viftyctl-audit.schema.json",
+    "capabilities": "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
+    "commandError": "Contents/Resources/schemas/viftyctl-command-error.schema.json",
+    "diagnose": "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+    "status": "Contents/Resources/schemas/viftyctl-status.schema.json"
+  },
+  "schemas": {
+    "audit": "docs/schemas/viftyctl-audit.schema.json",
+    "capabilities": "docs/schemas/viftyctl-capabilities.schema.json",
+    "commandError": "docs/schemas/viftyctl-command-error.schema.json",
+    "diagnose": "docs/schemas/viftyctl-diagnose.schema.json",
+    "status": "docs/schemas/viftyctl-status.schema.json"
+  },
+  "supportsForceRetry": true,
+  "workloads": [
+    "build",
+    "test",
+    "render",
+    "localModel",
+    "custom"
+  ]
+}

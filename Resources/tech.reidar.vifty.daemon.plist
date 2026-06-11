@@ -23,6 +23,11 @@
 	<integer>63</integer>
 	<key>ThrottleInterval</key>
 	<integer>5</integer>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>VIFTY_XPC_ALLOWED_TEAM_ID</key>
+		<string></string>
+	</dict>
 	<key>StandardOutPath</key>
 	<string>/var/log/tech.reidar.vifty.daemon.out.log</string>
 	<key>StandardErrorPath</key>

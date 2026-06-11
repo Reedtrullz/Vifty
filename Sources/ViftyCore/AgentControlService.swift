@@ -41,6 +41,8 @@ public actor AgentControlService {
     private var lastDecision: AgentControlDecision?
     private var lastErrorCode: AgentControlErrorCode?
     private var operationInProgress = false
+    private var restoreOperationCount = 0
+    private var restoreRequestGeneration = 0
     private var scheduledExpiry: AgentControlScheduledExpiry?
     private var lastPrepareCompletedAt: Date?
     private let monitorIntervalSeconds: TimeInterval = 5
@@ -71,19 +73,24 @@ public actor AgentControlService {
     }
 
     public func status() -> AgentControlStatus {
-        let currentTime = now()
-        let lease = activeLease?.isActive(at: currentTime) == true ? activeLease : nil
+        let lease = activeLease?.restoredAt == nil ? activeLease : nil
         return AgentControlStatus(
             enabled: policy.enabled,
             activeLease: lease,
             lastDecision: lastDecision,
-            lastErrorCode: lastErrorCode
+            lastErrorCode: lastErrorCode,
+            policy: policy.snapshot
         )
+    }
+
+    public func auditEvents(limit: Int = AgentControlStore.defaultMaximumAuditEvents) throws -> [AgentControlAuditEvent] {
+        try store.loadRecentAuditEvents(limit: limit)
     }
 
     public func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus {
         try beginOperation()
         defer { endOperation() }
+        let prepareRestoreGeneration = restoreRequestGeneration
 
         if let lease = activeLease,
            lease.request.idempotencyKey == request.idempotencyKey,
@@ -92,10 +99,13 @@ public actor AgentControlService {
         }
 
         if let lease = activeLease,
-           lease.isActive(at: now()) {
+           lease.restoredAt == nil {
+            let message = lease.isActive(at: now())
+                ? "Agent cooling lease already active. Restore Auto before starting a new lease."
+                : "Agent cooling lease expired but Auto restore has not completed. Restore Auto before starting a new lease."
             let decision = AgentControlDecision.denied(
                 .policyDenied,
-                message: "Agent cooling lease already active. Restore Auto before starting a new lease."
+                message: message
             )
             lastDecision = decision
             lastErrorCode = decision.errorCode
@@ -105,10 +115,12 @@ public actor AgentControlService {
 
         if let lastPrepare = lastPrepareCompletedAt,
            now().timeIntervalSince(lastPrepare) < Double(policy.prepareCooldownSeconds) {
-            let remaining = policy.prepareCooldownSeconds - Int(now().timeIntervalSince(lastPrepare))
+            let elapsed = now().timeIntervalSince(lastPrepare)
+            let remaining = max(1, Int(ceil(Double(policy.prepareCooldownSeconds) - elapsed)))
             let decision = AgentControlDecision.denied(
                 .prepareRateLimited,
-                message: "Prepare rate-limited. Wait \(remaining)s between prepare calls."
+                message: "Prepare rate-limited. Wait \(remaining)s between prepare calls.",
+                retryAfterSeconds: remaining
             )
             lastDecision = decision
             lastErrorCode = decision.errorCode
@@ -117,6 +129,10 @@ public actor AgentControlService {
         }
 
         let snapshot = try await hardware.snapshot()
+        if restoreWasRequested(since: prepareRestoreGeneration) {
+            await cancelPrepareBecauseRestoreWasRequested(appliedFans: [], leaseID: nil)
+            return status()
+        }
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
         lastDecision = decision
         lastErrorCode = decision.errorCode
@@ -135,6 +151,10 @@ public actor AgentControlService {
                 let command = FanCommand(fanID: fan.id, mode: .fixedRPM(target))
                 try await hardware.apply(command, fan: fan)
                 appliedFans.append(fan)
+                if restoreWasRequested(since: prepareRestoreGeneration) {
+                    await cancelPrepareBecauseRestoreWasRequested(appliedFans: appliedFans, leaseID: rollbackLeaseID)
+                    return status()
+                }
             }
 
             let createdAt = now()
@@ -169,8 +189,9 @@ public actor AgentControlService {
     }
 
     public func restoreAuto(reason: String) async throws -> AgentControlStatus {
-        try beginOperation()
-        defer { endOperation() }
+        markRestoreRequested()
+        restoreOperationCount += 1
+        defer { restoreOperationCount -= 1 }
 
         let snapshot = try await hardware.snapshot()
         return try await restoreAuto(reason: reason, snapshot: snapshot)
@@ -189,13 +210,13 @@ public actor AgentControlService {
         cancelScheduledExpiry()
         activeLease = nil
         try store.saveActiveLease(nil)
+        lastDecision = nil
         lastErrorCode = nil
         return status()
     }
 
     public func clearActiveLease(reason: String) throws -> AgentControlStatus {
-        try beginOperation()
-        defer { endOperation() }
+        markRestoreRequested()
 
         cancelScheduledExpiry()
         if let lease = activeLease {
@@ -203,7 +224,32 @@ public actor AgentControlService {
         }
         activeLease = nil
         try store.saveActiveLease(nil)
+        lastDecision = nil
+        lastErrorCode = nil
         return status()
+    }
+
+    private func cancelPrepareBecauseRestoreWasRequested(appliedFans: [Fan], leaseID: String?) async {
+        for fan in appliedFans {
+            do {
+                try await hardware.restoreAuto(fan: fan)
+            } catch {
+                appendAudit(
+                    action: "prepare-cancel-restore-failure",
+                    leaseID: leaseID,
+                    message: "Failed to restore fan \(fan.id) after Auto preempted prepare: \(error.localizedDescription)"
+                )
+            }
+        }
+        let decision = AgentControlDecision.denied(
+            .restoreRequested,
+            message: "Prepare cancelled because Auto restore was requested."
+        )
+        activeLease = nil
+        try? store.saveActiveLease(nil)
+        lastDecision = decision
+        lastErrorCode = decision.errorCode
+        appendAudit(action: "prepare-cancelled", leaseID: leaseID, message: decision.message)
     }
 
     private func scheduleMonitor(for lease: AgentCoolingLease) {
@@ -282,7 +328,7 @@ public actor AgentControlService {
     }
 
     private func beginOperation() throws {
-        guard !operationInProgress else {
+        guard !operationInProgress, restoreOperationCount == 0 else {
             throw ViftyError.helperRejected("Agent control operation already in progress.")
         }
         operationInProgress = true
@@ -290,6 +336,14 @@ public actor AgentControlService {
 
     private func endOperation() {
         operationInProgress = false
+    }
+
+    private func markRestoreRequested() {
+        restoreRequestGeneration += 1
+    }
+
+    private func restoreWasRequested(since generation: Int) -> Bool {
+        restoreRequestGeneration != generation
     }
 
     private func appendAudit(action: String, leaseID: String?, message: String) {

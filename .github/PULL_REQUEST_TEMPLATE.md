@@ -4,7 +4,8 @@
 
 ## Checklist
 
-- [ ] `swift test` passes (127 tests, 0 failures)
+- [ ] `make verify` passes locally, or each skipped gate is explained
+- [ ] `swift test` passes
 - [ ] New tests added for new functionality or bug fixes
 - [ ] Architecture rules in CONTRIBUTING.md followed
 - [ ] Documentation updated (README, AGENTS.md) if public API or CLI flags changed

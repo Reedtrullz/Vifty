@@ -9,6 +9,7 @@ public enum ViftyError: Error, LocalizedError, Equatable {
     case smcOpenFailed(Int32)
     case smcCallFailed(Int32)
     case smcKeyUnavailable(String)
+    case smcWriteRejected(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ public enum ViftyError: Error, LocalizedError, Equatable {
             }
         case .smcKeyUnavailable(let key):
             "SMC key \(key) is unavailable."
+        case .smcWriteRejected(let key):
+            "SMC write rejected for key \(key). Vifty only writes fan mode, fan target, and guarded force-test keys."
         }
     }
 
@@ -56,6 +59,7 @@ public enum ViftyError: Error, LocalizedError, Equatable {
 public enum FanHardwareMode: Equatable, Sendable {
     case automatic
     case forced
+    case system
     case unknown(Int)
 
     public init?(rawValue: Int?) {
@@ -65,6 +69,8 @@ public enum FanHardwareMode: Equatable, Sendable {
             self = .automatic
         case 1:
             self = .forced
+        case 3:
+            self = .system
         default:
             self = .unknown(rawValue)
         }
@@ -74,6 +80,7 @@ public enum FanHardwareMode: Equatable, Sendable {
         switch self {
         case .automatic: 0
         case .forced: 1
+        case .system: 3
         case .unknown(let value): value
         }
     }
@@ -82,6 +89,7 @@ public enum FanHardwareMode: Equatable, Sendable {
         switch self {
         case .automatic: "Auto"
         case .forced: "Forced"
+        case .system: "System"
         case .unknown(let value): "Unknown (\(value))"
         }
     }

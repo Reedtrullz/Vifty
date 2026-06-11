@@ -23,7 +23,7 @@ guard let commandValue = arguments.first, let command = HelperCommand(rawValue: 
 do {
     switch command {
     case .probe:
-        let snapshot = try awaitSnapshot()
+        let snapshot = try await RealMacHardwareService().snapshot()
         printSnapshot(snapshot)
     case .probeLocal:
         let snapshot = try RealMacHardwareService(preferDaemon: false).localSnapshot()
@@ -66,34 +66,5 @@ do {
 }
 
 private func printSnapshot(_ snapshot: HardwareSnapshot) {
-        print("model=\(snapshot.modelIdentifier) appleSilicon=\(snapshot.isAppleSilicon) macBookPro=\(snapshot.isMacBookPro)")
-        print("fans=\(snapshot.fans.count)")
-        for fan in snapshot.fans {
-            print("fan[\(fan.id)] name=\"\(fan.name)\" rpm=\(fan.currentRPM) min=\(fan.minimumRPM) max=\(fan.maximumRPM) controllable=\(fan.controllable)")
-        }
-        print("temperatures=\(snapshot.temperatureSensors.count)")
-        for sensor in snapshot.temperatureSensors {
-            print("temp[\(sensor.id)] name=\"\(sensor.name)\" celsius=\(String(format: "%.1f", sensor.celsius)) source=\(sensor.source.rawValue)")
-        }
-}
-
-private func awaitSnapshot() throws -> HardwareSnapshot {
-    let semaphore = DispatchSemaphore(value: 0)
-    final class Box: @unchecked Sendable {
-        var result: Result<HardwareSnapshot, Error>?
-    }
-    let box = Box()
-    Task {
-        do {
-            box.result = .success(try await RealMacHardwareService().snapshot())
-        } catch {
-            box.result = .failure(error)
-        }
-        semaphore.signal()
-    }
-    semaphore.wait()
-    guard let result = box.result else {
-        fatalError("ViftyHelper internal error: snapshot result not set before semaphore signal")
-    }
-    return try result.get()
+    print(HardwareSnapshotProbeFormatter.string(for: snapshot))
 }

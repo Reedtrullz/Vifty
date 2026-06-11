@@ -5,6 +5,7 @@ final class FanStatusTests: XCTestCase {
     func testFanHardwareModeDecodesKnownSMCValues() {
         XCTAssertEqual(FanHardwareMode(rawValue: 0), .automatic)
         XCTAssertEqual(FanHardwareMode(rawValue: 1), .forced)
+        XCTAssertEqual(FanHardwareMode(rawValue: 3), .system)
         XCTAssertEqual(FanHardwareMode(rawValue: 7), .unknown(7))
         XCTAssertNil(FanHardwareMode(rawValue: nil))
     }

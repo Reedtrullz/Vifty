@@ -44,6 +44,32 @@ final class CurveProfileStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: backupURL.path), "Backup file should exist after save")
     }
 
+    func testSaveRestrictsDirectoryProfileAndBackupPermissions() throws {
+        let url = tempURL()
+        let store = CurveProfileStore(url: url)
+        let profiles = [CurveProfile(name: "A", startTemp: 50, startRPM: 1200, midTemp: 65, midRPM: 2500, maxTemp: 80, maxRPM: 4000)]
+
+        store.save(profiles)
+
+        XCTAssertEqual(try posixPermissions(at: url.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: url), 0o600)
+        XCTAssertEqual(try posixPermissions(at: url.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testSaveRestrictsLegacyBackupPermissions() throws {
+        let url = tempURL()
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("[]".utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o644)], ofItemAtPath: url.path)
+
+        let store = CurveProfileStore(url: url)
+        let profiles = [CurveProfile(name: "A", startTemp: 50, startRPM: 1200, midTemp: 65, midRPM: 2500, maxTemp: 80, maxRPM: 4000)]
+
+        store.save(profiles)
+
+        XCTAssertEqual(try posixPermissions(at: url.appendingPathExtension("bak")), 0o600)
+    }
+
     func testSaveHandlesBackupCopyItemFailure() {
         let url = tempURL()
         let store = CurveProfileStore(url: url)
@@ -74,10 +100,28 @@ final class CurveProfileStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: bakURL)
     }
 
+    func testSaveThrowingReportsDirectoryCreationFailure() throws {
+        let parentFile = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try Data("not a directory".utf8).write(to: parentFile)
+        let url = parentFile.appendingPathComponent("curve-profiles.json")
+        let store = CurveProfileStore(url: url)
+        let profiles = [CurveProfile(name: "A", startTemp: 50, startRPM: 1200, midTemp: 65, midRPM: 2500, maxTemp: 80, maxRPM: 4000)]
+
+        XCTAssertThrowsError(try store.saveThrowing(profiles))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     private func tempURL() -> URL {
         FileManager.default
             .temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("curve-profiles.json")
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }

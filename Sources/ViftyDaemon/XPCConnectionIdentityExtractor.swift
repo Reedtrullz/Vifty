@@ -7,12 +7,9 @@ struct XPCConnectionIdentityExtractor {
         // auditToken is available at runtime on macOS 13+ but not exposed as a
         // public Swift property in all SDK versions. Use key-value access and
         // bridge the Data bytes to an audit_token_t.
-        guard let tokenData = connection.value(forKey: "auditToken") as? Data,
-              tokenData.count == MemoryLayout<audit_token_t>.size else {
+        guard let token = XPCAuditTokenCoding.decode(connection.value(forKey: "auditToken")) else {
             return nil
         }
-        var token = audit_token_t()
-        _ = withUnsafeMutableBytes(of: &token) { tokenData.copyBytes(to: $0) }
         return identity(forAuditToken: token)
     }
 

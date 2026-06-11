@@ -1,0 +1,94 @@
+{
+  "agentControl": {
+    "activeLease": null,
+    "enabled": true,
+    "lastDecision": null,
+    "lastErrorCode": null,
+    "policy": {
+      "enabled": true,
+      "maxDurationSeconds": 1800,
+      "maximumAllowedRPMPercent": 80,
+      "minimumAgentRPMPercent": 45,
+      "prepareCooldownSeconds": 30
+    }
+  },
+  "agentControlStatusError": null,
+  "checks": [
+    {
+      "id": "daemonSnapshotAvailable",
+      "message": "Daemon hardware snapshot is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "supportedHardware",
+      "message": "Apple Silicon MacBook Pro hardware detected.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "thermalPressureSafe",
+      "message": "Thermal pressure is nominal.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "activeLeaseClear",
+      "message": "No active agent cooling lease.",
+      "passed": true,
+      "severity": "warning"
+    }
+  ],
+  "controllableFanCount": 2,
+  "daemonSnapshotError": null,
+  "fanCount": 2,
+  "fans": [
+    {
+      "controllable": true,
+      "currentRPM": 2200,
+      "hardwareMode": "Auto",
+      "hardwareModeRawValue": 0,
+      "id": 0,
+      "maximumRPM": 6800,
+      "minimumRPM": 1400,
+      "name": "Left Fan",
+      "targetRPM": null
+    },
+    {
+      "controllable": true,
+      "currentRPM": 2250,
+      "hardwareMode": "Auto",
+      "hardwareModeRawValue": 0,
+      "id": 1,
+      "maximumRPM": 7200,
+      "minimumRPM": 1500,
+      "name": "Right Fan",
+      "targetRPM": null
+    }
+  ],
+  "generatedAt": 700000000,
+  "highestTemperatureCelsius": 58.4,
+  "isAppleSilicon": true,
+  "isMacBookPro": true,
+  "modelIdentifier": "MacBookPro18,3",
+  "recommendedAgentAction": "requestCooling",
+  "safeToRequestCooling": true,
+  "schemaVersion": 1,
+  "state": "ready",
+  "temperatureSensorCount": 2,
+  "temperatureSensors": [
+    {
+      "celsius": 58.4,
+      "id": "Tp09",
+      "name": "CPU Proximity",
+      "source": "SMC"
+    },
+    {
+      "celsius": 51.2,
+      "id": "hid-0",
+      "name": "HID Temperature 0",
+      "source": "HID"
+    }
+  ],
+  "thermalPressure": "nominal"
+}

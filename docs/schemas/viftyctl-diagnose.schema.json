@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+  "title": "viftyctl diagnose --json readiness report",
+  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked or safeToRequestCooling=false as a hard stop before requesting Vifty cooling.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "state",
+    "recommendedAgentAction",
+    "safeToRequestCooling",
+    "modelIdentifier",
+    "isAppleSilicon",
+    "isMacBookPro",
+    "thermalPressure",
+    "fanCount",
+    "controllableFanCount",
+    "temperatureSensorCount",
+    "fans",
+    "temperatureSensors",
+    "agentControl",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatedAt": {
+      "description": "Swift JSONEncoder date value emitted by the CLI.",
+      "type": "number"
+    },
+    "state": {
+      "enum": [
+        "ready",
+        "degraded",
+        "blocked"
+      ]
+    },
+    "recommendedAgentAction": {
+      "enum": [
+        "requestCooling",
+        "requestCoolingWithCaution",
+        "restoreAutoBeforeRequestingCooling",
+        "doNotRequestCooling"
+      ]
+    },
+    "safeToRequestCooling": {
+      "type": "boolean"
+    },
+    "modelIdentifier": {
+      "type": "string"
+    },
+    "isAppleSilicon": {
+      "type": "boolean"
+    },
+    "isMacBookPro": {
+      "type": "boolean"
+    },
+    "thermalPressure": {
+      "enum": [
+        "nominal",
+        "fair",
+        "serious",
+        "critical",
+        "unknown"
+      ]
+    },
+    "fanCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "controllableFanCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "temperatureSensorCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "highestTemperatureCelsius": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "fans": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fanReport"
+      }
+    },
+    "temperatureSensors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/temperatureSensorReport"
+      }
+    },
+    "agentControl": {
+      "$ref": "#/$defs/agentControlStatus"
+    },
+    "daemonSnapshotError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "agentControlStatusError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/readinessCheck"
+      }
+    }
+  },
+  "$defs": {
+    "fanReport": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "currentRPM",
+        "minimumRPM",
+        "maximumRPM",
+        "controllable"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "currentRPM": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimumRPM": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximumRPM": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "controllable": {
+          "type": "boolean"
+        },
+        "hardwareMode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hardwareModeRawValue": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "targetRPM": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "temperatureSensorReport": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "celsius",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "celsius": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "readinessCheck": {
+      "type": "object",
+      "required": [
+        "id",
+        "severity",
+        "passed",
+        "message"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "daemonSnapshotAvailable",
+            "agentControlStatusAvailable",
+            "supportedHardware",
+            "agentControlEnabled",
+            "temperatureSensorsPresent",
+            "controllableFansPresent",
+            "fanIDsValid",
+            "fanIDsUnique",
+            "fanRangesValid",
+            "thermalPressureSafe",
+            "activeLeaseClear",
+            "fanModeTelemetry"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "agentControlStatus": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "activeLease",
+        "lastDecision",
+        "lastErrorCode",
+        "policy"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "activeLease": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "lastDecision": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "lastErrorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policy": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

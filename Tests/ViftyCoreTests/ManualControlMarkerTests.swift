@@ -40,10 +40,25 @@ final class ManualControlMarkerTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testMarkActiveRestrictsDirectoryAndFilePermissions() throws {
+        let url = tempURL()
+        let marker = ManualControlMarker(url: url)
+
+        marker.markActive()
+
+        XCTAssertEqual(try posixPermissions(at: url.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: url), 0o600)
+    }
+
     private func tempURL() -> URL {
         FileManager.default
             .temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("manual-control-active")
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }

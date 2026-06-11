@@ -18,27 +18,50 @@ public final class CurveProfileStore: @unchecked Sendable {
     }
 
     public func save(_ profiles: [CurveProfile]) {
+        try? saveThrowing(profiles)
+    }
+
+    public func saveThrowing(_ profiles: [CurveProfile]) throws {
         let directory = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        var attr: [FileAttributeKey: Any] = [.posixPermissions: NSNumber(value: 0o700)]
-        try? FileManager.default.setAttributes(attr, ofItemAtPath: directory.path)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let attr: [FileAttributeKey: Any] = [.posixPermissions: NSNumber(value: 0o700)]
+        try FileManager.default.setAttributes(attr, ofItemAtPath: directory.path)
 
         // Write a backup before overwriting the main file.
         if FileManager.default.fileExists(atPath: url.path) {
             let backupURL = url.appendingPathExtension("bak")
-            try? FileManager.default.removeItem(at: backupURL)
-            try? FileManager.default.copyItem(at: url, to: backupURL)
+            copyBackupIfPossible(from: url, to: backupURL)
         }
 
-        guard let data = try? JSONEncoder().encode(profiles) else { return }
-        try? data.write(to: url, options: .atomic)
-        attr = [.posixPermissions: NSNumber(value: 0o600)]
-        try? FileManager.default.setAttributes(attr, ofItemAtPath: url.path)
+        let data = try JSONEncoder().encode(profiles)
+        try data.write(to: url, options: .atomic)
+        try restrictFilePermissions(at: url)
 
         // Always ensure a backup copy exists after saving.
         let backupURL = url.appendingPathExtension("bak")
         if !FileManager.default.fileExists(atPath: backupURL.path) {
-            try? FileManager.default.copyItem(at: url, to: backupURL)
+            copyBackupIfPossible(from: url, to: backupURL)
         }
+        if FileManager.default.fileExists(atPath: backupURL.path) {
+            try? restrictFilePermissions(at: backupURL)
+        }
+    }
+
+    private func copyBackupIfPossible(from sourceURL: URL, to backupURL: URL) {
+        do {
+            if FileManager.default.fileExists(atPath: backupURL.path) {
+                try FileManager.default.removeItem(at: backupURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: backupURL)
+            try restrictFilePermissions(at: backupURL)
+        } catch {
+            // Backups are best-effort; saving the primary profile file is what
+            // should report success or failure to the caller.
+        }
+    }
+
+    private func restrictFilePermissions(at url: URL) throws {
+        let attr: [FileAttributeKey: Any] = [.posixPermissions: NSNumber(value: 0o600)]
+        try FileManager.default.setAttributes(attr, ofItemAtPath: url.path)
     }
 }

@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+  "title": "viftyctl capabilities --json report",
+  "description": "Machine-readable capabilities report emitted by viftyctl capabilities --json. Agents should use this payload to discover supported commands, workloads, policy limits, and exit-code meanings instead of hardcoding them.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "commands",
+    "workloads",
+    "schemas",
+    "schemaResources",
+    "schemaIDs",
+    "policy",
+    "policySource",
+    "daemonStatusAvailable",
+    "agentControlStatusError",
+    "supportsForceRetry",
+    "exitCodes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "status",
+          "capabilities",
+          "diagnose",
+          "audit",
+          "prepare",
+          "restore-auto",
+          "run"
+        ]
+      }
+    },
+    "workloads": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workload"
+      }
+    },
+    "schemas": {
+      "$ref": "#/$defs/schemaPathReferences"
+    },
+    "schemaResources": {
+      "$ref": "#/$defs/schemaResourceReferences"
+    },
+    "schemaIDs": {
+      "$ref": "#/$defs/schemaIDReferences"
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "policySource": {
+      "enum": [
+        "daemonStatus",
+        "fallbackUnavailable"
+      ]
+    },
+    "daemonStatusAvailable": {
+      "type": "boolean"
+    },
+    "agentControlStatusError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "supportsForceRetry": {
+      "type": "boolean"
+    },
+    "exitCodes": {
+      "$ref": "#/$defs/exitCodes"
+    }
+  },
+  "$defs": {
+    "workload": {
+      "enum": [
+        "build",
+        "test",
+        "render",
+        "localModel",
+        "custom"
+      ]
+    },
+    "schemaPathReferences": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "audit",
+        "diagnose",
+        "status",
+        "commandError"
+      ],
+      "properties": {
+        "capabilities": {
+          "const": "docs/schemas/viftyctl-capabilities.schema.json"
+        },
+        "audit": {
+          "const": "docs/schemas/viftyctl-audit.schema.json"
+        },
+        "diagnose": {
+          "const": "docs/schemas/viftyctl-diagnose.schema.json"
+        },
+        "status": {
+          "const": "docs/schemas/viftyctl-status.schema.json"
+        },
+        "commandError": {
+          "const": "docs/schemas/viftyctl-command-error.schema.json"
+        }
+      }
+    },
+    "schemaResourceReferences": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "audit",
+        "diagnose",
+        "status",
+        "commandError"
+      ],
+      "properties": {
+        "capabilities": {
+          "const": "Contents/Resources/schemas/viftyctl-capabilities.schema.json"
+        },
+        "audit": {
+          "const": "Contents/Resources/schemas/viftyctl-audit.schema.json"
+        },
+        "diagnose": {
+          "const": "Contents/Resources/schemas/viftyctl-diagnose.schema.json"
+        },
+        "status": {
+          "const": "Contents/Resources/schemas/viftyctl-status.schema.json"
+        },
+        "commandError": {
+          "const": "Contents/Resources/schemas/viftyctl-command-error.schema.json"
+        }
+      }
+    },
+    "schemaIDReferences": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "audit",
+        "diagnose",
+        "status",
+        "commandError"
+      ],
+      "properties": {
+        "capabilities": {
+          "const": "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+        },
+        "audit": {
+          "const": "https://vifty.local/schemas/viftyctl-audit.schema.json"
+        },
+        "diagnose": {
+          "const": "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+        },
+        "status": {
+          "const": "https://vifty.local/schemas/viftyctl-status.schema.json"
+        },
+        "commandError": {
+          "const": "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "minimumAgentRPMPercent",
+        "maximumAllowedRPMPercent",
+        "maxDurationSeconds",
+        "prepareCooldownSeconds"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minimumAgentRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maximumAllowedRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prepareCooldownSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "exitCodes": {
+      "type": "object",
+      "required": [
+        "success",
+        "commandFailure",
+        "usage",
+        "unavailable",
+        "blockedReadiness"
+      ],
+      "properties": {
+        "success": {
+          "type": "integer"
+        },
+        "commandFailure": {
+          "type": "integer"
+        },
+        "usage": {
+          "type": "integer"
+        },
+        "unavailable": {
+          "type": "integer"
+        },
+        "blockedReadiness": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

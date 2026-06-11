@@ -17,7 +17,7 @@ Thanks for considering contributing! Vifty is a native macOS utility for Apple S
 git clone https://github.com/Reedtrullz/Vifty.git
 cd Vifty
 
-# Run tests (127 XCTest cases)
+# Run tests
 swift test
 
 # Build release app bundle
@@ -54,11 +54,13 @@ For full conventions, see [AGENTS.md](AGENTS.md).
 ## Pull Request Process
 
 1. **Open an issue first** for significant changes — discuss the approach before writing code.
-2. **Run `swift test`** — all 127 tests must pass.
+2. **Run `swift test`** — all tests must pass.
 3. **Add tests** for new functionality or bug fixes.
 4. **Keep changes focused** — one concern per PR.
 5. **Update documentation** if you change public APIs, CLI flags, or architecture rules.
 6. **Sign your commits** — we prefer signed commits.
+
+Tagged public releases follow [docs/release.md](docs/release.md) and require Developer ID signing plus notarization.
 
 ## Code Conventions
 

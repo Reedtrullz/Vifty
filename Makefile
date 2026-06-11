@@ -1,11 +1,14 @@
-.PHONY: app install pkg clean-app clean-pkg test help clean
+.PHONY: app install pkg clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
+VIFTY_XPC_ALLOWED_TEAM_ID ?=
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
 MACOS := $(CONTENTS)/MacOS
+SCHEMAS := $(CONTENTS)/Resources/schemas
+DAEMON_PLIST := $(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
 
 install: CONFIGURATION = release
 pkg: CONFIGURATION = release
@@ -14,13 +17,16 @@ app: ## Build the release app bundle
 	swift build -c $(CONFIGURATION)
 	rm -rf "$(APP_DIR)"
 	mkdir -p "$(MACOS)"
+	mkdir -p "$(SCHEMAS)"
 	mkdir -p "$(CONTENTS)/Library/LaunchDaemons"
 	cp ".build/$(CONFIGURATION)/Vifty" "$(MACOS)/Vifty"
 	cp ".build/$(CONFIGURATION)/ViftyHelper" "$(MACOS)/ViftyHelper"
 	cp ".build/$(CONFIGURATION)/ViftyCtl" "$(MACOS)/viftyctl"
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
+	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
-	cp "Resources/tech.reidar.vifty.daemon.plist" "$(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
+	if [ -n "$(VIFTY_XPC_ALLOWED_TEAM_ID)" ]; then /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:VIFTY_XPC_ALLOWED_TEAM_ID $(VIFTY_XPC_ALLOWED_TEAM_ID)" "$(DAEMON_PLIST)"; fi
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime "$(MACOS)/ViftyHelper"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime "$(MACOS)/ViftyDaemon"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
@@ -35,6 +41,17 @@ pkg: ## Build an unsigned installer .pkg
 
 test: ## Run the XCTest suite
 	swift test
+
+verify: ## Run local trust gates without installing
+	/bin/bash -n scripts/*.sh
+	scripts/validate-release-metadata.sh
+	swift test
+	swift build -Xswiftc -warnings-as-errors
+	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
+	plutil -lint "$(CONTENTS)/Info.plist"
+	plutil -lint "$(DAEMON_PLIST)"
+	codesign --verify --deep --strict "$(APP_DIR)"
+	codesign -dvvv "$(MACOS)/viftyctl" 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

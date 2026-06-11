@@ -9,6 +9,7 @@ public enum ViftyDaemonConstants {
     func ping(reply: @escaping (Bool) -> Void)
     func snapshot(reply: @escaping (NSDictionary?, String?) -> Void)
     func agentControlStatus(reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
+    func agentControlAudit(_ limit: Int, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func setFixedRPM(
@@ -154,6 +155,9 @@ public enum XPCAgentControlCoding {
         if let lastErrorCode = status.lastErrorCode {
             encoded["lastErrorCode"] = lastErrorCode.rawValue
         }
+        if let policy = status.policy {
+            encoded["policy"] = encodePolicy(policy)
+        }
         return encoded as NSDictionary
     }
 
@@ -189,11 +193,105 @@ public enum XPCAgentControlCoding {
             lastErrorCode = decodedErrorCode
         }
 
+        var policy: AgentControlPolicySnapshot?
+        if let value = dictionary["policy"] {
+            guard let policyDictionary = value as? NSDictionary,
+                  let decodedPolicy = decodePolicy(policyDictionary) else {
+                return nil
+            }
+            policy = decodedPolicy
+        }
+
         return AgentControlStatus(
             enabled: enabled,
             activeLease: activeLease,
             lastDecision: lastDecision,
-            lastErrorCode: lastErrorCode
+            lastErrorCode: lastErrorCode,
+            policy: policy
+        )
+    }
+
+    public static func encodeAuditEvents(_ events: [AgentControlAuditEvent]) -> NSDictionary {
+        [
+            "events": events.map(encodeAuditEvent)
+        ] as NSDictionary
+    }
+
+    public static func decodeAuditEvents(_ dictionary: NSDictionary) -> [AgentControlAuditEvent]? {
+        guard let eventDictionaries = dictionary["events"] as? [NSDictionary] else {
+            return nil
+        }
+
+        var events: [AgentControlAuditEvent] = []
+        for eventDictionary in eventDictionaries {
+            guard let event = decodeAuditEvent(eventDictionary) else {
+                return nil
+            }
+            events.append(event)
+        }
+        return events
+    }
+
+    private static func encodePolicy(_ policy: AgentControlPolicySnapshot) -> NSDictionary {
+        [
+            "enabled": policy.enabled,
+            "minimumAgentRPMPercent": policy.minimumAgentRPMPercent,
+            "maximumAllowedRPMPercent": policy.maximumAllowedRPMPercent,
+            "maxDurationSeconds": policy.maxDurationSeconds,
+            "prepareCooldownSeconds": policy.prepareCooldownSeconds
+        ] as NSDictionary
+    }
+
+    private static func decodePolicy(_ dictionary: NSDictionary) -> AgentControlPolicySnapshot? {
+        guard let enabled = boolValue(dictionary["enabled"]),
+              let minimumAgentRPMPercent = intValue(dictionary["minimumAgentRPMPercent"]),
+              let maximumAllowedRPMPercent = intValue(dictionary["maximumAllowedRPMPercent"]),
+              let maxDurationSeconds = intValue(dictionary["maxDurationSeconds"]),
+              let prepareCooldownSeconds = intValue(dictionary["prepareCooldownSeconds"]) else {
+            return nil
+        }
+
+        return AgentControlPolicySnapshot(
+            enabled: enabled,
+            minimumAgentRPMPercent: minimumAgentRPMPercent,
+            maximumAllowedRPMPercent: maximumAllowedRPMPercent,
+            maxDurationSeconds: maxDurationSeconds,
+            prepareCooldownSeconds: prepareCooldownSeconds
+        )
+    }
+
+    private static func encodeAuditEvent(_ event: AgentControlAuditEvent) -> NSDictionary {
+        var encoded: [String: Any] = [
+            "timestamp": event.timestamp.timeIntervalSince1970,
+            "action": event.action,
+            "message": event.message
+        ]
+        if let leaseID = event.leaseID {
+            encoded["leaseID"] = leaseID
+        }
+        return encoded as NSDictionary
+    }
+
+    private static func decodeAuditEvent(_ dictionary: NSDictionary) -> AgentControlAuditEvent? {
+        guard let timestamp = doubleValue(dictionary["timestamp"]),
+              let action = dictionary["action"] as? String,
+              let message = dictionary["message"] as? String else {
+            return nil
+        }
+
+        var leaseID: String?
+        if let value = dictionary["leaseID"] {
+            guard let decodedLeaseID = value as? String else {
+                return nil
+            }
+            leaseID = decodedLeaseID
+        }
+
+        return AgentControlAuditEvent(
+            timestamp: Date(timeIntervalSince1970: timestamp),
+            action: action,
+            leaseID: leaseID,
+            message: message
         )
     }
 
@@ -249,6 +347,9 @@ public enum XPCAgentControlCoding {
         if let errorCode = decision.errorCode {
             encoded["errorCode"] = errorCode.rawValue
         }
+        if let retryAfterSeconds = decision.retryAfterSeconds {
+            encoded["retryAfterSeconds"] = retryAfterSeconds
+        }
         return encoded as NSDictionary
     }
 
@@ -269,12 +370,21 @@ public enum XPCAgentControlCoding {
             errorCode = decodedErrorCode
         }
 
+        var retryAfterSeconds: Int?
+        if let value = dictionary["retryAfterSeconds"] {
+            guard let decodedRetryAfterSeconds = intValue(value) else {
+                return nil
+            }
+            retryAfterSeconds = decodedRetryAfterSeconds
+        }
+
         return AgentControlDecision(
             allowed: allowed,
             errorCode: errorCode,
             message: message,
             targetRPMByFanID: targetRPMByFanID,
-            warnings: warnings
+            warnings: warnings,
+            retryAfterSeconds: retryAfterSeconds
         )
     }
 

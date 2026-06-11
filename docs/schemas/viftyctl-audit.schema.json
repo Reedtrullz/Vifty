@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-audit.schema.json",
+  "title": "viftyctl audit --json report",
+  "description": "Machine-readable read-only agent-control audit report emitted by viftyctl audit --json.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "readOnly",
+    "coolingCommandsRun",
+    "limit",
+    "eventCount",
+    "events"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "number"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "coolingCommandsRun": {
+      "const": false
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "eventCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/auditEvent"
+      }
+    }
+  },
+  "$defs": {
+    "auditEvent": {
+      "type": "object",
+      "required": [
+        "timestamp",
+        "action",
+        "message"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "number"
+        },
+        "action": {
+          "type": "string"
+        },
+        "leaseID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

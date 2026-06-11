@@ -16,6 +16,52 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(command, .status(json: true))
     }
 
+    func testParsesDiagnoseJSON() throws {
+        let command = try ViftyCtlArguments.parse(["diagnose", "--json"])
+
+        XCTAssertEqual(command, .diagnose(json: true))
+    }
+
+    func testParsesAuditJSONWithLimit() throws {
+        let command = try ViftyCtlArguments.parse(["audit", "--limit", "7", "--json"])
+
+        XCTAssertEqual(command, .audit(limit: 7, json: true))
+    }
+
+    func testAuditUsesDefaultLimit() throws {
+        let command = try ViftyCtlArguments.parse(["audit"])
+
+        XCTAssertEqual(command, .audit(limit: ViftyCtlArguments.defaultAuditLimit, json: false))
+    }
+
+    func testInvalidAuditLimitThrows() {
+        assertParseError(["audit", "--limit", "0"], equals: .invalidLimit)
+    }
+
+    func testStatusUnknownOptionThrows() {
+        assertParseError(["status", "--yaml"], equals: .unknownOption("--yaml"))
+    }
+
+    func testPrepareUnknownOptionThrows() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--rpm", "4000"
+        ], equals: .unknownOption("--rpm"))
+    }
+
+    func testPrepareUnexpectedPositionalArgumentThrows() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "swift"
+        ], equals: .unexpectedArgument("swift"))
+    }
+
     func testInvalidWorkloadThrows() {
         assertParseError([
             "prepare",
@@ -185,6 +231,49 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .missingChildCommand)
     }
 
+    func testRequestsJSONDetectsPrepareFlagForParseErrors() {
+        XCTAssertTrue(ViftyCtlArguments.requestsJSON([
+            "prepare",
+            "--workload", "invalid",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--json"
+        ]))
+    }
+
+    func testRequestsJSONDetectsRunWrapperFlagBeforeSeparator() {
+        XCTAssertTrue(ViftyCtlArguments.requestsJSON([
+            "run",
+            "--json",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--",
+            "swift", "test"
+        ]))
+    }
+
+    func testRequestsJSONIgnoresRunChildFlagAfterSeparator() {
+        XCTAssertFalse(ViftyCtlArguments.requestsJSON([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--",
+            "swift", "test", "--json"
+        ]))
+    }
+
+    func testParseErrorReportHelpersProduceStableOutput() {
+        XCTAssertEqual(ViftyCtlArguments.commandNameHint([]), "unknown")
+        XCTAssertEqual(ViftyCtlArguments.commandNameHint(["prepare", "--json"]), "prepare")
+        XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.invalidDuration), "invalid or missing --duration")
+        XCTAssertEqual(
+            ViftyCtlArguments.humanReadableParseError(.unknownCommand("frobnicate")),
+            "unknown command 'frobnicate'"
+        )
+    }
+
     func testParsesRunCommandAndChildArguments() throws {
         let command = try ViftyCtlArguments.parse([
             "run",
@@ -196,15 +285,86 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "swift", "test", "--json", "--filter", "ViftyCtlArgumentsTests"
         ])
 
-        guard case let .run(request, childArguments, _) = command else {
+        guard case let .run(request, childArguments, json, _) = command else {
             return XCTFail("Expected run command")
         }
 
+        XCTAssertFalse(json)
         XCTAssertEqual(request.workload, .test)
         XCTAssertEqual(request.durationSeconds, 600)
         XCTAssertEqual(request.maxRPMPercent, 70)
         XCTAssertEqual(request.reason, "swift test")
         XCTAssertEqual(childArguments, ["swift", "test", "--json", "--filter", "ViftyCtlArgumentsTests"])
+    }
+
+    func testRunUnknownWrapperOptionBeforeSeparatorThrows() {
+        assertParseError([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--cooler",
+            "--",
+            "swift", "test"
+        ], equals: .unknownOption("--cooler"))
+    }
+
+    func testRunJSONFlagBeforeSeparatorEnablesWrapperJSON() throws {
+        let command = try ViftyCtlArguments.parse([
+            "run",
+            "--json",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--",
+            "swift", "test"
+        ])
+
+        guard case let .run(_, childArguments, json, force) = command else {
+            return XCTFail("Expected run command")
+        }
+
+        XCTAssertTrue(json)
+        XCTAssertFalse(force)
+        XCTAssertEqual(childArguments, ["swift", "test"])
+    }
+
+    func testRunForceFlagBeforeSeparatorEnablesForce() throws {
+        let command = try ViftyCtlArguments.parse([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--force",
+            "--",
+            "swift", "test"
+        ])
+
+        guard case let .run(_, _, json, force) = command else {
+            return XCTFail("Expected run command")
+        }
+
+        XCTAssertFalse(json)
+        XCTAssertTrue(force)
+    }
+
+    func testRunChildForceFlagAfterSeparatorDoesNotEnableForce() throws {
+        let command = try ViftyCtlArguments.parse([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--",
+            "swift", "test", "--force"
+        ])
+
+        guard case let .run(_, childArguments, json, force) = command else {
+            return XCTFail("Expected run command")
+        }
+
+        XCTAssertEqual(childArguments, ["swift", "test", "--force"])
+        XCTAssertFalse(json)
+        XCTAssertFalse(force)
     }
 
     private func assertParseError(

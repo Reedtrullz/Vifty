@@ -36,8 +36,8 @@ final class AppModel: ObservableObject {
     private let now: @Sendable () -> Date
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async -> AgentControlStatus?
-    private let agentRestore: @Sendable (String) async -> AgentControlStatus?
-    private let profileStore = CurveProfileStore()
+    private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
+    private let profileStore: CurveProfileStore
     private var pollingTask: Task<Void, Never>?
 
     init(
@@ -49,9 +49,10 @@ final class AppModel: ObservableObject {
         agentStatusReader: @escaping @Sendable () async -> AgentControlStatus? = {
             try? await ViftyDaemonClient().agentControlStatus()
         },
-        agentRestore: @escaping @Sendable (String) async -> AgentControlStatus? = { reason in
-            try? await ViftyDaemonClient().restoreAgentControl(reason: reason)
-        }
+        agentRestore: @escaping @Sendable (String) async throws -> AgentControlStatus? = { reason in
+            try await ViftyDaemonClient().restoreAgentControl(reason: reason)
+        },
+        profileStore: CurveProfileStore = CurveProfileStore()
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
@@ -60,6 +61,7 @@ final class AppModel: ObservableObject {
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
+        self.profileStore = profileStore
         savedProfiles = profileStore.load()
     }
 
@@ -131,18 +133,27 @@ final class AppModel: ObservableObject {
         let mode = selectedFanMode()
         updateManualDeadline(for: mode)
         await coordinator.setMode(mode)
+        let agentRestoreError: String?
         if mode == .auto {
-            await clearAgentLeaseForUserAutoIfNeeded()
+            agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
+        } else {
+            agentRestoreError = nil
         }
         await pollOnce()
+        if let agentRestoreError {
+            lastError = agentRestoreError
+        }
     }
 
     func restoreAutoNow() async {
         selectedMode = .auto
         manualSessionExpiresAt = nil
         await coordinator.setMode(.auto)
-        await clearAgentLeaseForUserAutoIfNeeded()
+        let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
         await pollOnce()
+        if let agentRestoreError {
+            lastError = agentRestoreError
+        }
     }
 
     func saveCurrentProfile(name: String) {
@@ -162,7 +173,7 @@ final class AppModel: ObservableObject {
         } else {
             savedProfiles.append(profile)
         }
-        profileStore.save(savedProfiles)
+        persistProfiles()
     }
 
     func loadProfile(_ profile: CurveProfile) {
@@ -175,12 +186,23 @@ final class AppModel: ObservableObject {
         selectedSensorID = profile.sensorID
         fanOverrides = profile.fanOverrides
         usePerFanOverrides = !profile.fanOverrides.isEmpty
+        if let fans = snapshot?.fans, usePerFanOverrides {
+            ensureFanOverrides(for: fans)
+        }
         applyModeSelection()
     }
 
     func deleteProfile(_ profile: CurveProfile) {
         savedProfiles.removeAll { $0.id == profile.id }
-        profileStore.save(savedProfiles)
+        persistProfiles()
+    }
+
+    private func persistProfiles() {
+        do {
+            try profileStore.saveThrowing(savedProfiles)
+        } catch {
+            lastError = "Failed to save profiles: \(error.localizedDescription)"
+        }
     }
 
     func targetRPMPreview(for fan: Fan) -> Int? {
@@ -191,6 +213,37 @@ final class AppModel: ObservableObject {
             minimumRPM: fan.minimumRPM,
             maximumRPM: fan.maximumRPM
         )
+    }
+
+    func ensureFanOverrides(for fans: [Fan]) {
+        let existingByFanID = fanOverrides.reduce(into: [Int: FanCurveOverride]()) { overridesByID, override in
+            overridesByID[override.fanID] = override
+        }
+        fanOverrides = fans.map { fan in
+            existingByFanID[fan.id] ?? defaultFanOverride(for: fan)
+        }
+    }
+
+    func fanOverride(for fanID: Int) -> FanCurveOverride? {
+        fanOverrides.first { $0.fanID == fanID }
+    }
+
+    func setOverrideStartRPM(_ rpm: Int, for fan: Fan) {
+        updateFanOverride(for: fan) { override in
+            override.startRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        }
+    }
+
+    func setOverrideMidRPM(_ rpm: Int, for fan: Fan) {
+        updateFanOverride(for: fan) { override in
+            override.midRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        }
+    }
+
+    func setOverrideMaxRPM(_ rpm: Int, for fan: Fan) {
+        updateFanOverride(for: fan) { override in
+            override.maxRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        }
     }
 
     var selectedSensor: TemperatureSensor? {
@@ -219,10 +272,37 @@ final class AppModel: ObservableObject {
         if let thermal = thermalPressure.menuSummary {
             parts.append(thermal)
         }
-        if agentControlStatus?.activeLease != nil {
-            parts.append("Agent cooling")
+        if let agentCoolingMenuSummary {
+            parts.append(agentCoolingMenuSummary)
         }
         return parts.joined(separator: " | ")
+    }
+
+    var agentCoolingMenuSummary: String? {
+        guard let lease = agentControlStatus?.activeLease else { return nil }
+        return lease.isActive(at: now()) ? "Agent cooling" : "Agent restore pending"
+    }
+
+    var agentCoolingSummary: String? {
+        guard let lease = agentControlStatus?.activeLease else { return nil }
+
+        let state = if lease.isActive(at: now()) {
+            "Agent \(lease.request.workload.displayName) cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))"
+        } else {
+            "Agent \(lease.request.workload.displayName) cooling expired; waiting for Auto restore"
+        }
+
+        let targets = lease.targetRPMByFanID
+            .sorted { $0.key < $1.key }
+            .map { "F\($0.key) \($0.value) RPM" }
+            .joined(separator: ", ")
+
+        return targets.isEmpty ? state : "\(state) · \(targets)"
+    }
+
+    var agentCoolingNeedsAttention: Bool {
+        guard let lease = agentControlStatus?.activeLease else { return false }
+        return !lease.isActive(at: now())
     }
 
     var helperHealthSummary: String {
@@ -297,9 +377,13 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    private func clearAgentLeaseForUserAutoIfNeeded() async {
-        if agentControlStatus?.activeLease != nil {
-            agentControlStatus = await agentRestore("User selected Auto in Vifty")
+    private func clearAgentLeaseForUserAutoIfNeeded() async -> String? {
+        guard agentControlStatus?.activeLease != nil else { return nil }
+        do {
+            agentControlStatus = try await agentRestore("User selected Auto in Vifty")
+            return nil
+        } catch {
+            return "Failed to clear agent cooling lease after Auto restore: \(error.localizedDescription)"
         }
     }
 
@@ -311,6 +395,30 @@ final class AppModel: ObservableObject {
             selectedSensorID = selectedSensor?.id
         }
         curveDefaultsSynced = true
+    }
+
+    private func defaultFanOverride(for fan: Fan) -> FanCurveOverride {
+        FanCurveOverride(
+            fanID: fan.id,
+            startRPM: FanCurve.clamp(Int(curveStartRPM.rounded()), fan.minimumRPM, fan.maximumRPM),
+            midRPM: FanCurve.clamp(Int(curveMidRPM.rounded()), fan.minimumRPM, fan.maximumRPM),
+            maxRPM: FanCurve.clamp(Int(curveMaxRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+        )
+    }
+
+    private func updateFanOverride(for fan: Fan, mutate: (inout FanCurveOverride) -> Void) {
+        if let index = fanOverrides.firstIndex(where: { $0.fanID == fan.id }) {
+            mutate(&fanOverrides[index])
+        } else {
+            var override = defaultFanOverride(for: fan)
+            mutate(&override)
+            fanOverrides.append(override)
+        }
+        fanOverrides = fanOverrides.reduce(into: [Int: FanCurveOverride]()) { overridesByID, override in
+            overridesByID[override.fanID] = override
+        }
+        .sorted { $0.key < $1.key }
+        .map(\.value)
     }
 
     private func syncState() async {

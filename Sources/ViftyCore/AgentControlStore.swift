@@ -15,10 +15,17 @@ public struct AgentControlAuditEvent: Codable, Equatable, Sendable {
 }
 
 public struct AgentControlStore: Sendable {
-    private let directory: URL
+    public static let defaultMaximumAuditEvents = 2_000
 
-    public init(directory: URL = URL(fileURLWithPath: "/Library/Application Support/Vifty/AgentControl", isDirectory: true)) {
+    private let directory: URL
+    private let maximumAuditEvents: Int
+
+    public init(
+        directory: URL = URL(fileURLWithPath: "/Library/Application Support/Vifty/AgentControl", isDirectory: true),
+        maximumAuditEvents: Int = Self.defaultMaximumAuditEvents
+    ) {
         self.directory = directory
+        self.maximumAuditEvents = max(1, maximumAuditEvents)
     }
 
     public func saveActiveLease(_ lease: AgentCoolingLease?) throws {
@@ -49,7 +56,26 @@ public struct AgentControlStore: Sendable {
             try handle.write(contentsOf: data)
         } else {
             try data.write(to: url, options: .atomic)
-            try restrictFilePermissions(at: url)
+        }
+        try trimAuditFileIfNeeded(at: url)
+        try restrictFilePermissions(at: url)
+    }
+
+    public func loadRecentAuditEvents(limit: Int = Self.defaultMaximumAuditEvents) throws -> [AgentControlAuditEvent] {
+        let url = directory.appendingPathComponent("audit.jsonl")
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+
+        let retainedLimit = max(1, limit)
+        let data = try Data(contentsOf: url)
+        let lines = String(decoding: data, as: UTF8.self)
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+
+        return try lines.suffix(retainedLimit).map { line in
+            guard let lineData = line.data(using: .utf8) else {
+                throw ViftyError.helperRejected("Could not decode audit event as UTF-8.")
+            }
+            return try decoder.decode(AgentControlAuditEvent.self, from: lineData)
         }
     }
 
@@ -78,5 +104,17 @@ public struct AgentControlStore: Sendable {
             [.posixPermissions: NSNumber(value: 0o600)],
             ofItemAtPath: url.path
         )
+    }
+
+    private func trimAuditFileIfNeeded(at url: URL) throws {
+        let data = try Data(contentsOf: url)
+        let lines = String(decoding: data, as: UTF8.self)
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+
+        guard lines.count > maximumAuditEvents else { return }
+
+        let retained = lines.suffix(maximumAuditEvents).joined(separator: "\n") + "\n"
+        try Data(retained.utf8).write(to: url, options: .atomic)
     }
 }

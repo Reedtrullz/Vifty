@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+  "title": "viftyctl --json command error report",
+  "description": "Machine-readable command or pre-child wrapper failure emitted by viftyctl when --json is present. safeToProceed is always false for this report.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "command",
+    "errorCode",
+    "message",
+    "safeToProceed",
+    "generatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "command": {
+      "type": "string"
+    },
+    "errorCode": {
+      "oneOf": [
+        {
+          "enum": [
+            "AGENT_CONTROL_DISABLED",
+            "UNSUPPORTED_HARDWARE",
+            "HELPER_UNREACHABLE",
+            "TEMP_SENSOR_UNAVAILABLE",
+            "NO_CONTROLLABLE_FANS",
+            "POLICY_DENIED",
+            "DURATION_TOO_LONG",
+            "RPM_OUT_OF_RANGE",
+            "THERMAL_CRITICAL",
+            "LEASE_NOT_FOUND",
+            "RESTORE_FAILED",
+            "INVALID_ARGUMENTS",
+            "PREPARE_RATE_LIMITED",
+            "RESTORE_REQUESTED"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "safeToProceed": {
+      "const": false
+    },
+    "generatedAt": {
+      "description": "Swift JSONEncoder date value emitted by the CLI.",
+      "type": "number"
+    }
+  }
+}

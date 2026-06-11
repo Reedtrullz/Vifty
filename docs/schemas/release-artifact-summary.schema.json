@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/release-artifact-summary.schema.json",
+  "title": "Vifty release artifact verification summary",
+  "description": "Machine-readable summary written by scripts/verify-release-artifact.sh for pre-publish and post-publish release trust evidence.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "status",
+    "generatedAtUTC",
+    "caskVersion",
+    "caskURL",
+    "expectedArtifactName",
+    "artifactPath",
+    "appPath",
+    "bundleVersion",
+    "expectedSHA",
+    "expectedSHASource",
+    "actualSHA",
+    "expectedTeamID",
+    "requiredTeamID",
+    "signatureChecksSkipped",
+    "notarizationChecksSkipped",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/release-artifact-summary.schema.json"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "generatedAtUTC": {
+      "type": "string"
+    },
+    "caskVersion": {
+      "type": "string"
+    },
+    "caskURL": {
+      "type": "string"
+    },
+    "expectedArtifactName": {
+      "type": "string"
+    },
+    "artifactPath": {
+      "type": "string"
+    },
+    "appPath": {
+      "type": "string"
+    },
+    "bundleVersion": {
+      "type": "string"
+    },
+    "expectedSHA": {
+      "type": "string"
+    },
+    "expectedSHASource": {
+      "enum": [
+        "cask sha256",
+        "expected sha256"
+      ]
+    },
+    "actualSHA": {
+      "type": "string"
+    },
+    "expectedTeamID": {
+      "type": "string"
+    },
+    "requiredTeamID": {
+      "type": "string"
+    },
+    "signatureChecksSkipped": {
+      "type": "boolean"
+    },
+    "notarizationChecksSkipped": {
+      "type": "boolean"
+    },
+    "failureCheck": {
+      "type": "string"
+    },
+    "failureMessage": {
+      "type": "string"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/releaseCheck"
+      }
+    }
+  },
+  "$defs": {
+    "releaseCheck": {
+      "type": "object",
+      "required": [
+        "name",
+        "status",
+        "scope",
+        "note"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "skipped",
+            "failed"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

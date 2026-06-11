@@ -29,6 +29,18 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         }
     }
 
+    func agentControlAudit(_ limit: Int, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
+        let agentControl = self.agentControl
+        Task {
+            do {
+                let events = try await agentControl.auditEvents(limit: limit)
+                reply(XPCAgentControlCoding.encodeAuditEvents(events), nil)
+            } catch {
+                reply(nil, error.localizedDescription)
+            }
+        }
+    }
+
     func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
         guard let decoded = XPCAgentControlCoding.decodeRequest(request) else {
             reply(nil, AgentControlErrorCode.invalidArguments.rawValue)
@@ -118,16 +130,13 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
 private final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     private let service = DaemonService()
     private let identityExtractor = XPCConnectionIdentityExtractor()
-    // XPC clients must match signing identifier. TeamID is nil by default
-    // so anyone who clones and builds gets a working app (ad-hoc signed).
-    // Opt-in: set SIGNING_IDENTITY and teamIdentifier to your Apple Developer
-    // TeamID to prevent other ad-hoc binaries from connecting to the daemon.
-    // Run `codesign -dvvv .build/Vifty.app 2>&1 | grep TeamIdentifier`
-    // to find your embedded TeamIdentifier.
-    private let validator = XPCClientValidator(allowedClients: [
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil),
-        XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)
-    ])
+    // XPC clients must match signing identifier. The TeamID requirement is
+    // empty by default so ad-hoc local builds keep working. Release packaging
+    // should set VIFTY_XPC_ALLOWED_TEAM_ID in the LaunchDaemon plist to require
+    // Developer ID signed clients from that team.
+    private let validator = XPCClientValidator(allowedClients: XPCTrustConfiguration.allowedClients(
+        releaseTeamIdentifier: XPCTrustConfiguration.releaseTeamIdentifier(from: ProcessInfo.processInfo.environment)
+    ))
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         guard validator.isAllowed(identityExtractor.identity(for: connection)) else {

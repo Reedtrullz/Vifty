@@ -22,14 +22,17 @@ final class XPCAgentControlCodingTests: XCTestCase {
                 expiresAt: created.addingTimeInterval(600),
                 targetRPMByFanID: [0: 3600]
             ),
-            lastDecision: .allowed(targetRPMByFanID: [0: 3600]),
-            lastErrorCode: nil
+            lastDecision: .denied(.prepareRateLimited, message: "Wait", retryAfterSeconds: 12),
+            lastErrorCode: .prepareRateLimited,
+            policy: AgentControlPolicy(enabled: true, minimumAgentRPMPercent: 40, maximumAllowedRPMPercent: 75, maxDurationSeconds: 1_800, prepareCooldownSeconds: 12).snapshot
         )
 
         let encoded = XPCAgentControlCoding.encode(status)
         let decoded = XPCAgentControlCoding.decodeStatus(encoded)
 
         XCTAssertEqual(decoded, status)
+        XCTAssertEqual(decoded?.lastDecision?.retryAfterSeconds, 12)
+        XCTAssertEqual(decoded?.policy?.maximumAllowedRPMPercent, 75)
     }
 
     func testOlderStatusWithoutLeaseStillDecodes() {
@@ -40,5 +43,28 @@ final class XPCAgentControlCodingTests: XCTestCase {
         XCTAssertEqual(decoded?.enabled, true)
         XCTAssertNil(decoded?.activeLease)
         XCTAssertNil(decoded?.lastDecision)
+        XCTAssertNil(decoded?.policy)
+    }
+
+    func testAuditEventsRoundTripThroughNSDictionary() {
+        let events = [
+            AgentControlAuditEvent(
+                timestamp: Date(timeIntervalSince1970: 1_000),
+                action: "prepare",
+                leaseID: "lease-1",
+                message: "Swift build"
+            ),
+            AgentControlAuditEvent(
+                timestamp: Date(timeIntervalSince1970: 1_001),
+                action: "restore-auto",
+                leaseID: nil,
+                message: "done"
+            )
+        ]
+
+        let encoded = XPCAgentControlCoding.encodeAuditEvents(events)
+        let decoded = XPCAgentControlCoding.decodeAuditEvents(encoded)
+
+        XCTAssertEqual(decoded, events)
     }
 }

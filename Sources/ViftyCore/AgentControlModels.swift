@@ -32,6 +32,7 @@ public enum AgentControlErrorCode: String, Codable, Equatable, Sendable {
     case restoreFailed = "RESTORE_FAILED"
     case invalidArguments = "INVALID_ARGUMENTS"
     case prepareRateLimited = "PREPARE_RATE_LIMITED"
+    case restoreRequested = "RESTORE_REQUESTED"
 }
 
 public struct AgentControlRequest: Codable, Equatable, Sendable {
@@ -56,13 +57,30 @@ public struct AgentControlDecision: Codable, Equatable, Sendable {
     public var message: String
     public var targetRPMByFanID: [Int: Int]
     public var warnings: [String]
+    public var retryAfterSeconds: Int?
 
     public static func allowed(targetRPMByFanID: [Int: Int], warnings: [String] = []) -> AgentControlDecision {
         AgentControlDecision(allowed: true, errorCode: nil, message: "Allowed", targetRPMByFanID: targetRPMByFanID, warnings: warnings)
     }
 
-    public static func denied(_ code: AgentControlErrorCode, message: String) -> AgentControlDecision {
-        AgentControlDecision(allowed: false, errorCode: code, message: message, targetRPMByFanID: [:], warnings: [])
+    public static func denied(_ code: AgentControlErrorCode, message: String, retryAfterSeconds: Int? = nil) -> AgentControlDecision {
+        AgentControlDecision(allowed: false, errorCode: code, message: message, targetRPMByFanID: [:], warnings: [], retryAfterSeconds: retryAfterSeconds)
+    }
+
+    public init(
+        allowed: Bool,
+        errorCode: AgentControlErrorCode?,
+        message: String,
+        targetRPMByFanID: [Int: Int],
+        warnings: [String],
+        retryAfterSeconds: Int? = nil
+    ) {
+        self.allowed = allowed
+        self.errorCode = errorCode
+        self.message = message
+        self.targetRPMByFanID = targetRPMByFanID
+        self.warnings = warnings
+        self.retryAfterSeconds = retryAfterSeconds
     }
 }
 
@@ -93,11 +111,41 @@ public struct AgentControlStatus: Codable, Equatable, Sendable {
     public var activeLease: AgentCoolingLease?
     public var lastDecision: AgentControlDecision?
     public var lastErrorCode: AgentControlErrorCode?
+    public var policy: AgentControlPolicySnapshot?
 
-    public init(enabled: Bool, activeLease: AgentCoolingLease?, lastDecision: AgentControlDecision?, lastErrorCode: AgentControlErrorCode?) {
+    public init(
+        enabled: Bool,
+        activeLease: AgentCoolingLease?,
+        lastDecision: AgentControlDecision?,
+        lastErrorCode: AgentControlErrorCode?,
+        policy: AgentControlPolicySnapshot? = nil
+    ) {
         self.enabled = enabled
         self.activeLease = activeLease
         self.lastDecision = lastDecision
         self.lastErrorCode = lastErrorCode
+        self.policy = policy
+    }
+}
+
+public struct AgentControlPolicySnapshot: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    public var minimumAgentRPMPercent: Int
+    public var maximumAllowedRPMPercent: Int
+    public var maxDurationSeconds: Int
+    public var prepareCooldownSeconds: Int
+
+    public init(
+        enabled: Bool,
+        minimumAgentRPMPercent: Int,
+        maximumAllowedRPMPercent: Int,
+        maxDurationSeconds: Int,
+        prepareCooldownSeconds: Int
+    ) {
+        self.enabled = enabled
+        self.minimumAgentRPMPercent = minimumAgentRPMPercent
+        self.maximumAllowedRPMPercent = maximumAllowedRPMPercent
+        self.maxDurationSeconds = maxDurationSeconds
+        self.prepareCooldownSeconds = prepareCooldownSeconds
     }
 }

@@ -23,6 +23,12 @@ final class FanDisplayFormatterTests: XCTestCase {
         XCTAssertEqual(FanDisplayFormatter.subtitle(for: fan), "Auto")
     }
 
+    func testSystemFanSubtitleShowsSystemMode() {
+        let fan = Fan(id: 0, name: "Left Fan", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .system)
+
+        XCTAssertEqual(FanDisplayFormatter.subtitle(for: fan), "System")
+    }
+
     func testUnknownFanSubtitleWhenHardwareModeMissing() {
         let fan = Fan(id: 0, name: "Left Fan", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true)
 

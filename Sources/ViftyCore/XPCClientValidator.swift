@@ -1,3 +1,5 @@
+import Foundation
+
 public struct XPCClientIdentity: Equatable, Sendable {
     public let signingIdentifier: String?
     public let teamIdentifier: String?
@@ -49,5 +51,26 @@ public struct XPCClientValidator: Sendable {
             }
             return true // nil team requirement → skip team check entirely
         }
+    }
+}
+
+public enum XPCTrustConfiguration {
+    public static let appSigningIdentifier = "tech.reidar.vifty"
+    public static let ctlSigningIdentifier = "tech.reidar.vifty.ctl"
+    public static let teamEnvironmentKey = "VIFTY_XPC_ALLOWED_TEAM_ID"
+
+    public static func releaseTeamIdentifier(from environment: [String: String]) -> String? {
+        guard let rawValue = environment[teamEnvironmentKey] else {
+            return nil
+        }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    public static func allowedClients(releaseTeamIdentifier: String?) -> [XPCAllowedClient] {
+        [
+            XPCAllowedClient(signingIdentifier: appSigningIdentifier, teamIdentifier: releaseTeamIdentifier),
+            XPCAllowedClient(signingIdentifier: ctlSigningIdentifier, teamIdentifier: releaseTeamIdentifier)
+        ]
     }
 }

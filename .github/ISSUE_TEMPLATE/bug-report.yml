@@ -3,6 +3,13 @@ description: Report a bug in Vifty
 title: "[Bug]: "
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not open public issues for security vulnerabilities. Use GitHub Security Advisories instead.
+
+        For fan, sensor, helper, or agent-cooling bugs, start with read-only diagnostics where possible.
+
   - type: input
     id: macos-version
     attributes:
@@ -18,8 +25,10 @@ body:
       label: Mac model
       description: What kind of Mac are you using?
       options:
-        - Apple Silicon (M1/M2/M3/M4)
-        - Intel
+        - Apple Silicon MacBook Pro
+        - Apple Silicon non-MacBook-Pro
+        - Intel MacBook Pro
+        - Intel non-MacBook-Pro
     validations:
       required: true
 
@@ -33,15 +42,44 @@ body:
       required: true
 
   - type: textarea
-    id: smc-key-dump
+    id: readiness-diagnostics
     attributes:
-      label: SMC key dump (optional)
+      label: Readiness diagnostics
       description: |
-        If the bug involves fan speed or temperature readings, please attach the output of:
-        `viftyctl smcDiagnostics` or `viftyhelper smcDiagnostics`
+        If the bug involves fan speed, temperature readings, helper install, or agent/build/test cooling, paste:
+        `/Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json`
+      render: json
       placeholder: |
-        Key: F0Tg [flt ] (bytes: 0a 63 94) = 44.6 °C
-        Key: F0Ac [flt ] (bytes: 00 00 00) = 0.0 RPM
+        {
+          "state": "blocked",
+          "checks": []
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: helper-probe
+    attributes:
+      label: Helper probe output
+      description: |
+        For hardware/sensor/fan bugs, paste the output of:
+        `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal`
+      render: text
+      placeholder: |
+        model=MacBookPro18,3 appleSilicon=true macBookPro=true
+        fans=2
+        fan[0] name="Left Fan" rpm=2100 min=1400 max=6000 controllable=true
+    validations:
+      required: false
+
+  - type: textarea
+    id: agent-command
+    attributes:
+      label: Agent or build/test command
+      description: If the bug involves `viftyctl prepare`, `restore-auto`, or `run`, paste the exact command and stdout/stderr.
+      render: shell
+      placeholder: |
+        /Applications/Vifty.app/Contents/MacOS/viftyctl run --workload test --duration 20m --max-rpm-percent 70 -- swift test
     validations:
       required: false
 

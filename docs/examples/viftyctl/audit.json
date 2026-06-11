@@ -1,0 +1,22 @@
+{
+  "coolingCommandsRun": false,
+  "eventCount": 2,
+  "events": [
+    {
+      "action": "prepare",
+      "leaseID": "lease-example-test",
+      "message": "swift test",
+      "timestamp": 700000000
+    },
+    {
+      "action": "restore-auto",
+      "leaseID": "lease-example-test",
+      "message": "viftyctl run child exited with 0",
+      "timestamp": 700000600
+    }
+  ],
+  "generatedAt": 700000900,
+  "limit": 20,
+  "readOnly": true,
+  "schemaVersion": 1
+}

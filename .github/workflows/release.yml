@@ -1,0 +1,172 @@
+name: Release
+
+"on":
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, e.g. v1.0.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  signed-notarized-app:
+    name: Signed and notarized app
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Validate release version
+        run: |
+          set -euo pipefail
+          TAG="${RELEASE_TAG}"
+          VERSION="${TAG#v}"
+          BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          if [[ "${TAG}" == "${VERSION}" ]]; then
+            echo "Release tag must start with v, e.g. v1.0.1" >&2
+            exit 1
+          fi
+          if [[ "${VERSION}" != "${BUNDLE_VERSION}" ]]; then
+            echo "Release version ${VERSION} does not match CFBundleShortVersionString ${BUNDLE_VERSION}" >&2
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Validate release metadata
+        run: scripts/validate-release-metadata.sh
+
+      - name: Require signing and notarization secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_IDENTITY }}
+          DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in \
+            APPLE_TEAM_ID \
+            APPLE_ID \
+            APPLE_APP_SPECIFIC_PASSWORD \
+            DEVELOPER_ID_APPLICATION_IDENTITY \
+            DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 \
+            DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD
+          do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required release secret: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          KEYCHAIN_PATH="${RUNNER_TEMP}/vifty-release.keychain-db"
+          CERTIFICATE_PATH="${RUNNER_TEMP}/developer-id-application.p12"
+          echo "${CERTIFICATE_BASE64}" | base64 --decode > "${CERTIFICATE_PATH}"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security import "${CERTIFICATE_PATH}" -k "${KEYCHAIN_PATH}" -P "${CERTIFICATE_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s "${KEYCHAIN_PATH}" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build signed app
+        env:
+          SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_IDENTITY }}
+          VIFTY_XPC_ALLOWED_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          make app CONFIGURATION=release SIGNING_IDENTITY="${SIGNING_IDENTITY}" VIFTY_XPC_ALLOWED_TEAM_ID="${VIFTY_XPC_ALLOWED_TEAM_ID}"
+          plutil -lint .build/Vifty.app/Contents/Info.plist
+          plutil -lint .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+          codesign --verify --deep --strict .build/Vifty.app
+          codesign -dvvv .build/Vifty.app 2>&1 | grep "TeamIdentifier=${VIFTY_XPC_ALLOWED_TEAM_ID}"
+          codesign -dvvv .build/Vifty.app/Contents/MacOS/viftyctl 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
+          /usr/bin/plutil -extract EnvironmentVariables.VIFTY_XPC_ALLOWED_TEAM_ID raw -o - .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist | grep "^${VIFTY_XPC_ALLOWED_TEAM_ID}$"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          NOTARY_ZIP="${RUNNER_TEMP}/Vifty-${VERSION}-notary.zip"
+          ditto -c -k --keepParent .build/Vifty.app "${NOTARY_ZIP}"
+          xcrun notarytool submit "${NOTARY_ZIP}" \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --wait
+          xcrun stapler staple .build/Vifty.app
+          xcrun stapler validate .build/Vifty.app
+          /usr/sbin/spctl --assess --type execute --verbose .build/Vifty.app
+
+      - name: Create release artifacts
+        run: |
+          set -euo pipefail
+          ZIP_PATH=".build/Vifty-v${VERSION}.zip"
+          CHECKSUM_PATH="${ZIP_PATH}.sha256"
+          SUMMARY_PATH=".build/Vifty-v${VERSION}-artifact-summary.json"
+          ditto -c -k --keepParent .build/Vifty.app "${ZIP_PATH}"
+          shasum -a 256 "${ZIP_PATH}" | tee "${CHECKSUM_PATH}"
+          echo "ZIP_PATH=${ZIP_PATH}" >> "${GITHUB_ENV}"
+          echo "CHECKSUM_PATH=${CHECKSUM_PATH}" >> "${GITHUB_ENV}"
+          echo "SUMMARY_PATH=${SUMMARY_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Verify release artifact before publish
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="$(awk '{print $1}' "${CHECKSUM_PATH}")"
+          scripts/verify-release-artifact.sh \
+            --artifact "${ZIP_PATH}" \
+            --expected-sha "${EXPECTED_SHA}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --summary "${SUMMARY_PATH}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${RELEASE_TAG}" \
+            "${ZIP_PATH}#Vifty ${VERSION} notarized app" \
+            "${CHECKSUM_PATH}#Vifty ${VERSION} SHA-256 checksum" \
+            "${SUMMARY_PATH}#Vifty ${VERSION} release artifact verification summary" \
+            --title "Vifty ${VERSION}" \
+            --generate-notes \
+            --verify-tag

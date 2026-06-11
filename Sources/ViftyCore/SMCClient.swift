@@ -141,6 +141,10 @@ public final class SMCClient: @unchecked Sendable {
     }
 
     public func write(_ key: String, dataType: String, bytes: [UInt8]) throws {
+        guard Self.isAllowedWriteKey(key) else {
+            throw ViftyError.smcWriteRejected(key)
+        }
+
         var infoInput = SMCKeyData()
         infoInput.key = Self.fourCharCode(key)
         infoInput.data8 = 9
@@ -159,6 +163,22 @@ public final class SMCClient: @unchecked Sendable {
 
         let output = try call(input)
         guard output.result == 0 else { throw ViftyError.smcKeyUnavailable(key) }
+    }
+
+    public static func isAllowedWriteKey(_ key: String) -> Bool {
+        let bytes = Array(key.utf8)
+        guard bytes.count == 4 else { return false }
+
+        if key == "Ftst" { return true }
+
+        guard bytes[0] == UInt8(ascii: "F"),
+              (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[1]) else {
+            return false
+        }
+
+        return (bytes[2] == UInt8(ascii: "M") && bytes[3] == UInt8(ascii: "d"))
+            || (bytes[2] == UInt8(ascii: "m") && bytes[3] == UInt8(ascii: "d"))
+            || (bytes[2] == UInt8(ascii: "T") && bytes[3] == UInt8(ascii: "g"))
     }
 
     private func call(_ input: SMCKeyData) throws -> SMCKeyData {

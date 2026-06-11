@@ -7,12 +7,22 @@ public struct AgentControlPolicy: Equatable, Sendable {
     public var maxDurationSeconds: Int
     public var prepareCooldownSeconds: Int
 
-    public init(enabled: Bool = false, minimumAgentRPMPercent: Int = 35, maximumAllowedRPMPercent: Int = 80, maxDurationSeconds: Int = 60 * 60, prepareCooldownSeconds: Int = 30) {
+    public init(enabled: Bool = false, minimumAgentRPMPercent: Int = 35, maximumAllowedRPMPercent: Int = 80, maxDurationSeconds: Int = 30 * 60, prepareCooldownSeconds: Int = 30) {
         self.enabled = enabled
         self.minimumAgentRPMPercent = minimumAgentRPMPercent
         self.maximumAllowedRPMPercent = maximumAllowedRPMPercent
         self.maxDurationSeconds = maxDurationSeconds
         self.prepareCooldownSeconds = prepareCooldownSeconds
+    }
+
+    public var snapshot: AgentControlPolicySnapshot {
+        AgentControlPolicySnapshot(
+            enabled: enabled,
+            minimumAgentRPMPercent: minimumAgentRPMPercent,
+            maximumAllowedRPMPercent: maximumAllowedRPMPercent,
+            maxDurationSeconds: maxDurationSeconds,
+            prepareCooldownSeconds: prepareCooldownSeconds
+        )
     }
 
     public func evaluate(_ request: AgentControlRequest, snapshot: HardwareSnapshot, thermalPressure: ThermalPressure) -> AgentControlDecision {
@@ -30,6 +40,9 @@ public struct AgentControlPolicy: Equatable, Sendable {
         for fan in controllableFans {
             guard seenFanIDs.insert(fan.id).inserted else {
                 return .denied(.policyDenied, message: "Controllable fan telemetry contains duplicate fan ID \(fan.id).")
+            }
+            guard SMCFanControlKeys.isValidFanID(fan.id) else {
+                return .denied(.policyDenied, message: "Controllable fan telemetry contains invalid fan ID \(fan.id); SMC fan IDs must be 0 through 9.")
             }
             guard fan.maximumRPM > 0, fan.minimumRPM >= 0, fan.minimumRPM <= fan.maximumRPM else {
                 return .denied(.policyDenied, message: "Controllable fan telemetry contains an invalid RPM range for fan ID \(fan.id).")

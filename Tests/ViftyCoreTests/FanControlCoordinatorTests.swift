@@ -199,6 +199,59 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertTrue(commands.contains(FanCommand(fanID: 1, mode: .fixedRPM(4200))))
     }
 
+    func testCurveWithDuplicatePerFanOverridesUsesLastOverrideWithoutTrapping() async throws {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [
+                    Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1500, maximumRPM: 4500, controllable: true)
+                ],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        let curve = FanCurve(sensorID: nil, points: [
+            CurvePoint(temperatureCelsius: 40, rpm: 2000),
+            CurvePoint(temperatureCelsius: 60, rpm: 4000),
+            CurvePoint(temperatureCelsius: 85, rpm: 5500)
+        ])
+        let overrides = [
+            FanCurveOverride(fanID: 1, startRPM: 2200, midRPM: 4200, maxRPM: 4500),
+            FanCurveOverride(fanID: 1, startRPM: 2300, midRPM: 4300, maxRPM: 4500)
+        ]
+
+        try await coordinator.applyCurveWithOverrides(curve, fanOverrides: overrides, snapshot: hardware.snapshotValue)
+
+        let commands = await hardware.appliedCommands
+        XCTAssertEqual(commands, [FanCommand(fanID: 1, mode: .fixedRPM(4300))])
+    }
+
+    func testCurveOverrideFallsBackToSharedCurveWhenBaseCurveHasFewerThanThreePoints() async throws {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [
+                    Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1500, maximumRPM: 4500, controllable: true)
+                ],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        let curve = FanCurve(sensorID: nil, points: [
+            CurvePoint(temperatureCelsius: 60, rpm: 4000)
+        ])
+        let overrides = [FanCurveOverride(fanID: 1, startRPM: 2200, midRPM: 4200, maxRPM: 4500)]
+
+        try await coordinator.applyCurveWithOverrides(curve, fanOverrides: overrides, snapshot: hardware.snapshotValue)
+
+        let commands = await hardware.appliedCommands
+        XCTAssertEqual(commands, [FanCommand(fanID: 1, mode: .fixedRPM(4000))])
+    }
+
     private static func fan(minimumRPM: Int = 1400, maximumRPM: Int = 6000) -> Fan {
         Fan(id: 0, name: "Left Fan", currentRPM: minimumRPM, minimumRPM: minimumRPM, maximumRPM: maximumRPM, controllable: true)
     }

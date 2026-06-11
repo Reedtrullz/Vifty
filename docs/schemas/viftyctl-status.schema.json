@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-status.schema.json",
+  "title": "viftyctl status --json report",
+  "description": "Machine-readable agent-control status emitted by viftyctl status --json, prepare --json, and restore-auto --json.",
+  "type": "object",
+  "required": [
+    "enabled",
+    "activeLease",
+    "lastDecision",
+    "lastErrorCode",
+    "policy"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "activeLease": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/lease"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lastDecision": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/decision"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lastErrorCode": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/errorCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "policy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/policy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "workload": {
+      "enum": [
+        "build",
+        "test",
+        "render",
+        "localModel",
+        "custom"
+      ]
+    },
+    "errorCode": {
+      "enum": [
+        "AGENT_CONTROL_DISABLED",
+        "UNSUPPORTED_HARDWARE",
+        "HELPER_UNREACHABLE",
+        "TEMP_SENSOR_UNAVAILABLE",
+        "NO_CONTROLLABLE_FANS",
+        "POLICY_DENIED",
+        "DURATION_TOO_LONG",
+        "RPM_OUT_OF_RANGE",
+        "THERMAL_CRITICAL",
+        "LEASE_NOT_FOUND",
+        "RESTORE_FAILED",
+        "INVALID_ARGUMENTS",
+        "PREPARE_RATE_LIMITED",
+        "RESTORE_REQUESTED"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "workload",
+        "durationSeconds",
+        "maxRPMPercent",
+        "reason",
+        "idempotencyKey"
+      ],
+      "properties": {
+        "workload": {
+          "$ref": "#/$defs/workload"
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "reason": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "required": [
+        "id",
+        "request",
+        "createdAt",
+        "expiresAt",
+        "targetRPMByFanID",
+        "restoredAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "expiresAt": {
+          "type": "number"
+        },
+        "targetRPMByFanID": {
+          "$ref": "#/$defs/fanRPMMap"
+        },
+        "restoredAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "allowed",
+        "errorCode",
+        "message",
+        "targetRPMByFanID",
+        "warnings",
+        "retryAfterSeconds"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "errorCode": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/errorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "targetRPMByFanID": {
+          "$ref": "#/$defs/fanRPMMap"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "retryAfterSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "minimumAgentRPMPercent",
+        "maximumAllowedRPMPercent",
+        "maxDurationSeconds",
+        "prepareCooldownSeconds"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minimumAgentRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maximumAllowedRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prepareCooldownSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "fanRPMMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  }
+}

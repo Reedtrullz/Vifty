@@ -40,7 +40,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ViftyCoreTests",
-            dependencies: ["ViftyCore", "Vifty"]
+            dependencies: ["ViftyCore", "Vifty", "ViftyCtl"]
         ),
         .target(
             name: "ViftyPrivateIOKit",

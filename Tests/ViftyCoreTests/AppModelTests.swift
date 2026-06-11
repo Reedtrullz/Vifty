@@ -31,6 +31,58 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.savedProfiles.count, 2)
     }
 
+    func testEnsureFanOverridesMatchesSavedOverridesByFanIDAndAddsMissingFans() {
+        let model = AppModel()
+        model.curveStartRPM = 1400
+        model.curveMidRPM = 3500
+        model.curveMaxRPM = 6000
+        model.fanOverrides = [
+            FanCurveOverride(fanID: 1, startRPM: 2200, midRPM: 4200, maxRPM: 5800)
+        ]
+        let fans = [
+            Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1400, maximumRPM: 6000, controllable: true),
+            Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)
+        ]
+
+        model.ensureFanOverrides(for: fans)
+
+        XCTAssertEqual(model.fanOverrides.map(\.fanID), [0, 1])
+        XCTAssertEqual(model.fanOverride(for: 0)?.startRPM, 1400)
+        XCTAssertEqual(model.fanOverride(for: 1)?.startRPM, 2200)
+        XCTAssertEqual(model.fanOverride(for: 1)?.midRPM, 4200)
+    }
+
+    func testSetFanOverrideUpdatesMatchingFanIDAndClampsToFanRange() {
+        let model = AppModel()
+        let left = Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1500, maximumRPM: 3000, controllable: true)
+        let right = Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1400, maximumRPM: 4500, controllable: true)
+        model.fanOverrides = [
+            FanCurveOverride(fanID: 1, startRPM: 2200, midRPM: 4200, maxRPM: 4400)
+        ]
+
+        model.setOverrideStartRPM(1000, for: left)
+        model.setOverrideMaxRPM(9999, for: right)
+
+        XCTAssertEqual(model.fanOverride(for: 0)?.startRPM, 1500)
+        XCTAssertEqual(model.fanOverride(for: 1)?.startRPM, 2200)
+        XCTAssertEqual(model.fanOverride(for: 1)?.maxRPM, 4500)
+    }
+
+    func testSaveProfileReportsProfileStoreFailure() throws {
+        let parentFile = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try Data("not a directory".utf8).write(to: parentFile)
+        let store = CurveProfileStore(url: parentFile.appendingPathComponent("curve-profiles.json"))
+        let model = AppModel(profileStore: store)
+        model.savedProfiles = []
+
+        model.saveCurrentProfile(name: "Quiet")
+
+        XCTAssertEqual(model.savedProfiles.count, 1)
+        XCTAssertTrue(model.lastError?.contains("Failed to save profiles") == true)
+    }
+
     func testCurveDefaultsOnlySyncOnce() {
         let model = AppModel()
         // Initially not synced.
@@ -281,6 +333,7 @@ final class AppModelTests: XCTestCase {
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
             daemonPing: { true },
             agentStatusReader: {
                 AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
@@ -294,6 +347,37 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
         XCTAssertTrue(model.menuTitle.contains("Agent cooling"))
+    }
+
+    func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(targetRPMByFanID: [1: 3700, 0: 3600]),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertEqual(model.agentCoolingMenuSummary, "Agent cooling")
+        XCTAssertFalse(model.agentCoolingNeedsAttention)
+        XCTAssertTrue(model.agentCoolingSummary?.contains("Agent Build cooling until") == true)
+        XCTAssertTrue(model.agentCoolingSummary?.contains("F0 3600 RPM, F1 3700 RPM") == true)
+    }
+
+    func testAgentCoolingSummaryWarnsWhenLeaseExpiredButUnrestored() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1700) })
+        model.snapshot = agentHardwareSnapshot()
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertEqual(model.agentCoolingMenuSummary, "Agent restore pending")
+        XCTAssertTrue(model.agentCoolingNeedsAttention)
+        XCTAssertTrue(model.agentCoolingSummary?.contains("expired; waiting for Auto restore") == true)
+        XCTAssertTrue(model.menuTitle.contains("Agent restore pending"))
     }
 
     func testRestoreAutoClearsDaemonOwnedAgentLease() async {
@@ -321,7 +405,36 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.agentControlStatus?.activeLease)
     }
 
-    private func agentLease() -> AgentCoolingLease {
+    func testRestoreAutoReportsAgentLeaseClearFailure() async {
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+            },
+            agentRestore: { _ in
+                throw ViftyError.helperRejected("Daemon connection invalidated.")
+            }
+        )
+
+        await model.pollOnce()
+        await model.restoreAutoNow()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
+        XCTAssertTrue(model.lastError?.contains("Failed to clear agent cooling lease") == true)
+        XCTAssertTrue(model.lastError?.contains("Daemon connection invalidated") == true)
+    }
+
+    private func agentLease(
+        expiresAt: Date = Date(timeIntervalSince1970: 1600),
+        targetRPMByFanID: [Int: Int] = [0: 3600]
+    ) -> AgentCoolingLease {
         AgentCoolingLease(
             id: "lease-1",
             request: AgentControlRequest(
@@ -332,8 +445,8 @@ final class AppModelTests: XCTestCase {
                 idempotencyKey: "key"
             ),
             createdAt: Date(timeIntervalSince1970: 1000),
-            expiresAt: Date(timeIntervalSince1970: 1600),
-            targetRPMByFanID: [0: 3600]
+            expiresAt: expiresAt,
+            targetRPMByFanID: targetRPMByFanID
         )
     }
 

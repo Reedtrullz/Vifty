@@ -80,6 +80,25 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertEqual(decision.errorCode, .policyDenied)
     }
 
+    func testDeniesInvalidControllableFanIDs() {
+        let policy = AgentControlPolicy(enabled: true)
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 10, name: "Invalid", currentRPM: 1500, minimumRPM: 1500, maximumRPM: 4500, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU", celsius: 61, source: .synthetic)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        let decision = policy.evaluate(Self.request(), snapshot: snapshot, thermalPressure: .nominal)
+
+        XCTAssertFalse(decision.allowed)
+        XCTAssertEqual(decision.errorCode, .policyDenied)
+        XCTAssertTrue(decision.message.contains("invalid fan ID 10"))
+    }
+
     func testDeniesInvalidControllableFanRPMRanges() {
         let policy = AgentControlPolicy(enabled: true)
         let minGreaterThanMax = HardwareSnapshot(
@@ -121,6 +140,16 @@ final class AgentControlPolicyTests: XCTestCase {
 
         let customPolicy = AgentControlPolicy(enabled: true, prepareCooldownSeconds: 10)
         XCTAssertEqual(customPolicy.prepareCooldownSeconds, 10)
+    }
+
+    func testDefaultMaxDurationIsThirtyMinutes() {
+        let policy = AgentControlPolicy(enabled: true)
+        let accepted = AgentControlRequest(workload: .build, durationSeconds: 1_800, maxRPMPercent: 70, reason: "Build", idempotencyKey: "accepted")
+        let rejected = AgentControlRequest(workload: .build, durationSeconds: 1_801, maxRPMPercent: 70, reason: "Too long", idempotencyKey: "rejected")
+
+        XCTAssertEqual(policy.maxDurationSeconds, 1_800)
+        XCTAssertTrue(policy.evaluate(accepted, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal).allowed)
+        XCTAssertEqual(policy.evaluate(rejected, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal).errorCode, .durationTooLong)
     }
 
     private static func request() -> AgentControlRequest {

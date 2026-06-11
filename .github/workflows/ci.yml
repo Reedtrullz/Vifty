@@ -40,6 +40,9 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Validate release metadata
+        run: scripts/validate-release-metadata.sh
+
       - name: Run tests
         run: swift test
 

@@ -186,16 +186,12 @@ public actor FanControlCoordinator {
             throw ViftyError.noTemperatureSensors
         }
 
-        let overridesByID = Dictionary(uniqueKeysWithValues: fanOverrides.map { ($0.fanID, $0) })
+        let overridesByID = fanOverridesByID(fanOverrides)
 
         for fan in snapshot.fans where fan.controllable {
             let target: Int
-            if let override = overridesByID[fan.id] {
-                let fanCurve = FanCurve(sensorID: curve.sensorID, points: [
-                    CurvePoint(temperatureCelsius: curve.points[0].temperatureCelsius, rpm: override.startRPM),
-                    CurvePoint(temperatureCelsius: curve.points[1].temperatureCelsius, rpm: override.midRPM),
-                    CurvePoint(temperatureCelsius: curve.points[2].temperatureCelsius, rpm: override.maxRPM)
-                ])
+            if let override = overridesByID[fan.id],
+               let fanCurve = curve.applying(override: override) {
                 target = fanCurve.targetRPM(
                     for: sensor.celsius,
                     minimumRPM: fan.minimumRPM,
@@ -216,6 +212,29 @@ public actor FanControlCoordinator {
         state.selectedSensorID = sensor.id
         state.statusMessage = "\(sensor.name) \(sensor.celsius.rounded()) C"
     }
+
+    private func fanOverridesByID(_ overrides: [FanCurveOverride]) -> [Int: FanCurveOverride] {
+        overrides.reduce(into: [:]) { byID, override in
+            byID[override.fanID] = override
+        }
+    }
+}
+
+private extension FanCurve {
+    func applying(override: FanCurveOverride) -> FanCurve? {
+        let sortedPoints = points.sorted { $0.temperatureCelsius < $1.temperatureCelsius }
+        guard let first = sortedPoints.first,
+              let last = sortedPoints.last,
+              sortedPoints.count >= 3 else {
+            return nil
+        }
+        let middle = sortedPoints[sortedPoints.count / 2]
+        return FanCurve(sensorID: sensorID, points: [
+            CurvePoint(temperatureCelsius: first.temperatureCelsius, rpm: override.startRPM),
+            CurvePoint(temperatureCelsius: middle.temperatureCelsius, rpm: override.midRPM),
+            CurvePoint(temperatureCelsius: last.temperatureCelsius, rpm: override.maxRPM)
+        ])
+    }
 }
 
 public struct ManualControlMarker: Sendable {
@@ -234,6 +253,10 @@ public struct ManualControlMarker: Sendable {
     public func markActive() {
         let directory = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
         try? Data("active".utf8).write(to: url, options: .atomic)
         try? FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o600)],

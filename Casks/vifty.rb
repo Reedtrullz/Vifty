@@ -9,8 +9,6 @@ cask "vifty" do
 
   depends_on macos: :sequoia
 
-  signing_identity identity: "-"
-
   app "Vifty.app"
 
   caveats <<~EOS
@@ -24,7 +22,7 @@ cask "vifty" do
     To uninstall the privileged helper alongside the app:
       sudo launchctl bootout system /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
       sudo rm /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
-      sudo rm /Library/PrivilegedHelperTools/ViftyDaemon
+      sudo rm /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
   EOS
 
   zap trash: "~/Library/Application Support/Vifty"
