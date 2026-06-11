@@ -220,6 +220,23 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertFalse(section.contains("required: true"))
     }
 
+    func testBugReportTemplateKeepsBlockedFanReportsReadOnlyFirst() throws {
+        let bugReportTemplate = try read(".github/ISSUE_TEMPLATE/bug-report.yml")
+
+        XCTAssertTrue(bugReportTemplate.contains("For fan, sensor, helper, or agent-cooling bugs, start with read-only diagnostics where possible."))
+        XCTAssertTrue(bugReportTemplate.contains("If `viftyctl diagnose --json` reports unsupported hardware or `safeToRequestCooling: false`"))
+        XCTAssertTrue(bugReportTemplate.contains("do not run manual fan-write commands or raw SMC tools"))
+        XCTAssertTrue(bugReportTemplate.contains("leave helper probe output blank unless a maintainer asks for it"))
+        XCTAssertTrue(bugReportTemplate.contains("For supported Apple Silicon MacBook Pro hardware/sensor/fan bugs"))
+        XCTAssertTrue(bugReportTemplate.contains("Unsupported or blocked safe-block reports may leave this blank"))
+
+        let helperProbeSection = try XCTUnwrap(bugReportTemplate.range(of: "id: helper-probe"))
+        let agentCommandSection = try XCTUnwrap(bugReportTemplate.range(of: "id: agent-command"))
+        let section = String(bugReportTemplate[helperProbeSection.lowerBound..<agentCommandSection.lowerBound])
+        XCTAssertTrue(section.contains("required: false"))
+        XCTAssertFalse(section.contains("required: true"))
+    }
+
     func testPullRequestTemplateRequiresSafetyReview() throws {
         let contributing = try read("CONTRIBUTING.md")
         let template = try read(".github/PULL_REQUEST_TEMPLATE.md")

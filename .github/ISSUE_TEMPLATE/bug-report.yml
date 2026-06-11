@@ -12,6 +12,8 @@ body:
 
         Maintainers triage reports using docs/support-triage.md so helper, hardware, SMC telemetry, release-trust, and agent-cooling issues get the right evidence.
 
+        If `viftyctl diagnose --json` reports unsupported hardware or `safeToRequestCooling: false`, do not run manual fan-write commands or raw SMC tools. Use the diagnose JSON as the first evidence, and leave helper probe output blank unless a maintainer asks for it.
+
   - type: input
     id: macos-version
     attributes:
@@ -64,8 +66,9 @@ body:
     attributes:
       label: Helper probe output
       description: |
-        For hardware/sensor/fan bugs, paste the output of:
+        For supported Apple Silicon MacBook Pro hardware/sensor/fan bugs, paste the output of:
         `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal`
+        Unsupported or blocked safe-block reports may leave this blank when `viftyctl diagnose --json` already shows the hardware gate.
       render: text
       placeholder: |
         model=MacBookPro18,3 appleSilicon=true macBookPro=true
