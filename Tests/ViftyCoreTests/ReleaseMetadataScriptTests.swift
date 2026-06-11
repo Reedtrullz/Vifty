@@ -319,6 +319,86 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("docs/release.md"))
     }
 
+    func testReleaseReadinessAcceptsCompleteTrustInputs() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeRequiredSecretList()
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--secret-list-file", secretList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["version"] as? String, "1.0.0")
+        XCTAssertEqual(summary["tag"] as? String, "v1.0.0")
+        XCTAssertEqual(summary["status"] as? String, "ready")
+        XCTAssertEqual(summary["knownReadinessBlockersClear"] as? Bool, true)
+        XCTAssertEqual(summary["blockers"] as? [String], [])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+    }
+
+    func testReleaseReadinessReportsMissingSecretsAsBlocker() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeSecretList(contents: """
+        APPLE_ID\t2026-06-11T10:00:00Z
+        APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
+        """)
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--secret-list-file", secretList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["knownReadinessBlockersClear"] as? Bool, false)
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-secrets"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("APPLE_TEAM_ID") == true)
+    }
+
+    func testReleaseReadinessBlocksMissingReleaseAssets() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeRequiredSecretList()
+        let releaseView = try harness.writeReleaseView(assetNames: [
+            "Vifty-v1.0.0.zip"
+        ])
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--secret-list-file", secretList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("missing assets") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0.zip.sha256") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-artifact-summary.json") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-release-checklist.md") == true)
+    }
+
     func testReleaseChecklistWriterCreatesChecklistForVersion() throws {
         let harness = try ReleaseMetadataHarness()
         let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-release-checklist.md")
@@ -348,6 +428,19 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 64)
         XCTAssertTrue(result.stderr.contains("release version must be a SemVer-like value"))
+    }
+
+    private func decodeReadinessSummary(_ stdout: String) throws -> [String: Any] {
+        let data = Data(stdout.utf8)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func checkStatus(named name: String, in checks: [[String: Any]]) -> String? {
+        checks.first { $0["name"] as? String == name }?["status"] as? String
+    }
+
+    private func checkMessage(named name: String, in checks: [[String: Any]]) -> String? {
+        checks.first { $0["name"] as? String == name }?["message"] as? String
     }
 }
 
@@ -518,6 +611,34 @@ private final class ReleaseMetadataHarness {
         )
     }
 
+    func runReleaseReadiness(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("scripts/check-release-readiness.sh")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
+
+        let process = Process()
+        process.executableURL = scriptURL
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
+            uniquingKeysWith: { _, new in new }
+        )
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        return ReleaseMetadataProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+    }
+
     func runReleaseChecklistWriter(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/write-release-checklist.sh")
@@ -557,6 +678,43 @@ private final class ReleaseMetadataHarness {
 
     func writeSecretList(contents: String) throws -> URL {
         let url = rootURL.appendingPathComponent("release-secrets.tsv")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    func writeRequiredSecretList() throws -> URL {
+        try writeSecretList(contents: """
+        APPLE_TEAM_ID\t2026-06-11T10:00:00Z
+        APPLE_ID\t2026-06-11T10:00:00Z
+        APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_IDENTITY\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD\t2026-06-11T10:00:00Z
+        """)
+    }
+
+    func writeReleaseView(
+        version: String = "1.0.0",
+        tagName: String? = nil,
+        isDraft: Bool = false,
+        assetNames: [String]? = nil
+    ) throws -> URL {
+        let assets = assetNames ?? [
+            "Vifty-v\(version).zip",
+            "Vifty-v\(version).zip.sha256",
+            "Vifty-v\(version)-artifact-summary.json",
+            "Vifty-v\(version)-release-checklist.md"
+        ]
+        let assetEntries = assets.map { #"{"name": "\#($0)"}"# }.joined(separator: ", ")
+        let contents = """
+        {
+          "tagName": "\(tagName ?? "v\(version)")",
+          "isDraft": \(isDraft ? "true" : "false"),
+          "isPrerelease": false,
+          "assets": [\(assetEntries)]
+        }
+        """
+        let url = rootURL.appendingPathComponent("release-view.json")
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

@@ -55,7 +55,7 @@ Maintainers should triage reports with [docs/support-triage.md](docs/support-tri
 
 ### Current release trust status
 
-The `v1.1.0` source tag is prepared, but the public signed/notarized binary release is not trust-complete until the GitHub Release workflow publishes `Vifty-v1.1.0.zip`, its checksum, and the verifier summary. Before treating Homebrew as a trusted binary install path, check [docs/release-status.md](docs/release-status.md) and verify the artifact with `scripts/verify-release-artifact.sh --team-id <TEAMID>`.
+The `v1.1.0` source tag is prepared, but the public signed/notarized binary release is not trust-complete until the GitHub Release workflow publishes `Vifty-v1.1.0.zip`, its checksum, the verifier summary, and the release checklist. Before treating Homebrew as a trusted binary install path, check [docs/release-status.md](docs/release-status.md), run `scripts/check-release-readiness.sh --version 1.1.0 --repo Reedtrullz/Vifty`, and verify the artifact with `scripts/verify-release-artifact.sh --team-id <TEAMID>`.
 
 ### Homebrew
 
