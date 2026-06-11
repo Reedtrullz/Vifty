@@ -46,18 +46,24 @@ struct ViftyCtlMain {
 }
 
 struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
+    private let environment: [String: String]
+
+    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        self.environment = environment
+    }
+
     func resolve(_ arguments: [String]) throws -> [String] {
         if arguments[0].contains("/") {
-            guard FileManager.default.isExecutableFile(atPath: arguments[0]) else {
+            guard isExecutableCommand(atPath: arguments[0]) else {
                 throw ViftyError.helperRejected("Child command is not executable: \(arguments[0])")
             }
             return arguments
         }
 
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        let path = environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
             let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(arguments[0]).path
-            if FileManager.default.isExecutableFile(atPath: candidate) {
+            if isExecutableCommand(atPath: candidate) {
                 return [candidate] + Array(arguments.dropFirst())
             }
         }
@@ -86,6 +92,15 @@ struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
         @unknown default:
             return status
         }
+    }
+
+    private func isExecutableCommand(atPath path: String) -> Bool {
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return false
+        }
+        return FileManager.default.isExecutableFile(atPath: path)
     }
 }
 

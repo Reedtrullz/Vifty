@@ -26,6 +26,38 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
         }
     }
 
+    func testResolveRejectsExecutableDirectoryBeforeRun() throws {
+        let runner = ViftyCtlProcessRunner()
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-process-runner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: tempDirectory.path))
+        XCTAssertThrowsError(try runner.resolve([tempDirectory.path])) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Child command is not executable"))
+        }
+    }
+
+    func testResolveSkipsExecutableDirectoryOnPATH() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-process-runner-\(UUID().uuidString)", isDirectory: true)
+        let directoryPath = tempDirectory.appendingPathComponent("path-dir", isDirectory: true)
+        let executablePath = tempDirectory.appendingPathComponent("path-bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryPath.appendingPathComponent("tool", isDirectory: true), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: executablePath, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let toolPath = executablePath.appendingPathComponent("tool").path
+        FileManager.default.createFile(atPath: toolPath, contents: Data("#!/bin/sh\nexit 0\n".utf8))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: toolPath)
+        let runner = ViftyCtlProcessRunner(environment: ["PATH": "\(directoryPath.path):\(executablePath.path)"])
+
+        let resolved = try runner.resolve(["tool", "arg"])
+
+        XCTAssertEqual(resolved, [toolPath, "arg"])
+    }
+
     func testResolveRejectsMissingBareCommandBeforeRun() throws {
         let runner = ViftyCtlProcessRunner()
 
