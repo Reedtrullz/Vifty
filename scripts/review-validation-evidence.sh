@@ -254,6 +254,39 @@ ruby -rjson -rcsv -rfileutils -e '
     end
   end
 
+  def require_review_summary_tsv_matches_json(tsv_rows, json_checks, failures)
+    if tsv_rows.empty?
+      failures << "review-summary.tsv must include check rows"
+      return
+    end
+
+    missing_headers = %w[name status].reject { |header| tsv_rows.first.key?(header) }
+    unless missing_headers.empty?
+      failures << "review-summary.tsv is missing required header(s): #{missing_headers.join(", ")}"
+      return
+    end
+
+    tsv_checks = {}
+    tsv_rows.each do |row|
+      name = row["name"].to_s
+      next if name.empty?
+      if tsv_checks.key?(name)
+        failures << "review-summary.tsv has duplicate check #{name}"
+        next
+      end
+      tsv_checks[name] = row["status"].to_s
+    end
+
+    json_checks.each do |name, json_status|
+      tsv_status = tsv_checks[name]
+      if tsv_status.nil?
+        failures << "review-summary.tsv is missing check #{name}"
+      elsif tsv_status != json_status
+        failures << "review-summary.tsv #{name} status #{tsv_status.inspect} did not match review-summary.json #{json_status.inspect}"
+      end
+    end
+  end
+
   def require_positive_integer(value, field, failures)
     integer = Integer(value)
     failures << "#{field} must be greater than zero" unless integer.positive?
@@ -331,6 +364,8 @@ ruby -rjson -rcsv -rfileutils -e '
     next unless check.is_a?(Hash) && check["name"]
     checks[check["name"].to_s] = check["status"].to_s
   end
+  review_summary_rows = parse_tsv(bundle, "review-summary.tsv", failures)
+  require_review_summary_tsv_matches_json(review_summary_rows, checks, failures)
 
   COMMON_ZERO_CHECKS.each do |name|
     require_status(checks, name, ["0"], failures)

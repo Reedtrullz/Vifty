@@ -66,6 +66,17 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv runLifecycle.autoRestoreAfterChildExit actual"))
     }
 
+    func testReviewRejectsReviewSummaryTSVStatusDrift() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            reviewSummaryTSVStatusOverrides: ["capabilities-contract": "1"]
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("review-summary.tsv capabilities-contract status \"1\" did not match review-summary.json \"0\""))
+    }
+
     func testReviewRejectsSupportedHardwareEvidenceWithoutProbeLocal() throws {
         let harness = try ValidationEvidenceReviewHarness(
             probeLocalStatus: "skipped",
@@ -383,6 +394,7 @@ private final class ValidationEvidenceReviewHarness {
         privacyReviewStatus: String = "0",
         privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
         capabilitiesStatus: String = "0",
+        reviewSummaryTSVStatusOverrides: [String: String] = [:],
         schemaResourcesText: String? = nil,
         capabilitiesSchemaResourcesText: String? = nil,
         capabilitiesContractText: String? = nil,
@@ -432,12 +444,13 @@ private final class ValidationEvidenceReviewHarness {
             statuses["release-artifact-summary"] = releaseArtifactStatus
         }
 
+        let reviewSummaryTSVStatuses = statuses.merging(reviewSummaryTSVStatusOverrides) { _, new in new }
         try writeReviewSummary(
             statuses: statuses,
             releaseArtifactSummaryPath: includeReleaseSummary ? "/tmp/Vifty-v1.2.3-artifact-summary.json" : "",
             releaseChecklistPath: includeReleaseChecklist ? "/tmp/Vifty-v\(releaseChecklistVersion)-release-checklist.md" : ""
         )
-        try writeText("review-summary.tsv", contents: tsvSummary(statuses))
+        try writeText("review-summary.tsv", contents: tsvSummary(reviewSummaryTSVStatuses))
         try writeText("manifest.tsv", contents: "name\tstatus\tstdout\tstderr\n")
         try writeText("metadata.txt", contents: "readOnly=true\ncoolingCommandsRun=false\n")
         try writeText("checksums.tsv", contents: "sha256\tbytes\tfile\n")
