@@ -107,7 +107,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         policySource = try container.decode(ViftyCtlPolicySource.self, forKey: .policySource)
         daemonStatusAvailable = try container.decode(Bool.self, forKey: .daemonStatusAvailable)
         agentControlStatusError = try container.decodeIfPresent(String.self, forKey: .agentControlStatusError)
-        supportsForceRetry = try container.decode(Bool.self, forKey: .supportsForceRetry)
+        supportsForceRetry = try container.decodeIfPresent(Bool.self, forKey: .supportsForceRetry) ?? false
         runLifecycle = try container.decodeIfPresent(
             ViftyCtlRunLifecycleCapabilities.self,
             forKey: .runLifecycle

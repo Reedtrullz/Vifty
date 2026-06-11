@@ -39,13 +39,15 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaIDs.commandError, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
     }
 
-    func testLegacyCapabilitiesPayloadDecodesWithRunLifecycleDefaults() throws {
+    func testLegacyCapabilitiesPayloadDecodesWithConservativeDefaults() throws {
         var payload = try readJSON(fixtureURL("capabilities.json"))
+        payload.removeValue(forKey: "supportsForceRetry")
         payload.removeValue(forKey: "runLifecycle")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
 
+        XCTAssertFalse(capabilities.supportsForceRetry)
         XCTAssertEqual(capabilities.runLifecycle, ViftyCtlRunLifecycleCapabilities())
     }
 

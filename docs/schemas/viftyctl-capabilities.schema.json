@@ -71,7 +71,8 @@
       ]
     },
     "supportsForceRetry": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "True when viftyctl run --force supports a supervised one-time wait for retryAfterSeconds and retry after a rate-limited prepare. Consumers reading legacy payloads without this field should treat force retry as unsupported."
     },
     "runLifecycle": {
       "$ref": "#/$defs/runLifecycle"

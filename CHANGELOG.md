@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `viftyctl capabilities --json` now includes `runLifecycle` metadata so agents can discover child-command preflight, forwarded signals, Auto restore, structured pre-child failures, and cleanup-state reporting without scraping docs.
 - `examples/viftyctl/guarded-run.sh` now checks the advertised `runLifecycle` contract before readiness and refuses cooling if child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, or launch-failure cleanup reporting are missing.
 - `examples/viftyctl/guarded-run.sh` now checks `supportsForceRetry` before passing `--force` so supervised retry opt-in stays tied to advertised CLI capabilities.
+- `ViftyCtlCapabilities` now decodes legacy payloads without `supportsForceRetry` as force-retry unsupported, matching the guarded wrapper's fail-closed behavior for missing capability fields.
 
 ### Changed
 - The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
