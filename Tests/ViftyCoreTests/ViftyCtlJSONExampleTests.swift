@@ -116,7 +116,15 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.retryAfterSeconds)
     }
 
-    func testRunCleanupCommandErrorExamplesDecodeAgainstCurrentModel() throws {
+    func testRunCommandErrorExamplesDecodeAgainstCurrentModel() throws {
+        let preflight = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-child-command-failed.json")
+        XCTAssertEqual(preflight.command, "run")
+        XCTAssertEqual(preflight.errorCode, .childCommandFailed)
+        XCTAssertFalse(preflight.safeToProceed)
+        XCTAssertFalse(preflight.coolingLeasePrepared)
+        XCTAssertFalse(preflight.autoRestoreAttempted)
+        XCTAssertNil(preflight.autoRestoreSucceeded)
+
         let restored = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-cleanup-restored.json")
         XCTAssertEqual(restored.command, "run")
         XCTAssertEqual(restored.errorCode, .childCommandFailed)
@@ -227,6 +235,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             ("viftyctl-audit.schema.json", "audit.json"),
             ("viftyctl-capabilities.schema.json", "capabilities.json"),
             ("viftyctl-command-error.schema.json", "command-error.json"),
+            ("viftyctl-command-error.schema.json", "command-error-run-child-command-failed.json"),
             ("viftyctl-command-error.schema.json", "command-error-run-cleanup-restored.json"),
             ("viftyctl-command-error.schema.json", "command-error-run-cleanup-failed.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-ready.json"),
