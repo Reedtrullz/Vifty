@@ -147,6 +147,7 @@ ruby -rjson -rcsv -rfileutils -e '
     viftyctl-diagnose.json
     viftyctl-audit.json
     bundle-executables.tsv
+    privacy-review.tsv
     schema-resources.tsv
     capabilities-schema-resources.tsv
   ].freeze
@@ -154,6 +155,7 @@ ruby -rjson -rcsv -rfileutils -e '
   COMMON_ZERO_CHECKS = %w[
     app-info-plist
     bundle-executables
+    privacy-review
     schema-resources
     capabilities-schema-resources
     launchdaemon-lint

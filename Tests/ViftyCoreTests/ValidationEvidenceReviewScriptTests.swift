@@ -25,6 +25,21 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("viftyhelper-probeLocal.txt is missing fan["))
     }
 
+    func testReviewRejectsEvidenceBundleWithPrivacyFindings() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            privacyReviewStatus: "1",
+            privacyReviewText: """
+            finding\tfile\tline\tkind
+            redaction-needed\tviftyctl-status.json\t1\tserial-number-label
+            """
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("privacy-review status \"1\" was not one of 0"))
+    }
+
     func testReviewAcceptsUnsupportedHardwareSafeBlockBundle() throws {
         let harness = try ValidationEvidenceReviewHarness(
             diagnoseStatus: "75",
@@ -311,6 +326,8 @@ private final class ValidationEvidenceReviewHarness {
         diagnose: ValidationEvidenceDiagnoseFixture = .supportedReady,
         probeLocalStatus: String = "0",
         probeLocalText: String = "fan[0] id=0 name=\"Left Fan\" currentRPM=2200 minimumRPM=1400 maximumRPM=6800 hardwareMode=Auto hardwareModeRawValue=0 targetRPM=nil",
+        privacyReviewStatus: String = "0",
+        privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
@@ -332,6 +349,7 @@ private final class ValidationEvidenceReviewHarness {
         var statuses: [String: String] = [
             "app-info-plist": "0",
             "bundle-executables": "0",
+            "privacy-review": privacyReviewStatus,
             "schema-resources": "0",
             "capabilities-schema-resources": "0",
             "launchdaemon-lint": "0",
@@ -365,6 +383,7 @@ private final class ValidationEvidenceReviewHarness {
         try writeText("metadata.txt", contents: "readOnly=true\ncoolingCommandsRun=false\n")
         try writeText("checksums.tsv", contents: "sha256\tbytes\tfile\n")
         try writeText("bundle-executables.tsv", contents: bundleExecutablesTSV)
+        try writeText("privacy-review.tsv", contents: privacyReviewText)
         try writeText("schema-resources.tsv", contents: schemaResourcesTSV)
         try writeText("capabilities-schema-resources.tsv", contents: capabilitiesSchemaResourcesTSV)
         try writeDiagnose(diagnose)

@@ -31,7 +31,9 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.md"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("bundled executable hashes"))
+        XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("checksums.tsv"))
+        XCTAssertLessThanOrEqual(try harness.read("system-uname.txt").split(separator: " ").count, 3)
         let bundleExecutables = try harness.read("bundle-executables.tsv")
         XCTAssertTrue(bundleExecutables.contains("executable\tsha256\tbytes\tbundlePath"))
         XCTAssertTrue(bundleExecutables.contains("Vifty\t"))
@@ -59,6 +61,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let manifest = try harness.read("manifest.tsv")
         XCTAssertTrue(manifest.contains("app-info-plist\t0\tapp-info-plist.txt"))
         XCTAssertTrue(manifest.contains("bundle-executables\t0\tbundle-executables.tsv"))
+        XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv"))
         XCTAssertTrue(manifest.contains("schema-resources\t0\tschema-resources.tsv"))
         XCTAssertTrue(manifest.contains("capabilities-schema-resources\t0\tcapabilities-schema-resources.tsv"))
         XCTAssertTrue(manifest.contains("launchdaemon-plist\t0\tlaunchdaemon-plist.txt"))
@@ -76,6 +79,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewSummary.contains("name\tstatus\texpected\tscope\tnote"))
         XCTAssertTrue(reviewSummary.contains("app-info-plist\t0\t0\trelease-and-hardware"))
         XCTAssertTrue(reviewSummary.contains("bundle-executables\t0\t0\trelease-and-hardware"))
+        XCTAssertTrue(reviewSummary.contains("privacy-review\t0\t0\tpublic-report-privacy"))
         XCTAssertTrue(reviewSummary.contains("release-artifact-summary\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("release-checklist\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\trelease-and-agent-contract"))
@@ -114,6 +118,12 @@ final class ValidationEvidenceScriptTests: XCTestCase {
                 && check["scope"] as? String == "release-and-hardware"
         })
         XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "privacy-review"
+                && check["status"] as? String == "0"
+                && check["expected"] as? String == "0"
+                && check["scope"] as? String == "public-report-privacy"
+        })
+        XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "schema-resources"
                 && check["status"] as? String == "0"
                 && check["expected"] as? String == "0"
@@ -146,6 +156,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("sha256\tbytes\tfile"))
         XCTAssertTrue(checksums.contains("\tapp-info-plist.txt"))
         XCTAssertTrue(checksums.contains("\tbundle-executables.tsv"))
+        XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
         XCTAssertTrue(checksums.contains("\tschema-resources.tsv"))
         XCTAssertTrue(checksums.contains("\tcapabilities-schema-resources.tsv"))
         XCTAssertTrue(checksums.contains("\tlaunchdaemon-plist.txt"))
@@ -166,6 +177,48 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(invocations.contains { invocation in
             ["prepare", "run", "restore-auto", "setFixed", "auto"].contains { invocation.hasPrefix($0) }
         })
+    }
+
+    func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {
+        let harness = try ValidationEvidenceHarness(includePrivacyLeak: true)
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("redaction-needed\tviftyctl-status.json"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("serial-number-label"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("user-home-path"))
+        XCTAssertTrue(try harness.read("privacy-review.stderr").contains("privacy review found local identifiers"))
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("privacy-review\t1\tprivacy-review.tsv"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("privacy-review\t1\t0\tpublic-report-privacy"))
+        let summary = try harness.readJSON("review-summary.json")
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "privacy-review"
+                && check["status"] as? String == "1"
+                && check["expected"] as? String == "0"
+        })
+        XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
+    }
+
+    func testCollectorPrivacyReviewScansGeneratedReviewSummary() throws {
+        let harness = try ValidationEvidenceHarness(
+            appPathComponents: ["Users", "private-user", "Vifty.app"]
+        )
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("redaction-needed\treview-summary.json"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("user-home-path"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("privacy-review\t1\t0\tpublic-report-privacy"))
+        XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
     }
 
     func testCollectorOptionallyCapturesProbeLocal() throws {
@@ -545,6 +598,7 @@ private final class ValidationEvidenceHarness {
     private let diagnoseState: String
     private let diagnoseExitCode: Int
     private let statusSchemaResourcePath: String
+    private let includePrivacyLeak: Bool
 
     init(
         createViftyCtl: Bool = true,
@@ -552,17 +606,24 @@ private final class ValidationEvidenceHarness {
         createSchemaResources: Bool = true,
         statusSchemaResourcePath: String = "Contents/Resources/schemas/viftyctl-status.schema.json",
         diagnoseState: String = "ready",
-        diagnoseExitCode: Int = 0
+        diagnoseExitCode: Int = 0,
+        includePrivacyLeak: Bool = false,
+        appPathComponents: [String] = ["Vifty.app"]
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-validation-evidence-\(UUID().uuidString)", isDirectory: true)
-        appURL = rootURL.appendingPathComponent("Vifty.app", isDirectory: true)
+        var appBundleURL = rootURL
+        for component in appPathComponents {
+            appBundleURL = appBundleURL.appendingPathComponent(component, isDirectory: true)
+        }
+        appURL = appBundleURL
         outputURL = rootURL.appendingPathComponent("evidence", isDirectory: true)
         viftyCtlLogURL = rootURL.appendingPathComponent("viftyctl.log")
         helperLogURL = rootURL.appendingPathComponent("helper.log")
         self.diagnoseState = diagnoseState
         self.diagnoseExitCode = diagnoseExitCode
         self.statusSchemaResourcePath = statusSchemaResourcePath
+        self.includePrivacyLeak = includePrivacyLeak
 
         let macOSURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
@@ -837,7 +898,11 @@ private final class ValidationEvidenceHarness {
         fi
 
         if [ "$#" -eq 2 ] && [ "$1" = "status" ] && [ "$2" = "--json" ]; then
-          printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true}}\\n'
+          if [ "\(includePrivacyLeak ? "1" : "0")" = "1" ]; then
+            printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true},"debug":"Serial Number: C02SECRET1234 /Users/private-user/Vifty.app"}\\n'
+          else
+            printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true}}\\n'
+          fi
           exit 0
         fi
 

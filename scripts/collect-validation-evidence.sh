@@ -614,6 +614,82 @@ capture_release_checklist() {
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
 }
 
+capture_privacy_review() {
+  local name="privacy-review"
+  local stdout_name="privacy-review.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local status
+  local host_name=""
+  local short_host_name=""
+
+  host_name="$(/bin/hostname 2>/dev/null || true)"
+  short_host_name="$(/bin/hostname -s 2>/dev/null || true)"
+
+  set +e
+  ruby -e '
+    bundle, home_path, host_name, short_host_name = ARGV
+    ignored = {
+      "privacy-review.tsv" => true,
+      "privacy-review.stderr" => true,
+      "privacy-review.status" => true
+    }
+    common_host_tokens = %w[localhost mac macbook macbookpro]
+    host_tokens = [host_name, short_host_name]
+      .map(&:to_s)
+      .map(&:strip)
+      .uniq
+      .select { |value| value.length >= 5 }
+      .reject { |value| common_host_tokens.include?(value.downcase.gsub(/[^a-z0-9]/, "")) }
+    patterns = [
+      ["serial-number-label", /serial\s+number|IOPlatformSerialNumber/i],
+      ["hardware-uuid-label", /hardware\s+uuid|platform\s+uuid|IOPlatformUUID/i],
+      ["user-home-path", %r{/Users/[^/\s]+}]
+    ]
+    if home_path.to_s.start_with?("/Users/")
+      patterns << ["current-home-path", Regexp.new(Regexp.escape(home_path))]
+    end
+    host_tokens.each do |token|
+      patterns << ["local-hostname", Regexp.new(Regexp.escape(token), Regexp::IGNORECASE)]
+    end
+
+    findings = []
+    Dir.children(bundle).sort.each do |entry|
+      next if ignored[entry]
+      path = File.join(bundle, entry)
+      next unless File.file?(path)
+      begin
+        File.foreach(path).with_index(1) do |line, line_number|
+          patterns.each do |kind, pattern|
+            findings << [entry, line_number, kind] if line.match?(pattern)
+          end
+        end
+      rescue ArgumentError
+        next
+      end
+    end
+
+    puts "finding\tfile\tline\tkind"
+    if findings.empty?
+      puts "none\t-\t-\tpassed"
+      exit 0
+    end
+
+    findings.each do |file, line, kind|
+      puts "redaction-needed\t#{file}\t#{line}\t#{kind}"
+    end
+    warn "privacy review found local identifiers; review or redact the named files before sharing the bundle"
+    exit 1
+  ' "${OUTPUT_DIR}" "${HOME:-}" "${host_name}" "${short_host_name}" > "${stdout_path}" 2> "${stderr_path}"
+  status=$?
+  set -e
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
 write_review_summary() {
   printf 'name\tstatus\texpected\tscope\tnote\n' > "${SUMMARY_PATH}"
   SUMMARY_JSON_FIRST_ROW=1
@@ -648,6 +724,7 @@ write_review_summary() {
   summary_row "system-hw-model" "0" "hardware-validation" "Machine model source for the report."
   summary_row "app-info-plist" "0" "release-and-hardware" "Bundle metadata identifies the tested app version."
   summary_row "bundle-executables" "0" "release-and-hardware" "Bundled app/helper/daemon/CLI executables should be present, executable, and hashed."
+  summary_row "privacy-review" "0" "public-report-privacy" "Evidence bundle should not contain local hostnames, /Users paths, serial labels, or hardware identifier labels."
   summary_row "release-artifact-summary" "0 or skipped" "release-trust" "Optional verifier summary should pass and match the installed app version when supplied."
   summary_row "release-checklist" "0 or skipped" "release-trust" "Optional release checklist should match the installed app version and include post-publication trust follow-up when supplied."
   summary_row "schema-resources" "0" "release-and-agent-contract" "Bundled release and viftyctl JSON Schemas should be present and hashed."
@@ -680,7 +757,7 @@ Vifty validation evidence bundle.
 Attach these files to a Hardware Validation Report issue when validating real
 hardware. The viftyctl JSON files are read-only diagnostics and audit evidence. Bundle plist,
 bundled executable hashes, bundled schema resource hashes, advertised schema
-resource paths, LaunchDaemon, signing, notarization, and Gatekeeper files
+resource paths, privacy-review.tsv, LaunchDaemon, signing, notarization, and Gatekeeper files
 identify exactly what
 app/helper/daemon/CLI contract was tested. If --release-summary was supplied,
 release-artifact-summary.json is a copy of the verifier output and
@@ -713,7 +790,7 @@ README
 } > "${OUTPUT_DIR}/metadata.txt"
 
 run_capture "system-sw_vers" "system-sw_vers.txt" /usr/bin/sw_vers
-run_capture "system-uname" "system-uname.txt" /usr/bin/uname -a
+run_capture "system-uname" "system-uname.txt" /usr/bin/uname -srm
 run_capture "system-hw-model" "system-hw-model.txt" /usr/sbin/sysctl -n hw.model
 
 run_capture "app-info-plist" "app-info-plist.txt" /usr/libexec/PlistBuddy -c Print "${INFO_PLIST}"
@@ -749,6 +826,9 @@ else
   echo "Skipped. Re-run with --include-probe-local to collect direct helper fan probe output." > "${OUTPUT_DIR}/viftyhelper-probeLocal.txt"
 fi
 
+# Write a provisional summary so the privacy review also scans generated summary JSON.
+write_review_summary
+capture_privacy_review
 write_review_summary
 
 printf 'sha256\tbytes\tfile\n' > "${CHECKSUM_PATH}"

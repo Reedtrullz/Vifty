@@ -29,6 +29,8 @@ scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json
 ```
 
+Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A nonzero `privacy-review` row means the named files may contain a hostname, `/Users/...` path, serial-number label, or hardware UUID label and should be redacted or shared privately.
+
 ## Triage Buckets
 
 | Bucket | Typical signal | Evidence to request | Safe next action |
