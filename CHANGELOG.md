@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Release Trust Report issue template now collects release-readiness JSON, GitHub Release asset listings, verifier/reviewer evidence, Gatekeeper/signing/notarization/cask output, and no-bypass safety confirmations for public binary trust failures.
 - GitHub repository topics and triage labels are now captured in `.github/repo-metadata.json`, checked by `scripts/check-github-metadata.sh`, and covered by fixture-backed tests so the contributor/reporting surface stays reproducible.
 - `examples/viftyctl/guarded-run.sh` now leaves force retry off by default and requires explicit `VIFTY_GUARDED_RUN_FORCE_RETRY=1` opt-in before passing `--force` to `viftyctl run`.
+- Canonical `viftyctl run --json` command-error examples now cover child-launch failures after a prepared cooling lease, including both Auto-restore-success and Auto-restore-failure cleanup states.
 
 ## [1.1.0] — 2026-06-11
 

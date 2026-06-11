@@ -97,6 +97,24 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.autoRestoreSucceeded)
     }
 
+    func testRunCleanupCommandErrorExamplesDecodeAgainstCurrentModel() throws {
+        let restored = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-cleanup-restored.json")
+        XCTAssertEqual(restored.command, "run")
+        XCTAssertEqual(restored.errorCode, .helperUnreachable)
+        XCTAssertFalse(restored.safeToProceed)
+        XCTAssertTrue(restored.coolingLeasePrepared)
+        XCTAssertTrue(restored.autoRestoreAttempted)
+        XCTAssertEqual(restored.autoRestoreSucceeded, true)
+
+        let failed = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-cleanup-failed.json")
+        XCTAssertEqual(failed.command, "run")
+        XCTAssertEqual(failed.errorCode, .restoreFailed)
+        XCTAssertFalse(failed.safeToProceed)
+        XCTAssertTrue(failed.coolingLeasePrepared)
+        XCTAssertTrue(failed.autoRestoreAttempted)
+        XCTAssertEqual(failed.autoRestoreSucceeded, false)
+    }
+
     func testAuditExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlAuditReport.self, from: "audit.json")
 
@@ -190,6 +208,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             ("viftyctl-audit.schema.json", "audit.json"),
             ("viftyctl-capabilities.schema.json", "capabilities.json"),
             ("viftyctl-command-error.schema.json", "command-error.json"),
+            ("viftyctl-command-error.schema.json", "command-error-run-cleanup-restored.json"),
+            ("viftyctl-command-error.schema.json", "command-error-run-cleanup-failed.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-ready.json"),
             ("viftyctl-status.schema.json", "status-active-lease.json")
         ]

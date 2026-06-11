@@ -13,6 +13,8 @@ Files:
 - [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
 - [command-error.json](command-error.json) - structured `--json` command failure
+- [command-error-run-cleanup-restored.json](command-error-run-cleanup-restored.json) - `viftyctl run --json` launch failure after a prepared lease with Auto restore confirmed
+- [command-error-run-cleanup-failed.json](command-error-run-cleanup-failed.json) - `viftyctl run --json` launch failure after a prepared lease where Auto restore failed
 
 Schema:
 
