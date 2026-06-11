@@ -25,6 +25,45 @@ final class GuardedRunScriptTests: XCTestCase {
         )
     }
 
+    func testGuardedRunAcceptsCapabilitiesUnavailableWhenRunLifecycleIsSafe() throws {
+        let harness = try ScriptHarness(state: "ready", capabilitiesExitCode: 69)
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(
+            try harness.loggedArguments(),
+            [
+                "run",
+                "--json",
+                "--workload", "test",
+                "--duration", "20m",
+                "--max-rpm-percent", "70",
+                "--reason", "swift test",
+                "--",
+                "swift", "test"
+            ]
+        )
+    }
+
+    func testGuardedRunFailsClosedWhenRunLifecycleIsUnsafe() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            runLifecycleOverride: #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":false,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("safe run lifecycle"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"autoRestoreAfterChildExit\":false"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunForceRetryIsOptIn() throws {
         let harness = try ScriptHarness(state: "ready")
 
@@ -289,6 +328,10 @@ private final class ScriptHarness {
         includeDecisionFields: Bool = true,
         decisionFieldsOverride: String? = nil,
         commandErrorOverride: String? = nil,
+        capabilitiesExitCode: Int = 0,
+        includeRunLifecycle: Bool = true,
+        runLifecycleOverride: String? = nil,
+        capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -305,7 +348,11 @@ private final class ScriptHarness {
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
                 includeDecisionFields: includeDecisionFields,
                 decisionFieldsOverride: decisionFieldsOverride,
-                commandErrorOverride: commandErrorOverride
+                commandErrorOverride: commandErrorOverride,
+                capabilitiesExitCode: capabilitiesExitCode,
+                includeRunLifecycle: includeRunLifecycle,
+                runLifecycleOverride: runLifecycleOverride,
+                capabilitiesOutputOverride: capabilitiesOutputOverride
             )
         }
     }
@@ -361,16 +408,31 @@ private final class ScriptHarness {
         emitReadinessOnDiagnoseFailure: Bool,
         includeDecisionFields: Bool,
         decisionFieldsOverride: String?,
-        commandErrorOverride: String?
+        commandErrorOverride: String?,
+        capabilitiesExitCode: Int,
+        includeRunLifecycle: Bool,
+        runLifecycleOverride: String?,
+        capabilitiesOutputOverride: String?
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
         let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
             ? #","recommendedAgentAction":"\#(recommendedAction)","safeToRequestCooling":\#(safeToRequestCooling)"#
             : "")
         let commandError = commandErrorOverride ?? #"{"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
+        let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
+            ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
+            : "")
+        let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
+            ? #"{"schemaVersion":1}"#
+            : #"{"schemaVersion":1,\#(runLifecycle)}"#)
         let script = """
         #!/bin/sh
         set -eu
+
+        if [ "$#" -ge 2 ] && [ "$1" = "capabilities" ] && [ "$2" = "--json" ]; then
+          printf '\(capabilitiesOutput)\n'
+          exit \(capabilitiesExitCode)
+        fi
 
         if [ "$#" -ge 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then

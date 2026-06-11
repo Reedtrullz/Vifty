@@ -60,6 +60,54 @@ case "$force_retry" in
 esac
 
 set +e
+capabilities_json="$("$viftyctl" capabilities --json)"
+capabilities_status=$?
+set -e
+
+run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
+auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
+structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
+cleanup_state_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.cleanupStateReportedOnLaunchFailure raw -o - - 2>/dev/null || printf '')"
+signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.signalsForwardedToChild json -o - - 2>/dev/null || printf '')"
+
+[ "$run_child_preflight" = "null" ] && run_child_preflight=""
+[ "$auto_restore_after_child" = "null" ] && auto_restore_after_child=""
+[ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
+[ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
+
+case "$signals_forwarded" in
+  *'"INT"'*) forwards_int=1 ;;
+  *) forwards_int=0 ;;
+esac
+
+case "$signals_forwarded" in
+  *'"TERM"'*) forwards_term=1 ;;
+  *) forwards_term=0 ;;
+esac
+
+case "$signals_forwarded" in
+  *'"HUP"'*) forwards_hup=1 ;;
+  *) forwards_hup=0 ;;
+esac
+
+if [ "$run_child_preflight" != "true" ] ||
+   [ "$auto_restore_after_child" != "true" ] ||
+   [ "$structured_pre_child_failures" != "true" ] ||
+   [ "$cleanup_state_reported" != "true" ] ||
+   [ "$forwards_int" -ne 1 ] ||
+   [ "$forwards_term" -ne 1 ] ||
+   [ "$forwards_hup" -ne 1 ]; then
+  echo "guarded-run: viftyctl capabilities does not advertise the safe run lifecycle; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+set +e
 diagnose_json="$("$viftyctl" diagnose --json)"
 diagnose_status=$?
 set -e

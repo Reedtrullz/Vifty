@@ -3,10 +3,11 @@
 These scripts are small convenience wrappers around `guarded-run.sh`. They keep
 common developer workloads on Vifty's safe path:
 
-1. read-only `viftyctl diagnose --json`;
-2. fail closed when readiness is blocked or `safeToRequestCooling` is false;
-3. delegate to `viftyctl run --json` with one bounded lease;
-4. let `viftyctl run` validate the child command and restore Auto afterward.
+1. read-only `viftyctl capabilities --json` and require the safe `runLifecycle` contract;
+2. read-only `viftyctl diagnose --json`;
+3. fail closed when readiness is blocked or `safeToRequestCooling` is false;
+4. delegate to `viftyctl run --json` with one bounded lease;
+5. let `viftyctl run` validate the child command and restore Auto afterward.
 
 Set `VIFTYCTL` to test against a development app bundle:
 

@@ -22,7 +22,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It runs read-only readiness first and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks the read-only `capabilities --json` `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test

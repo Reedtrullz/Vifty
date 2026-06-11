@@ -220,6 +220,7 @@ examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 
 The wrapper:
 
+- runs `capabilities --json` and requires the safe `runLifecycle` contract,
 - runs `diagnose --json`,
 - treats nonzero blocked diagnose reports as readiness blocks,
 - fails closed and prints any structured diagnose failure before requesting cooling,
@@ -240,7 +241,7 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
   examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
-The [examples/viftyctl](../examples/viftyctl/README.md) directory also includes small workload wrappers for common developer commands. They all delegate through `guarded-run.sh` and keep the same read-only readiness gate:
+The [examples/viftyctl](../examples/viftyctl/README.md) directory also includes small workload wrappers for common developer commands. They all delegate through `guarded-run.sh` and keep the same read-only capabilities/readiness gates:
 
 ```sh
 examples/viftyctl/swift-test.sh --filter ViftyCoreTests

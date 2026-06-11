@@ -1,6 +1,6 @@
 # Agent Integration Snippets
 
-Use these snippets when a local coding agent can run shell commands on a supported Mac. They all point at the same safe path: read-only readiness first, then `examples/viftyctl/guarded-run.sh`, which delegates to `viftyctl run --json` only when Vifty says cooling is safe to request.
+Use these snippets when a local coding agent can run shell commands on a supported Mac. They all point at the same safe path: read-only capabilities and readiness first, then `examples/viftyctl/guarded-run.sh`, which delegates to `viftyctl run --json` only when Vifty says cooling is safe to request.
 
 For the short operational runbook and failure-handling table, see [safe-agent-cooling.md](safe-agent-cooling.md).
 
@@ -40,6 +40,8 @@ examples/viftyctl/pytest.sh
 Use shorter durations and lower RPM percentages for degraded readiness. Never call raw SMC commands, `sudo ViftyHelper`, or arbitrary fan RPM writes. If Vifty reports `restoreAutoBeforeRequestingCooling`, ask the user before restoring Auto or retrying.
 
 Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once.
+
+The guarded wrapper checks `viftyctl capabilities --json` before readiness and refuses cooling if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 ````
 
 ## Codex
