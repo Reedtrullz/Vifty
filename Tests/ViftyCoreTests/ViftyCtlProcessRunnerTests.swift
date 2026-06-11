@@ -42,6 +42,18 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
         XCTAssertEqual(exitCode, 143)
     }
 
+    func testRunRestoresPreviousSignalHandlerAfterChildExits() throws {
+        let originalHandler = Darwin.signal(SIGHUP, SIG_DFL)
+        defer { _ = Darwin.signal(SIGHUP, originalHandler) }
+
+        let runner = ViftyCtlProcessRunner()
+        let exitCode = try runner.run(["/bin/sh", "-c", "exit 0"])
+
+        XCTAssertEqual(exitCode, 0)
+        let observedHandler = Darwin.signal(SIGHUP, originalHandler)
+        XCTAssertEqual(Self.signalHandlerBits(observedHandler), Self.signalHandlerBits(SIG_DFL))
+    }
+
     func testExitCodeReturnsNormalChildExitStatus() {
         XCTAssertEqual(
             ViftyCtlProcessRunner.exitCode(for: .exit, status: 7),
@@ -58,5 +70,9 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
             ViftyCtlProcessRunner.exitCode(for: .uncaughtSignal, status: SIGTERM),
             143
         )
+    }
+
+    private static func signalHandlerBits(_ handler: (@convention(c) (Int32) -> Void)?) -> UInt {
+        unsafeBitCast(handler, to: UInt.self)
     }
 }

@@ -90,18 +90,24 @@ struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
 }
 
 private final class ChildProcessSignalForwarder: @unchecked Sendable {
+    private typealias SignalHandler = @convention(c) (Int32) -> Void
+
     private let process: Process
     private let queue = DispatchQueue(label: "tech.reidar.vifty.viftyctl.signal-forwarder")
     private let signals: [Int32] = [SIGINT, SIGTERM, SIGHUP]
     private var sources: [DispatchSourceSignal] = []
+    private var previousHandlers: [(signal: Int32, handler: SignalHandler?)] = []
 
     init(process: Process) {
         self.process = process
     }
 
     func start() {
+        guard sources.isEmpty else { return }
+        previousHandlers.removeAll()
         for signalNumber in signals {
-            Darwin.signal(signalNumber, SIG_IGN)
+            let previousHandler = Darwin.signal(signalNumber, SIG_IGN)
+            previousHandlers.append((signalNumber, previousHandler))
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: queue)
             source.setEventHandler { [weak self] in
                 self?.forward(signalNumber)
@@ -114,6 +120,8 @@ private final class ChildProcessSignalForwarder: @unchecked Sendable {
     func cancel() {
         sources.forEach { $0.cancel() }
         sources.removeAll()
+        previousHandlers.forEach { _ = Darwin.signal($0.signal, $0.handler) }
+        previousHandlers.removeAll()
     }
 
     private func forward(_ signalNumber: Int32) {
