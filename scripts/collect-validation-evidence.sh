@@ -369,6 +369,71 @@ capture_capabilities_schema_resources() {
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
 }
 
+capture_capabilities_contract() {
+  local name="capabilities-contract"
+  local stdout_name="capabilities-contract.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local capabilities_path="${OUTPUT_DIR}/viftyctl-capabilities.json"
+  local status
+
+  set +e
+  ruby -rjson -e '
+    path = ARGV.fetch(0)
+    puts "field\tactual\texpected"
+
+    begin
+      data = JSON.parse(File.read(path))
+    rescue StandardError => error
+      warn "could not parse viftyctl capabilities JSON: #{error.message}"
+      exit 1
+    end
+
+    lifecycle = data["runLifecycle"]
+    unless lifecycle.is_a?(Hash)
+      warn "viftyctl capabilities JSON did not include runLifecycle"
+      lifecycle = {}
+    end
+
+    ok = true
+    expected_booleans = {
+      "supportsForceRetry" => data["supportsForceRetry"],
+      "runLifecycle.childCommandPreflightBeforeCooling" => lifecycle["childCommandPreflightBeforeCooling"],
+      "runLifecycle.autoRestoreAfterChildExit" => lifecycle["autoRestoreAfterChildExit"],
+      "runLifecycle.structuredPreChildFailures" => lifecycle["structuredPreChildFailures"],
+      "runLifecycle.cleanupStateReportedOnLaunchFailure" => lifecycle["cleanupStateReportedOnLaunchFailure"]
+    }
+
+    expected_booleans.each do |field, actual|
+      puts "#{field}\t#{actual}\ttrue"
+      next if actual == true
+
+      warn "#{field} #{actual.inspect} did not match true"
+      ok = false
+    end
+
+    signals = lifecycle["signalsForwardedToChild"]
+    signals = [] unless signals.is_a?(Array)
+    expected_signals = %w[INT TERM HUP]
+    actual_signal_list = signals.join(",")
+    puts "runLifecycle.signalsForwardedToChild\t#{actual_signal_list}\t#{expected_signals.join(",")}"
+    missing_signals = expected_signals - signals
+    unless missing_signals.empty?
+      warn "runLifecycle.signalsForwardedToChild missing #{missing_signals.join(",")}"
+      ok = false
+    end
+
+    exit(ok ? 0 : 1)
+  ' "${capabilities_path}" > "${stdout_path}" 2> "${stderr_path}"
+  status=$?
+  set -e
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
 capture_release_artifact_summary() {
   if [[ -z "${RELEASE_SUMMARY_PATH}" ]]; then
     return
@@ -739,6 +804,7 @@ write_review_summary() {
   summary_row "stapler-validate-app" "0 for public release" "release-trust" "Stapled notarization ticket should validate for public releases."
   summary_row "viftyctl-capabilities" "0 or 69" "agent-contract" "69 still preserves static JSON but means daemon status was unavailable."
   summary_row "capabilities-schema-resources" "0" "agent-contract" "Capabilities output should advertise installed schema resource paths."
+  summary_row "capabilities-contract" "0" "agent-contract" "Capabilities output should advertise the safe run lifecycle and supervised force-retry support."
   summary_row "viftyctl-status" "0" "agent-contract" "Nonzero means agent status could not be read."
   summary_row "viftyctl-diagnose" "0 or 75" "hardware-and-agent" "75 means a structured blocked readiness report was captured."
   summary_row "viftyctl-audit" "0" "agent-contract" "Read-only recent agent-control audit export should be captured."
@@ -757,7 +823,7 @@ Vifty validation evidence bundle.
 Attach these files to a Hardware Validation Report issue when validating real
 hardware. The viftyctl JSON files are read-only diagnostics and audit evidence. Bundle plist,
 bundled executable hashes, bundled schema resource hashes, advertised schema
-resource paths, privacy-review.tsv, LaunchDaemon, signing, notarization, and Gatekeeper files
+resource paths, capabilities-contract.tsv, privacy-review.tsv, LaunchDaemon, signing, notarization, and Gatekeeper files
 identify exactly what
 app/helper/daemon/CLI contract was tested. If --release-summary was supplied,
 release-artifact-summary.json is a copy of the verifier output and
@@ -816,6 +882,7 @@ run_capture "stapler-validate-app" "stapler-validate-app.txt" /usr/bin/xcrun sta
 
 run_capture "viftyctl-capabilities" "viftyctl-capabilities.json" "${VIFTYCTL}" capabilities --json
 capture_capabilities_schema_resources
+capture_capabilities_contract
 run_capture "viftyctl-status" "viftyctl-status.json" "${VIFTYCTL}" status --json
 run_capture "viftyctl-diagnose" "viftyctl-diagnose.json" "${VIFTYCTL}" diagnose --json
 run_capture "viftyctl-audit" "viftyctl-audit.json" "${VIFTYCTL}" audit --limit 20 --json

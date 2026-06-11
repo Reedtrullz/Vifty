@@ -54,6 +54,11 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(capabilitiesSchemaResources.contains("audit\tContents/Resources/schemas/viftyctl-audit.schema.json\tContents/Resources/schemas/viftyctl-audit.schema.json"))
         XCTAssertTrue(capabilitiesSchemaResources.contains("capabilities\tContents/Resources/schemas/viftyctl-capabilities.schema.json\tContents/Resources/schemas/viftyctl-capabilities.schema.json"))
         XCTAssertTrue(capabilitiesSchemaResources.contains("commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json"))
+        let capabilitiesContract = try harness.read("capabilities-contract.tsv")
+        XCTAssertTrue(capabilitiesContract.contains("field\tactual\texpected"))
+        XCTAssertTrue(capabilitiesContract.contains("supportsForceRetry\ttrue\ttrue"))
+        XCTAssertTrue(capabilitiesContract.contains("runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue"))
+        XCTAssertTrue(capabilitiesContract.contains("runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP"))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
         XCTAssertTrue(try harness.read("viftyctl-audit.json").contains("\"readOnly\":true"))
         XCTAssertTrue(try harness.read("viftyhelper-probeLocal.txt").contains("Skipped"))
@@ -64,6 +69,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv"))
         XCTAssertTrue(manifest.contains("schema-resources\t0\tschema-resources.tsv"))
         XCTAssertTrue(manifest.contains("capabilities-schema-resources\t0\tcapabilities-schema-resources.tsv"))
+        XCTAssertTrue(manifest.contains("capabilities-contract\t0\tcapabilities-contract.tsv"))
         XCTAssertTrue(manifest.contains("launchdaemon-plist\t0\tlaunchdaemon-plist.txt"))
         XCTAssertTrue(manifest.contains("launchdaemon-lint\t0\tlaunchdaemon-lint.txt"))
         XCTAssertTrue(manifest.contains("launchdaemon-teamid\t0\tlaunchdaemon-teamid.txt"))
@@ -84,6 +90,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewSummary.contains("release-checklist\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\trelease-and-agent-contract"))
         XCTAssertTrue(reviewSummary.contains("capabilities-schema-resources\t0\t0\tagent-contract"))
+        XCTAssertTrue(reviewSummary.contains("capabilities-contract\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("launchdaemon-teamid\t0\t0 for public release\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("spctl-assess-app\t"))
         XCTAssertTrue(reviewSummary.contains("viftyctl-capabilities\t0\t0 or 69\tagent-contract"))
@@ -136,6 +143,12 @@ final class ValidationEvidenceScriptTests: XCTestCase {
                 && check["scope"] as? String == "agent-contract"
         })
         XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "capabilities-contract"
+                && check["status"] as? String == "0"
+                && check["expected"] as? String == "0"
+                && check["scope"] as? String == "agent-contract"
+        })
+        XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "viftyctl-audit"
                 && check["status"] as? String == "0"
                 && check["expected"] as? String == "0"
@@ -159,6 +172,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
         XCTAssertTrue(checksums.contains("\tschema-resources.tsv"))
         XCTAssertTrue(checksums.contains("\tcapabilities-schema-resources.tsv"))
+        XCTAssertTrue(checksums.contains("\tcapabilities-contract.tsv"))
         XCTAssertTrue(checksums.contains("\tlaunchdaemon-plist.txt"))
         XCTAssertTrue(checksums.contains("\treview-summary.tsv"))
         XCTAssertTrue(checksums.contains("\treview-summary.json"))
@@ -308,6 +322,29 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "capabilities-schema-resources"
+                && check["status"] as? String == "1"
+                && check["expected"] as? String == "0"
+        })
+        let invocations = try harness.loggedViftyCtlInvocations()
+        XCTAssertEqual(invocations, expectedReadOnlyViftyCtlInvocations)
+    }
+
+    func testCollectorRecordsCapabilitiesContractDriftWithoutRunningCoolingCommands() throws {
+        let harness = try ValidationEvidenceHarness(runLifecycleAutoRestore: false)
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("capabilities-contract\t1\tcapabilities-contract.tsv"))
+        XCTAssertTrue(try harness.read("capabilities-contract.tsv").contains("runLifecycle.autoRestoreAfterChildExit\tfalse\ttrue"))
+        XCTAssertTrue(try harness.read("capabilities-contract.stderr").contains("runLifecycle.autoRestoreAfterChildExit"))
+        let summary = try harness.readJSON("review-summary.json")
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "capabilities-contract"
                 && check["status"] as? String == "1"
                 && check["expected"] as? String == "0"
         })
@@ -598,6 +635,7 @@ private final class ValidationEvidenceHarness {
     private let diagnoseState: String
     private let diagnoseExitCode: Int
     private let statusSchemaResourcePath: String
+    private let runLifecycleAutoRestore: Bool
     private let includePrivacyLeak: Bool
 
     init(
@@ -605,6 +643,7 @@ private final class ValidationEvidenceHarness {
         createViftyAppExecutable: Bool = true,
         createSchemaResources: Bool = true,
         statusSchemaResourcePath: String = "Contents/Resources/schemas/viftyctl-status.schema.json",
+        runLifecycleAutoRestore: Bool = true,
         diagnoseState: String = "ready",
         diagnoseExitCode: Int = 0,
         includePrivacyLeak: Bool = false,
@@ -623,6 +662,7 @@ private final class ValidationEvidenceHarness {
         self.diagnoseState = diagnoseState
         self.diagnoseExitCode = diagnoseExitCode
         self.statusSchemaResourcePath = statusSchemaResourcePath
+        self.runLifecycleAutoRestore = runLifecycleAutoRestore
         self.includePrivacyLeak = includePrivacyLeak
 
         let macOSURL = appURL
@@ -893,7 +933,7 @@ private final class ValidationEvidenceHarness {
         printf '%s\\n' "$*" >> "${FAKE_VIFTYCTL_LOG:?}"
 
         if [ "$#" -eq 2 ] && [ "$1" = "capabilities" ] && [ "$2" = "--json" ]; then
-          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true}\\n'
+          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}}\\n'
           exit 0
         fi
 

@@ -352,6 +352,7 @@ private final class ValidationEvidenceReviewHarness {
             "privacy-review": privacyReviewStatus,
             "schema-resources": "0",
             "capabilities-schema-resources": "0",
+            "capabilities-contract": "0",
             "launchdaemon-lint": "0",
             "viftyctl-capabilities": "0",
             "viftyctl-status": "0",
@@ -386,6 +387,7 @@ private final class ValidationEvidenceReviewHarness {
         try writeText("privacy-review.tsv", contents: privacyReviewText)
         try writeText("schema-resources.tsv", contents: schemaResourcesTSV)
         try writeText("capabilities-schema-resources.tsv", contents: capabilitiesSchemaResourcesTSV)
+        try writeText("capabilities-contract.tsv", contents: capabilitiesContractTSV)
         try writeDiagnose(diagnose)
         try writeJSON(
             "viftyctl-audit.json",
@@ -716,6 +718,18 @@ private final class ValidationEvidenceReviewHarness {
         commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json
         diagnose\tContents/Resources/schemas/viftyctl-diagnose.schema.json\tContents/Resources/schemas/viftyctl-diagnose.schema.json
         status\tContents/Resources/schemas/viftyctl-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json
+        """
+    }
+
+    private var capabilitiesContractTSV: String {
+        """
+        field\tactual\texpected
+        supportsForceRetry\ttrue\ttrue
+        runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue
+        runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue
+        runLifecycle.structuredPreChildFailures\ttrue\ttrue
+        runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
+        runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
         """
     }
 }

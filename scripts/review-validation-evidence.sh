@@ -150,6 +150,7 @@ ruby -rjson -rcsv -rfileutils -e '
     privacy-review.tsv
     schema-resources.tsv
     capabilities-schema-resources.tsv
+    capabilities-contract.tsv
   ].freeze
 
   COMMON_ZERO_CHECKS = %w[
@@ -158,6 +159,7 @@ ruby -rjson -rcsv -rfileutils -e '
     privacy-review
     schema-resources
     capabilities-schema-resources
+    capabilities-contract
     launchdaemon-lint
     viftyctl-capabilities
     viftyctl-status

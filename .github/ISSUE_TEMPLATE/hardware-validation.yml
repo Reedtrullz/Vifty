@@ -157,7 +157,7 @@ body:
     id: release-trust-evidence
     attributes:
       label: Release trust evidence
-      description: Paste review-summary.tsv rows, attach review-summary.json, privacy-review.tsv, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The privacy-review row should be 0 before public sharing; redact or share privately if it names hostnames, /Users/... paths, serial-number labels, or hardware UUID labels. Source-first source builds and unsigned-dev reports may skip release-artifact-summary evidence; trusted binary release reports should include it and the row should be 0 so the verifier result passed and matched the installed app version.
+      description: Paste review-summary.tsv rows, attach review-summary.json, privacy-review.tsv, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, capabilities-contract.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The privacy-review row should be 0 before public sharing; redact or share privately if it names hostnames, /Users/... paths, serial-number labels, or hardware UUID labels. The capabilities-contract row should be 0 so agent wrappers can rely on the installed CLI contract. Source-first source builds and unsigned-dev reports may skip release-artifact-summary evidence; trusted binary release reports should include it and the row should be 0 so the verifier result passed and matched the installed app version.
       render: text
       placeholder: |
         name	status	expected	scope	note
@@ -167,6 +167,7 @@ body:
         release-artifact-summary	0	0 or skipped	release-trust	Optional verifier summary should pass and match the installed app version when supplied.
         schema-resources	0	0	agent-contract	Bundled viftyctl JSON Schemas should be present and hashed.
         capabilities-schema-resources	0	0	agent-contract	Capabilities output should advertise installed schema resource paths.
+        capabilities-contract	0	0	agent-contract	Capabilities output should advertise safe runLifecycle and supportsForceRetry fields.
         launchdaemon-teamid	0	0 for public release	release-trust	Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty.
         spctl-assess-app	0	0 for public release	release-trust	Gatekeeper assessment should pass for notarized releases.
     validations:

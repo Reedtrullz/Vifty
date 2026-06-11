@@ -344,6 +344,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("validated-hardware-evidence"))
         XCTAssertTrue(release.contains("Vifty-v<version>-artifact-summary.json"))
         XCTAssertTrue(release.contains("review-summary.json"))
+        XCTAssertTrue(release.contains("capabilities-contract.tsv"))
         XCTAssertTrue(hardwareValidation.contains("[compatibility.md](compatibility.md)"))
         XCTAssertTrue(hardwareValidation.contains("scripts/collect-validation-evidence.sh"))
         XCTAssertTrue(hardwareValidation.contains("scripts/review-validation-evidence.sh"))
@@ -352,7 +353,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("--manual-smoke-result passed-auto-restored"))
         XCTAssertTrue(hardwareValidation.contains("validated-hardware-evidence"))
         XCTAssertTrue(hardwareValidation.contains("review-summary.json"))
+        XCTAssertTrue(hardwareValidation.contains("capabilities-contract.tsv"))
         XCTAssertTrue(hardwareValidationTemplate.contains("privacy-review.tsv"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("capabilities-contract.tsv"))
         XCTAssertTrue(hardwareValidationTemplate.contains("The privacy-review row should be 0 before public sharing"))
         XCTAssertTrue(hardwareValidationTemplate.contains("Review captured files for likely hostnames, /Users/... paths, serial-number labels, or hardware UUID labels before public sharing."))
     }
@@ -412,7 +415,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let workplan = try read("docs/plans/2026-06-11-vifty-strategy-workplan.md")
 
         XCTAssertTrue(workplan.contains("Local hardening is on `main` for the `v1.1.0` source-first release"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 415 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 416 XCTest cases"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
