@@ -83,6 +83,24 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must export the validated release VERSION"))
     }
 
+    func testValidatorRejectsCIWorkflowWithoutNode24ActionsRuntime() throws {
+        let harness = try ReleaseMetadataHarness(includeCIWorkflowNode24ActionsRuntime: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must opt GitHub JavaScript actions into Node.js 24"))
+    }
+
+    func testValidatorRejectsReleaseWorkflowWithoutNode24ActionsRuntime() throws {
+        let harness = try ReleaseMetadataHarness(includeReleaseWorkflowNode24ActionsRuntime: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/release.yml must opt GitHub JavaScript actions into Node.js 24"))
+    }
+
     func testValidatorRejectsWorkflowWithoutNotarization() throws {
         let harness = try ReleaseMetadataHarness(includeNotarization: false)
 
@@ -354,7 +372,9 @@ private final class ReleaseMetadataHarness {
         includePublishedZip: Bool = true,
         includePublishedChecksum: Bool = true,
         includeReleaseChecklist: Bool = true,
-        includeVerifyTag: Bool = true
+        includeVerifyTag: Bool = true,
+        includeCIWorkflowNode24ActionsRuntime: Bool = true,
+        includeReleaseWorkflowNode24ActionsRuntime: Bool = true
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-release-metadata-\(UUID().uuidString)", isDirectory: true)
@@ -379,6 +399,7 @@ private final class ReleaseMetadataHarness {
             includeAdHocSigningIdentity: includeAdHocSigningIdentity,
             privilegedHelperCleanupPath: privilegedHelperCleanupPath
         )
+        try writeCIWorkflow(includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime)
         try writeReleaseWorkflow(
             includeTagVersionDerivation: includeTagVersionDerivation,
             includeTagPrefixCheck: includeTagPrefixCheck,
@@ -396,7 +417,8 @@ private final class ReleaseMetadataHarness {
             includePublishedZip: includePublishedZip,
             includePublishedChecksum: includePublishedChecksum,
             includeReleaseChecklist: includeReleaseChecklist,
-            includeVerifyTag: includeVerifyTag
+            includeVerifyTag: includeVerifyTag,
+            includeNode24ActionsRuntime: includeReleaseWorkflowNode24ActionsRuntime
         )
     }
 
@@ -597,8 +619,16 @@ private final class ReleaseMetadataHarness {
         includePublishedZip: Bool,
         includePublishedChecksum: Bool,
         includeReleaseChecklist: Bool,
-        includeVerifyTag: Bool
+        includeVerifyTag: Bool,
+        includeNode24ActionsRuntime: Bool
     ) throws {
+        let node24RuntimeLines = includeNode24ActionsRuntime
+            ? """
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+        """
+            : ""
         let tagVersionDerivationLine = includeTagVersionDerivation
             ? "VERSION=\"${TAG#v}\""
             : ""
@@ -685,7 +715,7 @@ private final class ReleaseMetadataHarness {
             : ""
         let contents = """
         name: Release
-        jobs:
+        \(node24RuntimeLines)jobs:
           signed-notarized-app:
             steps:
               - name: Validate release version
@@ -725,6 +755,29 @@ private final class ReleaseMetadataHarness {
         """
         try contents.write(
             to: rootURL.appendingPathComponent(".github/workflows/release.yml"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private func writeCIWorkflow(includeNode24ActionsRuntime: Bool) throws {
+        let node24RuntimeLines = includeNode24ActionsRuntime
+            ? """
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+        """
+            : ""
+        let contents = """
+        name: CI
+        \(node24RuntimeLines)jobs:
+          swiftpm:
+            steps:
+              - name: Cache SPM build artifacts
+                uses: actions/cache@v4
+        """
+        try contents.write(
+            to: rootURL.appendingPathComponent(".github/workflows/ci.yml"),
             atomically: true,
             encoding: .utf8
         )

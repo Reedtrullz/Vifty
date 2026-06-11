@@ -5,6 +5,7 @@ ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/..
 cd "${ROOT_DIR}"
 
 CASK_PATH="Casks/vifty.rb"
+CI_WORKFLOW=".github/workflows/ci.yml"
 RELEASE_WORKFLOW=".github/workflows/release.yml"
 INFO_PLIST="Resources/Info.plist"
 
@@ -69,6 +70,16 @@ fi
 
 if ! grep -Fq 'echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must export the validated release VERSION" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' "${CI_WORKFLOW}"; then
+  echo "error: ${CI_WORKFLOW} must opt GitHub JavaScript actions into Node.js 24" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must opt GitHub JavaScript actions into Node.js 24" >&2
   exit 1
 fi
 
