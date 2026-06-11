@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/review-validation-evidence.sh` now accepts `viftyctl-capabilities` status `69` when the static schema-resource and capabilities-contract evidence still pass, matching the collector's daemon-unavailable but machine-readable capabilities mode.
 - `scripts/review-validation-evidence.sh` now directly verifies `schema-resources.tsv`, `capabilities-schema-resources.tsv`, and `capabilities-contract.tsv` contents instead of relying only on `review-summary.json` status rows for the agent-facing contract evidence.
 - `scripts/review-validation-evidence.sh` now rejects validation bundles when human-facing `review-summary.tsv` check statuses drift from automation-facing `review-summary.json`.
+- `scripts/review-validation-evidence.sh` now validates `manifest.tsv` command rows, output files, and per-command `.status` files against captured summary evidence.
 - `scripts/review-validation-evidence.sh` now requires `checksums.tsv` coverage for captured evidence files and recomputes SHA-256 digests and byte counts so files cannot be edited or omitted after collection without reviewer detection.
 
 ### Changed
@@ -27,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardware validation docs and the issue template now distinguish source builds, source-first unsigned-dev zips, future notarized releases, and Homebrew installs so `v1.1.0` compatibility reports do not imply trusted binary distribution.
 - The Bug Report template now steers unsupported or blocked fan reports to `viftyctl diagnose --json` first and keeps helper probe output optional unless supported hardware or maintainer follow-up needs it.
 - The Agent Cooling Report template now treats blocked readiness as evidence-only, adds a blocked-before-cooling command path, and warns reporters not to retry `viftyctl prepare` or `viftyctl run` while diagnose says cooling is unsafe.
-- The strategy workplan now reflects the landed `main` hardening state, 424-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
+- The strategy workplan now reflects the landed `main` hardening state, 426-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
 
 ## [1.1.0] — 2026-06-11
 

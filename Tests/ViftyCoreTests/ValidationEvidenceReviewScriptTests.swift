@@ -78,6 +78,28 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("review-summary.tsv capabilities-contract status \"1\" did not match review-summary.json \"0\""))
     }
 
+    func testReviewRejectsManifestStatusDriftFromReviewSummary() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            manifestStatusOverrides: ["capabilities-contract": "1"]
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("manifest.tsv capabilities-contract status \"1\" did not match review-summary.json \"0\""))
+    }
+
+    func testReviewRejectsManifestMissingOutputFile() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            manifestStdoutOverrides: ["capabilities-contract": "missing.tsv"]
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("manifest.tsv capabilities-contract stdout references missing file missing.tsv"))
+    }
+
     func testReviewRejectsChecksumDriftForCapturedEvidenceFiles() throws {
         let harness = try ValidationEvidenceReviewHarness()
         try "readOnly=true\ncoolingCommandsRun=false\ntampered=true\n".write(
@@ -431,6 +453,9 @@ private final class ValidationEvidenceReviewHarness {
         privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
         capabilitiesStatus: String = "0",
         reviewSummaryTSVStatusOverrides: [String: String] = [:],
+        manifestStatusOverrides: [String: String] = [:],
+        manifestStdoutOverrides: [String: String] = [:],
+        manifestStderrOverrides: [String: String] = [:],
         schemaResourcesText: String? = nil,
         capabilitiesSchemaResourcesText: String? = nil,
         capabilitiesContractText: String? = nil,
@@ -487,7 +512,6 @@ private final class ValidationEvidenceReviewHarness {
             releaseChecklistPath: includeReleaseChecklist ? "/tmp/Vifty-v\(releaseChecklistVersion)-release-checklist.md" : ""
         )
         try writeText("review-summary.tsv", contents: tsvSummary(reviewSummaryTSVStatuses))
-        try writeText("manifest.tsv", contents: "name\tstatus\tstdout\tstderr\n")
         try writeText("metadata.txt", contents: "readOnly=true\ncoolingCommandsRun=false\n")
         try writeText("bundle-executables.tsv", contents: bundleExecutablesTSV)
         try writeText("privacy-review.tsv", contents: privacyReviewText)
@@ -527,6 +551,12 @@ private final class ValidationEvidenceReviewHarness {
         if includeReleaseChecklist {
             try writeReleaseChecklist(version: releaseChecklistVersion)
         }
+        try writeManifest(
+            statuses: statuses,
+            statusOverrides: manifestStatusOverrides,
+            stdoutOverrides: manifestStdoutOverrides,
+            stderrOverrides: manifestStderrOverrides
+        )
         try writeChecksums()
     }
 
@@ -623,6 +653,69 @@ private final class ValidationEvidenceReviewHarness {
             lines.append("\(name)\t\(statuses[name] ?? "")\t0\ttest\tfixture")
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func writeManifest(
+        statuses: [String: String],
+        statusOverrides: [String: String],
+        stdoutOverrides: [String: String],
+        stderrOverrides: [String: String]
+    ) throws {
+        let manifestStatuses = statuses.merging(statusOverrides) { _, new in new }
+        var lines = ["name\tstatus\tstdout\tstderr"]
+
+        for name in manifestStatuses.keys.sorted() {
+            let status = manifestStatuses[name] ?? ""
+            guard status != "skipped" else {
+                continue
+            }
+
+            let stdoutName = stdoutOverrides[name] ?? defaultManifestStdoutName(for: name)
+            let stderrName = stderrOverrides[name] ?? "\(name).stderr"
+
+            if stdoutOverrides[name] == nil {
+                try ensureManifestFile(stdoutName, contents: "fixture for \(name)\n")
+            }
+            if stderrOverrides[name] == nil {
+                try ensureManifestFile(stderrName, contents: "")
+            }
+            try writeText("\(name).status", contents: "\(status)\n")
+            lines.append("\(name)\t\(status)\t\(stdoutName)\t\(stderrName)")
+        }
+
+        try writeText("manifest.tsv", contents: lines.joined(separator: "\n") + "\n")
+    }
+
+    private func ensureManifestFile(_ filename: String, contents: String) throws {
+        guard isBundleLocalManifestFilename(filename) else {
+            return
+        }
+        let url = bundleURL.appendingPathComponent(filename)
+        guard !FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+        try writeText(filename, contents: contents)
+    }
+
+    private func isBundleLocalManifestFilename(_ filename: String) -> Bool {
+        !filename.isEmpty && !filename.contains("/") && !filename.hasPrefix(".")
+    }
+
+    private func defaultManifestStdoutName(for name: String) -> String {
+        switch name {
+        case "bundle-executables",
+            "privacy-review",
+            "schema-resources",
+            "capabilities-schema-resources",
+            "capabilities-contract",
+            "release-artifact-summary",
+            "release-checklist":
+            "\(name).tsv"
+        case "viftyctl-capabilities", "viftyctl-status", "viftyctl-diagnose", "viftyctl-audit":
+            "\(name).json"
+        default:
+            "\(name).txt"
+        }
     }
 
     private func writeDiagnose(_ fixture: ValidationEvidenceDiagnoseFixture) throws {

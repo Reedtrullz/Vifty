@@ -287,6 +287,93 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def require_manifest_matches_summary(bundle, manifest_rows, json_checks, failures)
+    if manifest_rows.empty?
+      failures << "manifest.tsv must include command rows"
+      return
+    end
+
+    missing_headers = %w[name status stdout stderr].reject { |header| manifest_rows.first.key?(header) }
+    unless missing_headers.empty?
+      failures << "manifest.tsv is missing required header(s): #{missing_headers.join(", ")}"
+      return
+    end
+
+    manifest_checks = {}
+    manifest_files = {}
+    manifest_rows.each do |row|
+      name = row["name"].to_s
+      if name.empty?
+        failures << "manifest.tsv has a row with an empty name"
+        next
+      end
+      unless name.match?(/\A[A-Za-z0-9_.-]+\z/) && !name.start_with?(".")
+        failures << "manifest.tsv name #{name.inspect} must be a command name"
+        next
+      end
+      if manifest_checks.key?(name)
+        failures << "manifest.tsv has duplicate command #{name}"
+        next
+      end
+
+      status = row["status"].to_s
+      if status.empty?
+        failures << "manifest.tsv #{name} status is empty"
+      end
+      manifest_checks[name] = status
+
+      json_status = json_checks[name]
+      if !json_status.nil? && status != json_status
+        failures << "manifest.tsv #{name} status #{status.inspect} did not match review-summary.json #{json_status.inspect}"
+      end
+
+      %w[stdout stderr].each do |field|
+        relative_path = row[field].to_s
+        if relative_path.empty?
+          failures << "manifest.tsv #{name} #{field} is empty"
+          next
+        end
+        if relative_path.include?("/") || relative_path.start_with?(".")
+          failures << "manifest.tsv #{name} #{field} #{relative_path.inspect} must be a bundle-local filename"
+          next
+        end
+        if manifest_files.key?(relative_path)
+          failures << "manifest.tsv #{name} #{field} #{relative_path.inspect} duplicates another manifest file"
+        else
+          manifest_files[relative_path] = true
+        end
+        unless File.file?(bundle_path(bundle, relative_path))
+          failures << "manifest.tsv #{name} #{field} references missing file #{relative_path}"
+        end
+      end
+
+      status_path = "#{name}.status"
+      if manifest_files.key?(status_path)
+        failures << "manifest.tsv #{name} status file #{status_path.inspect} duplicates another manifest file"
+      else
+        manifest_files[status_path] = true
+      end
+      status_file_path = bundle_path(bundle, status_path)
+      unless File.file?(status_file_path)
+        failures << "manifest.tsv #{name} status references missing file #{status_path}"
+        next
+      end
+      status_file_value = File.read(status_file_path).strip
+      unless status_file_value == status
+        failures << "manifest.tsv #{name} status #{status.inspect} did not match #{status_path} #{status_file_value.inspect}"
+      end
+    end
+
+    json_checks.each do |name, json_status|
+      next if json_status == "skipped"
+      next if manifest_checks.key?(name)
+
+      failures << "manifest.tsv is missing command #{name}"
+    end
+  rescue StandardError => error
+    failures << "could not validate manifest.tsv: #{error.message}"
+  end
+
   def require_checksums_match_bundle(bundle, checksum_rows, summary_path, failures)
     if checksum_rows.empty?
       failures << "checksums.tsv must include evidence rows"
@@ -322,7 +409,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
       require_sha256(row["sha256"], "checksums.tsv #{relative_path} sha256", failures)
       declared_bytes = row["bytes"].to_s
-      require_positive_integer(declared_bytes, "checksums.tsv #{relative_path} bytes", failures)
+      require_nonnegative_integer(declared_bytes, "checksums.tsv #{relative_path} bytes", failures)
 
       path = bundle_path(bundle, relative_path)
       unless File.file?(path)
@@ -357,6 +444,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "#{field} must be greater than zero" unless integer.positive?
   rescue StandardError
     failures << "#{field} must be a positive integer"
+  end
+
+  def require_nonnegative_integer(value, field, failures)
+    integer = Integer(value)
+    failures << "#{field} must be zero or greater" if integer.negative?
+  rescue StandardError
+    failures << "#{field} must be a nonnegative integer"
   end
 
   def require_sha256(value, field, failures)
@@ -431,6 +525,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
   review_summary_rows = parse_tsv(bundle, "review-summary.tsv", failures)
   require_review_summary_tsv_matches_json(review_summary_rows, checks, failures)
+  manifest_rows = parse_tsv(bundle, "manifest.tsv", failures)
+  require_manifest_matches_summary(bundle, manifest_rows, checks, failures)
   checksum_rows = parse_tsv(bundle, "checksums.tsv", failures)
   require_checksums_match_bundle(bundle, checksum_rows, summary_path, failures)
 
