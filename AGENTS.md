@@ -53,6 +53,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
 - `.github/workflows/ci.yml` — GitHub Actions CI: Swift tests, release app build, plist/code-sign checks, temp install verification, and app artifact upload.
 - `.github/workflows/release.yml` — tagged release workflow for Developer ID signing, notarization, stapling, checksums, and GitHub Release publishing.
+- `.github/ISSUE_TEMPLATE/release-trust.yml` — structured release-trust reports for missing assets, cask checksum drift, Gatekeeper/notarization/signing/TeamID failures, and release-readiness/verifier/reviewer blockers.
 - `.github/ISSUE_TEMPLATE/hardware-validation.yml` — structured compatibility reports for release validation evidence.
 - `.github/ISSUE_TEMPLATE/agent-cooling.yml` — structured `viftyctl`/guarded-run agent cooling reports with diagnose/status/audit evidence and safety confirmations.
 - `scripts/validate-release-metadata.sh` — verifies release tag/version wiring, bundle version, cask version, cask URL/SHA, release artifact naming, release TeamID build wiring, notarization/stapling workflow steps, pre-publish artifact verification summary publication, public verifier skip flags, and Gatekeeper assessment stay aligned.

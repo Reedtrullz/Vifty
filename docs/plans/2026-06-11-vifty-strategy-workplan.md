@@ -258,6 +258,7 @@ Current progress:
 - `docs/unsupported-hardware.md` defines unsupported-machine safe-block behavior for Intel Macs, Apple Silicon non-MacBook-Pro machines, unknown fan topology, and untrustworthy telemetry, with read-only evidence commands, reviewer mode, and explicit no-bypass rules.
 - `.github/PULL_REQUEST_TEMPLATE.md` now requires contributors to identify safety impact across fan/SMC writes, daemon/helper/XPC boundaries, agent leases, release trust, hardware validation, UI restore/ownership state, and local persistence before review.
 - `.github/CODEOWNERS` now explicitly calls out agent-facing contracts, JSON Schemas, release workflows, cask metadata, validation docs, issue templates, and repo safety process files as safety-sensitive review surfaces.
+- `.github/ISSUE_TEMPLATE/release-trust.yml` now gives reporters a structured path for GitHub Release asset, Homebrew cask checksum, Gatekeeper, notarization, stapling, Developer ID TeamID, LaunchDaemon TeamID, release-readiness, verifier, and reviewer failures without asking them to bypass trust gates or run fan-write tests.
 
 Exit criteria:
 

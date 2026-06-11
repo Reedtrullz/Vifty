@@ -1,0 +1,182 @@
+name: Release Trust Report
+description: Report a signed release, notarization, Gatekeeper, checksum, cask, or release-asset trust issue
+title: "[Release Trust]: "
+labels: ["release-trust"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for public release trust issues: missing GitHub Release assets, checksum or cask drift, Gatekeeper failures, notarization/stapling failures, TeamID/XPC allowlist mismatches, bundle-version drift, or release-readiness blockers.
+
+        Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
+
+        A source tag, passing CI run, local ad-hoc build, or CI artifact is not a trusted public binary release. Public trust requires the signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
+
+  - type: input
+    id: release-version
+    attributes:
+      label: Release version
+      description: Which Vifty release is affected?
+      placeholder: e.g. 1.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: Install source
+      description: How did you obtain the app or artifact?
+      options:
+        - GitHub Release
+        - Homebrew cask
+        - Release workflow artifact
+        - Local Developer ID build
+        - Local ad-hoc build
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: failure-area
+    attributes:
+      label: Failure area
+      description: Which trust gate failed or appears inconsistent?
+      options:
+        - Release readiness blocked
+        - GitHub Release asset missing
+        - Homebrew cask SHA mismatch
+        - Bundle version mismatch
+        - Developer ID signature or TeamID mismatch
+        - Notarization or stapling failure
+        - Gatekeeper assessment failure
+        - LaunchDaemon TeamID allowlist mismatch
+        - Release artifact verifier failure
+        - Validation evidence reviewer failure
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Which macOS version produced the failure?
+      placeholder: e.g. 15.5
+    validations:
+      required: true
+
+  - type: textarea
+    id: exact-command
+    attributes:
+      label: Exact command or install path
+      description: Paste the exact command, URL, or installed app path involved.
+      render: shell
+      placeholder: |
+        brew install --cask vifty
+        scripts/check-release-readiness.sh --version 1.1.0 --repo Reedtrullz/Vifty --json
+        scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
+    validations:
+      required: true
+
+  - type: textarea
+    id: release-readiness-json
+    attributes:
+      label: Release readiness JSON
+      description: Paste `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --json` when available.
+      render: json
+      placeholder: |
+        {
+          "schemaID": "https://vifty.local/schemas/release-readiness.schema.json",
+          "version": "1.1.0",
+          "sourceCommit": "...",
+          "status": "blocked",
+          "checks": []
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: release-assets
+    attributes:
+      label: GitHub Release assets
+      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Trusted releases should include the zip, checksum, verifier summary, and release checklist.
+      render: text
+      placeholder: |
+        Vifty-v<version>.zip
+        Vifty-v<version>.zip.sha256
+        Vifty-v<version>-artifact-summary.json
+        Vifty-v<version>-release-checklist.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: verifier-summary
+    attributes:
+      label: Release verifier output or summary
+      description: Paste `scripts/verify-release-artifact.sh --team-id <TEAMID>` output, or attach/paste `Vifty-v<version>-artifact-summary.json` if the workflow produced one.
+      render: json
+      placeholder: |
+        {
+          "schemaID": "https://vifty.local/schemas/release-artifact-summary.schema.json",
+          "passed": false,
+          "checks": []
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: validation-review
+    attributes:
+      label: Validation evidence review
+      description: Paste `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json` output or attach `review-result.json` / `review-summary.tsv` when available.
+      render: text
+      placeholder: |
+        scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json --release-checklist ./Vifty-v<version>-release-checklist.md
+        scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> --mode release --summary .build/vifty-validation-<timestamp>/review-result.json
+    validations:
+      required: false
+
+  - type: textarea
+    id: gatekeeper-signing-output
+    attributes:
+      label: Gatekeeper, signing, notarization, or cask output
+      description: Paste relevant `spctl`, `codesign`, `stapler`, `brew`, or installer output.
+      render: text
+      placeholder: |
+        spctl --assess --type execute --verbose=4 /Applications/Vifty.app
+        codesign --verify --deep --strict /Applications/Vifty.app
+        xcrun stapler validate /Applications/Vifty.app
+        brew info --cask vifty
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual trust state
+      description: What did you expect to pass, and what failed or looked inconsistent?
+      placeholder: |
+        Expected:
+        Actual:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety-confirmations
+    attributes:
+      label: Safety confirmations
+      options:
+        - label: "I did not bypass Gatekeeper, manually edit the Homebrew cask SHA, or disable release verifier signature/notarization checks."
+          required: true
+        - label: "I understand that source tags, CI artifacts, and local ad-hoc builds are not trusted public binary releases."
+          required: true
+        - label: "I did not run manual fan-write smoke tests or raw SMC commands to investigate this release-trust issue."
+          required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Include screenshots, release workflow run URLs, cask commit links, hardware model, or anything else useful.
+    validations:
+      required: false

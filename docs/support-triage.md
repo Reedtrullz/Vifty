@@ -20,9 +20,10 @@ For hardware/fan reports on supported Apple Silicon MacBook Pro machines, also a
 sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
 ```
 
-For release-trust reports, prefer the collector bundle:
+For release-trust reports, use the dedicated **Release Trust Report** issue template and prefer the release-readiness preflight plus collector bundle:
 
 ```sh
+scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --json
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json
 ```
@@ -31,7 +32,7 @@ scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --s
 
 | Bucket | Typical signal | Evidence to request | Safe next action |
 | --- | --- | --- | --- |
-| Release trust | Gatekeeper, notarization, cask SHA, TeamID, or bundle-version mismatch | `scripts/verify-release-artifact.sh --team-id <TEAMID>`, collector bundle, `review-result.json` | Do not promote the release or cask until verifier and reviewer pass. |
+| Release trust | Gatekeeper, notarization, cask SHA, TeamID, missing release assets, release-readiness blocker, or bundle-version mismatch | Release Trust Report issue, `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --json`, `scripts/verify-release-artifact.sh --team-id <TEAMID>`, collector bundle, `review-result.json` | Do not promote the release or cask until readiness, verifier, and reviewer pass. |
 | Hardware validation | New Apple Silicon MacBook Pro model, missing compatibility row, or smoke-test report | Hardware Validation Report issue, `diagnose --json`, `probeLocal`, collector bundle | Keep the model as needs validation until review passes and manual smoke records Auto restore. |
 | Unsupported hardware safe block | Non-MacBook-Pro, Intel, or unsupported Apple Silicon reports `blocked` | `diagnose --json`, optional collector bundle, [unsupported-hardware.md](unsupported-hardware.md) | Treat safe blocking as expected behavior; do not suggest bypasses. |
 | Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, Login Items approval, empty fan snapshot | `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper, approve Login Items, then rerun read-only diagnostics. |
@@ -54,6 +55,8 @@ Suggested labels:
 Use `security` only for public non-sensitive tracking. For vulnerabilities involving unprivileged fan writes, daemon client spoofing, arbitrary SMC writes, or local permission leaks, direct the reporter to GitHub Security Advisories.
 
 Use the dedicated **Agent Cooling Report** issue template for `viftyctl run`, `prepare`, `restore-auto`, guarded wrapper, rate-limit, expired-lease, and restore-failure reports.
+
+Use the dedicated **Release Trust Report** issue template for GitHub Release asset, Homebrew cask SHA, Gatekeeper, notarization, stapling, Developer ID TeamID, LaunchDaemon TeamID allowlist, bundle-version, release-readiness, and release verifier/reviewer failures. Do not treat a source tag, CI artifact, or local ad-hoc build as a trusted public binary release.
 
 ## Escalation Rules
 

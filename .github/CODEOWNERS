@@ -53,6 +53,7 @@ docs/release-status.md  @Reedtrullz
 docs/support-triage.md  @Reedtrullz
 docs/trust-model.md  @Reedtrullz
 docs/unsupported-hardware.md  @Reedtrullz
+.github/ISSUE_TEMPLATE/release-trust.yml  @Reedtrullz
 .github/ISSUE_TEMPLATE/hardware-validation.yml  @Reedtrullz
 .github/ISSUE_TEMPLATE/bug-report.yml  @Reedtrullz
 .github/ISSUE_TEMPLATE/config.yml  @Reedtrullz

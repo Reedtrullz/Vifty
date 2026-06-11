@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A Release Trust Report issue template now collects release-readiness JSON, GitHub Release asset listings, verifier/reviewer evidence, Gatekeeper/signing/notarization/cask output, and no-bypass safety confirmations for public binary trust failures.
+
 ## [1.1.0] — 2026-06-11
 
 ### Added

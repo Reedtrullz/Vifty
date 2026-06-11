@@ -43,6 +43,8 @@ gh release view v1.1.0 --repo Reedtrullz/Vifty
 scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
 ```
 
+If any of these checks fail unexpectedly after the release secrets are configured, open a **Release Trust Report** issue and attach the release-readiness JSON, `gh release view` output, verifier summary, and release-mode `review-result.json` when available.
+
 Expected current result before secrets are configured:
 
 - `scripts/check-release-readiness.sh` reports `schemaID: "https://vifty.local/schemas/release-readiness.schema.json"` and `status: "blocked"`, with `release-metadata` and `source-ci` passed and `release-secrets` / `github-release` blocked.
