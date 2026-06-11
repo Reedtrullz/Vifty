@@ -324,6 +324,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
@@ -331,6 +332,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -351,6 +353,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
     }
@@ -360,6 +363,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
@@ -368,6 +372,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--require-source-ref", sourceSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -388,6 +393,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let requiredSHA = String(repeating: "c", count: 40)
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: tagSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: tagSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
@@ -396,6 +402,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--require-source-ref", requiredSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -420,6 +427,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
         """)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
@@ -427,6 +435,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -449,6 +458,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(assetNames: [
             "Vifty-v1.0.0.zip"
         ])
@@ -458,6 +468,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -476,11 +487,12 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-release-checklist.md") == true)
     }
 
-    func testReleaseReadinessBlocksFailedSourceCI() throws {
+    func testReleaseReadinessBlocksFailedReleaseWorkflowSeparatelyFromMissingAssets() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
-        let ciRunList = try harness.writeCIRunList(
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
             status: "completed",
             conclusion: "failure"
@@ -492,6 +504,43 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
             "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-workflow"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("completed/failure") == true)
+        XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("https://github.com/Reedtrullz/Vifty/actions/runs/2") == true)
+    }
+
+    func testReleaseReadinessBlocksFailedSourceCI() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(
+            sourceSHA: sourceSHA,
+            status: "completed",
+            conclusion: "failure"
+        )
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -821,6 +870,31 @@ private final class ReleaseMetadataHarness {
         ]
         """
         let url = rootURL.appendingPathComponent("ci-runs.json")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    func writeReleaseRunList(
+        sourceSHA: String,
+        status: String = "completed",
+        conclusion: String = "success",
+        version: String = "1.0.0"
+    ) throws -> URL {
+        let contents = """
+        [
+          {
+            "workflowName": "Release",
+            "headBranch": "v\(version)",
+            "headSha": "\(sourceSHA)",
+            "status": "\(status)",
+            "conclusion": "\(conclusion)",
+            "event": "push",
+            "databaseId": 2,
+            "url": "https://github.com/Reedtrullz/Vifty/actions/runs/2"
+          }
+        ]
+        """
+        let url = rootURL.appendingPathComponent("release-runs.json")
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

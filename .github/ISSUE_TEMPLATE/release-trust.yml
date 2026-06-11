@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for public release trust issues: missing GitHub Release assets, checksum or cask drift, Gatekeeper failures, notarization/stapling failures, TeamID/XPC allowlist mismatches, bundle-version drift, or release-readiness blockers.
+        Use this template for public release trust issues: failed Release workflow runs, missing GitHub Release assets, checksum or cask drift, Gatekeeper failures, notarization/stapling failures, TeamID/XPC allowlist mismatches, bundle-version drift, or release-readiness blockers.
 
         Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
 
@@ -43,6 +43,7 @@ body:
       description: Which trust gate failed or appears inconsistent?
       options:
         - Release readiness blocked
+        - Release workflow failed
         - GitHub Release asset missing
         - Homebrew cask SHA mismatch
         - Bundle version mismatch

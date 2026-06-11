@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/release-readiness.schema.json",
   "title": "Vifty release readiness preflight report",
-  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, optional required source-ref alignment, source CI status, required secret names, and GitHub Release asset presence; it does not replace artifact signing, notarization, checksum, or hardware validation.",
+  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, optional required source-ref alignment, source CI status, Release workflow status, required secret names, and GitHub Release asset presence; it does not replace artifact signing, notarization, checksum, or hardware validation.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -45,7 +45,7 @@
     },
     "checks": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 5,
       "items": {
         "$ref": "#/$defs/check"
       }
@@ -63,6 +63,7 @@
         "release-metadata",
         "release-source-ref",
         "source-ci",
+        "release-workflow",
         "release-secrets",
         "github-release"
       ]

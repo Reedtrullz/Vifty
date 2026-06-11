@@ -8,7 +8,7 @@ As of 2026-06-11, the `v1.1.0` source tag is the prepared release candidate, but
 
 Current facts:
 
-- `main` and the `v1.1.0` tag have passed the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload. The release-readiness JSON reports the exact `sourceCommit`, can require that the tag matches `origin/main`, and reports the CI run URL.
+- `main` and the `v1.1.0` tag have passed the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload. The release-readiness JSON reports the exact `sourceCommit`, can require that the tag matches `origin/main`, and reports the source CI and Release workflow run URLs.
 - The `v1.1.0` GitHub Release workflow currently stops before signing and notarization because the required repository secrets are not configured.
 - No `v1.1.0` GitHub Release artifact should be treated as published or trusted until the workflow publishes `Vifty-v1.1.0.zip`, `Vifty-v1.1.0.zip.sha256`, `Vifty-v1.1.0-artifact-summary.json`, and `Vifty-v1.1.0-release-checklist.md`.
 - Homebrew install instructions are release-path documentation, not proof that the current cask artifact is trust-complete. Treat the Homebrew cask as trusted only after its version and SHA match a signed, notarized, stapled artifact that passes `scripts/verify-release-artifact.sh`.
@@ -19,7 +19,7 @@ Current facts:
 All of these must be true for the current public release:
 
 1. `scripts/check-release-secrets.sh --repo Reedtrullz/Vifty` reports all required release secret names.
-2. After `git fetch origin main --tags`, `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` reports `release-source-ref` and `source-ci` passed for the release tag commit.
+2. After `git fetch origin main --tags`, `scripts/check-release-readiness.sh --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` reports `release-source-ref`, `source-ci`, and `release-workflow` passed for the release tag commit.
 3. The `Release` workflow for the `v<version>` tag completes successfully.
 4. The GitHub Release includes:
    - `Vifty-v<version>.zip`
@@ -48,7 +48,7 @@ If any of these checks fail unexpectedly after the release secrets are configure
 
 Expected current result before secrets are configured:
 
-- `scripts/check-release-readiness.sh` reports `schemaID: "https://vifty.local/schemas/release-readiness.schema.json"` and `status: "blocked"`, with `release-metadata`, `release-source-ref`, and `source-ci` passed and `release-secrets` / `github-release` blocked.
+- `scripts/check-release-readiness.sh` reports `schemaID: "https://vifty.local/schemas/release-readiness.schema.json"` and `status: "blocked"`, with `release-metadata`, `release-source-ref`, and `source-ci` passed, `release-workflow` blocked at the required signing/notarization secret gate, and `release-secrets` / `github-release` blocked.
 - `scripts/check-release-secrets.sh` reports the missing Developer ID and notarization secret names.
 - `gh release view v1.1.0` reports that the release is not found.
 - `scripts/verify-release-artifact.sh` cannot pass for `v1.1.0` until the release asset and cask checksum exist.

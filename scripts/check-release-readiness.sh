@@ -11,18 +11,20 @@ VERSION=""
 SECRET_LIST_FILE=""
 RELEASE_VIEW_FILE=""
 CI_RUN_LIST_FILE=""
+RELEASE_RUN_LIST_FILE=""
 SOURCE_SHA=""
 REQUIRE_SOURCE_REF=""
 JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-view-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
 metadata, verifies source CI for the release tag commit, checks required GitHub
-Actions release secret names, and verifies that the GitHub Release has the
-required public trust assets.
+Actions release secret names, verifies the Release workflow result for the tag
+commit, and verifies that the GitHub Release has the required public trust
+assets.
 
 Options:
   --version version          Release version to check. Defaults to Info.plist.
@@ -32,6 +34,9 @@ Options:
                              ref or commit SHA, such as origin/main.
   --secret-list-file path    Read pre-captured `gh secret list` output for tests.
   --ci-run-list-file path    Read pre-captured `gh run list --json ...` output.
+  --release-run-list-file path
+                             Read pre-captured Release workflow `gh run list`
+                             JSON output for tests.
   --release-view-file path   Read pre-captured `gh release view --json ...` output.
   --json                     Print a machine-readable summary instead of text.
   -h, --help                 Show this help.
@@ -94,6 +99,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       CI_RUN_LIST_FILE="$2"
+      shift 2
+      ;;
+    --release-run-list-file)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --release-run-list-file requires a value" >&2
+        exit 64
+      fi
+      RELEASE_RUN_LIST_FILE="$2"
       shift 2
       ;;
     --json)
@@ -220,6 +233,7 @@ fi
 
 if [[ ! "${resolved_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
   add_check "source-ci" "blocked" "Could not resolve release tag ${TAG} to a commit SHA. Run from a git checkout with the tag fetched or pass --source-sha."
+  add_check "release-workflow" "blocked" "Could not inspect Release workflow for ${TAG} because the release tag commit SHA is unavailable."
 else
   if [ -n "${REQUIRE_SOURCE_REF}" ]; then
     required_source_sha=""
@@ -290,6 +304,58 @@ else
     add_check "source-ci" "passed" "${ci_output}"
   else
     add_check "source-ci" "blocked" "${ci_output}"
+  fi
+
+  release_run_json=""
+  release_run_output=""
+  if [ -n "${RELEASE_RUN_LIST_FILE}" ]; then
+    if [ ! -f "${RELEASE_RUN_LIST_FILE}" ]; then
+      release_run_output="Release workflow run list file does not exist: ${RELEASE_RUN_LIST_FILE}"
+    else
+      release_run_json="$(cat "${RELEASE_RUN_LIST_FILE}")"
+    fi
+  elif command -v gh >/dev/null 2>&1; then
+    release_run_args=(--workflow "Release" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch,databaseId,createdAt")
+    if [ -n "${REPO}" ]; then
+      release_run_args+=(--repo "${REPO}")
+    fi
+    if ! release_run_json="$(gh run list "${release_run_args[@]}" 2>&1)"; then
+      release_run_output="${release_run_json}"
+      release_run_json=""
+    fi
+  else
+    release_run_output="gh CLI is required unless --release-run-list-file is supplied"
+  fi
+
+  if [ -z "${release_run_json}" ]; then
+    add_check "release-workflow" "blocked" "Release workflow status for ${TAG} (${resolved_source_sha}) is not available: ${release_run_output}"
+  elif release_run_output="$(ruby -rjson -e '
+    tag = ARGV.fetch(0)
+    source_sha = ARGV.fetch(1).downcase
+    runs = JSON.parse(STDIN.read)
+    runs = [runs] if runs.is_a?(Hash)
+    matching = Array(runs).select do |run|
+      run["headSha"].to_s.downcase == source_sha && run["headBranch"].to_s == tag
+    end
+    latest = matching.first
+    if latest && latest["status"] == "completed" && latest["conclusion"] == "success"
+      detail = latest["url"].to_s
+      detail = "#{latest["workflowName"] || "Release"} run #{latest["databaseId"] || "unknown"}" if detail.empty?
+      puts "Release workflow passed for #{tag} (#{source_sha}): #{detail}"
+    elsif latest
+      observed = "#{latest["workflowName"] || "Release"} #{latest["status"] || "unknown"}/#{latest["conclusion"] || "unknown"}"
+      detail = latest["url"].to_s
+      detail = " #{detail}" unless detail.empty?
+      warn "Latest Release workflow for #{tag} (#{source_sha}) did not pass: #{observed}.#{detail}"
+      exit 1
+    else
+      warn "No Release workflow run found for #{tag} (#{source_sha})"
+      exit 1
+    end
+  ' "${TAG}" "${resolved_source_sha}" <<< "${release_run_json}" 2>&1)"; then
+    add_check "release-workflow" "passed" "${release_run_output}"
+  else
+    add_check "release-workflow" "blocked" "${release_run_output}"
   fi
 fi
 

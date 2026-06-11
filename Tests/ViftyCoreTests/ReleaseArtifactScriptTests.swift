@@ -255,6 +255,7 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         let checkNames = try XCTUnwrap(checkName["enum"] as? [String])
         XCTAssertTrue(checkNames.contains("release-source-ref"))
         XCTAssertTrue(checkNames.contains("source-ci"))
+        XCTAssertTrue(checkNames.contains("release-workflow"))
     }
 }
 
