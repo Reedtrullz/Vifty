@@ -56,6 +56,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `.github/ISSUE_TEMPLATE/hardware-validation.yml` — structured compatibility reports for release validation evidence.
 - `.github/ISSUE_TEMPLATE/agent-cooling.yml` — structured `viftyctl`/guarded-run agent cooling reports with diagnose/status/audit evidence and safety confirmations.
 - `scripts/validate-release-metadata.sh` — verifies release tag/version wiring, bundle version, cask version, cask URL/SHA, release artifact naming, release TeamID build wiring, notarization/stapling workflow steps, pre-publish artifact verification summary publication, public verifier skip flags, and Gatekeeper assessment stay aligned.
+- `scripts/check-release-secrets.sh` — verifies required GitHub Actions release secret names are configured before pushing/rerunning release tags; reads names only, never values.
 - `scripts/update-cask-checksum.sh` — applies the release workflow's checksum file to `Casks/vifty.rb` only when the artifact name matches the cask version, with release metadata validation before and after the edit.
 - `scripts/verify-release-artifact.sh` — public-release audit that verifies the cask artifact SHA or generated workflow checksum, bundle version, required executables, bundled schema JSON/IDs, plist validity, Developer ID TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment.
 - `scripts/collect-validation-evidence.sh` — read-only evidence collector for release/hardware validation reports, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, optional `release-artifact-summary.json` / `release-artifact-summary.tsv` with installed-app version matching, bundle plist, LaunchDaemon TeamID, per-binary signing, notarization, and Gatekeeper outputs.
@@ -100,7 +101,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (354 tests).
+- `swift test` runs `ViftyCoreTests` (356 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.

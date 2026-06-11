@@ -247,6 +247,41 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must not declare ad-hoc signing"))
         XCTAssertTrue(try harness.readCask().contains("sha256 \"\(oldSHA)\""))
     }
+
+    func testReleaseSecretPreflightAcceptsRequiredSecretNames() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeSecretList(contents: """
+        APPLE_TEAM_ID\t2026-06-11T10:00:00Z
+        APPLE_ID\t2026-06-11T10:00:00Z
+        APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_IDENTITY\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD\t2026-06-11T10:00:00Z
+        """)
+
+        let result = try harness.runReleaseSecretChecker(["--secret-list-file", secretList.path])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Release secrets OK"))
+        XCTAssertTrue(result.stdout.contains("6 required names"))
+    }
+
+    func testReleaseSecretPreflightRejectsMissingSecretNames() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeSecretList(contents: """
+        APPLE_ID\t2026-06-11T10:00:00Z
+        APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
+        """)
+
+        let result = try harness.runReleaseSecretChecker(["--secret-list-file", secretList.path])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("Missing required release secret: APPLE_TEAM_ID"))
+        XCTAssertTrue(result.stderr.contains("Missing required release secret: DEVELOPER_ID_APPLICATION_IDENTITY"))
+        XCTAssertTrue(result.stderr.contains("Missing required release secret: DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64"))
+        XCTAssertTrue(result.stderr.contains("Missing required release secret: DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD"))
+        XCTAssertTrue(result.stderr.contains("docs/release.md"))
+    }
 }
 
 private struct ReleaseMetadataProcessResult {
@@ -378,11 +413,45 @@ private final class ReleaseMetadataHarness {
         )
     }
 
+    func runReleaseSecretChecker(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("scripts/check-release-secrets.sh")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
+
+        let process = Process()
+        process.executableURL = scriptURL
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
+            uniquingKeysWith: { _, new in new }
+        )
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        return ReleaseMetadataProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+    }
+
     func writeChecksumFile(
         named name: String = "Vifty-v1.0.0.zip.sha256",
         contents: String
     ) throws -> URL {
         let url = rootURL.appendingPathComponent(name)
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    func writeSecretList(contents: String) throws -> URL {
+        let url = rootURL.appendingPathComponent("release-secrets.tsv")
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

@@ -27,23 +27,31 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 
 ## Release Checklist
 
-1. Confirm the local tree is clean and tests pass:
+1. Confirm the release secrets are configured:
+
+   ```sh
+   scripts/check-release-secrets.sh --repo Reedtrullz/Vifty
+   ```
+
+   This checks only secret names, not values. It should report all required Developer ID and notarization secret names before a release tag is pushed or a failed release workflow is rerun.
+
+2. Confirm the local tree is clean and tests pass:
 
    ```sh
    make verify
    ```
 
-2. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
-3. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version.
-4. Commit the release prep. The cask checksum can be updated in a follow-up commit after the notarized artifact exists.
-5. Tag the commit:
+3. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
+4. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version.
+5. Commit the release prep. The cask checksum can be updated in a follow-up commit after the notarized artifact exists.
+6. Tag the commit:
 
    ```sh
    git tag v<version>
    git push origin main --tags
    ```
 
-6. Watch the `Release` workflow. It will:
+7. Watch the `Release` workflow. It will:
 
    - validate tag and bundle versions;
    - validate that release metadata and the cask artifact URL agree;
@@ -58,7 +66,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    - write `Vifty-v<version>-artifact-summary.json`;
    - publish the zip, SHA-256 checksum, and verification summary to the GitHub Release.
 
-7. Update `Casks/vifty.rb` with the SHA-256 checksum from the release artifact:
+8. Update `Casks/vifty.rb` with the SHA-256 checksum from the release artifact:
 
    ```sh
    scripts/update-cask-checksum.sh \
@@ -68,7 +76,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 
    The updater accepts the normal `shasum -a 256` output from the release workflow, requires the checksum artifact name to match the cask version, and re-runs release metadata validation before and after editing the cask.
 
-8. Verify the public artifact and cask agree:
+9. Verify the public artifact and cask agree:
 
    ```sh
    scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
@@ -78,8 +86,8 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 
    If this fails after an artifact has already been published, cut a corrected patch release instead of treating the Homebrew cask as trusted.
 
-9. After publication, verify on hardware with [hardware-validation.md](hardware-validation.md). Prefer `scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json` so release reports include the same read-only evidence bundle, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `viftyctl-audit.json`, `release-artifact-summary.json`, `release-artifact-summary.tsv`, bundle plist, LaunchDaemon TeamID, per-binary signing, notarization, Gatekeeper files, and the release verifier result. The collector marks the release-summary row nonzero if the verifier result does not pass or if its version does not match the installed app being tested. Before treating the installed release as trusted, run `scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json` on the captured bundle and keep `review-result.json` with the report.
-10. Update [compatibility.md](compatibility.md) only with report-backed results. Use `scripts/summarize-validation-reports.sh --input <reports-dir> --output-json <reports-dir>/compatibility-index.json --output-tsv <reports-dir>/compatibility-index.tsv` to index valid reviewed `review-result.json` files; the indexer rejects malformed, non-read-only, cooling-mutating, unsupported-mode, or contradictory passed review outputs. Leave model families as "needs validation" until supported-hardware rows are indexed as `validated-hardware-evidence` from `manualSmokeTestResult: "passed-auto-restored"`.
+10. After publication, verify on hardware with [hardware-validation.md](hardware-validation.md). Prefer `scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json` so release reports include the same read-only evidence bundle, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `viftyctl-audit.json`, `release-artifact-summary.json`, `release-artifact-summary.tsv`, bundle plist, LaunchDaemon TeamID, per-binary signing, notarization, Gatekeeper files, and the release verifier result. The collector marks the release-summary row nonzero if the verifier result does not pass or if its version does not match the installed app being tested. Before treating the installed release as trusted, run `scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json` on the captured bundle and keep `review-result.json` with the report.
+11. Update [compatibility.md](compatibility.md) only with report-backed results. Use `scripts/summarize-validation-reports.sh --input <reports-dir> --output-json <reports-dir>/compatibility-index.json --output-tsv <reports-dir>/compatibility-index.tsv` to index valid reviewed `review-result.json` files; the indexer rejects malformed, non-read-only, cooling-mutating, unsupported-mode, or contradictory passed review outputs. Leave model families as "needs validation" until supported-hardware rows are indexed as `validated-hardware-evidence` from `manualSmokeTestResult: "passed-auto-restored"`.
 
 ## Manual Local Signing Smoke Test
 
