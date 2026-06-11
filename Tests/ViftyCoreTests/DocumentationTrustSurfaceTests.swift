@@ -400,6 +400,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(integrations.contains("VIFTY_GUARDED_RUN_FORCE_RETRY"))
 
         let exampleReadme = try read("examples/viftyctl/README.md")
+        XCTAssertTrue(exampleReadme.contains("preflight that the child command is a regular executable path or resolves to one on `PATH`"))
         XCTAssertTrue(exampleReadme.contains("read-only `viftyctl capabilities --json`"))
         XCTAssertTrue(exampleReadme.contains("safe `runLifecycle` contract"))
         XCTAssertTrue(exampleReadme.contains("checks `supportsForceRetry` before passing `--force`"))
@@ -415,7 +416,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let workplan = try read("docs/plans/2026-06-11-vifty-strategy-workplan.md")
 
         XCTAssertTrue(workplan.contains("Local hardening is on `main` for the `v1.1.0` source-first release"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 429 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 431 XCTest cases"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))

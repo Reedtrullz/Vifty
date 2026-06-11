@@ -116,6 +116,35 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRejectsMissingChildCommandBeforeViftyRun() throws {
+        let harness = try ScriptHarness(state: "ready")
+        let missingCommand = "vifty-missing-child-\(UUID().uuidString)"
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "missing child", "--", missingCommand
+        ])
+
+        XCTAssertEqual(result.exitCode, 127)
+        XCTAssertTrue(result.stderr.contains("child command was not found on PATH"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(missingCommand), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsNonExecutableChildPathBeforeViftyRun() throws {
+        let harness = try ScriptHarness(state: "ready")
+        let childURL = harness.rootURL.appendingPathComponent("not-executable")
+        XCTAssertTrue(FileManager.default.createFile(atPath: childURL.path, contents: Data("#!/bin/sh\nexit 0\n".utf8)))
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "bad child", "--", childURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 126)
+        XCTAssertTrue(result.stderr.contains("child command is not executable"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(childURL.path), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunWarnsAndDelegatesWhenDegraded() throws {
         let harness = try ScriptHarness(
             state: "degraded",
@@ -330,6 +359,7 @@ private struct ProcessResult {
 
 private final class ScriptHarness {
     let rootURL: URL
+    let binURL: URL
     let fakeViftyCtlURL: URL
     let logURL: URL
 
@@ -351,9 +381,12 @@ private final class ScriptHarness {
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-guarded-run-\(UUID().uuidString)", isDirectory: true)
+        binURL = rootURL.appendingPathComponent("fake-bin", isDirectory: true)
         fakeViftyCtlURL = rootURL.appendingPathComponent("viftyctl")
         logURL = rootURL.appendingPathComponent("viftyctl-args.log")
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: binURL, withIntermediateDirectories: true)
+        try writeFakeChildTools()
         if createFakeViftyCtl {
             try writeFakeViftyCtl(
                 state: state,
@@ -385,10 +418,12 @@ private final class ScriptHarness {
         let process = Process()
         process.executableURL = scriptURL
         process.arguments = arguments
+        process.currentDirectoryURL = rootURL
 
         var environment = ProcessInfo.processInfo.environment
         environment["VIFTYCTL"] = fakeViftyCtlURL.path
         environment["FAKE_VIFTYCTL_LOG"] = logURL.path
+        environment["PATH"] = "\(binURL.path):\(environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")"
         if let forceRetry {
             environment["VIFTY_GUARDED_RUN_FORCE_RETRY"] = forceRetry
         }
@@ -414,6 +449,26 @@ private final class ScriptHarness {
         return String(decoding: data, as: UTF8.self)
             .split(separator: "\n")
             .map(String.init)
+    }
+
+    private func writeFakeChildTools() throws {
+        for tool in ["swift", "xcodebuild", "npm", "cargo", "python3", "local-model-runner", "custom-runner"] {
+            try writeFakeExecutable(named: tool, in: binURL)
+        }
+
+        let scriptsURL = rootURL.appendingPathComponent("scripts", isDirectory: true)
+        try FileManager.default.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
+        try writeFakeExecutable(named: "smoke-test.sh", in: scriptsURL)
+        try writeFakeExecutable(named: "run-local-model.sh", in: rootURL)
+    }
+
+    private func writeFakeExecutable(named name: String, in directory: URL) throws {
+        let url = directory.appendingPathComponent(name)
+        try "#!/bin/sh\nexit 0\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: url.path
+        )
     }
 
     private func writeFakeViftyCtl(

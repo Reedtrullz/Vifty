@@ -16,6 +16,44 @@ Environment:
 USAGE
 }
 
+preflight_child_command() {
+  child_command="$1"
+
+  case "$child_command" in
+    */*)
+      if [ ! -e "$child_command" ]; then
+        echo "guarded-run: child command path does not exist: $child_command" >&2
+        exit 127
+      fi
+      if [ ! -f "$child_command" ] || [ ! -x "$child_command" ]; then
+        echo "guarded-run: child command is not executable: $child_command" >&2
+        exit 126
+      fi
+      return
+      ;;
+  esac
+
+  old_ifs="$IFS"
+  IFS=:
+  found_child_command=0
+  for path_directory in ${PATH:-/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin}; do
+    if [ -z "$path_directory" ]; then
+      continue
+    fi
+    candidate="$path_directory/$child_command"
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      found_child_command=1
+      break
+    fi
+  done
+  IFS="$old_ifs"
+
+  if [ "$found_child_command" -ne 1 ]; then
+    echo "guarded-run: child command was not found on PATH: $child_command" >&2
+    exit 127
+  fi
+}
+
 if [ "$#" -lt 6 ]; then
   usage
   exit 64
@@ -37,6 +75,8 @@ if [ "$#" -eq 0 ]; then
   usage
   exit 64
 fi
+
+preflight_child_command "$1"
 
 viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"

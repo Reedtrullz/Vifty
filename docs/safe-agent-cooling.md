@@ -22,7 +22,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks the read-only `capabilities --json` `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, checks the read-only `capabilities --json` `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
@@ -35,7 +35,7 @@ VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
   /path/to/guarded-run.sh build 25m 75 "release build" -- swift build -c release
 ```
 
-The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead.
+The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
 For common workloads, use the audited shortcuts:
 
