@@ -321,12 +321,16 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
     func testReleaseReadinessAcceptsCompleteTrustInputs() throws {
         let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
             "--version", "1.0.0",
+            "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -339,27 +343,33 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         )
         XCTAssertEqual(summary["version"] as? String, "1.0.0")
         XCTAssertEqual(summary["tag"] as? String, "v1.0.0")
+        XCTAssertEqual(summary["sourceCommit"] as? String, sourceSHA)
         XCTAssertEqual(summary["status"] as? String, "ready")
         XCTAssertEqual(summary["knownReadinessBlockersClear"] as? Bool, true)
         XCTAssertEqual(summary["blockers"] as? [String], [])
 
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
     }
 
     func testReleaseReadinessReportsMissingSecretsAsBlocker() throws {
         let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeSecretList(contents: """
         APPLE_ID\t2026-06-11T10:00:00Z
         APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
         """)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView()
 
         let result = try harness.runReleaseReadiness([
             "--version", "1.0.0",
+            "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -371,6 +381,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertEqual(summary["blockers"] as? [String], ["release-secrets"])
 
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "blocked")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
         XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("APPLE_TEAM_ID") == true)
@@ -378,14 +389,18 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
     func testReleaseReadinessBlocksMissingReleaseAssets() throws {
         let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
         let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(assetNames: [
             "Vifty-v1.0.0.zip"
         ])
 
         let result = try harness.runReleaseReadiness([
             "--version", "1.0.0",
+            "--source-sha", sourceSHA,
             "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
             "--release-view-file", releaseView.path,
             "--json"
         ])
@@ -396,11 +411,44 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
 
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("missing assets") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0.zip.sha256") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-artifact-summary.json") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-release-checklist.md") == true)
+    }
+
+    func testReleaseReadinessBlocksFailedSourceCI() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(
+            sourceSHA: sourceSHA,
+            status: "completed",
+            conclusion: "failure"
+        )
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["source-ci"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "source-ci", in: checks)?.contains("No successful completed CI run found") == true)
     }
 
     func testReleaseChecklistWriterCreatesChecklistForVersion() throws {
@@ -695,6 +743,29 @@ private final class ReleaseMetadataHarness {
         DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64\t2026-06-11T10:00:00Z
         DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD\t2026-06-11T10:00:00Z
         """)
+    }
+
+    func writeCIRunList(
+        sourceSHA: String,
+        status: String = "completed",
+        conclusion: String = "success"
+    ) throws -> URL {
+        let contents = """
+        [
+          {
+            "workflowName": "CI",
+            "headBranch": "main",
+            "headSha": "\(sourceSHA)",
+            "status": "\(status)",
+            "conclusion": "\(conclusion)",
+            "event": "push",
+            "url": "https://github.com/Reedtrullz/Vifty/actions/runs/1"
+          }
+        ]
+        """
+        let url = rootURL.appendingPathComponent("ci-runs.json")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
     }
 
     func writeReleaseView(

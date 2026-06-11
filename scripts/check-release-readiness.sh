@@ -10,20 +10,25 @@ REPO=""
 VERSION=""
 SECRET_LIST_FILE=""
 RELEASE_VIEW_FILE=""
+CI_RUN_LIST_FILE=""
+SOURCE_SHA=""
 JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--secret-list-file path] [--release-view-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--version version] [--repo owner/name] [--source-sha sha] [--secret-list-file path] [--ci-run-list-file path] [--release-view-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
-metadata, checks required GitHub Actions release secret names, and verifies that
-the GitHub Release has the required public trust assets.
+metadata, verifies source CI for the release tag commit, checks required GitHub
+Actions release secret names, and verifies that the GitHub Release has the
+required public trust assets.
 
 Options:
   --version version          Release version to check. Defaults to Info.plist.
   --repo owner/name          Repository to inspect. Defaults to gh's current repo.
+  --source-sha sha           Override the release tag commit SHA, mainly for tests.
   --secret-list-file path    Read pre-captured `gh secret list` output for tests.
+  --ci-run-list-file path    Read pre-captured `gh run list --json ...` output.
   --release-view-file path   Read pre-captured `gh release view --json ...` output.
   --json                     Print a machine-readable summary instead of text.
   -h, --help                 Show this help.
@@ -48,6 +53,14 @@ while [ "$#" -gt 0 ]; do
       REPO="$2"
       shift 2
       ;;
+    --source-sha)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --source-sha requires a value" >&2
+        exit 64
+      fi
+      SOURCE_SHA="$2"
+      shift 2
+      ;;
     --secret-list-file)
       if [ "$#" -lt 2 ]; then
         echo "error: --secret-list-file requires a value" >&2
@@ -62,6 +75,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       RELEASE_VIEW_FILE="$2"
+      shift 2
+      ;;
+    --ci-run-list-file)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --ci-run-list-file requires a value" >&2
+        exit 64
+      fi
+      CI_RUN_LIST_FILE="$2"
       shift 2
       ;;
     --json)
@@ -125,6 +146,7 @@ emit_json() {
   printf '  "schemaID": %s,\n' "$(json_string "${RELEASE_READINESS_SCHEMA_ID}")"
   printf '  "version": %s,\n' "$(json_string "${VERSION}")"
   printf '  "tag": %s,\n' "$(json_string "${TAG}")"
+  printf '  "sourceCommit": %s,\n' "$(json_string "${resolved_source_sha}")"
   printf '  "status": %s,\n' "$(json_string "${status}")"
   printf '  "knownReadinessBlockersClear": %s,\n' "${known_readiness_blockers_clear}"
   printf '  "checks": [\n'
@@ -172,6 +194,71 @@ if metadata_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/v
   add_check "release-metadata" "passed" "${metadata_output}"
 else
   add_check "release-metadata" "blocked" "${metadata_output}"
+fi
+
+resolved_source_sha=""
+if [ -n "${SOURCE_SHA}" ]; then
+  resolved_source_sha="${SOURCE_SHA}"
+elif command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if resolved_source_sha="$(git rev-parse "${TAG}^{commit}" 2>&1)"; then
+    :
+  else
+    resolved_source_sha=""
+  fi
+fi
+
+if [[ ! "${resolved_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+  add_check "source-ci" "blocked" "Could not resolve release tag ${TAG} to a commit SHA. Run from a git checkout with the tag fetched or pass --source-sha."
+else
+  ci_run_json=""
+  ci_output=""
+  if [ -n "${CI_RUN_LIST_FILE}" ]; then
+    if [ ! -f "${CI_RUN_LIST_FILE}" ]; then
+      ci_output="CI run list file does not exist: ${CI_RUN_LIST_FILE}"
+    else
+      ci_run_json="$(cat "${CI_RUN_LIST_FILE}")"
+    fi
+  elif command -v gh >/dev/null 2>&1; then
+    ci_args=(--workflow "CI" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch")
+    if [ -n "${REPO}" ]; then
+      ci_args+=(--repo "${REPO}")
+    fi
+    if ! ci_run_json="$(gh run list "${ci_args[@]}" 2>&1)"; then
+      ci_output="${ci_run_json}"
+      ci_run_json=""
+    fi
+  else
+    ci_output="gh CLI is required unless --ci-run-list-file is supplied"
+  fi
+
+  if [ -z "${ci_run_json}" ]; then
+    add_check "source-ci" "blocked" "CI status for ${TAG} (${resolved_source_sha}) is not available: ${ci_output}"
+  elif ci_output="$(ruby -rjson -e '
+    source_sha = ARGV.fetch(0).downcase
+    runs = JSON.parse(STDIN.read)
+    runs = [runs] if runs.is_a?(Hash)
+    matching = Array(runs).select { |run| run["headSha"].to_s.downcase == source_sha }
+    passed = matching.find { |run| run["status"] == "completed" && run["conclusion"] == "success" }
+    if passed
+      detail = passed["url"].to_s
+      detail = "#{passed["workflowName"] || "CI"} on #{passed["headBranch"] || "unknown branch"}" if detail.empty?
+      puts "CI passed for #{source_sha}: #{detail}"
+    else
+      if matching.empty?
+        warn "No CI run found for #{source_sha}"
+      else
+        observed = matching.map do |run|
+          "#{run["workflowName"] || "run"} #{run["status"] || "unknown"}/#{run["conclusion"] || "unknown"}"
+        end.join(", ")
+        warn "No successful completed CI run found for #{source_sha}; observed: #{observed}"
+      end
+      exit 1
+    end
+  ' "${resolved_source_sha}" <<< "${ci_run_json}" 2>&1)"; then
+    add_check "source-ci" "passed" "${ci_output}"
+  else
+    add_check "source-ci" "blocked" "${ci_output}"
+  fi
 fi
 
 secret_args=()

@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/release-readiness.schema.json",
   "title": "Vifty release readiness preflight report",
-  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, required secret names, and GitHub Release asset presence; it does not replace artifact signing, notarization, checksum, or hardware validation.",
+  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, source CI status, required secret names, and GitHub Release asset presence; it does not replace artifact signing, notarization, checksum, or hardware validation.",
   "type": "object",
   "required": [
     "schemaVersion",
     "schemaID",
     "version",
     "tag",
+    "sourceCommit",
     "status",
     "knownReadinessBlockersClear",
     "checks",
@@ -29,6 +30,10 @@
       "type": "string",
       "pattern": "^v[0-9]+([.][0-9]+){1,2}([-.][0-9A-Za-z]+)?$"
     },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^([0-9a-fA-F]{7,40})?$"
+    },
     "status": {
       "enum": [
         "ready",
@@ -40,7 +45,7 @@
     },
     "checks": {
       "type": "array",
-      "minItems": 3,
+      "minItems": 4,
       "items": {
         "$ref": "#/$defs/check"
       }
@@ -56,6 +61,7 @@
     "checkName": {
       "enum": [
         "release-metadata",
+        "source-ci",
         "release-secrets",
         "github-release"
       ]

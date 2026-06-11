@@ -241,6 +241,7 @@ final class ReleaseArtifactScriptTests: XCTestCase {
             "schemaID",
             "version",
             "tag",
+            "sourceCommit",
             "status",
             "knownReadinessBlockersClear",
             "checks",
@@ -248,6 +249,11 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
         }
+
+        let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let checkName = try XCTUnwrap(defs["checkName"] as? [String: Any])
+        let checkNames = try XCTUnwrap(checkName["enum"] as? [String])
+        XCTAssertTrue(checkNames.contains("source-ci"))
     }
 }
 
