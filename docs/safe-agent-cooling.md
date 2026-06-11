@@ -9,7 +9,7 @@ This guide is for supported Apple Silicon MacBook Pro hardware only. Unsupported
 Agents and scripts may:
 
 - run `viftyctl diagnose --json`, `status --json`, `capabilities --json`, and `audit --json`;
-- run workloads through `examples/viftyctl/guarded-run.sh`;
+- run workloads through `examples/viftyctl/guarded-run.sh` or the convenience wrappers in `examples/viftyctl/`;
 - use direct `prepare` / `restore-auto` only when a human is supervising a lifecycle that cannot be represented by `viftyctl run`.
 
 Agents and scripts must not:
@@ -33,6 +33,18 @@ Use the installed CLI explicitly when running outside the Vifty repository:
 ```sh
 VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
   /path/to/guarded-run.sh build 25m 75 "release build" -- swift build -c release
+```
+
+For common workloads, use the audited shortcuts:
+
+```sh
+examples/viftyctl/swift-test.sh
+examples/viftyctl/swift-release-build.sh
+examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/npm-test.sh
+examples/viftyctl/cargo-test.sh
+examples/viftyctl/pytest.sh
+examples/viftyctl/local-model.sh -- ./run-local-model.sh
 ```
 
 ## Readiness Decisions

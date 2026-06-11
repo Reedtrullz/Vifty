@@ -231,49 +231,61 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
   examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+The [examples/viftyctl](../examples/viftyctl/README.md) directory also includes small workload wrappers for common developer commands. They all delegate through `guarded-run.sh` and keep the same read-only readiness gate:
+
+```sh
+examples/viftyctl/swift-test.sh --filter ViftyCoreTests
+examples/viftyctl/swift-release-build.sh --product Vifty
+examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/npm-test.sh -- --watch=false
+examples/viftyctl/cargo-test.sh --locked
+examples/viftyctl/pytest.sh Tests
+examples/viftyctl/local-model.sh -- ./run-local-model.sh
+examples/viftyctl/custom-workload.sh 15m 65 "project smoke test" -- ./scripts/smoke-test.sh
+```
+
 ## Common Workloads
 
 Swift package tests:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
+examples/viftyctl/swift-test.sh
 ```
 
 Swift release build:
 
 ```sh
-examples/viftyctl/guarded-run.sh build 25m 75 "swift release build" -- swift build -c release
+examples/viftyctl/swift-release-build.sh
 ```
 
 Xcode test:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 30m 75 "xcodebuild test" -- \
-  xcodebuild test -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
 ```
 
 npm test:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "npm test" -- npm test
+examples/viftyctl/npm-test.sh
 ```
 
 Cargo test:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "cargo test" -- cargo test
+examples/viftyctl/cargo-test.sh
 ```
 
 pytest:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "pytest" -- python3 -m pytest
+examples/viftyctl/pytest.sh
 ```
 
 Local model run:
 
 ```sh
-examples/viftyctl/guarded-run.sh localModel 30m 75 "local model run" -- ./run-local-model.sh
+examples/viftyctl/local-model.sh -- ./run-local-model.sh
 ```
 
 ## Direct Prepare/Restore

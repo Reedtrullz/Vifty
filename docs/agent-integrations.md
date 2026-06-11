@@ -27,6 +27,16 @@ Prefer the guarded wrapper:
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+For common local workloads, the shortcut scripts in `examples/viftyctl/` are equivalent safe wrappers around `guarded-run.sh`:
+
+```sh
+examples/viftyctl/swift-test.sh
+examples/viftyctl/swift-release-build.sh
+examples/viftyctl/npm-test.sh
+examples/viftyctl/cargo-test.sh
+examples/viftyctl/pytest.sh
+```
+
 Use shorter durations and lower RPM percentages for degraded readiness. Never call raw SMC commands, `sudo ViftyHelper`, or arbitrary fan RPM writes. If Vifty reports `restoreAutoBeforeRequestingCooling`, ask the user before restoring Auto or retrying.
 ````
 
@@ -35,15 +45,15 @@ Use shorter durations and lower RPM percentages for degraded readiness. Never ca
 For a repository-level `AGENTS.md`, add the shared rule and then use workload-specific commands:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
-examples/viftyctl/guarded-run.sh build 25m 75 "release build" -- swift build -c release
+examples/viftyctl/swift-test.sh
+examples/viftyctl/swift-release-build.sh
 ```
 
 If the repository is not Vifty itself, copy `examples/viftyctl/guarded-run.sh` into that project or call it from a known path. Set `VIFTYCTL` when testing a development bundle:
 
 ```sh
 VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
-  examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
+  examples/viftyctl/swift-test.sh
 ```
 
 ## Claude Code
@@ -51,9 +61,8 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
 For `CLAUDE.md`, use the shared rule and prefer explicit one-shot commands:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "pytest" -- python3 -m pytest
-examples/viftyctl/guarded-run.sh build 25m 75 "xcodebuild" -- \
-  xcodebuild test -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/pytest.sh
+examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
 ```
 
 If Claude Code is running outside an interactive terminal, avoid direct `prepare` / `restore-auto`. The guarded wrapper keeps lifecycle and Auto restore tied to one child process.
@@ -66,8 +75,8 @@ For a Cursor project rule, use the shared rule and keep the command examples nar
 When running long local tests or builds, prefer:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "npm test" -- npm test
-examples/viftyctl/guarded-run.sh test 20m 70 "cargo test" -- cargo test
+examples/viftyctl/npm-test.sh
+examples/viftyctl/cargo-test.sh
 ```
 
 Do not request Vifty cooling when readiness is blocked, when `safeToRequestCooling` is false, or when the machine is not a supported Apple Silicon MacBook Pro.

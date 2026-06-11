@@ -155,6 +155,81 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 69)
         XCTAssertTrue(result.stderr.contains("viftyctl is not executable"))
     }
+
+    func testWorkloadExampleScriptsDelegateThroughGuardedRun() throws {
+        let cases: [(script: String, arguments: [String], expected: [String])] = [
+            (
+                "examples/viftyctl/swift-test.sh",
+                ["--filter", "AgentTests"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "swift test", "--", "swift", "test", "--filter", "AgentTests"]
+            ),
+            (
+                "examples/viftyctl/swift-release-build.sh",
+                ["--product", "Vifty"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--force", "--reason", "swift release build", "--", "swift", "build", "-c", "release", "--product", "Vifty"]
+            ),
+            (
+                "examples/viftyctl/xcode-test.sh",
+                ["-scheme", "MyApp", "-destination", "platform=macOS"],
+                ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--force", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
+            ),
+            (
+                "examples/viftyctl/npm-test.sh",
+                ["--", "--watch=false"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
+            ),
+            (
+                "examples/viftyctl/cargo-test.sh",
+                ["--locked"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "cargo test", "--", "cargo", "test", "--locked"]
+            ),
+            (
+                "examples/viftyctl/pytest.sh",
+                ["Tests"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--force", "--reason", "pytest", "--", "python3", "-m", "pytest", "Tests"]
+            ),
+            (
+                "examples/viftyctl/local-model.sh",
+                ["--", "./run-local-model.sh", "--prompt", "smoke"],
+                ["run", "--json", "--workload", "localModel", "--duration", "30m", "--max-rpm-percent", "75", "--force", "--reason", "local model run", "--", "./run-local-model.sh", "--prompt", "smoke"]
+            ),
+            (
+                "examples/viftyctl/custom-workload.sh",
+                ["15m", "65", "project smoke test", "--", "./scripts/smoke-test.sh"],
+                ["run", "--json", "--workload", "custom", "--duration", "15m", "--max-rpm-percent", "65", "--force", "--reason", "project smoke test", "--", "./scripts/smoke-test.sh"]
+            )
+        ]
+
+        for testCase in cases {
+            let harness = try ScriptHarness(state: "ready")
+
+            let result = try harness.runScript(testCase.script, arguments: testCase.arguments)
+
+            XCTAssertEqual(result.exitCode, 0, testCase.script)
+            XCTAssertEqual(try harness.loggedArguments(), testCase.expected, testCase.script)
+        }
+    }
+
+    func testWorkloadExampleScriptsStayOnGuardedRunPath() throws {
+        let rootURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("examples/viftyctl")
+        let scripts = try FileManager.default.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "sh" }
+
+        XCTAssertGreaterThanOrEqual(scripts.count, 9)
+
+        for script in scripts {
+            XCTAssertTrue(FileManager.default.isExecutableFile(atPath: script.path), script.lastPathComponent)
+            let contents = try String(contentsOf: script, encoding: .utf8)
+            XCTAssertFalse(contents.contains("ViftyHelper setFixed"), script.lastPathComponent)
+            XCTAssertFalse(contents.contains("ViftyHelper auto"), script.lastPathComponent)
+            XCTAssertFalse(contents.contains("sudo"), script.lastPathComponent)
+            XCTAssertFalse(contents.contains("smc"), script.lastPathComponent)
+            if script.lastPathComponent != "guarded-run.sh" {
+                XCTAssertTrue(contents.contains("guarded-run.sh"), script.lastPathComponent)
+            }
+        }
+    }
 }
 
 private struct ProcessResult {
@@ -199,8 +274,12 @@ private final class ScriptHarness {
     }
 
     func runGuardedRun(_ arguments: [String]) throws -> ProcessResult {
+        try runScript("examples/viftyctl/guarded-run.sh", arguments: arguments)
+    }
+
+    func runScript(_ relativePath: String, arguments: [String]) throws -> ProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("examples/viftyctl/guarded-run.sh")
+            .appendingPathComponent(relativePath)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
 
         let process = Process()

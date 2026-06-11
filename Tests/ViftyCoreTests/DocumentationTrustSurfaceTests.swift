@@ -13,6 +13,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("[docs/safe-agent-cooling.md](docs/safe-agent-cooling.md)"))
         XCTAssertTrue(readme.contains("[docs/unsupported-hardware.md](docs/unsupported-hardware.md)"))
         XCTAssertTrue(readme.contains("[docs/agent-integrations.md](docs/agent-integrations.md)"))
+        XCTAssertTrue(readme.contains("[examples/viftyctl](examples/viftyctl/README.md)"))
     }
 
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
@@ -250,15 +251,33 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(guide.contains("The app's menu and main window also show the current fan-control owner."))
         XCTAssertTrue(agentWorkflows.contains("[safe-agent-cooling.md](safe-agent-cooling.md)"))
         XCTAssertTrue(agentWorkflows.contains("[agent-integrations.md](agent-integrations.md)"))
+        XCTAssertTrue(agentWorkflows.contains("[examples/viftyctl](../examples/viftyctl/README.md)"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/swift-test.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/swift-release-build.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/xcode-test.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/npm-test.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/cargo-test.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/pytest.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/local-model.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/custom-workload.sh"))
         XCTAssertTrue(integrations.contains("[safe-agent-cooling.md](safe-agent-cooling.md)"))
         XCTAssertTrue(integrations.contains("Codex"))
         XCTAssertTrue(integrations.contains("Claude Code"))
         XCTAssertTrue(integrations.contains("Cursor"))
         XCTAssertTrue(integrations.contains("examples/viftyctl/guarded-run.sh"))
+        XCTAssertTrue(integrations.contains("examples/viftyctl/swift-test.sh"))
+        XCTAssertTrue(integrations.contains("examples/viftyctl/cargo-test.sh"))
         XCTAssertTrue(integrations.contains("safeToRequestCooling"))
         XCTAssertTrue(integrations.contains("restoreAutoBeforeRequestingCooling"))
         XCTAssertTrue(integrations.contains("Never call raw SMC commands"))
         XCTAssertTrue(integrations.contains("Do not give agents permission to call `ViftyHelper setFixed`"))
+
+        let exampleReadme = try read("examples/viftyctl/README.md")
+        XCTAssertTrue(exampleReadme.contains("read-only `viftyctl diagnose --json`"))
+        XCTAssertTrue(exampleReadme.contains("delegate to `viftyctl run --json`"))
+        XCTAssertTrue(exampleReadme.contains("swift-test.sh"))
+        XCTAssertTrue(exampleReadme.contains("custom-workload.sh"))
+        XCTAssertTrue(exampleReadme.contains("Do not edit these wrappers to call `sudo`, `ViftyHelper`, raw SMC tools"))
     }
 
     private func read(_ relativePath: String) throws -> String {

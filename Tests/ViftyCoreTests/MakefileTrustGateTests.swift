@@ -6,7 +6,7 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
-        XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh"))
+        XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh"))
         XCTAssertTrue(makefile.contains("swift test"))
         XCTAssertTrue(makefile.contains("swift build -Xswiftc -warnings-as-errors"))
