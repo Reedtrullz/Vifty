@@ -626,6 +626,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "prepare")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue((json["message"] as? String)?.contains("Could not create daemon proxy") == true)
         let prepareRequests = await client.prepareRequests
         XCTAssertEqual(prepareRequests, [request])
@@ -663,6 +666,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "restore-auto")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue((json["message"] as? String)?.contains("Daemon connection invalidated") == true)
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(restoreReasons, ["done"])
@@ -755,6 +761,71 @@ final class ViftyCtlRunnerTests: XCTestCase {
         }
     }
 
+    func testRunJSONReportsRestoreSuccessWhenChildLaunchThrowsAfterPrepare() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let launchError = ViftyError.helperRejected("launch failed")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
+        let processRunner = FakeProcessRunner(error: launchError)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["missing-command"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["command"] as? String, "run")
+        XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
+        XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertTrue((json["message"] as? String)?.contains("launch failed") == true)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, ["viftyctl run failed to launch child: \(launchError.localizedDescription)"])
+        XCTAssertEqual(processRunner.runArguments, [["missing-command"]])
+    }
+
+    func testRunJSONReportsRestoreFailureWhenChildLaunchThrowsAfterPrepare() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let launchError = ViftyError.helperRejected("launch failed")
+        let restoreError = ViftyError.helperRejected("restore failed")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)], restoreError: restoreError)
+        let processRunner = FakeProcessRunner(error: launchError)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["missing-command"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["command"] as? String, "run")
+        XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.restoreFailed.rawValue)
+        XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, false)
+        XCTAssertTrue((json["message"] as? String)?.contains("launch failed") == true)
+        XCTAssertTrue((json["message"] as? String)?.contains("Auto restore also failed") == true)
+        XCTAssertTrue((json["message"] as? String)?.contains("restore failed") == true)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, ["viftyctl run failed to launch child: \(launchError.localizedDescription)"])
+        XCTAssertEqual(processRunner.runArguments, [["missing-command"]])
+    }
+
     func testRunDoesNotLaunchChildWhenPrepareIsDenied() async throws {
         let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
         let denied = AgentControlStatus(
@@ -806,6 +877,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.unsupportedHardware.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue((json["message"] as? String)?.contains("Apple Silicon MacBook Pro") == true)
         let prepareRequests = await client.prepareRequests
         XCTAssertEqual(prepareRequests, [request])
@@ -894,6 +968,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue((json["message"] as? String)?.contains("missing child") == true)
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount

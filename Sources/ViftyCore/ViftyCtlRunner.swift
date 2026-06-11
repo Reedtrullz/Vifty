@@ -126,6 +126,9 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var errorCode: AgentControlErrorCode?
     public var message: String
     public var safeToProceed: Bool
+    public var coolingLeasePrepared: Bool
+    public var autoRestoreAttempted: Bool
+    public var autoRestoreSucceeded: Bool?
     public var generatedAt: Date
 
     public init(
@@ -134,6 +137,9 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         errorCode: AgentControlErrorCode?,
         message: String,
         safeToProceed: Bool = false,
+        coolingLeasePrepared: Bool = false,
+        autoRestoreAttempted: Bool = false,
+        autoRestoreSucceeded: Bool? = nil,
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
@@ -141,7 +147,52 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         self.errorCode = errorCode
         self.message = message
         self.safeToProceed = safeToProceed
+        self.coolingLeasePrepared = coolingLeasePrepared
+        self.autoRestoreAttempted = autoRestoreAttempted
+        self.autoRestoreSucceeded = autoRestoreSucceeded
         self.generatedAt = generatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case command
+        case errorCode
+        case message
+        case safeToProceed
+        case coolingLeasePrepared
+        case autoRestoreAttempted
+        case autoRestoreSucceeded
+        case generatedAt
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        command = try container.decode(String.self, forKey: .command)
+        errorCode = try container.decodeIfPresent(AgentControlErrorCode.self, forKey: .errorCode)
+        message = try container.decode(String.self, forKey: .message)
+        safeToProceed = try container.decode(Bool.self, forKey: .safeToProceed)
+        coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? false
+        autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? false
+        autoRestoreSucceeded = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreSucceeded)
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(command, forKey: .command)
+        try container.encode(errorCode, forKey: .errorCode)
+        try container.encode(message, forKey: .message)
+        try container.encode(safeToProceed, forKey: .safeToProceed)
+        try container.encode(coolingLeasePrepared, forKey: .coolingLeasePrepared)
+        try container.encode(autoRestoreAttempted, forKey: .autoRestoreAttempted)
+        if let autoRestoreSucceeded {
+            try container.encode(autoRestoreSucceeded, forKey: .autoRestoreSucceeded)
+        } else {
+            try container.encodeNil(forKey: .autoRestoreSucceeded)
+        }
+        try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
 
@@ -328,7 +379,27 @@ public struct ViftyCtlRunner: Sendable {
                     do {
                         _ = try await client.restore(reason: reason)
                     } catch {
-                        throw ViftyError.helperRejected("\(reason). Auto restore also failed: \(error.localizedDescription)")
+                        let message = "\(reason). Auto restore also failed: \(error.localizedDescription)"
+                        if json {
+                            return try commandErrorResult(
+                                command: command,
+                                errorCode: .restoreFailed,
+                                message: message,
+                                coolingLeasePrepared: true,
+                                autoRestoreAttempted: true,
+                                autoRestoreSucceeded: false
+                            )
+                        }
+                        throw ViftyError.helperRejected(message)
+                    }
+                    if json {
+                        return try commandErrorResult(
+                            command: command,
+                            error: error,
+                            coolingLeasePrepared: true,
+                            autoRestoreAttempted: true,
+                            autoRestoreSucceeded: true
+                        )
                     }
                     throw error
                 }
@@ -339,19 +410,38 @@ public struct ViftyCtlRunner: Sendable {
         }
     }
 
-    private func commandErrorResult(command: ViftyCtlCommand, error: any Error) throws -> ViftyCtlResult {
+    private func commandErrorResult(
+        command: ViftyCtlCommand,
+        error: any Error,
+        coolingLeasePrepared: Bool = false,
+        autoRestoreAttempted: Bool = false,
+        autoRestoreSucceeded: Bool? = nil
+    ) throws -> ViftyCtlResult {
         try commandErrorResult(
             command: command,
             errorCode: commandErrorCode(for: error),
-            message: error.localizedDescription
+            message: error.localizedDescription,
+            coolingLeasePrepared: coolingLeasePrepared,
+            autoRestoreAttempted: autoRestoreAttempted,
+            autoRestoreSucceeded: autoRestoreSucceeded
         )
     }
 
-    private func commandErrorResult(command: ViftyCtlCommand, errorCode: AgentControlErrorCode?, message: String) throws -> ViftyCtlResult {
+    private func commandErrorResult(
+        command: ViftyCtlCommand,
+        errorCode: AgentControlErrorCode?,
+        message: String,
+        coolingLeasePrepared: Bool = false,
+        autoRestoreAttempted: Bool = false,
+        autoRestoreSucceeded: Bool? = nil
+    ) throws -> ViftyCtlResult {
         let report = ViftyCtlCommandErrorReport(
             command: commandName(for: command),
             errorCode: errorCode,
             message: message,
+            coolingLeasePrepared: coolingLeasePrepared,
+            autoRestoreAttempted: autoRestoreAttempted,
+            autoRestoreSucceeded: autoRestoreSucceeded,
             generatedAt: now()
         )
         return ViftyCtlResult(stdout: try encodeJSON(report) + "\n", exitCode: 1)

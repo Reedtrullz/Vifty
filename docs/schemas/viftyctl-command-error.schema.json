@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
   "title": "viftyctl --json command error report",
-  "description": "Machine-readable command or pre-child wrapper failure emitted by viftyctl when --json is present. safeToProceed is always false for this report.",
+  "description": "Machine-readable command or viftyctl run wrapper failure emitted by viftyctl when --json is present. safeToProceed is always false for this report.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -10,6 +10,9 @@
     "errorCode",
     "message",
     "safeToProceed",
+    "coolingLeasePrepared",
+    "autoRestoreAttempted",
+    "autoRestoreSucceeded",
     "generatedAt"
   ],
   "properties": {
@@ -49,6 +52,25 @@
     },
     "safeToProceed": {
       "const": false
+    },
+    "coolingLeasePrepared": {
+      "description": "True only when viftyctl run successfully prepared a matching cooling lease before reporting this error.",
+      "type": "boolean"
+    },
+    "autoRestoreAttempted": {
+      "description": "True when viftyctl run attempted to restore Auto after preparing a lease and then failing before the child workload could run.",
+      "type": "boolean"
+    },
+    "autoRestoreSucceeded": {
+      "description": "null when no Auto restore was attempted; otherwise reports whether the run-wrapper cleanup restore succeeded.",
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "generatedAt": {
       "description": "Swift JSONEncoder date value emitted by the CLI.",

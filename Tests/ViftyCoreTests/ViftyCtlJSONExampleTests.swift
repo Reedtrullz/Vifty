@@ -69,7 +69,32 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.command, "prepare")
         XCTAssertEqual(report.errorCode, .prepareRateLimited)
         XCTAssertFalse(report.safeToProceed)
+        XCTAssertFalse(report.coolingLeasePrepared)
+        XCTAssertFalse(report.autoRestoreAttempted)
+        XCTAssertNil(report.autoRestoreSucceeded)
         XCTAssertTrue(report.message.contains("Wait 20s"))
+    }
+
+    func testCommandErrorLegacyPayloadDecodesWithLifecycleDefaults() throws {
+        let data = Data("""
+        {
+          "command": "prepare",
+          "errorCode": "HELPER_UNREACHABLE",
+          "generatedAt": 700000000,
+          "message": "daemon unavailable",
+          "safeToProceed": false,
+          "schemaVersion": 1
+        }
+        """.utf8)
+
+        let report = try JSONDecoder().decode(ViftyCtlCommandErrorReport.self, from: data)
+
+        XCTAssertEqual(report.command, "prepare")
+        XCTAssertEqual(report.errorCode, .helperUnreachable)
+        XCTAssertFalse(report.safeToProceed)
+        XCTAssertFalse(report.coolingLeasePrepared)
+        XCTAssertFalse(report.autoRestoreAttempted)
+        XCTAssertNil(report.autoRestoreSucceeded)
     }
 
     func testAuditExampleDecodesAgainstCurrentModel() throws {
@@ -238,9 +263,15 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let commandErrorProperties = try XCTUnwrap(commandErrorSchema["properties"] as? [String: Any])
         let safeToProceed = try XCTUnwrap(commandErrorProperties["safeToProceed"] as? [String: Any])
         XCTAssertEqual(safeToProceed["const"] as? Bool, false)
+        XCTAssertNotNil(commandErrorProperties["coolingLeasePrepared"] as? [String: Any])
+        XCTAssertNotNil(commandErrorProperties["autoRestoreAttempted"] as? [String: Any])
+        XCTAssertNotNil(commandErrorProperties["autoRestoreSucceeded"] as? [String: Any])
         XCTAssertEqual(oneOfEnumValues(named: "errorCode", in: commandErrorProperties), agentErrorCodeStrings)
         let commandErrorExample = try readJSON(fixtureURL("command-error.json"))
         XCTAssertEqual(commandErrorExample["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(commandErrorExample["coolingLeasePrepared"] as? Bool, false)
+        XCTAssertEqual(commandErrorExample["autoRestoreAttempted"] as? Bool, false)
+        XCTAssertTrue(commandErrorExample["autoRestoreSucceeded"] is NSNull)
 
         let auditSchema = try readJSON(schemaURL("viftyctl-audit.schema.json"))
         let auditProperties = try XCTUnwrap(auditSchema["properties"] as? [String: Any])

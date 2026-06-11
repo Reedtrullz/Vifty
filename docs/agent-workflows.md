@@ -183,6 +183,9 @@ For JSON command/parse/transport failures, Vifty emits:
 - `errorCode`
 - `message`
 - `safeToProceed: false`
+- `coolingLeasePrepared`
+- `autoRestoreAttempted`
+- `autoRestoreSucceeded`
 
 ### `audit --json`
 
@@ -198,7 +201,7 @@ For JSON command/parse/transport failures, Vifty emits:
 
 Each event includes `timestamp`, `action`, optional `leaseID`, and `message`. Use `--limit <count>` to request a smaller or larger recent window; the daemon-backed store remains capped to the most recent 2,000 events by default. Agents can use this after a failed restore, blocked readiness, or user report to show what Vifty actually did without requesting cooling or reading raw SMC state.
 
-For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures and daemon prepare denial. Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
+For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures, daemon prepare denial, and child launch failures after a cooling lease was prepared. When a lease was prepared before launch failed, `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` tell agents whether Vifty reached the cleanup path and whether Auto restore succeeded. Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
 
 Unknown wrapper options and unexpected positional arguments fail with `INVALID_ARGUMENTS` instead of being ignored. For `viftyctl run`, only arguments before `--` are parsed as Vifty wrapper options; child arguments after `--` are passed through to the child command.
 
@@ -343,6 +346,7 @@ Recommended agent behavior:
 - On `HELPER_UNREACHABLE`, ask the user to open Vifty and reinstall the helper rather than attempting direct SMC writes.
 - On `PREPARE_RATE_LIMITED`, wait for `retryAfterSeconds` before retrying.
 - Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a supervised human workflow explicitly wants the guarded wrapper to wait once and retry a rate-limited prepare.
+- If `viftyctl run --json` reports `coolingLeasePrepared: true` and `autoRestoreSucceeded: false`, show the user the restore failure and run `viftyctl status --json` before starting more work.
 - After any unexpected wrapper failure, run `viftyctl status --json` and show the user whether an active lease remains.
 
 ## Safety Notes
