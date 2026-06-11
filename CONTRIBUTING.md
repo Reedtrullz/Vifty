@@ -67,6 +67,8 @@ Tagged public releases follow [docs/release.md](docs/release.md) and require Dev
 
 Use [docs/support-triage.md](docs/support-triage.md) to sort reports into release trust, hardware validation, unsupported hardware, helper install, SMC telemetry, agent-cooling, or UI buckets. Ask for read-only evidence first and do not suggest manual fan-write tests when readiness is blocked. For machines outside the Apple Silicon MacBook Pro scope, follow [docs/unsupported-hardware.md](docs/unsupported-hardware.md). For GitHub Release asset, Homebrew cask checksum, Gatekeeper, notarization, TeamID, release-readiness, verifier, or reviewer failures, use the **Release Trust Report** issue template. For `viftyctl run`, `prepare`, `restore-auto`, guarded wrapper, expired-lease, rate-limit, or restore-failure reports, use the **Agent Cooling Report** issue template.
 
+Repository topics and triage labels are part of the contributor surface. When changing issue templates or triage buckets, update `.github/repo-metadata.json` and run `scripts/check-github-metadata.sh --repo Reedtrullz/Vifty --json` when you have GitHub access.
+
 ## Code Conventions
 
 - `@MainActor` for UI state, actors for mutable shared state

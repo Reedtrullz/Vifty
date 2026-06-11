@@ -52,6 +52,12 @@ Suggested labels:
 - `agent-cooling`
 - `ui`
 
+The expected GitHub topics and labels are tracked in `.github/repo-metadata.json`. Maintainers can verify live repository metadata with:
+
+```sh
+scripts/check-github-metadata.sh --repo Reedtrullz/Vifty --json
+```
+
 Use `security` only for public non-sensitive tracking. For vulnerabilities involving unprivileged fan writes, daemon client spoofing, arbitrary SMC writes, or local permission leaks, direct the reporter to GitHub Security Advisories.
 
 Use the dedicated **Agent Cooling Report** issue template for `viftyctl run`, `prepare`, `restore-auto`, guarded wrapper, rate-limit, expired-lease, and restore-failure reports.

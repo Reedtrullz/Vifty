@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "repository": "Reedtrullz/Vifty",
+  "requiredTopics": [
+    "apple-silicon",
+    "battery-monitor",
+    "developer-tools",
+    "fan-control",
+    "hardware-monitoring",
+    "iokit",
+    "launchdaemon",
+    "local-first",
+    "macbook-pro",
+    "macos",
+    "macos-app",
+    "menubar",
+    "menu-bar-app",
+    "power-monitor",
+    "smc",
+    "swift",
+    "temperature-monitoring",
+    "thermal",
+    "thermal-management",
+    "xpc"
+  ],
+  "labels": [
+    {
+      "name": "release-trust",
+      "color": "B60205",
+      "description": "Release signing, notarization, cask checksum, or GitHub Release trust issue"
+    },
+    {
+      "name": "hardware-validation",
+      "color": "1D76DB",
+      "description": "Real-machine compatibility and validation evidence"
+    },
+    {
+      "name": "unsupported-hardware",
+      "color": "D93F0B",
+      "description": "Expected safe-block behavior outside supported hardware scope"
+    },
+    {
+      "name": "helper-install",
+      "color": "5319E7",
+      "description": "Privileged helper, LaunchDaemon, or approval/install issue"
+    },
+    {
+      "name": "smc-telemetry",
+      "color": "FBCA04",
+      "description": "Fan, SMC key, sensor, or hardware telemetry drift"
+    },
+    {
+      "name": "agent-cooling",
+      "color": "0E8A16",
+      "description": "viftyctl lease, guarded-run, restore, or local workload cooling issue"
+    },
+    {
+      "name": "ui",
+      "color": "C5DEF5",
+      "description": "Menu bar, window, copy, screenshot, or visible state issue"
+    },
+    {
+      "name": "security",
+      "color": "D73A4A",
+      "description": "Public non-sensitive security tracking; use advisories for vulnerabilities"
+    }
+  ]
+}

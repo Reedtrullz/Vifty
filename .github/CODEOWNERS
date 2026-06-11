@@ -46,6 +46,7 @@ Resources/tech.reidar.vifty.daemon.plist  @Reedtrullz
 Install Vifty.command  @Reedtrullz
 
 # Compatibility, validation, and policy surfaces
+.github/repo-metadata.json  @Reedtrullz
 docs/compatibility.md  @Reedtrullz
 docs/hardware-validation.md  @Reedtrullz
 docs/release.md  @Reedtrullz
