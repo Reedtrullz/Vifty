@@ -21,6 +21,51 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode supported-hardware"))
     }
 
+    func testReviewRejectsSchemaResourceDriftEvenWhenSummaryStatusPasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            schemaResourcesText: ValidationEvidenceReviewHarness.defaultSchemaResourcesTSV
+                .replacingOccurrences(
+                    of: "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
+                    with: "Contents/Resources/schemas/stale-capabilities.schema.json"
+                )
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("viftyctl-capabilities.schema.json bundlePath"))
+    }
+
+    func testReviewRejectsAdvertisedCapabilitiesSchemaResourceDriftEvenWhenSummaryStatusPasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            capabilitiesSchemaResourcesText: ValidationEvidenceReviewHarness.defaultCapabilitiesSchemaResourcesTSV
+                .replacingOccurrences(
+                    of: "status\tContents/Resources/schemas/viftyctl-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json",
+                    with: "status\tContents/Resources/schemas/stale-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json"
+                )
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("capabilities-schema-resources.tsv status advertisedResource"))
+    }
+
+    func testReviewRejectsCapabilitiesContractDriftEvenWhenSummaryStatusPasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            capabilitiesContractText: ValidationEvidenceReviewHarness.defaultCapabilitiesContractTSV
+                .replacingOccurrences(
+                    of: "runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue",
+                    with: "runLifecycle.autoRestoreAfterChildExit\tfalse\ttrue"
+                )
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv runLifecycle.autoRestoreAfterChildExit actual"))
+    }
+
     func testReviewRejectsSupportedHardwareEvidenceWithoutProbeLocal() throws {
         let harness = try ValidationEvidenceReviewHarness(
             probeLocalStatus: "skipped",
@@ -338,6 +383,9 @@ private final class ValidationEvidenceReviewHarness {
         privacyReviewStatus: String = "0",
         privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
         capabilitiesStatus: String = "0",
+        schemaResourcesText: String? = nil,
+        capabilitiesSchemaResourcesText: String? = nil,
+        capabilitiesContractText: String? = nil,
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
@@ -395,9 +443,12 @@ private final class ValidationEvidenceReviewHarness {
         try writeText("checksums.tsv", contents: "sha256\tbytes\tfile\n")
         try writeText("bundle-executables.tsv", contents: bundleExecutablesTSV)
         try writeText("privacy-review.tsv", contents: privacyReviewText)
-        try writeText("schema-resources.tsv", contents: schemaResourcesTSV)
-        try writeText("capabilities-schema-resources.tsv", contents: capabilitiesSchemaResourcesTSV)
-        try writeText("capabilities-contract.tsv", contents: capabilitiesContractTSV)
+        try writeText("schema-resources.tsv", contents: schemaResourcesText ?? Self.defaultSchemaResourcesTSV)
+        try writeText(
+            "capabilities-schema-resources.tsv",
+            contents: capabilitiesSchemaResourcesText ?? Self.defaultCapabilitiesSchemaResourcesTSV
+        )
+        try writeText("capabilities-contract.tsv", contents: capabilitiesContractText ?? Self.defaultCapabilitiesContractTSV)
         try writeDiagnose(diagnose)
         try writeJSON(
             "viftyctl-audit.json",
@@ -708,38 +759,32 @@ private final class ValidationEvidenceReviewHarness {
         """
     }
 
-    private var schemaResourcesTSV: String {
-        """
-        schema\tsha256\tbytes\tbundlePath
-        release-artifact-summary.schema.json\t\(String(repeating: "f", count: 64))\t3300\tContents/Resources/schemas/release-artifact-summary.schema.json
-        viftyctl-audit.schema.json\t\(String(repeating: "e", count: 64))\t1390\tContents/Resources/schemas/viftyctl-audit.schema.json
-        viftyctl-capabilities.schema.json\t\(String(repeating: "a", count: 64))\t5170\tContents/Resources/schemas/viftyctl-capabilities.schema.json
-        viftyctl-command-error.schema.json\t\(String(repeating: "b", count: 64))\t1461\tContents/Resources/schemas/viftyctl-command-error.schema.json
-        viftyctl-diagnose.schema.json\t\(String(repeating: "c", count: 64))\t5697\tContents/Resources/schemas/viftyctl-diagnose.schema.json
-        viftyctl-status.schema.json\t\(String(repeating: "d", count: 64))\t4828\tContents/Resources/schemas/viftyctl-status.schema.json
-        """
-    }
+    static let defaultSchemaResourcesTSV = """
+    schema\tsha256\tbytes\tbundlePath
+    release-artifact-summary.schema.json\t\(String(repeating: "f", count: 64))\t3300\tContents/Resources/schemas/release-artifact-summary.schema.json
+    viftyctl-audit.schema.json\t\(String(repeating: "e", count: 64))\t1390\tContents/Resources/schemas/viftyctl-audit.schema.json
+    viftyctl-capabilities.schema.json\t\(String(repeating: "a", count: 64))\t5170\tContents/Resources/schemas/viftyctl-capabilities.schema.json
+    viftyctl-command-error.schema.json\t\(String(repeating: "b", count: 64))\t1461\tContents/Resources/schemas/viftyctl-command-error.schema.json
+    viftyctl-diagnose.schema.json\t\(String(repeating: "c", count: 64))\t5697\tContents/Resources/schemas/viftyctl-diagnose.schema.json
+    viftyctl-status.schema.json\t\(String(repeating: "d", count: 64))\t4828\tContents/Resources/schemas/viftyctl-status.schema.json
+    """
 
-    private var capabilitiesSchemaResourcesTSV: String {
-        """
-        key\tadvertisedResource\texpectedResource
-        audit\tContents/Resources/schemas/viftyctl-audit.schema.json\tContents/Resources/schemas/viftyctl-audit.schema.json
-        capabilities\tContents/Resources/schemas/viftyctl-capabilities.schema.json\tContents/Resources/schemas/viftyctl-capabilities.schema.json
-        commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json
-        diagnose\tContents/Resources/schemas/viftyctl-diagnose.schema.json\tContents/Resources/schemas/viftyctl-diagnose.schema.json
-        status\tContents/Resources/schemas/viftyctl-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json
-        """
-    }
+    static let defaultCapabilitiesSchemaResourcesTSV = """
+    key\tadvertisedResource\texpectedResource
+    audit\tContents/Resources/schemas/viftyctl-audit.schema.json\tContents/Resources/schemas/viftyctl-audit.schema.json
+    capabilities\tContents/Resources/schemas/viftyctl-capabilities.schema.json\tContents/Resources/schemas/viftyctl-capabilities.schema.json
+    commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json
+    diagnose\tContents/Resources/schemas/viftyctl-diagnose.schema.json\tContents/Resources/schemas/viftyctl-diagnose.schema.json
+    status\tContents/Resources/schemas/viftyctl-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json
+    """
 
-    private var capabilitiesContractTSV: String {
-        """
-        field\tactual\texpected
-        supportsForceRetry\ttrue\ttrue
-        runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue
-        runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue
-        runLifecycle.structuredPreChildFailures\ttrue\ttrue
-        runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
-        runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
-        """
-    }
+    static let defaultCapabilitiesContractTSV = """
+    field\tactual\texpected
+    supportsForceRetry\ttrue\ttrue
+    runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue
+    runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue
+    runLifecycle.structuredPreChildFailures\ttrue\ttrue
+    runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
+    runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
+    """
 }

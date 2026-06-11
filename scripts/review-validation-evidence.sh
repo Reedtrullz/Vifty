@@ -138,6 +138,32 @@ ruby -rjson -rcsv -rfileutils -e '
     "viftyctl" => "Contents/MacOS/viftyctl"
   }.freeze
 
+  EXPECTED_SCHEMA_RESOURCES = {
+    "release-artifact-summary.schema.json" => "Contents/Resources/schemas/release-artifact-summary.schema.json",
+    "viftyctl-audit.schema.json" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
+    "viftyctl-capabilities.schema.json" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
+    "viftyctl-command-error.schema.json" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
+    "viftyctl-diagnose.schema.json" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+    "viftyctl-status.schema.json" => "Contents/Resources/schemas/viftyctl-status.schema.json"
+  }.freeze
+
+  EXPECTED_CAPABILITIES_SCHEMA_RESOURCES = {
+    "audit" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
+    "capabilities" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
+    "commandError" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
+    "diagnose" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+    "status" => "Contents/Resources/schemas/viftyctl-status.schema.json"
+  }.freeze
+
+  EXPECTED_CAPABILITIES_CONTRACT = {
+    "supportsForceRetry" => "true",
+    "runLifecycle.childCommandPreflightBeforeCooling" => "true",
+    "runLifecycle.autoRestoreAfterChildExit" => "true",
+    "runLifecycle.structuredPreChildFailures" => "true",
+    "runLifecycle.cleanupStateReportedOnLaunchFailure" => "true",
+    "runLifecycle.signalsForwardedToChild" => "INT,TERM,HUP"
+  }.freeze
+
   REQUIRED_COMMON_FILES = %w[
     review-summary.json
     review-summary.tsv
@@ -235,6 +261,12 @@ ruby -rjson -rcsv -rfileutils -e '
     failures << "#{field} must be a positive integer"
   end
 
+  def require_sha256(value, field, failures)
+    return if value.to_s.match?(/\A[0-9a-f]{64}\z/)
+
+    failures << "#{field} must be a lowercase 64-character SHA-256 checksum"
+  end
+
   def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, manual_smoke_result, manual_smoke_source)
     return if path.to_s.empty?
 
@@ -316,10 +348,55 @@ ruby -rjson -rcsv -rfileutils -e '
     unless row["bundlePath"] == expected_bundle_path
       failures << "#{name} bundlePath #{row["bundlePath"].inspect} did not match #{expected_bundle_path}"
     end
-    unless row["sha256"].to_s.match?(/\A[0-9a-f]{64}\z/)
-      failures << "#{name} sha256 must be a lowercase 64-character SHA-256 checksum"
-    end
+    require_sha256(row["sha256"], "#{name} sha256", failures)
     require_positive_integer(row["bytes"], "#{name} bytes", failures)
+  end
+
+  schema_rows = parse_tsv(bundle, "schema-resources.tsv", failures)
+  schema_by_name = schema_rows.to_h { |row| [row["schema"].to_s, row] }
+  EXPECTED_SCHEMA_RESOURCES.each do |schema, expected_bundle_path|
+    row = schema_by_name[schema]
+    if row.nil?
+      failures << "schema-resources.tsv is missing #{schema}"
+      next
+    end
+    unless row["bundlePath"] == expected_bundle_path
+      failures << "#{schema} bundlePath #{row["bundlePath"].inspect} did not match #{expected_bundle_path}"
+    end
+    require_sha256(row["sha256"], "#{schema} sha256", failures)
+    require_positive_integer(row["bytes"], "#{schema} bytes", failures)
+  end
+
+  capabilities_resource_rows = parse_tsv(bundle, "capabilities-schema-resources.tsv", failures)
+  capabilities_resource_by_key = capabilities_resource_rows.to_h { |row| [row["key"].to_s, row] }
+  EXPECTED_CAPABILITIES_SCHEMA_RESOURCES.each do |key, expected_resource|
+    row = capabilities_resource_by_key[key]
+    if row.nil?
+      failures << "capabilities-schema-resources.tsv is missing #{key}"
+      next
+    end
+    unless row["advertisedResource"] == expected_resource
+      failures << "capabilities-schema-resources.tsv #{key} advertisedResource #{row["advertisedResource"].inspect} did not match #{expected_resource}"
+    end
+    unless row["expectedResource"] == expected_resource
+      failures << "capabilities-schema-resources.tsv #{key} expectedResource #{row["expectedResource"].inspect} did not match #{expected_resource}"
+    end
+  end
+
+  capabilities_contract_rows = parse_tsv(bundle, "capabilities-contract.tsv", failures)
+  capabilities_contract_by_field = capabilities_contract_rows.to_h { |row| [row["field"].to_s, row] }
+  EXPECTED_CAPABILITIES_CONTRACT.each do |field, expected_value|
+    row = capabilities_contract_by_field[field]
+    if row.nil?
+      failures << "capabilities-contract.tsv is missing #{field}"
+      next
+    end
+    unless row["expected"] == expected_value
+      failures << "capabilities-contract.tsv #{field} expected #{row["expected"].inspect} did not match #{expected_value}"
+    end
+    unless row["actual"] == expected_value
+      failures << "capabilities-contract.tsv #{field} actual #{row["actual"].inspect} did not match #{expected_value}"
+    end
   end
 
   diagnose = parse_json(bundle, "viftyctl-diagnose.json", failures) || {}
