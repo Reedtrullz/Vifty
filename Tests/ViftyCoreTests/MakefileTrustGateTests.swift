@@ -6,7 +6,11 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
+        XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))
+        XCTAssertTrue(makefile.contains("RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"))
+        XCTAssertTrue(makefile.contains("RELEASE_REPO ?= Reedtrullz/Vifty"))
         XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh"))
@@ -24,9 +28,14 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg unsigned-dev-artifact clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install pkg source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
+        XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))
+        XCTAssertTrue(makefile.contains("scripts/write-release-checklist.sh --mode source-first --version \"$(RELEASE_VERSION)\""))
+        XCTAssertTrue(makefile.contains("scripts/build-unsigned-dev-artifact.sh --version \"$(RELEASE_VERSION)\""))
+        XCTAssertTrue(makefile.contains("scripts/check-release-readiness.sh --mode source-first --version \"$(RELEASE_VERSION)\" --repo \"$(RELEASE_REPO)\" --json"))
     }
 
     private func read(_ relativePath: String) throws -> String {

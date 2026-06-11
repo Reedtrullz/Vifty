@@ -1,8 +1,10 @@
-.PHONY: app install pkg unsigned-dev-artifact clean-app clean-pkg test verify help clean
+.PHONY: app install pkg source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
 VIFTY_XPC_ALLOWED_TEAM_ID ?=
+RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
+RELEASE_REPO ?= Reedtrullz/Vifty
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -39,8 +41,14 @@ install: ## Build and install to /Applications
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
 
+source-first-release-notes: ## Write source-first release notes for the current version
+	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)"
+
 unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum
-	./scripts/build-unsigned-dev-artifact.sh
+	./scripts/build-unsigned-dev-artifact.sh --version "$(RELEASE_VERSION)"
+
+source-first-readiness: ## Check published source-first release readiness
+	./scripts/check-release-readiness.sh --mode source-first --version "$(RELEASE_VERSION)" --repo "$(RELEASE_REPO)" --json
 
 test: ## Run the XCTest suite
 	swift test

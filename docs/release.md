@@ -28,10 +28,7 @@ Source-first checklist:
 2. Generate source-first release notes:
 
    ```sh
-   scripts/write-release-checklist.sh \
-     --mode source-first \
-     --version <version> \
-     --output .build/Vifty-v<version>-source-first-release-notes.md
+   RELEASE_VERSION=<version> make source-first-release-notes
    ```
 
 3. Optionally build the unsigned tester artifact:
@@ -66,11 +63,7 @@ Source-first checklist:
 
    ```sh
    git fetch origin main --tags
-   scripts/check-release-readiness.sh \
-     --mode source-first \
-     --version <version> \
-     --repo Reedtrullz/Vifty \
-     --json
+   RELEASE_VERSION=<version> make source-first-readiness
    ```
 
    If you need an immutable source-ref check after publication, use the release commit SHA rather than a moving branch.

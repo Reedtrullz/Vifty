@@ -30,12 +30,14 @@ Use these checks before publishing or updating the `v1.1.0` GitHub Release:
 ```sh
 git fetch origin main --tags
 make verify
-scripts/write-release-checklist.sh --mode source-first --version 1.1.0 --output .build/Vifty-v1.1.0-source-first-release-notes.md
+make source-first-release-notes
 make unsigned-dev-artifact
-scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json
+make source-first-readiness
 ```
 
-If this check is being run before the release tag is pushed, add `--require-source-ref <candidate-ref-or-sha>` so a stale local tag cannot be promoted. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
+`make source-first-release-notes` writes `.build/Vifty-v1.1.0-source-first-release-notes.md`. `make source-first-readiness` runs the published-release readiness preflight with `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json`.
+
+If the readiness check is being run before the release tag is pushed, run the script directly with `--require-source-ref <candidate-ref-or-sha>` so a stale local tag cannot be promoted. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
 Expected source-first release notes must include:
 
