@@ -17,13 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/viftyctl/guarded-run.sh` now checks `supportsForceRetry` before passing `--force` so supervised retry opt-in stays tied to advertised CLI capabilities.
 - `ViftyCtlCapabilities` now decodes legacy payloads without `supportsForceRetry` as force-retry unsupported, matching the guarded wrapper's fail-closed behavior for missing capability fields.
 - `scripts/collect-validation-evidence.sh` now writes `capabilities-contract.tsv` and review summaries flag it when the installed `viftyctl capabilities --json` payload no longer advertises the safe `runLifecycle` and `supportsForceRetry` contract expected by guarded workload wrappers.
+- `scripts/review-validation-evidence.sh` now accepts `viftyctl-capabilities` status `69` when the static schema-resource and capabilities-contract evidence still pass, matching the collector's daemon-unavailable but machine-readable capabilities mode.
 
 ### Changed
 - The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
 - Hardware validation docs and the issue template now distinguish source builds, source-first unsigned-dev zips, future notarized releases, and Homebrew installs so `v1.1.0` compatibility reports do not imply trusted binary distribution.
 - The Bug Report template now steers unsupported or blocked fan reports to `viftyctl diagnose --json` first and keeps helper probe output optional unless supported hardware or maintainer follow-up needs it.
 - The Agent Cooling Report template now treats blocked readiness as evidence-only, adds a blocked-before-cooling command path, and warns reporters not to retry `viftyctl prepare` or `viftyctl run` while diagnose says cooling is unsafe.
-- The strategy workplan now reflects the landed `main` hardening state, 416-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
+- The strategy workplan now reflects the landed `main` hardening state, 417-test trust gate, source-first `v1.1.0` assets, and no-retag/no-Homebrew boundaries.
 
 ## [1.1.0] — 2026-06-11
 

@@ -12,6 +12,15 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("manual fan-write smoke-test result is not recorded"))
     }
 
+    func testReviewAcceptsCapabilitiesUnavailableWhenStaticContractEvidencePasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(capabilitiesStatus: "69")
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode supported-hardware"))
+    }
+
     func testReviewRejectsSupportedHardwareEvidenceWithoutProbeLocal() throws {
         let harness = try ValidationEvidenceReviewHarness(
             probeLocalStatus: "skipped",
@@ -328,6 +337,7 @@ private final class ValidationEvidenceReviewHarness {
         probeLocalText: String = "fan[0] id=0 name=\"Left Fan\" currentRPM=2200 minimumRPM=1400 maximumRPM=6800 hardwareMode=Auto hardwareModeRawValue=0 targetRPM=nil",
         privacyReviewStatus: String = "0",
         privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
+        capabilitiesStatus: String = "0",
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
@@ -354,7 +364,7 @@ private final class ValidationEvidenceReviewHarness {
             "capabilities-schema-resources": "0",
             "capabilities-contract": "0",
             "launchdaemon-lint": "0",
-            "viftyctl-capabilities": "0",
+            "viftyctl-capabilities": capabilitiesStatus,
             "viftyctl-status": "0",
             "viftyctl-diagnose": diagnoseStatus,
             "viftyctl-audit": "0",

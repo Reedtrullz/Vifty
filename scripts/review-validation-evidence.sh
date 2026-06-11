@@ -161,7 +161,6 @@ ruby -rjson -rcsv -rfileutils -e '
     capabilities-schema-resources
     capabilities-contract
     launchdaemon-lint
-    viftyctl-capabilities
     viftyctl-status
     viftyctl-audit
   ].freeze
@@ -304,6 +303,7 @@ ruby -rjson -rcsv -rfileutils -e '
   COMMON_ZERO_CHECKS.each do |name|
     require_status(checks, name, ["0"], failures)
   end
+  require_status(checks, "viftyctl-capabilities", ["0", "69"], failures)
 
   executable_rows = parse_tsv(bundle, "bundle-executables.tsv", failures)
   executable_by_name = executable_rows.to_h { |row| [row["executable"], row] }
