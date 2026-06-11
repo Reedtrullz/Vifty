@@ -38,6 +38,7 @@
             "LEASE_NOT_FOUND",
             "RESTORE_FAILED",
             "INVALID_ARGUMENTS",
+            "CHILD_COMMAND_FAILED",
             "PREPARE_RATE_LIMITED",
             "RESTORE_REQUESTED"
           ]

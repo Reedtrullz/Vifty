@@ -178,6 +178,7 @@ Known `lastDecision.errorCode` values include:
 - `LEASE_NOT_FOUND`
 - `RESTORE_FAILED`
 - `INVALID_ARGUMENTS`
+- `CHILD_COMMAND_FAILED`
 - `PREPARE_RATE_LIMITED`
 - `RESTORE_REQUESTED`
 
@@ -207,7 +208,7 @@ For JSON command/parse/transport failures, Vifty emits:
 
 Each event includes `timestamp`, `action`, optional `leaseID`, and `message`. Use `--limit <count>` to request a smaller or larger recent window; the daemon-backed store remains capped to the most recent 2,000 events by default. Agents can use this after a failed restore, blocked readiness, or user report to show what Vifty actually did without requesting cooling or reading raw SMC state.
 
-For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures, daemon prepare denial, and child launch failures after a cooling lease was prepared. When a lease was prepared before launch failed, `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` tell agents whether Vifty reached the cleanup path and whether Auto restore succeeded. Canonical examples for both cleanup-success and cleanup-failure launch errors live in [docs/examples/viftyctl](examples/viftyctl). Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
+For `viftyctl run --json`, wrapper failures before the child process starts use this same structured error shape. That includes child-command resolution failures, daemon prepare denial, and child launch failures after a cooling lease was prepared. Child-command failures report `CHILD_COMMAND_FAILED` so agents can fix the workload command instead of treating the Vifty helper as unavailable. When a lease was prepared before launch failed, `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` tell agents whether Vifty reached the cleanup path and whether Auto restore succeeded. Canonical examples for both cleanup-success and cleanup-failure launch errors live in [docs/examples/viftyctl](examples/viftyctl). Once the child has started, Vifty preserves normal child output and wrapper exit/stderr behavior so agents do not confuse child stdout with a clean Vifty JSON document.
 
 If `--force` is waiting for a `PREPARE_RATE_LIMITED` cooldown retry and the wait is interrupted before a lease is prepared, JSON callers receive `errorCode: PREPARE_RATE_LIMITED`, `coolingLeasePrepared: false`, `autoRestoreAttempted: false`, and `retryAfterSeconds` from the rate-limit decision or policy fallback.
 
@@ -353,6 +354,7 @@ Recommended agent behavior:
 - Stop or back off the workload on `THERMAL_CRITICAL`.
 - On `RESTORE_REQUESTED`, assume the user intentionally chose Auto and do not retry automatically.
 - On `HELPER_UNREACHABLE`, ask the user to open Vifty and reinstall the helper rather than attempting direct SMC writes.
+- On `CHILD_COMMAND_FAILED`, fix the workload command/path or show the launch error; do not repair Vifty helper state or retry cooling.
 - On `PREPARE_RATE_LIMITED`, wait for `retryAfterSeconds` before retrying.
 - Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a supervised human workflow explicitly wants the guarded wrapper to wait once and retry a rate-limited prepare.
 - If `viftyctl run --json` reports `coolingLeasePrepared: true` and `autoRestoreSucceeded: false`, show the user the restore failure and run `viftyctl status --json` before starting more work.

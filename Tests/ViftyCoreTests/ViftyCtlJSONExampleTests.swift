@@ -119,7 +119,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
     func testRunCleanupCommandErrorExamplesDecodeAgainstCurrentModel() throws {
         let restored = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-cleanup-restored.json")
         XCTAssertEqual(restored.command, "run")
-        XCTAssertEqual(restored.errorCode, .helperUnreachable)
+        XCTAssertEqual(restored.errorCode, .childCommandFailed)
         XCTAssertFalse(restored.safeToProceed)
         XCTAssertTrue(restored.coolingLeasePrepared)
         XCTAssertTrue(restored.autoRestoreAttempted)
@@ -426,6 +426,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "LEASE_NOT_FOUND",
             "RESTORE_FAILED",
             "INVALID_ARGUMENTS",
+            "CHILD_COMMAND_FAILED",
             "PREPARE_RATE_LIMITED",
             "RESTORE_REQUESTED"
         ]

@@ -333,6 +333,14 @@ private struct ViftyCtlForceRetryWaitError: Error, LocalizedError, Sendable {
     }
 }
 
+private struct ViftyCtlChildCommandError: Error, LocalizedError, Sendable {
+    var message: String
+
+    var errorDescription: String? {
+        message
+    }
+}
+
 public extension ViftyCtlProcessRunning {
     func resolve(_ arguments: [String]) throws -> [String] {
         arguments
@@ -446,7 +454,12 @@ public struct ViftyCtlRunner: Sendable {
                 let stdout = try format(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
             case .run(let request, let childArguments, let json, let force):
-                let resolvedChildArguments = try processRunner.resolve(childArguments)
+                let resolvedChildArguments: [String]
+                do {
+                    resolvedChildArguments = try processRunner.resolve(childArguments)
+                } catch {
+                    throw ViftyCtlChildCommandError(message: error.localizedDescription)
+                }
                 let prepareStatus = try await prepareWithOptionalForceRetry(request, force: force)
                 guard prepareSucceeded(prepareStatus, request: request) else {
                     let message = prepareFailureMessage(prepareStatus, request: request)
@@ -485,7 +498,8 @@ public struct ViftyCtlRunner: Sendable {
                     if json {
                         return try commandErrorResult(
                             command: command,
-                            error: error,
+                            errorCode: .childCommandFailed,
+                            message: error.localizedDescription,
                             coolingLeasePrepared: true,
                             autoRestoreAttempted: true,
                             autoRestoreSucceeded: true
@@ -577,6 +591,9 @@ public struct ViftyCtlRunner: Sendable {
     private func commandErrorCode(for error: any Error) -> AgentControlErrorCode? {
         if error is ViftyCtlForceRetryWaitError {
             return .prepareRateLimited
+        }
+        if error is ViftyCtlChildCommandError {
+            return .childCommandFailed
         }
         if error is ViftyCtlParseError {
             return .invalidArguments

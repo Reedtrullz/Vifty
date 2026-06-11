@@ -3,7 +3,7 @@
   "autoRestoreSucceeded": true,
   "command": "run",
   "coolingLeasePrepared": true,
-  "errorCode": "HELPER_UNREACHABLE",
+  "errorCode": "CHILD_COMMAND_FAILED",
   "generatedAt": 700000001,
   "message": "The child command failed to launch after Vifty prepared a cooling lease. Auto restore succeeded.",
   "safeToProceed": false,

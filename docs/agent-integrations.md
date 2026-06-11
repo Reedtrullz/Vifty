@@ -109,6 +109,7 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `restoreAutoBeforeRequestingCooling`: ask the user whether to restore Auto before retrying.
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
 - `HELPER_UNREACHABLE`: ask the user to open Vifty and reinstall or approve the helper.
+- `CHILD_COMMAND_FAILED`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
 - `PREPARE_RATE_LIMITED`: wait for `retryAfterSeconds`; do not busy-loop retries.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
