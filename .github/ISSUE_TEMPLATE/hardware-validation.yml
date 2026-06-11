@@ -12,7 +12,7 @@ body:
         scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
         ```
 
-        The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, and Gatekeeper evidence for the app, CLI, helper, and daemon.
+        The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, Gatekeeper, and privacy-review evidence for the app, CLI, helper, and daemon. Check privacy-review.tsv before posting publicly; redact files it flags or share them privately with maintainers.
 
         Or run these commands manually:
 
@@ -152,12 +152,13 @@ body:
     id: release-trust-evidence
     attributes:
       label: Release trust evidence
-      description: Paste review-summary.tsv rows, attach review-summary.json, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The release-artifact-summary row should be 0 for release reports so the verifier result passed and matched the installed app version.
+      description: Paste review-summary.tsv rows, attach review-summary.json, privacy-review.tsv, review-result.json if maintainers already ran scripts/review-validation-evidence.sh, bundle-executables.tsv, schema-resources.tsv, capabilities-schema-resources.tsv, and release-artifact-summary.tsv/json when available, or attach files for app-info-plist, launchdaemon-teamid, codesign-*, spctl-assess-app, and stapler-validate-app. Maintainers should be able to run scripts/review-validation-evidence.sh against the attached bundle. The privacy-review row should be 0 before public sharing; redact or share privately if it names hostnames, /Users/... paths, serial-number labels, or hardware UUID labels. The release-artifact-summary row should be 0 for release reports so the verifier result passed and matched the installed app version.
       render: text
       placeholder: |
         name	status	expected	scope	note
         app-info-plist	0	0	release-and-hardware	Bundle metadata identifies the tested app version.
         bundle-executables	0	0	release-and-hardware	Bundled app/helper/daemon/CLI executables should be present, executable, and hashed.
+        privacy-review	0	0	release-and-hardware	Review captured files for likely hostnames, /Users/... paths, serial-number labels, or hardware UUID labels before public sharing.
         release-artifact-summary	0	0 or skipped	release-trust	Optional verifier summary should pass and match the installed app version when supplied.
         schema-resources	0	0	agent-contract	Bundled viftyctl JSON Schemas should be present and hashed.
         capabilities-schema-resources	0	0	agent-contract	Capabilities output should advertise installed schema resource paths.

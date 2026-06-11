@@ -234,6 +234,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testReleaseAndHardwareDocsPointBackToCompatibilityStatus() throws {
         let release = try read("docs/release.md")
         let hardwareValidation = try read("docs/hardware-validation.md")
+        let hardwareValidationTemplate = try read(".github/ISSUE_TEMPLATE/hardware-validation.yml")
 
         XCTAssertTrue(release.contains("make verify"))
         XCTAssertTrue(release.contains("[compatibility.md](compatibility.md)"))
@@ -253,6 +254,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("--manual-smoke-result passed-auto-restored"))
         XCTAssertTrue(hardwareValidation.contains("validated-hardware-evidence"))
         XCTAssertTrue(hardwareValidation.contains("review-summary.json"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("privacy-review.tsv"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("The privacy-review row should be 0 before public sharing"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("Review captured files for likely hostnames, /Users/... paths, serial-number labels, or hardware UUID labels before public sharing."))
     }
 
     func testAgentIntegrationDocsPreferGuardedRunAndForbidRawWrites() throws {
