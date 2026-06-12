@@ -456,6 +456,7 @@ else
   if release_output="$(ruby -rjson -e '
     version = ARGV.fetch(0)
     mode = ARGV.fetch(1)
+    source_sha = ARGV.fetch(2)
     tag = "v#{version}"
     data = JSON.parse(STDIN.read)
     assets = Array(data["assets"]).map { |asset| asset["name"].to_s }
@@ -500,7 +501,10 @@ else
         "This is a source-first release",
         "does not yet include a Developer ID signed or notarized public binary",
         "For the most trusted path, build from source",
-        "Gatekeeper warnings"
+        "Gatekeeper warnings",
+        "## Source Provenance",
+        source_sha,
+        "post-release hardening"
       ].each do |needle|
         problems << "release notes must include #{needle.inspect}" unless body.include?(needle)
       end
@@ -516,7 +520,7 @@ else
         exit 1
       end
     end
-  ' "${VERSION}" "${RELEASE_MODE}" <<< "${release_json}" 2>&1)"; then
+  ' "${VERSION}" "${RELEASE_MODE}" "${resolved_source_sha}" <<< "${release_json}" 2>&1)"; then
     add_check "github-release" "passed" "${release_output}"
   else
     add_check "github-release" "blocked" "${release_output}"

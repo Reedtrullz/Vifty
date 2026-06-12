@@ -635,6 +635,38 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("is present without Vifty-v1.0.0-unsigned-dev.zip.sha256") == true)
     }
 
+    func testSourceFirstReadinessRejectsReleaseNotesWithoutSourceProvenance() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0", includeProvenance: false)
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("## Source Provenance") == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains(sourceSHA) == true)
+        XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("post-release hardening") == true)
+    }
+
     func testReleaseReadinessBlocksFailedSourceCI() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
@@ -744,12 +776,21 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         checks.first { $0["name"] as? String == name }?["message"] as? String
     }
 
-    private func sourceFirstReleaseNotes(version: String) -> String {
-        """
+    private func sourceFirstReleaseNotes(version: String, includeProvenance: Bool = true) -> String {
+        var notes = """
         This is a source-first release. Vifty v\(version) does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
 
         A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
         """
+        if includeProvenance {
+            notes += """
+
+            ## Source Provenance
+
+            The `v\(version)` tag is the source release boundary. Record the immutable tag commit SHA before publishing: \(String(repeating: "b", count: 40)). Later `main` commits are post-release hardening until a future release is cut.
+            """
+        }
+        return notes
     }
 }
 
