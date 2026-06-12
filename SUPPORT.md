@@ -11,9 +11,10 @@ read-only evidence and conservative safety gates.
   source-first release warnings, unsigned-dev asset naming or checksum issues,
   Gatekeeper, Developer ID, notarization, Homebrew, TeamID, release-readiness,
   verifier, or reviewer problems. For source-first releases, remember that the
-  optional unsigned `.app` zip is tester convenience only; `v1.1.0` also has a
-  known helper-unreachable issue that should be handled as release-trust
-  evidence, not as proof of trusted binary distribution.
+  optional unsigned `.app` zip is tester convenience only. The `v1.1.1`
+  source-first hotfix supersedes the known `v1.1.0` helper-unreachable issue;
+  keep both reports in the release-trust evidence lane, not as proof of trusted
+  binary distribution.
 - **Hardware validation:** use the **Hardware Validation Report** issue
   template and follow [docs/hardware-validation.md](docs/hardware-validation.md).
 - **Agent/build/test cooling:** use the **Agent Cooling Report** issue template

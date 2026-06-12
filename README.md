@@ -55,15 +55,13 @@ For help or reports, start with [SUPPORT.md](SUPPORT.md). Maintainers should tri
 
 ### Current release trust status
 
-The latest published public release is Vifty `v1.1.0`, a source-first release because the project does not currently have Apple Developer Program credentials. There is no Developer ID signed or notarized public binary for `v1.1.0`, and the canonical notarized artifact name `Vifty-v1.1.0.zip` is reserved for a future Developer ID release.
+The latest published public release is Vifty `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials. There is no Developer ID signed or notarized public binary for `v1.1.1`, and the canonical notarized artifact name `Vifty-v1.1.1.zip` is reserved for a future Developer ID release.
 
-The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.0` source release unless a future release is cut.
+The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
-An optional `Vifty-v1.1.0-unsigned-dev.zip` convenience app may be attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
+An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
-Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening on `main` and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use a current source build for local testing and cut a new source-first hotfix release for public users.
-
-The current source tree is prepared as Vifty `v1.1.1`, a source-first hotfix candidate for that helper issue. Until `v1.1.1` is tagged and published, the recommended local path is building from current source. After publication, use the `v1.1.1` source tag. Any `Vifty-v1.1.1-unsigned-dev.zip` asset must remain clearly marked as unsigned, ad-hoc signed, not notarized, and tester convenience only.
+Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
 ### From source
 
