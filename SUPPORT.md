@@ -34,6 +34,7 @@ Start with these read-only commands when Vifty is installed:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
+/Applications/Vifty.app/Contents/MacOS/viftyctl capabilities --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl status --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl audit --limit 20 --json
 ```

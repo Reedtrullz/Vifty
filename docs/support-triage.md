@@ -10,6 +10,7 @@ Ask for the least invasive evidence that answers the triage question:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
+/Applications/Vifty.app/Contents/MacOS/viftyctl capabilities --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl status --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl audit --limit 20 --json
 ```
@@ -46,7 +47,7 @@ Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A
 | Unsupported hardware safe block | Non-MacBook-Pro, Intel, or unsupported Apple Silicon reports `blocked` | `diagnose --json`, optional collector bundle, [unsupported-hardware.md](unsupported-hardware.md) | Treat safe blocking as expected behavior; do not suggest bypasses. |
 | Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, fallback fan telemetry with daemon not responding, Login Items approval, empty fan snapshot, or manual controls blocked by helper state | `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper so the app copies the daemon, strips quarantine, and restarts launchd, approve Login Items if macOS asks, then rerun read-only diagnostics. |
 | SMC key or fan telemetry drift | Fan count/range/mode missing, `hardwareMode` unknown, fan mode-key casing drift, no controllable fans on supported hardware | `probeLocal`, `diagnose --json`, model identifier, macOS version | Keep fan writes blocked until fan IDs, ranges, mode-key casing, and mode/target telemetry are understood. |
-| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, `status --json`, `audit --limit 20 --json`, `diagnose --json` | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending. |
+| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json` | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending. |
 | UI or copy | Confusing owner/helper state, profile preset behavior, power/thermal display | screenshot, macOS version, `diagnose --json` if fan state is involved | Fix copy/state without changing SMC behavior unless evidence shows a control bug. |
 
 ## Labels
