@@ -36,6 +36,8 @@ Source-first checklist:
 3. Optionally build the unsigned tester artifact:
 
    ```sh
+   git fetch origin main --tags
+   git checkout v<version>
    make unsigned-dev-artifact
    ```
 
@@ -44,7 +46,7 @@ Source-first checklist:
    - `Vifty-v<version>-unsigned-dev.zip`
    - `Vifty-v<version>-unsigned-dev.zip.sha256`
 
-   Do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
+   The Makefile target requires the current source to match `v<version>` by default. If you are building from an unpublished candidate, run the script directly with `--require-source-ref <candidate-ref-or-sha>` or set `UNSIGNED_DEV_SOURCE_REF=<candidate-ref-or-sha>` intentionally. Do not build a `Vifty-v<version>-unsigned-dev.zip` from later `main` hardening, and do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
 
 4. Before pushing the source tag, optionally confirm that the tag or candidate commit matches the intended source ref:
 

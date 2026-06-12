@@ -763,6 +763,62 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("release version must be a SemVer-like value"))
     }
 
+    func testUnsignedDevArtifactBuilderAcceptsMatchingRequiredSourceRef() throws {
+        let harness = try ReleaseMetadataHarness()
+        try harness.writeUnsignedDevAppBundleFixture()
+        let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
+        let sourceSHA = String(repeating: "b", count: 40)
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.0.0",
+            "--skip-build",
+            "--output-dir", output.path,
+            "--source-sha", sourceSHA,
+            "--require-source-ref", sourceSHA.uppercased()
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Source provenance OK"))
+        XCTAssertTrue(result.stdout.contains("Vifty-v1.0.0-unsigned-dev.zip"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip.sha256").path))
+    }
+
+    func testUnsignedDevArtifactBuilderRejectsRequiredSourceRefDrift() throws {
+        let harness = try ReleaseMetadataHarness()
+        try harness.writeUnsignedDevAppBundleFixture()
+        let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
+        let sourceSHA = String(repeating: "b", count: 40)
+        let requiredSHA = String(repeating: "c", count: 40)
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.0.0",
+            "--skip-build",
+            "--output-dir", output.path,
+            "--source-sha", sourceSHA,
+            "--require-source-ref", requiredSHA
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("refusing to build Vifty-v1.0.0-unsigned-dev.zip from source \(sourceSHA)"))
+        XCTAssertTrue(result.stderr.contains("required source ref \(requiredSHA) resolves to \(requiredSHA)"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip").path))
+    }
+
+    func testUnsignedDevArtifactBuilderRequiresGitOrSourceSHAForRequiredSourceRef() throws {
+        let harness = try ReleaseMetadataHarness()
+        try harness.writeUnsignedDevAppBundleFixture()
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.0.0",
+            "--skip-build",
+            "--require-source-ref", "v1.0.0"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("--require-source-ref needs a Git checkout or explicit --source-sha"))
+    }
+
     private func decodeReadinessSummary(_ stdout: String) throws -> [String: Any] {
         let data = Data(stdout.utf8)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -1014,6 +1070,47 @@ private final class ReleaseMetadataHarness {
             stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             exitCode: process.terminationStatus
+        )
+    }
+
+    func runUnsignedDevArtifactBuilder(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("scripts/build-unsigned-dev-artifact.sh")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
+
+        let process = Process()
+        process.executableURL = scriptURL
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
+            uniquingKeysWith: { _, new in new }
+        )
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        return ReleaseMetadataProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+    }
+
+    func writeUnsignedDevAppBundleFixture() throws {
+        let appURL = rootURL.appendingPathComponent(".build/Vifty.app", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: appURL.appendingPathComponent("Contents/MacOS", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "fixture".write(
+            to: appURL.appendingPathComponent("Contents/MacOS/Vifty"),
+            atomically: true,
+            encoding: .utf8
         )
     }
 

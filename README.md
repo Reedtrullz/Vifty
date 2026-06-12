@@ -85,12 +85,14 @@ open /Applications/Vifty.app
 For v1.1.0 tester convenience only:
 
 ```sh
+git fetch origin main --tags
+git checkout v1.1.0
 make source-first-release-notes
 make unsigned-dev-artifact
 make source-first-readiness
 ```
 
-This writes `.build/Vifty-v1.1.0-source-first-release-notes.md`, creates `.build/Vifty-v1.1.0-unsigned-dev.zip` plus `.build/Vifty-v1.1.0-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. Do not rename the unsigned artifact to `Vifty-v1.1.0.zip`; that name is reserved for a future signed and notarized release.
+This writes `.build/Vifty-v1.1.0-source-first-release-notes.md`, creates `.build/Vifty-v1.1.0-unsigned-dev.zip` plus `.build/Vifty-v1.1.0-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.0` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.0.zip`; that name is reserved for a future signed and notarized release.
 
 ### Homebrew
 
@@ -135,7 +137,7 @@ GitHub Actions runs the same verification on every push to `main`, every pull re
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.
 
-Source-first releases use `make source-first-release-notes`, `make unsigned-dev-artifact`, and `make source-first-readiness`; the readiness target calls `scripts/check-release-readiness.sh --mode source-first` and allows only clearly named `Vifty-v<version>-unsigned-dev.zip` convenience builds. Tagged public Developer ID releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
+Source-first releases use `make source-first-release-notes`, `make unsigned-dev-artifact`, and `make source-first-readiness`; the unsigned-dev target requires `UNSIGNED_DEV_SOURCE_REF` to match the current source and defaults to `v<version>`, while the readiness target calls `scripts/check-release-readiness.sh --mode source-first` and allows only clearly named `Vifty-v<version>-unsigned-dev.zip` convenience builds. Tagged public Developer ID releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
 
 After a public release artifact and cask checksum are published, `scripts/verify-release-artifact.sh --team-id <TEAMID>` verifies the cask SHA, bundle version, bundled release and agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. The release workflow publishes a JSON artifact summary and release checklist for reviewer evidence, and `scripts/collect-validation-evidence.sh --release-summary <path> --release-checklist <path>` can copy those files into hardware-validation bundles while marking the release-summary row nonzero for skipped or failed verifier checks, checksum mismatches, artifact-name drift, schema drift, or version mismatch, and marking the release-checklist row nonzero for version drift or missing follow-up sections.
 

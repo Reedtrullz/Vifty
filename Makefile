@@ -5,6 +5,7 @@ SIGNING_IDENTITY ?= -
 VIFTY_XPC_ALLOWED_TEAM_ID ?=
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
+UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -45,7 +46,7 @@ source-first-release-notes: ## Write source-first release notes for the current 
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)"
 
 unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum
-	./scripts/build-unsigned-dev-artifact.sh --version "$(RELEASE_VERSION)"
+	./scripts/build-unsigned-dev-artifact.sh --version "$(RELEASE_VERSION)" $(if $(UNSIGNED_DEV_SOURCE_REF),--require-source-ref "$(UNSIGNED_DEV_SOURCE_REF)",)
 
 source-first-readiness: ## Check published source-first release readiness
 	./scripts/check-release-readiness.sh --mode source-first --version "$(RELEASE_VERSION)" --repo "$(RELEASE_REPO)" --json
