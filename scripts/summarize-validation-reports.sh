@@ -207,6 +207,15 @@ ruby -rjson -rcsv -rfileutils -e '
       valid = false
     end
 
+    if result["mode"].to_s == "release" && !%w[
+      notarized-github-release
+      homebrew-cask
+      local-developer-id-build
+    ].include?(install_source)
+      failures << "#{path} release mode requires installSource notarized-github-release, homebrew-cask, or local-developer-id-build"
+      valid = false
+    end
+
     source_sha = result.fetch("sourceSHA", "").to_s
     unless source_sha.empty? || source_sha.match?(/\A[0-9a-f]{40}\z/)
       failures << "#{path} sourceSHA must be a lowercase 40-character git commit SHA"

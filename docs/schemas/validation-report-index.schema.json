@@ -154,6 +154,13 @@
         "other"
       ]
     },
+    "releaseInstallSource": {
+      "enum": [
+        "notarized-github-release",
+        "homebrew-cask",
+        "local-developer-id-build"
+      ]
+    },
     "readinessRecoveryAction": {
       "enum": [
         "none",
@@ -308,7 +315,28 @@
           "type": "string",
           "pattern": "^[0-9]+$"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "release"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "installSource": {
+                "$ref": "#/$defs/releaseInstallSource"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -35,7 +35,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             status: "passed",
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
-            safeToRequestCooling: true
+            safeToRequestCooling: true,
+            installSource: "local-developer-id-build"
         )
         try harness.writeReviewResult(
             at: "failed/review-result.json",
@@ -68,7 +69,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
         XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
-        XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
+        XCTAssertTrue(tsv.contains("release-trust-evidence\tlocal-developer-id-build\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
 
         let json = try harness.readJSON(jsonURL)
@@ -99,7 +100,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsByClaim["release-trust-evidence"], 1)
         XCTAssertEqual(countsByClaim["rejected"], 1)
         let countsByInstallSource = try XCTUnwrap(json["countsByInstallSource"] as? [String: Int])
-        XCTAssertEqual(countsByInstallSource["source-build-tag"], 5)
+        XCTAssertEqual(countsByInstallSource["source-build-tag"], 4)
+        XCTAssertEqual(countsByInstallSource["local-developer-id-build"], 1)
         let countsByModelFamily = try XCTUnwrap(json["countsByModelFamily"] as? [String: Int])
         XCTAssertEqual(countsByModelFamily["MacBookPro18"], 4)
         XCTAssertEqual(countsByModelFamily["Mac14"], 1)
@@ -135,7 +137,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             status: "passed",
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
-            safeToRequestCooling: true
+            safeToRequestCooling: true,
+            installSource: "local-developer-id-build"
         )
         let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
 
@@ -203,6 +206,11 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(installSourceValues.contains(""))
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
+        let releaseInstallSource = try XCTUnwrap(defs["releaseInstallSource"] as? [String: Any])
+        let releaseInstallSourceValues = try XCTUnwrap(releaseInstallSource["enum"] as? [String])
+        XCTAssertTrue(releaseInstallSourceValues.contains("notarized-github-release"))
+        XCTAssertTrue(releaseInstallSourceValues.contains("homebrew-cask"))
+        XCTAssertTrue(releaseInstallSourceValues.contains("local-developer-id-build"))
     }
 
     func testValidationReviewResultSchemaDocumentsReviewerContract() throws {
@@ -248,7 +256,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             status: "passed",
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
-            safeToRequestCooling: true
+            safeToRequestCooling: true,
+            installSource: "local-developer-id-build"
         )
 
         let result = try harness.runSummarizer(["--input", reviewURL.path])
@@ -276,6 +285,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
             safeToRequestCooling: true,
+            installSource: "local-developer-id-build",
             readOnly: false
         )
 
@@ -293,6 +303,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
             safeToRequestCooling: true,
+            installSource: "local-developer-id-build",
             includeSchemaID: false
         )
 
@@ -310,6 +321,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
             safeToRequestCooling: true,
+            installSource: "local-developer-id-build",
             schemaID: "https://vifty.local/schemas/old-validation-review-result.schema.json"
         )
 
@@ -334,6 +346,26 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("sourceArtifactBytes must be a positive integer"))
+    }
+
+    func testSummarizerRejectsReleaseModeFromSourceFirstInstallSource() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "source-first-release-review.json",
+            status: "passed",
+            mode: "release",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            installSource: "source-build-tag"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("release mode requires installSource notarized-github-release, homebrew-cask, or local-developer-id-build"),
+            result.stderr
+        )
     }
 
     func testSummarizerRejectsReviewResultWithoutDaemonControlPathReadiness() throws {
@@ -412,6 +444,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             mode: "release",
             modelIdentifier: "MacBookPro18,3",
             safeToRequestCooling: true,
+            installSource: "local-developer-id-build",
             failures: ["release-artifact-summary status \"1\" was not one of 0"]
         )
 
@@ -460,6 +493,7 @@ private final class ValidationReportSummaryHarness {
         mode: String,
         modelIdentifier: String,
         safeToRequestCooling: Bool,
+        installSource: String = "source-build-tag",
         daemonControlPathReady: Bool = true,
         includeDaemonControlPathReady: Bool = true,
         includeRecommendedAgentAction: Bool = true,
@@ -490,7 +524,7 @@ private final class ValidationReportSummaryHarness {
             "readOnly": readOnly,
             "coolingCommandsRun": coolingCommandsRun,
             "appPath": "/Applications/Vifty.app",
-            "installSource": "source-build-tag",
+            "installSource": installSource,
             "sourceRef": "v1.1.0",
             "sourceSHA": String(repeating: "a", count: 40),
             "sourceArtifactName": "",
