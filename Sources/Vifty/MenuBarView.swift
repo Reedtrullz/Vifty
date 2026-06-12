@@ -76,7 +76,7 @@ struct MenuBarView: View {
                 Label(helperRecoverySuggestion, systemImage: "wrench.and.screwdriver")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
             }
 
             Divider()

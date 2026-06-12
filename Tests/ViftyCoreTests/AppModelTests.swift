@@ -180,7 +180,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck.")
     }
 
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
@@ -236,7 +236,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds.")
     }
 
     func testManualFanControlAvailabilityRequiresDaemonBackedWritePath() {
@@ -262,7 +262,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
         XCTAssertEqual(model.helperHealthState, .unreachable)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval.")
     }
 
     func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {
@@ -414,7 +414,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds.")
     }
 
     func testPollOnceRefreshesHelperStatusAfterSnapshotFailure() async {
@@ -434,7 +434,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck.")
         XCTAssertTrue(model.lastError?.contains("Snapshot failed") == true)
     }
 
