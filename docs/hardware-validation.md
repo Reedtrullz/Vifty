@@ -34,7 +34,7 @@ sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --incl
 
 Review the bundle before sharing it publicly, especially any files named by `privacy-review.tsv`, then paste or attach the relevant files to the GitHub **Hardware Validation Report** issue template.
 
-The helper probe fan rows include `hardwareMode`, `hardwareModeRawValue`, and `targetRPM` fields in addition to current/min/max RPM. Use those fields to confirm whether Vifty and macOS agree about Auto, Forced, or System-managed fan state before and after a smoke test.
+The helper probe fan rows include `hardwareMode`, `hardwareModeRawValue`, `hardwareModeKey`, and `targetRPM` fields in addition to current/min/max RPM. Use those fields to confirm whether Vifty and macOS agree about Auto, Forced, or System-managed fan state before and after a smoke test, including whether the machine reports uppercase `F{n}Md` or lowercase `F{n}md` fan mode keys.
 
 Source-first and unsigned-dev `v1.1.0` hardware reports may leave release-artifact verifier evidence skipped or absent. Do not use those reports as proof of public binary trust; use them only for hardware behavior, agent readiness, helper telemetry, and manual smoke-test evidence.
 
@@ -99,6 +99,7 @@ Attach the full JSON to validation notes. The most important fields are:
 - `temperatureSensorCount`
 - `fans[].hardwareMode`
 - `fans[].hardwareModeRawValue`
+- `fans[].hardwareModeKey`
 - `fans[].targetRPM`
 - `agentControl.policy`
 - `daemonSnapshotError`

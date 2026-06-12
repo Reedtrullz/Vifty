@@ -68,6 +68,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertEqual(report.controllableFanCount, 2)
         XCTAssertEqual(report.fans.map(\.id), [0, 1])
+        XCTAssertEqual(report.fans.map(\.hardwareModeKey), ["F0Md", "F1md"])
         XCTAssertTrue(report.checks.contains { $0.id == "supportedHardware" && $0.passed })
         XCTAssertNil(report.daemonSnapshotError)
         XCTAssertNil(report.agentControlStatusError)

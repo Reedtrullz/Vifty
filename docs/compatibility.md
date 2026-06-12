@@ -28,7 +28,7 @@ Until enough public reports exist, treat each model family as **needs validation
 ## Evidence Rules
 
 - Always capture `viftyctl diagnose --json` before any manual smoke test. It is read-only and should say whether the machine is `ready`, `degraded`, or `blocked`.
-- Always capture `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal` for supported MacBook Pro validation, because it shows fan count, per-fan min/max RPM, `hardwareMode`, `hardwareModeRawValue`, and `targetRPM` telemetry.
+- Always capture `sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal` for supported MacBook Pro validation, because it shows fan count, per-fan min/max RPM, `hardwareMode`, `hardwareModeRawValue`, `hardwareModeKey`, and `targetRPM` telemetry.
 - Do not run the manual smoke test when readiness is `blocked`, when thermal pressure is critical, when fans/sensors are missing, or when RPM ranges look invalid. Follow [unsupported-hardware.md](unsupported-hardware.md) for unsupported-hardware safe-block reports.
 - A `degraded` report can still be useful, but the reason must be explained. Examples include missing optional fan mode telemetry, System-managed fan mode, or an already-active lease.
 - For `v1.1.0`, record whether the install source was a source build from the tag or the unsigned-dev convenience zip. Treat those as compatibility-only evidence, not release-trust evidence.

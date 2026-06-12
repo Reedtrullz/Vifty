@@ -19,10 +19,12 @@ final class FanStatusTests: XCTestCase {
             maximumRPM: 6000,
             controllable: true,
             hardwareMode: .forced,
+            hardwareModeKey: "F0Md",
             targetRPM: 5000
         )
 
         XCTAssertEqual(fan.hardwareMode, .forced)
+        XCTAssertEqual(fan.hardwareModeKey, "F0Md")
         XCTAssertEqual(fan.targetRPM, 5000)
     }
 }

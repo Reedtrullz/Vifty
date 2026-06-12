@@ -290,6 +290,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(probeLocal.contains("fan[0]"))
         XCTAssertTrue(probeLocal.contains("hardwareMode=Forced"))
         XCTAssertTrue(probeLocal.contains("hardwareModeRawValue=1"))
+        XCTAssertTrue(probeLocal.contains("hardwareModeKey=F0Md"))
         XCTAssertTrue(probeLocal.contains("targetRPM=5000"))
         XCTAssertTrue(try harness.read("review-summary.tsv").contains("viftyhelper-probeLocal\t0\t0 or skipped\thardware-validation"))
         let summary = try harness.readJSON("review-summary.json")
@@ -1035,7 +1036,7 @@ private final class ValidationEvidenceHarness {
         printf '%s\\n' "$*" >> "${FAKE_VIFTYHELPER_LOG:?}"
 
         if [ "$#" -eq 1 ] && [ "$1" = "probeLocal" ]; then
-          printf 'fan[0] name="Left Fan" rpm=2100 min=1400 max=6000 controllable=true hardwareMode=Forced hardwareModeRawValue=1 targetRPM=5000\\n'
+          printf 'fan[0] name="Left Fan" rpm=2100 min=1400 max=6000 controllable=true hardwareMode=Forced hardwareModeRawValue=1 hardwareModeKey=F0Md targetRPM=5000\\n'
           exit 0
         fi
 

@@ -26,8 +26,9 @@ public enum HardwareSnapshotProbeFormatter {
     private static func line(for fan: Fan) -> String {
         let hardwareMode = fan.hardwareMode?.displayName ?? "unknown"
         let hardwareModeRawValue = fan.hardwareMode.map { String($0.rawValue) } ?? "nil"
+        let hardwareModeKey = fan.hardwareModeKey ?? "nil"
         let targetRPM = fan.targetRPM.map(String.init) ?? "nil"
-        return "fan[\(fan.id)] name=\"\(fan.name)\" rpm=\(fan.currentRPM) min=\(fan.minimumRPM) max=\(fan.maximumRPM) controllable=\(fan.controllable) hardwareMode=\(hardwareMode) hardwareModeRawValue=\(hardwareModeRawValue) targetRPM=\(targetRPM)"
+        return "fan[\(fan.id)] name=\"\(fan.name)\" rpm=\(fan.currentRPM) min=\(fan.minimumRPM) max=\(fan.maximumRPM) controllable=\(fan.controllable) hardwareMode=\(hardwareMode) hardwareModeRawValue=\(hardwareModeRawValue) hardwareModeKey=\(hardwareModeKey) targetRPM=\(targetRPM)"
     }
 
     private static func line(for sensor: TemperatureSensor) -> String {

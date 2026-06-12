@@ -45,6 +45,9 @@ public enum XPCSnapshotCoding {
                 if let hardwareMode = fan.hardwareMode {
                     encodedFan["hardwareMode"] = hardwareMode.rawValue
                 }
+                if let hardwareModeKey = fan.hardwareModeKey {
+                    encodedFan["hardwareModeKey"] = hardwareModeKey
+                }
                 if let targetRPM = fan.targetRPM {
                     encodedFan["targetRPM"] = targetRPM
                 }
@@ -78,6 +81,7 @@ public enum XPCSnapshotCoding {
                 return nil
             }
             let hardwareModeRaw = item["hardwareMode"] as? Int
+            let hardwareModeKey = item["hardwareModeKey"] as? String
             let targetRPM = item["targetRPM"] as? Int
             return Fan(
                 id: id,
@@ -87,6 +91,7 @@ public enum XPCSnapshotCoding {
                 maximumRPM: maximumRPM,
                 controllable: controllable,
                 hardwareMode: FanHardwareMode(rawValue: hardwareModeRaw),
+                hardwareModeKey: hardwareModeKey,
                 targetRPM: targetRPM
             )
         }

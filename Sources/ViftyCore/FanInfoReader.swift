@@ -25,7 +25,7 @@ public enum SMCFanInfoReader {
             let actual = (try? read("F\(index)Ac")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? 0
             let minimum = (try? read("F\(index)Mn")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? 1200
             let maximum = (try? read("F\(index)Mx")).flatMap(SMCDecoding.decodeFloat).map(Int.init) ?? max(actual, 6000)
-            let modeRaw = firstDecodedInteger(
+            let mode = firstDecodedInteger(
                 keys: SMCFanControlKeys.modeKeyCandidates(forFanID: index),
                 read: read
             )
@@ -38,7 +38,8 @@ public enum SMCFanInfoReader {
                 minimumRPM: minimum,
                 maximumRPM: maximum,
                 controllable: maximum > minimum,
-                hardwareMode: FanHardwareMode(rawValue: modeRaw),
+                hardwareMode: FanHardwareMode(rawValue: mode?.value),
+                hardwareModeKey: mode?.key,
                 targetRPM: target
             )
         }
@@ -52,11 +53,11 @@ public enum SMCFanInfoReader {
         }
     }
 
-    private static func firstDecodedInteger(keys: [String], read: ReadValue) -> Int? {
+    private static func firstDecodedInteger(keys: [String], read: ReadValue) -> (value: Int, key: String)? {
         for key in keys {
             if let value = try? read(key),
                let decoded = SMCDecoding.decodeFloat(value) {
-                return Int(decoded)
+                return (Int(decoded), key)
             }
         }
         return nil

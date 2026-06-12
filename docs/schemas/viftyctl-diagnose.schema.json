@@ -164,6 +164,13 @@
             "null"
           ]
         },
+        "hardwareModeKey": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^F[0-9](Md|md)$"
+        },
         "targetRPM": {
           "type": [
             "integer",

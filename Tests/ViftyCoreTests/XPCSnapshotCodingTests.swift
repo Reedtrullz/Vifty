@@ -13,6 +13,7 @@ final class XPCSnapshotCodingTests: XCTestCase {
                     maximumRPM: 6000,
                     controllable: true,
                     hardwareMode: .forced,
+                    hardwareModeKey: "F0md",
                     targetRPM: 5000
                 )
             ],
@@ -26,6 +27,7 @@ final class XPCSnapshotCodingTests: XCTestCase {
         let decoded = XPCSnapshotCoding.decode(encoded)
 
         XCTAssertEqual(decoded?.fans.first?.hardwareMode, .forced)
+        XCTAssertEqual(decoded?.fans.first?.hardwareModeKey, "F0md")
         XCTAssertEqual(decoded?.fans.first?.targetRPM, 5000)
     }
 
@@ -50,6 +52,7 @@ final class XPCSnapshotCodingTests: XCTestCase {
         let decoded = XPCSnapshotCoding.decode(dictionary)
 
         XCTAssertEqual(decoded?.fans.first?.hardwareMode, nil)
+        XCTAssertEqual(decoded?.fans.first?.hardwareModeKey, nil)
         XCTAssertEqual(decoded?.fans.first?.targetRPM, nil)
     }
 }

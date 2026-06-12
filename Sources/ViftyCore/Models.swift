@@ -103,6 +103,7 @@ public struct Fan: Identifiable, Equatable, Sendable {
     public var maximumRPM: Int
     public var controllable: Bool
     public var hardwareMode: FanHardwareMode?
+    public var hardwareModeKey: String?
     public var targetRPM: Int?
 
     public init(
@@ -113,6 +114,7 @@ public struct Fan: Identifiable, Equatable, Sendable {
         maximumRPM: Int,
         controllable: Bool,
         hardwareMode: FanHardwareMode? = nil,
+        hardwareModeKey: String? = nil,
         targetRPM: Int? = nil
     ) {
         self.id = id
@@ -122,6 +124,7 @@ public struct Fan: Identifiable, Equatable, Sendable {
         self.maximumRPM = maximumRPM
         self.controllable = controllable
         self.hardwareMode = hardwareMode
+        self.hardwareModeKey = hardwareModeKey
         self.targetRPM = targetRPM
     }
 

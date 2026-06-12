@@ -651,7 +651,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
 
     probe = read_file(bundle, "viftyhelper-probeLocal.txt", failures).to_s
-    ["fan[", "hardwareMode=", "hardwareModeRawValue=", "targetRPM="].each do |token|
+    ["fan[", "hardwareMode=", "hardwareModeRawValue=", "hardwareModeKey=", "targetRPM="].each do |token|
       failures << "viftyhelper-probeLocal.txt is missing #{token}" unless probe.include?(token)
     end
     case manual_smoke_result

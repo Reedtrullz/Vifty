@@ -42,6 +42,7 @@ public struct ViftyCtlFanReport: Codable, Equatable, Sendable {
     public var controllable: Bool
     public var hardwareMode: String?
     public var hardwareModeRawValue: Int?
+    public var hardwareModeKey: String?
     public var targetRPM: Int?
 
     public init(fan: Fan) {
@@ -53,6 +54,7 @@ public struct ViftyCtlFanReport: Codable, Equatable, Sendable {
         self.controllable = fan.controllable
         self.hardwareMode = fan.hardwareMode?.displayName
         self.hardwareModeRawValue = fan.hardwareMode?.rawValue
+        self.hardwareModeKey = fan.hardwareModeKey
         self.targetRPM = fan.targetRPM
     }
 }

@@ -448,7 +448,7 @@ private final class ValidationEvidenceReviewHarness {
         diagnoseStatus: String = "0",
         diagnose: ValidationEvidenceDiagnoseFixture = .supportedReady,
         probeLocalStatus: String = "0",
-        probeLocalText: String = "fan[0] id=0 name=\"Left Fan\" currentRPM=2200 minimumRPM=1400 maximumRPM=6800 hardwareMode=Auto hardwareModeRawValue=0 targetRPM=nil",
+        probeLocalText: String = "fan[0] id=0 name=\"Left Fan\" currentRPM=2200 minimumRPM=1400 maximumRPM=6800 hardwareMode=Auto hardwareModeRawValue=0 hardwareModeKey=F0Md targetRPM=nil",
         privacyReviewStatus: String = "0",
         privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n",
         capabilitiesStatus: String = "0",
@@ -742,6 +742,7 @@ private final class ValidationEvidenceReviewHarness {
                     "maximumRPM": 6800,
                     "controllable": true,
                     "hardwareMode": "Auto",
+                    "hardwareModeKey": "F0Md",
                     "hardwareModeRawValue": 0
                 ]
             ],

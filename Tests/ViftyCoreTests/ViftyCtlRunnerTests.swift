@@ -244,6 +244,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["fanCount"] as? Int, 2)
         XCTAssertEqual(json["controllableFanCount"] as? Int, 2)
         XCTAssertEqual(json["temperatureSensorCount"] as? Int, 1)
+        let fans = try XCTUnwrap(json["fans"] as? [[String: Any]])
+        XCTAssertEqual(fans.compactMap { $0["hardwareModeKey"] as? String }, ["F0Md", "F1md"])
         let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { $0["id"] as? String == "supportedHardware" && $0["passed"] as? Bool == true })
         let prepareRequestCount = await client.prepareRequestCount
@@ -1241,6 +1243,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
                     maximumRPM: 6_000,
                     controllable: true,
                     hardwareMode: fanMode,
+                    hardwareModeKey: "F0Md",
                     targetRPM: 2_000
                 ),
                 Fan(
@@ -1251,6 +1254,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
                     maximumRPM: 6_000,
                     controllable: true,
                     hardwareMode: fanMode,
+                    hardwareModeKey: "F1md",
                     targetRPM: 2_000
                 )
             ],

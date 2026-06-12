@@ -19,6 +19,7 @@ final class FanInfoReaderTests: XCTestCase {
 
         XCTAssertEqual(fans.count, 1)
         XCTAssertEqual(fans[0].hardwareMode, .forced)
+        XCTAssertEqual(fans[0].hardwareModeKey, "F0Md")
         XCTAssertEqual(fans[0].targetRPM, 5000)
         XCTAssertEqual(fans[0].minimumRPM, 1400)
         XCTAssertEqual(fans[0].maximumRPM, 6000)
@@ -38,6 +39,7 @@ final class FanInfoReaderTests: XCTestCase {
         }
 
         XCTAssertEqual(fans[0].hardwareMode, nil)
+        XCTAssertEqual(fans[0].hardwareModeKey, nil)
         XCTAssertEqual(fans[0].targetRPM, nil)
     }
 
@@ -56,5 +58,6 @@ final class FanInfoReaderTests: XCTestCase {
         }
 
         XCTAssertEqual(fans[0].hardwareMode, .system)
+        XCTAssertEqual(fans[0].hardwareModeKey, "F0md")
     }
 }
