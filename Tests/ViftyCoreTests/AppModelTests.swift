@@ -470,6 +470,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds.")
     }
 
+    func testPollOnceClearsStaleHelperUnreachableAfterDaemonRepair() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.hasCompletedHardwarePoll = true
+        model.daemonReachable = false
+        model.daemonResponding = false
+        model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
+        model.lastError = "Fan helper unreachable"
+
+        XCTAssertEqual(model.helperHealthState, .error)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
+
+        await model.pollOnce()
+
+        XCTAssertNil(model.lastError)
+        XCTAssertTrue(model.daemonReachable)
+        XCTAssertTrue(model.daemonResponding)
+        XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 1))
+        XCTAssertFalse(model.helperHealthNeedsAttention)
+        XCTAssertNil(model.helperRecoverySuggestion)
+        XCTAssertNil(model.manualFanControlBlockedReason)
+    }
+
     func testPollOnceRefreshesHelperStatusAfterSnapshotFailure() async {
         let hardware = AppModelFailingHardware(error: ViftyError.helperRejected("Snapshot failed"))
         let expectedStatus = AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)

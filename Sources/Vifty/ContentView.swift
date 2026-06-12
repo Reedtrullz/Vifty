@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var newProfileName = ""
     @State private var showSaveDialog = false
     @State private var selectedProfileID: UUID?
+    @State private var helperRefreshTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,7 +76,7 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
             Button {
-                daemonInstaller.installOrOpenApproval()
+                performHelperAction()
             } label: {
                 Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
                     .labelStyle(.titleAndIcon)
@@ -137,7 +138,7 @@ struct ContentView: View {
                 }
                 Spacer()
                 Button(daemonInstaller.actionTitle) {
-                    daemonInstaller.installOrOpenApproval()
+                    performHelperAction()
                 }
                 .controlSize(.small)
                 .disabled(!helperNeedsAttention || !daemonInstaller.canInstall)
@@ -188,7 +189,7 @@ struct ContentView: View {
                         description: Text(model.helperRecoverySuggestion ?? model.fanAccessMessage ?? daemonInstaller.statusText)
                     )
                     Button {
-                        daemonInstaller.installOrOpenApproval()
+                        performHelperAction()
                     } label: {
                         Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
                             .frame(maxWidth: 260)
@@ -208,6 +209,22 @@ struct ContentView: View {
         .padding(16)
         .onAppear {
             daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
+    }
+
+    private func performHelperAction() {
+        helperRefreshTask?.cancel()
+        daemonInstaller.installOrOpenApproval()
+        helperRefreshTask = Task { @MainActor in
+            await model.pollOnce()
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            daemonInstaller.refresh()
+            await model.pollOnce()
         }
     }
 
