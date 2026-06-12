@@ -189,6 +189,7 @@ final class DaemonInstaller: ObservableObject {
         cp \(shellQuote(plistSource)) \(shellQuote(plistTarget))
         chmod 644 \(shellQuote(plistTarget))
         chown root:wheel \(shellQuote(plistTarget))
+        xattr -cr \(shellQuote(helperTarget)) \(shellQuote(plistTarget)) 2>/dev/null || true
         /usr/libexec/PlistBuddy -c 'Delete :BundleProgram' \(shellQuote(plistTarget)) 2>/dev/null || true
         if ! /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' \(shellQuote(plistTarget)) 2>/dev/null; then
           /usr/libexec/PlistBuddy -c 'Delete :ProgramArguments' \(shellQuote(plistTarget)) 2>/dev/null || true

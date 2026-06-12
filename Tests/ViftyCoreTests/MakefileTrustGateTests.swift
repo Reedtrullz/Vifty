@@ -23,6 +23,8 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("plutil -lint \"$(CONTENTS)/Info.plist\""))
         XCTAssertTrue(makefile.contains("plutil -lint \"$(DAEMON_PLIST)\""))
         XCTAssertTrue(makefile.contains("codesign --verify --deep --strict \"$(APP_DIR)\""))
+        XCTAssertTrue(makefile.contains("--identifier tech.reidar.vifty.daemon \"$(MACOS)/ViftyDaemon\""))
+        XCTAssertTrue(makefile.contains("Identifier=tech.reidar.vifty.daemon"))
         XCTAssertTrue(makefile.contains("Identifier=tech.reidar.vifty.ctl"))
     }
 

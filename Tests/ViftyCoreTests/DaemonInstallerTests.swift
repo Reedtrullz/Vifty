@@ -43,6 +43,7 @@ final class DaemonInstallerTests: XCTestCase {
         XCTAssertTrue(script.contains("chown root:wheel '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
         XCTAssertTrue(script.contains("chmod 644 '\(plistTarget)'"))
         XCTAssertTrue(script.contains("chown root:wheel '\(plistTarget)'"))
+        XCTAssertTrue(script.contains("xattr -cr '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' '\(plistTarget)' 2>/dev/null || true"))
         XCTAssertTrue(script.contains("for log_path in '\(stdoutLogTarget)' '\(stderrLogTarget)'; do"))
         XCTAssertTrue(script.contains("touch \"$log_path\""))
         XCTAssertTrue(script.contains("chmod 600 \"$log_path\""))
@@ -54,6 +55,10 @@ final class DaemonInstallerTests: XCTestCase {
         XCTAssertTrue(
             script.contains("chown root:wheel '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
             "LaunchDaemon plist ownership must be fixed before launchd loads it."
+        )
+        XCTAssertTrue(
+            script.contains("xattr -cr '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            "Copied ad-hoc source-first helper files must not keep quarantine before launchd loads them."
         )
         XCTAssertTrue(
             script.contains("chmod 600 \"$log_path\"", before: "launchctl bootstrap system '\(plistTarget)'"),
