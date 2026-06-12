@@ -220,6 +220,36 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRequiresMetadataLimitsSupport() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            metadataLimitsOverride: #""metadataLimits":null"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise metadata limits"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsOversizedReasonFromAdvertisedMetadataLimit() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            metadataLimitsOverride: #""metadataLimits":{"maximumReasonLength":10,"maximumIdempotencyKeyLength":256}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test too long", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("reason is 19 characters after trimming; maximum is 10"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsMissingChildCommandBeforeViftyRun() throws {
         let harness = try ScriptHarness(state: "ready")
         let missingCommand = "vifty-missing-child-\(UUID().uuidString)"
@@ -566,6 +596,7 @@ private final class ScriptHarness {
         capabilityCommands: [String] = ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"],
         capabilityWorkloads: [String] = ["build", "test", "localModel", "custom"],
         runLifecycleOverride: String? = nil,
+        metadataLimitsOverride: String? = nil,
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
     ) throws {
@@ -599,6 +630,7 @@ private final class ScriptHarness {
                 capabilityCommands: capabilityCommands,
                 capabilityWorkloads: capabilityWorkloads,
                 runLifecycleOverride: runLifecycleOverride,
+                metadataLimitsOverride: metadataLimitsOverride,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
         }
@@ -686,6 +718,7 @@ private final class ScriptHarness {
         capabilityCommands: [String],
         capabilityWorkloads: [String],
         runLifecycleOverride: String?,
+        metadataLimitsOverride: String?,
         capabilitiesOutputOverride: String?
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
@@ -700,9 +733,11 @@ private final class ScriptHarness {
         let commandsJSON = Self.jsonStringArray(capabilityCommands)
         let workloadsJSON = Self.jsonStringArray(capabilityWorkloads)
         let exitCodes = #""exitCodes":{"unavailable":69}"#
+        let metadataLimits = metadataLimitsOverride
+            ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(exitCodes)}"#
-            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(exitCodes)}"#)
+            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(metadataLimits),\#(exitCodes)}"#
+            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(metadataLimits),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu

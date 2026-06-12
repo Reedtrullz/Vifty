@@ -121,6 +121,22 @@ print_readiness_recovery_action() {
   esac
 }
 
+is_positive_integer() {
+  printf '%s\n' "$1" | /usr/bin/awk '/^[0-9]+$/ { exit !(($0 + 0) > 0) } { exit 1 }'
+}
+
+trimmed_character_count() {
+  printf '%s' "$1" | /usr/bin/awk '
+    {
+      value = value (NR == 1 ? "" : "\n") $0
+    }
+    END {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      print length(value)
+    }
+  '
+}
+
 if [ "$#" -lt 6 ]; then
   usage
   exit 64
@@ -194,6 +210,8 @@ structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/p
 cleanup_state_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.cleanupStateReportedOnLaunchFailure raw -o - - 2>/dev/null || printf '')"
 signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.signalsForwardedToChild json -o - - 2>/dev/null || printf '')"
 supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract supportsForceRetry raw -o - - 2>/dev/null || printf '')"
+maximum_reason_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumReasonLength raw -o - - 2>/dev/null || printf '')"
+maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumIdempotencyKeyLength raw -o - - 2>/dev/null || printf '')"
 
 [ "$run_child_preflight" = "null" ] && run_child_preflight=""
 [ "$auto_restore_after_child" = "null" ] && auto_restore_after_child=""
@@ -201,6 +219,8 @@ supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -ex
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
+[ "$maximum_reason_length" = "null" ] && maximum_reason_length=""
+[ "$maximum_idempotency_key_length" = "null" ] && maximum_idempotency_key_length=""
 
 if [ "$capabilities_status" -ne 0 ] && [ "$capabilities_status" != "$capabilities_unavailable_exit" ]; then
   echo "guarded-run: viftyctl capabilities exited $capabilities_status instead of advertised unavailable exit ${capabilities_unavailable_exit:-unknown}; refusing to request cooling." >&2
@@ -262,6 +282,27 @@ if [ "$run_child_preflight" != "true" ] ||
     printf '%s\n' "$capabilities_json" >&2
   fi
   exit 75
+fi
+
+if ! is_positive_integer "$maximum_reason_length" ||
+   ! is_positive_integer "$maximum_idempotency_key_length"; then
+  echo "guarded-run: viftyctl capabilities does not advertise metadata limits; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+reason_length="$(trimmed_character_count "$reason")"
+if ! printf '%s\n' "$reason_length" | /usr/bin/awk -v maximum="$maximum_reason_length" '
+  /^[0-9]+$/ { exit !(($0 + 0) <= (maximum + 0)) }
+  { exit 1 }
+'; then
+  echo "guarded-run: reason is $reason_length characters after trimming; maximum is $maximum_reason_length." >&2
+  exit 64
 fi
 
 if [ "$force_retry" -eq 1 ] && [ "$supports_force_retry" != "true" ]; then
