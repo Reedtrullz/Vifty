@@ -146,6 +146,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.curveDefaultsSynced)
     }
 
+    func testHelperHealthSummaryReportsCheckingBeforeFirstHardwarePoll() {
+        let model = AppModel()
+
+        XCTAssertEqual(model.helperHealthSummary, "Checking fan helper")
+        XCTAssertEqual(model.helperHealthState, .checking)
+        XCTAssertFalse(model.helperHealthNeedsAttention)
+        XCTAssertNil(model.helperRecoverySuggestion)
+    }
+
     func testHelperHealthSummaryReportsHealthyWhenDaemonAndFansAvailable() {
         let model = AppModel()
         model.daemonResponding = true
@@ -299,6 +308,7 @@ final class AppModelTests: XCTestCase {
 
     func testHelperHealthSummaryReportsUnreachableDaemon() {
         let model = AppModel()
+        model.hasCompletedHardwarePoll = true
         model.daemonReachable = false
         model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
 
@@ -601,6 +611,63 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.manualSessionExpiresAt)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0], "Explicit Auto must also issue a hardware restore")
+    }
+
+    func testStopAndRestoreWaitsForHardwareAutoRestore() async {
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+        XCTAssertNotNil(model.manualSessionExpiresAt)
+
+        await model.stopAndRestore()
+
+        XCTAssertFalse(model.isRunning)
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0], "Stop must wait for a real Auto restore before callers terminate the app.")
+    }
+
+    func testStopAndRestoreReportsAgentLeaseClearFailure() async {
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+            },
+            agentRestore: { _ in
+                throw ViftyError.helperRejected("Daemon connection invalidated.")
+            }
+        )
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatus = AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+
+        await model.stopAndRestore()
+
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        XCTAssertTrue(model.lastError?.contains("Failed to clear agent cooling lease") == true)
+        XCTAssertTrue(model.lastError?.contains("Daemon connection invalidated") == true)
     }
 
     func testManualModeSelectionFailsClosedWhenDaemonDoesNotRespond() async {

@@ -3,6 +3,7 @@ import SwiftUI
 import ViftyCore
 
 enum HelperHealthState: Equatable {
+    case checking
     case healthy(fanCount: Int)
     case error
     case telemetryOnly
@@ -13,11 +14,16 @@ enum HelperHealthState: Equatable {
         if case .healthy = self {
             return false
         }
+        if case .checking = self {
+            return false
+        }
         return true
     }
 
     var summary: String {
         switch self {
+        case .checking:
+            return "Checking fan helper"
         case .healthy(let fanCount):
             return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
         case .error:
@@ -33,7 +39,7 @@ enum HelperHealthState: Equatable {
 
     var recoverySuggestion: String? {
         switch self {
-        case .healthy:
+        case .checking, .healthy:
             return nil
         case .error:
             return "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck."
@@ -74,6 +80,7 @@ final class AppModel: ObservableObject {
     @Published var manualSessionExpiresAt: Date?
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
+    @Published var hasCompletedHardwarePoll = false
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
@@ -128,16 +135,25 @@ final class AppModel: ObservableObject {
     }
 
     func stop() {
+        Task { await stopAndRestore() }
+    }
+
+    func stopAndRestore() async {
         pollingTask?.cancel()
         pollingTask = nil
         isRunning = false
-        Task {
-            await coordinator.forceAuto()
-            await syncState()
+        selectedMode = .auto
+        manualSessionExpiresAt = nil
+        await coordinator.forceAuto()
+        let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
+        await syncState()
+        if let agentRestoreError {
+            lastError = agentRestoreError
         }
     }
 
     func pollOnce() async {
+        defer { hasCompletedHardwarePoll = true }
         let currentPower = powerReader()
         let currentThermalPressure = thermalReader()
         powerSnapshot = currentPower
@@ -446,6 +462,9 @@ final class AppModel: ObservableObject {
     var helperHealthState: HelperHealthState {
         if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
             return .error
+        }
+        if !hasCompletedHardwarePoll, snapshot == nil, !daemonReachable {
+            return .checking
         }
         guard daemonReachable else {
             return .unreachable

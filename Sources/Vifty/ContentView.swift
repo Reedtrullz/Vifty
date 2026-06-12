@@ -31,6 +31,8 @@ struct ContentView: View {
 
     private var helperHealthSystemImage: String {
         switch model.helperHealthState {
+        case .checking:
+            "hourglass"
         case .healthy:
             "checkmark.shield"
         case .unreachable:
@@ -41,7 +43,14 @@ struct ContentView: View {
     }
 
     private var helperHealthColor: Color {
-        helperNeedsAttention ? .orange : .green
+        switch model.helperHealthState {
+        case .checking:
+            return .secondary
+        case .healthy:
+            return .green
+        case .error, .telemetryOnly, .unreachable, .noFanData:
+            return .orange
+        }
     }
 
     private var header: some View {

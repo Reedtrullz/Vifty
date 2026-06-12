@@ -90,8 +90,10 @@ struct MenuBarView: View {
                 }
                 .keyboardShortcut("a")
                 Button("Quit") {
-                    model.stop()
-                    NSApplication.shared.terminate(nil)
+                    Task { @MainActor in
+                        await model.stopAndRestore()
+                        NSApplication.shared.terminate(nil)
+                    }
                 }
                 .keyboardShortcut("q")
             }
@@ -103,12 +105,10 @@ struct MenuBarView: View {
         }
     }
 
-    private var helperNeedsAttention: Bool {
-        model.helperHealthNeedsAttention
-    }
-
     private var helperHealthSystemImage: String {
         switch model.helperHealthState {
+        case .checking:
+            "hourglass"
         case .healthy:
             "checkmark.shield"
         case .unreachable:
@@ -119,7 +119,14 @@ struct MenuBarView: View {
     }
 
     private var helperHealthMenuColor: Color {
-        helperNeedsAttention ? Color.orange : Color.secondary
+        switch model.helperHealthState {
+        case .healthy:
+            return Color.secondary
+        case .checking:
+            return Color.secondary
+        case .error, .telemetryOnly, .unreachable, .noFanData:
+            return Color.orange
+        }
     }
 
     private func adapterDetail(_ adapter: PowerAdapter) -> String {
