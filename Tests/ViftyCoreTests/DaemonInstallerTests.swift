@@ -11,6 +11,7 @@ final class DaemonInstallerTests: XCTestCase {
             ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper"),
             ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
             ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
+            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
             ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper"),
             ("Fan helper plist not found in app bundle", true, "Repair Helper", "Repair the privileged fan helper"),
             ("macOS 13 or newer is required for bundled daemon install", false, "Helper Unavailable", "macOS 13 or newer is required for bundled daemon install")

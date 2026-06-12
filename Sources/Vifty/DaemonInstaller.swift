@@ -21,7 +21,7 @@ final class DaemonInstaller: ObservableObject {
         if status.contains("not installed") || status == "checking helper" {
             return "Install Helper"
         }
-        if status.contains("enabled") || status == "fan helper installed" {
+        if status.contains("enabled") || status.contains("fan helper installed") {
             return "Reinstall Helper"
         }
         return "Repair Helper"
@@ -148,7 +148,7 @@ final class DaemonInstaller: ObservableObject {
             process.waitUntilExit()
             if process.terminationStatus == 0 {
                 statusText = "Fan helper installed"
-                canInstall = false
+                canInstall = true
             } else {
                 let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
                 let message = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)

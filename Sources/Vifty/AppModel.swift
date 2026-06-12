@@ -373,7 +373,7 @@ final class AppModel: ObservableObject {
             return "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck."
         }
         guard daemonReachable else {
-            return "Use Repair or Reinstall Helper; fan writes stay blocked until the daemon responds."
+            return "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds."
         }
         let fanCount = snapshot?.fans.count ?? 0
         guard fanCount > 0 else {

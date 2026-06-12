@@ -215,7 +215,7 @@ final class AppModelTests: XCTestCase {
         model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
-        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair or Reinstall Helper; fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds.")
     }
 
     func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {
