@@ -12,6 +12,8 @@ body:
 
         Vifty v1.1.0 is source-first because the project does not currently have Apple Developer Program credentials. A source tag, passing CI run, unsigned-dev convenience build, local ad-hoc build, or CI artifact is not a trusted public binary release. Future public binary trust requires signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
 
+        The published v1.1.0 source/unsigned-dev release has a known helper-unreachable issue that was fixed later on main. Do not retag v1.1.0 or replace its unsigned-dev assets with a main build; report it here so maintainers can cut a new source-first hotfix release.
+
   - type: input
     id: release-version
     attributes:
@@ -46,6 +48,7 @@ body:
         - Release readiness blocked
         - Release workflow failed
         - Source-first release notes missing warning
+        - Known source-first helper unreachable issue
         - Unsigned-dev artifact mislabeled
         - Unsigned-dev checksum missing
         - GitHub Release asset missing

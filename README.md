@@ -61,6 +61,8 @@ The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`.
 
 An optional `Vifty-v1.1.0-unsigned-dev.zip` convenience app may be attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
+Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening on `main` and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use a current source build for local testing and cut a new source-first hotfix release for public users.
+
 ### From source
 
 For normal local use:
@@ -93,6 +95,8 @@ make source-first-readiness
 ```
 
 This writes `.build/Vifty-v1.1.0-source-first-release-notes.md`, creates `.build/Vifty-v1.1.0-unsigned-dev.zip` plus `.build/Vifty-v1.1.0-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.0` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.0.zip`; that name is reserved for a future signed and notarized release.
+
+Because `v1.1.0` has the helper issue noted above, this target is for reproducing the already-published release boundary only. Do not use it to refresh public tester assets from post-release `main`; cut a new source-first hotfix version instead.
 
 ### Homebrew
 

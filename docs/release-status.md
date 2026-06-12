@@ -15,8 +15,11 @@ Release lanes:
 Current facts:
 
 - The `v1.1.0` source tag passed the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
+- Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main` (`6b0690b`, `4f729d7`, and `3064b9e`). Users may see "Fan helper unreachable" after updating even on supported hardware.
+- Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary. The honest remediation is a new source-first hotfix release, still unsigned/not notarized until Apple Developer Program credentials exist.
 - `main` has moved after `v1.1.0` was published. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
 - `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json` is the published source-first release preflight. It currently reports `ready` for source commit `f7d2c636ebf582ac3809998c3fac819d5d87eb72`, source-tag CI readiness, and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
+- Source-first readiness proves the release notes/assets/trust boundaries for the immutable tag. It does not prove the release has no post-publication functional defects; helper reports still need `viftyctl diagnose --json`, launchd evidence, and a hotfix release decision.
 - Before tagging a source-first candidate, maintainers may add `--require-source-ref <candidate-ref-or-sha>` to reject a stale tag. After publication, use the immutable release commit SHA if a source-ref check is still needed.
 - `scripts/check-release-readiness.sh --mode developer-id ...` remains the strict future trusted-binary preflight. It still requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
 - No unsigned build may use `Vifty-v1.1.0.zip` or `Vifty-v1.1.0.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
@@ -54,6 +57,8 @@ The optional unsigned-dev assets are valid only when both files are present:
 - `Vifty-v1.1.0-unsigned-dev.zip.sha256`
 
 If the GitHub Release is not created yet, source-first readiness should block only on `github-release` after source/ref/CI checks pass. After publication, it should pass without requiring Apple Developer Program secrets.
+
+For the `v1.1.0` helper issue, use these checks only to reproduce and audit the release boundary. Do not use the `v1.1.0` unsigned-dev target to refresh public assets from `main`; prepare a new source-first hotfix release and make its release notes repeat the unsigned/not-notarized warning.
 
 ## Future Developer ID Release Checks
 
