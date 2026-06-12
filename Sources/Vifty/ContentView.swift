@@ -158,6 +158,12 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
+                        if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
+                            Text(agentCoolingRecoverySuggestion)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .lineLimit(3)
+                        }
                     }
                     Spacer()
                     Button("Auto") { model.restoreAuto() }.controlSize(.small)

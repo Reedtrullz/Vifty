@@ -16,6 +16,17 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("helperRefreshTask?.cancel()"))
     }
 
+    func testMenuBarAgentCoolingSurfaceShowsTitleRecoveryAndContextualAuto() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+
+        XCTAssertTrue(menuBarView.contains("Label(model.agentCoolingPanelTitle, systemImage: \"cpu\")"))
+        XCTAssertTrue(menuBarView.contains("if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion"))
+        XCTAssertTrue(menuBarView.contains("Label(agentCoolingRecoverySuggestion, systemImage: \"exclamationmark.triangle\")"))
+        XCTAssertTrue(menuBarView.contains("if model.agentCoolingNeedsAttention {"))
+        XCTAssertTrue(menuBarView.contains("Button(\"Auto\") {"))
+        XCTAssertTrue(menuBarView.contains("Restore Auto before starting another agent workload"))
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)

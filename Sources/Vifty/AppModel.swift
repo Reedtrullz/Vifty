@@ -410,6 +410,19 @@ final class AppModel: ObservableObject {
         return baseSummary
     }
 
+    var agentCoolingRecoverySuggestion: String? {
+        if agentControlStatusError != nil {
+            guard agentControlStatus?.activeLease != nil else {
+                return "Repair Helper before requesting agent cooling."
+            }
+            return "Do not start another workload; use Auto to restore cooling, then check viftyctl status/audit after helper repair."
+        }
+        guard let lease = agentControlStatus?.activeLease, !lease.isActive(at: now()) else {
+            return nil
+        }
+        return "Use Auto to restore daemon control before starting another workload."
+    }
+
     var agentCoolingNeedsAttention: Bool {
         if agentControlStatusError != nil {
             return true

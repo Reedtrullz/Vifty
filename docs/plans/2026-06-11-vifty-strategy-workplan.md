@@ -224,6 +224,7 @@ Current progress:
 - Helper health surfaces now include recovery guidance for helper errors, unreachable daemon state, fallback fan telemetry while the daemon is not responding, and reachable helpers with no fan data; the app now blocks manual Fixed/Curve controls until the daemon-backed write path is healthy, so users see when to repair/reinstall and when not to start manual or agent cooling.
 - Helper install/repair actions in the main window and menu bar now trigger immediate follow-up helper-health polling, including a short delayed refresh for launchd startup, so stale "helper unreachable" UI clears as soon as the daemon-backed fan path is actually healthy.
 - Helper action labels now distinguish first install, Login Items approval, reinstall, repair, and unavailable states instead of always saying reinstall.
+- Agent cooling surfaces now show explicit active/status-warning/restore-pending titles, recovery guidance for expired leases or status-refresh failures, and contextual Auto restore in the menu bar so users can see when not to start another workload.
 
 Exit criteria:
 

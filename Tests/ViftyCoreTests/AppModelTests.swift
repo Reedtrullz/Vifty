@@ -881,6 +881,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.controlOwnershipSummary.contains("Agent Build owns cooling until"))
         XCTAssertTrue(model.controlOwnershipSummary.contains("status refresh failed"))
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        XCTAssertEqual(
+            model.agentCoolingRecoverySuggestion,
+            "Do not start another workload; use Auto to restore cooling, then check viftyctl status/audit after helper repair."
+        )
     }
 
     func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {
@@ -899,6 +903,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.agentCoolingSummary?.contains("F0 3600 RPM, F1 3700 RPM") == true)
         XCTAssertTrue(model.controlOwnershipSummary.contains("Agent Build owns cooling until"))
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
+        XCTAssertNil(model.agentCoolingRecoverySuggestion)
     }
 
     func testAgentCoolingSummaryWarnsWhenLeaseExpiredButUnrestored() {
@@ -918,6 +923,20 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuTitle.contains("Agent restore pending"))
         XCTAssertEqual(model.controlOwnershipSummary, "Agent Build lease expired; restore Auto to clear daemon control")
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        XCTAssertEqual(
+            model.agentCoolingRecoverySuggestion,
+            "Use Auto to restore daemon control before starting another workload."
+        )
+    }
+
+    func testAgentCoolingRecoverySuggestionRepairsStatusUnavailableBeforeCooling() {
+        let model = AppModel()
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(
+            model.agentCoolingRecoverySuggestion,
+            "Repair Helper before requesting agent cooling."
+        )
     }
 
     func testRestoreAutoClearsDaemonOwnedAgentLease() async {

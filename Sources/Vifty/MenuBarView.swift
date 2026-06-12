@@ -64,10 +64,26 @@ struct MenuBarView: View {
             }
 
             if let agentCoolingSummary = model.agentCoolingSummary {
-                Label(agentCoolingSummary, systemImage: "cpu")
-                    .font(.caption)
-                    .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(model.agentCoolingPanelTitle, systemImage: "cpu")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
+                    Text(agentCoolingSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
+                        Label(agentCoolingRecoverySuggestion, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .lineLimit(3)
+                    }
+                    if model.agentCoolingNeedsAttention {
+                        Button("Auto") { model.restoreAuto() }
+                        .controlSize(.small)
+                        .help("Restore Auto before starting another agent workload")
+                    }
+                }
             }
 
             Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
