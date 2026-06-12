@@ -161,6 +161,8 @@ RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/release-artifact
 EXPECTED_SCHEMA_FILES=(
   "release-artifact-summary.schema.json"
   "release-readiness.schema.json"
+  "validation-report-index.schema.json"
+  "validation-review-result.schema.json"
   "viftyctl-audit.schema.json"
   "viftyctl-capabilities.schema.json"
   "viftyctl-command-error.schema.json"

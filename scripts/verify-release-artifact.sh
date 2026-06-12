@@ -356,6 +356,7 @@ for schema_reference in \
   "release-artifact-summary.schema.json|https://vifty.local/schemas/release-artifact-summary.schema.json" \
   "release-readiness.schema.json|https://vifty.local/schemas/release-readiness.schema.json" \
   "validation-report-index.schema.json|https://vifty.local/schemas/validation-report-index.schema.json" \
+  "validation-review-result.schema.json|https://vifty.local/schemas/validation-review-result.schema.json" \
   "viftyctl-audit.schema.json|https://vifty.local/schemas/viftyctl-audit.schema.json" \
   "viftyctl-capabilities.schema.json|https://vifty.local/schemas/viftyctl-capabilities.schema.json" \
   "viftyctl-command-error.schema.json|https://vifty.local/schemas/viftyctl-command-error.schema.json" \

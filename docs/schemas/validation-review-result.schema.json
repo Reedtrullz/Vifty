@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/validation-review-result.schema.json",
+  "title": "Vifty validation evidence review result",
+  "description": "Machine-readable pass/fail summary emitted by scripts/review-validation-evidence.sh after reviewing a captured validation evidence bundle. Review results are read-only evidence and must not be used as proof that indexing or review ran cooling commands.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "generatedAtUTC",
+    "status",
+    "mode",
+    "bundlePath",
+    "readOnly",
+    "coolingCommandsRun",
+    "appPath",
+    "releaseArtifactSummaryPath",
+    "releaseChecklistPath",
+    "installSource",
+    "sourceRef",
+    "sourceSHA",
+    "sourceArtifactName",
+    "sourceArtifactSHA256",
+    "sourceArtifactBytes",
+    "diagnoseState",
+    "recommendedAgentAction",
+    "safeToRequestCooling",
+    "modelIdentifier",
+    "isAppleSilicon",
+    "isMacBookPro",
+    "fanCount",
+    "controllableFanCount",
+    "temperatureSensorCount",
+    "thermalPressure",
+    "manualSmokeTestResult",
+    "manualSmokeTestSource",
+    "failures",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/validation-review-result.schema.json"
+    },
+    "generatedAtUTC": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "mode": {
+      "$ref": "#/$defs/mode"
+    },
+    "bundlePath": {
+      "type": "string"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "coolingCommandsRun": {
+      "const": false
+    },
+    "appPath": {
+      "type": "string"
+    },
+    "releaseArtifactSummaryPath": {
+      "type": "string"
+    },
+    "releaseChecklistPath": {
+      "type": "string"
+    },
+    "installSource": {
+      "$ref": "#/$defs/installSource"
+    },
+    "sourceRef": {
+      "type": "string"
+    },
+    "sourceSHA": {
+      "$ref": "#/$defs/gitSHA"
+    },
+    "sourceArtifactName": {
+      "type": "string"
+    },
+    "sourceArtifactSHA256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "sourceArtifactBytes": {
+      "type": "string",
+      "pattern": "^([1-9][0-9]*)?$"
+    },
+    "diagnoseState": {
+      "$ref": "#/$defs/nullableString"
+    },
+    "recommendedAgentAction": {
+      "$ref": "#/$defs/nullableString"
+    },
+    "safeToRequestCooling": {
+      "$ref": "#/$defs/nullableBoolean"
+    },
+    "modelIdentifier": {
+      "$ref": "#/$defs/nullableString"
+    },
+    "isAppleSilicon": {
+      "$ref": "#/$defs/nullableBoolean"
+    },
+    "isMacBookPro": {
+      "$ref": "#/$defs/nullableBoolean"
+    },
+    "fanCount": {
+      "$ref": "#/$defs/nullableInteger"
+    },
+    "controllableFanCount": {
+      "$ref": "#/$defs/nullableInteger"
+    },
+    "temperatureSensorCount": {
+      "$ref": "#/$defs/nullableInteger"
+    },
+    "thermalPressure": {
+      "$ref": "#/$defs/nullableString"
+    },
+    "manualSmokeTestResult": {
+      "$ref": "#/$defs/manualSmokeTestResult"
+    },
+    "manualSmokeTestSource": {
+      "type": "string"
+    },
+    "failures": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableBoolean": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "nullableInteger": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mode": {
+      "enum": [
+        "release",
+        "supported-hardware",
+        "unsupported-hardware"
+      ]
+    },
+    "manualSmokeTestResult": {
+      "enum": [
+        "not-recorded",
+        "passed-auto-restored",
+        "skipped-blocked",
+        "skipped-unsupported",
+        "failed"
+      ]
+    },
+    "installSource": {
+      "enum": [
+        "",
+        "not-recorded",
+        "source-build-tag",
+        "source-first-unsigned-dev-zip",
+        "notarized-github-release",
+        "homebrew-cask",
+        "local-developer-id-build",
+        "local-ad-hoc-build",
+        "other"
+      ]
+    },
+    "gitSHA": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40})?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64})?$"
+    }
+  }
+}

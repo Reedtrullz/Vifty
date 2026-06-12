@@ -27,6 +27,7 @@ INPUTS=()
 OUTPUT_JSON=""
 OUTPUT_TSV=""
 VALIDATION_REPORT_INDEX_SCHEMA_ID="https://vifty.local/schemas/validation-report-index.schema.json"
+VALIDATION_REVIEW_RESULT_SCHEMA_ID="https://vifty.local/schemas/validation-review-result.schema.json"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -74,6 +75,7 @@ fi
 
 ruby -rjson -rcsv -rfileutils -e '
   schema_id = ARGV.shift.to_s
+  review_result_schema_id = ARGV.shift.to_s
   output_json = ARGV.shift.to_s
   output_tsv = ARGV.shift.to_s
   inputs = ARGV
@@ -112,11 +114,16 @@ ruby -rjson -rcsv -rfileutils -e '
     nil
   end
 
-  def validate_result(path, result, failures)
+  def validate_result(path, result, review_result_schema_id, failures)
     valid = true
 
     unless result["schemaVersion"] == 1
       failures << "#{path} schemaVersion must be 1"
+      valid = false
+    end
+
+    unless result["schemaID"] == review_result_schema_id
+      failures << "#{path} schemaID must be #{review_result_schema_id}"
       valid = false
     end
 
@@ -169,6 +176,12 @@ ruby -rjson -rcsv -rfileutils -e '
     source_artifact_sha = result.fetch("sourceArtifactSHA256", "").to_s
     unless source_artifact_sha.empty? || source_artifact_sha.match?(/\A[0-9a-f]{64}\z/)
       failures << "#{path} sourceArtifactSHA256 must be a lowercase 64-character SHA-256 checksum"
+      valid = false
+    end
+
+    source_artifact_bytes = result.fetch("sourceArtifactBytes", "").to_s
+    unless source_artifact_bytes.empty? || source_artifact_bytes.match?(/\A[1-9][0-9]*\z/)
+      failures << "#{path} sourceArtifactBytes must be a positive integer"
       valid = false
     end
 
@@ -234,7 +247,7 @@ ruby -rjson -rcsv -rfileutils -e '
   paths.each do |path|
     result = read_result(path, failures)
     next if result.nil?
-    next unless validate_result(path, result, failures)
+    next unless validate_result(path, result, review_result_schema_id, failures)
 
     warnings = result["warnings"].is_a?(Array) ? result["warnings"] : []
     failures_list = result["failures"].is_a?(Array) ? result["failures"] : []
@@ -347,4 +360,4 @@ ruby -rjson -rcsv -rfileutils -e '
     FileUtils.mkdir_p(directory) unless directory == "." || Dir.exist?(directory)
     File.write(output_tsv, tsv)
   end
-' "${VALIDATION_REPORT_INDEX_SCHEMA_ID}" "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${INPUTS[@]}"
+' "${VALIDATION_REPORT_INDEX_SCHEMA_ID}" "${VALIDATION_REVIEW_RESULT_SCHEMA_ID}" "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${INPUTS[@]}"

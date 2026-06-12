@@ -56,6 +56,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(schemaResources.contains("release-artifact-summary.schema.json"))
         XCTAssertTrue(schemaResources.contains("release-readiness.schema.json"))
         XCTAssertTrue(schemaResources.contains("validation-report-index.schema.json"))
+        XCTAssertTrue(schemaResources.contains("validation-review-result.schema.json"))
         XCTAssertTrue(schemaResources.contains("viftyctl-audit.schema.json"))
         XCTAssertTrue(schemaResources.contains("viftyctl-capabilities.schema.json"))
         XCTAssertTrue(schemaResources.contains("Contents/Resources/schemas/viftyctl-capabilities.schema.json"))
@@ -1019,6 +1020,7 @@ private final class ValidationEvidenceHarness {
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
             "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "validation-report-index.schema.json": "https://vifty.local/schemas/validation-report-index.schema.json",
+            "validation-review-result.schema.json": "https://vifty.local/schemas/validation-review-result.schema.json",
             "viftyctl-audit.schema.json": "https://vifty.local/schemas/viftyctl-audit.schema.json",
             "viftyctl-capabilities.schema.json": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
             "viftyctl-command-error.schema.json": "https://vifty.local/schemas/viftyctl-command-error.schema.json",

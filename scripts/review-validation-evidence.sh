@@ -130,6 +130,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   manual_smoke_source = ARGV.fetch(4, "")
   failures = []
   warnings = []
+  VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
 
   EXPECTED_EXECUTABLES = {
     "Vifty" => "Contents/MacOS/Vifty",
@@ -140,6 +141,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
   EXPECTED_SCHEMA_RESOURCES = {
     "release-artifact-summary.schema.json" => "Contents/Resources/schemas/release-artifact-summary.schema.json",
+    "release-readiness.schema.json" => "Contents/Resources/schemas/release-readiness.schema.json",
+    "validation-report-index.schema.json" => "Contents/Resources/schemas/validation-report-index.schema.json",
+    "validation-review-result.schema.json" => "Contents/Resources/schemas/validation-review-result.schema.json",
     "viftyctl-audit.schema.json" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
     "viftyctl-capabilities.schema.json" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
     "viftyctl-command-error.schema.json" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
@@ -545,6 +549,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
     payload = {
       "schemaVersion" => 1,
+      "schemaID" => VALIDATION_REVIEW_RESULT_SCHEMA_ID,
       "generatedAtUTC" => Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
       "status" => status,
       "mode" => mode,

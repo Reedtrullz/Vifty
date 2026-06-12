@@ -330,6 +330,10 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         let summary = try harness.readJSON(summaryURL)
         XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            summary["schemaID"] as? String,
+            "https://vifty.local/schemas/validation-review-result.schema.json"
+        )
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["mode"] as? String, "supported-hardware")
         XCTAssertEqual(summary["bundlePath"] as? String, harness.bundleURL.path)
@@ -1017,6 +1021,9 @@ private final class ValidationEvidenceReviewHarness {
     static let defaultSchemaResourcesTSV = """
     schema\tsha256\tbytes\tbundlePath
     release-artifact-summary.schema.json\t\(String(repeating: "f", count: 64))\t3300\tContents/Resources/schemas/release-artifact-summary.schema.json
+    release-readiness.schema.json\t\(String(repeating: "0", count: 64))\t2600\tContents/Resources/schemas/release-readiness.schema.json
+    validation-report-index.schema.json\t\(String(repeating: "9", count: 64))\t3100\tContents/Resources/schemas/validation-report-index.schema.json
+    validation-review-result.schema.json\t\(String(repeating: "8", count: 64))\t3700\tContents/Resources/schemas/validation-review-result.schema.json
     viftyctl-audit.schema.json\t\(String(repeating: "e", count: 64))\t1390\tContents/Resources/schemas/viftyctl-audit.schema.json
     viftyctl-capabilities.schema.json\t\(String(repeating: "a", count: 64))\t5170\tContents/Resources/schemas/viftyctl-capabilities.schema.json
     viftyctl-command-error.schema.json\t\(String(repeating: "b", count: 64))\t1461\tContents/Resources/schemas/viftyctl-command-error.schema.json

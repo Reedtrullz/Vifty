@@ -120,6 +120,39 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(claimValues.contains("safe-block-evidence"))
         let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
         let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
+        XCTAssertTrue(installSourceValues.contains(""))
+        XCTAssertTrue(installSourceValues.contains("source-build-tag"))
+        XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
+    }
+
+    func testValidationReviewResultSchemaDocumentsReviewerContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/validation-review-result.schema.json")
+        let schema = try ValidationReportSummaryHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(schema["$id"] as? String, "https://vifty.local/schemas/validation-review-result.schema.json")
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "readOnly",
+            "coolingCommandsRun",
+            "installSource",
+            "sourceSHA",
+            "sourceArtifactSHA256",
+            "sourceArtifactBytes",
+            "manualSmokeTestResult",
+            "failures",
+            "warnings"
+        ] {
+            XCTAssertTrue(required.contains(field), "review-result schema should require \(field)")
+        }
+
+        let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
+        let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
     }
@@ -166,6 +199,57 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("must declare readOnly=true"))
+    }
+
+    func testSummarizerRejectsReviewResultWithoutSchemaID() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "missing-schema-review.json",
+            status: "passed",
+            mode: "release",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            includeSchemaID: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("schemaID must be https://vifty.local/schemas/validation-review-result.schema.json"))
+    }
+
+    func testSummarizerRejectsReviewResultWithSchemaIDDrift() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "stale-schema-review.json",
+            status: "passed",
+            mode: "release",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            schemaID: "https://vifty.local/schemas/old-validation-review-result.schema.json"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("schemaID must be https://vifty.local/schemas/validation-review-result.schema.json"))
+    }
+
+    func testSummarizerRejectsInvalidSourceArtifactBytes() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "bad-artifact-bytes-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            sourceArtifactBytes: "0"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("sourceArtifactBytes must be a positive integer"))
     }
 
     func testSummarizerRejectsReviewResultThatRanCoolingCommands() throws {
@@ -246,14 +330,17 @@ private final class ValidationReportSummaryHarness {
         failures: [String] = [],
         warnings: [String] = [],
         readOnly: Bool = true,
-        coolingCommandsRun: Bool = false
+        coolingCommandsRun: Bool = false,
+        includeSchemaID: Bool = true,
+        schemaID: String = "https://vifty.local/schemas/validation-review-result.schema.json",
+        sourceArtifactBytes: String = ""
     ) throws -> URL {
         let url = rootURL.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        let json: [String: Any] = [
+        var json: [String: Any] = [
             "schemaVersion": 1,
             "generatedAtUTC": "2026-06-11T00:00:00Z",
             "status": status,
@@ -267,6 +354,7 @@ private final class ValidationReportSummaryHarness {
             "sourceSHA": String(repeating: "a", count: 40),
             "sourceArtifactName": "",
             "sourceArtifactSHA256": "",
+            "sourceArtifactBytes": sourceArtifactBytes,
             "diagnoseState": mode == "unsupported-hardware" ? "blocked" : "ready",
             "recommendedAgentAction": mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling",
             "safeToRequestCooling": safeToRequestCooling,
@@ -282,6 +370,9 @@ private final class ValidationReportSummaryHarness {
             "failures": failures,
             "warnings": warnings
         ]
+        if includeSchemaID {
+            json["schemaID"] = schemaID
+        }
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: url)
         return url
