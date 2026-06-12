@@ -39,6 +39,14 @@ VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
 
 The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
+The guarded wrapper also does not fall back to an uncooled workload by default.
+When the user explicitly wants the child command to run without Vifty after a
+structured readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The
+wrapper still performs read-only capabilities/readiness checks, prints the
+diagnose JSON, refuses to request cooling, and only then execs the child directly.
+It still refuses uncooled execution when Vifty recommends `backOffWorkload` or
+`restoreAutoBeforeRetry`.
+
 For common workloads, use the audited shortcuts:
 
 ```sh
@@ -71,7 +79,7 @@ Decision table:
 | `state: "ready"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use `guarded-run.sh` with normal conservative limits. |
 | `state: "degraded"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use a shorter duration, lower RPM percent, and surface the warning to the user. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto or wait. |
-| `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that. |
+| `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
 | `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying. |
 | Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes. |
 | Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto or wait for the active lease to clear before retrying. |

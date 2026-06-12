@@ -160,6 +160,19 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRejectsInvalidAllowUncooledEnvironmentBeforeDiagnose() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            allowUncooled: "maybe"
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsInvalidDurationBeforeViftyCtl() throws {
         let harness = try ScriptHarness(state: "ready")
 
@@ -406,6 +419,50 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("readiness is blocked"))
         XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
         XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunCanRunChildWithoutViftyCoolingWhenUserAllowsUncooledFallback() throws {
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "collectHardwareEvidence"
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("uncooled-child-ran.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stderr.contains("readiness is blocked"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling"), result.stderr)
+        XCTAssertEqual(try String(contentsOf: markerURL, encoding: .utf8), "child-ran")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenViftyRecommendsBackingOffWorkload() throws {
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "backOffWorkload"
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("recovery action is backOffWorkload"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -698,11 +755,25 @@ private final class ScriptHarness {
         }
     }
 
-    func runGuardedRun(_ arguments: [String], forceRetry: String? = nil) throws -> ProcessResult {
-        try runScript("examples/viftyctl/guarded-run.sh", arguments: arguments, forceRetry: forceRetry)
+    func runGuardedRun(
+        _ arguments: [String],
+        forceRetry: String? = nil,
+        allowUncooled: String? = nil
+    ) throws -> ProcessResult {
+        try runScript(
+            "examples/viftyctl/guarded-run.sh",
+            arguments: arguments,
+            forceRetry: forceRetry,
+            allowUncooled: allowUncooled
+        )
     }
 
-    func runScript(_ relativePath: String, arguments: [String], forceRetry: String? = nil) throws -> ProcessResult {
+    func runScript(
+        _ relativePath: String,
+        arguments: [String],
+        forceRetry: String? = nil,
+        allowUncooled: String? = nil
+    ) throws -> ProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
@@ -718,6 +789,9 @@ private final class ScriptHarness {
         environment["PATH"] = "\(binURL.path):\(environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")"
         if let forceRetry {
             environment["VIFTY_GUARDED_RUN_FORCE_RETRY"] = forceRetry
+        }
+        if let allowUncooled {
+            environment["VIFTY_GUARDED_RUN_ALLOW_UNCOOLED"] = allowUncooled
         }
         process.environment = environment
 

@@ -265,6 +265,13 @@ The wrapper:
 
 The wrapper does not pass `--force` by default. If a supervised human workflow wants the CLI to wait once for `retryAfterSeconds` and retry a rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`; the wrapper still checks `supportsForceRetry` before passing `--force`. Local agents should leave that off unless the user explicitly asks them to retry after a rate limit.
 
+The wrapper also does not silently rerun workloads without cooling. If the user
+explicitly wants the child command to run without Vifty after a structured
+readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The wrapper still
+prints the diagnose JSON, refuses to request cooling, and only then execs the
+child directly; it refuses that fallback when Vifty recommends backing off the
+workload or restoring Auto first.
+
 Set `VIFTYCTL` to point at a development bundle:
 
 ```sh

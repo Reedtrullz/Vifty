@@ -46,6 +46,11 @@ Use shorter durations and lower RPM percentages for degraded readiness. Never ca
 
 Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once. The wrapper still checks `supportsForceRetry` before passing `--force`.
 
+Leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset by default. Only set it to `1`
+after the user explicitly approved running the child command without Vifty
+cooling after seeing the structured readiness block. The wrapper will still run
+read-only checks, print the diagnose JSON, refuse to request cooling, and avoid the uncooled fallback when Vifty recommends backing off or restoring Auto first.
+
 The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the CLI no longer advertises `run`, if the requested workload is not advertised, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 ````
 
@@ -111,7 +116,7 @@ fi
 exec "$@"
 ```
 
-Use this pattern for developer machines only. Remote CI machines, unsupported Macs, and non-macOS runners should run the workload normally without Vifty fan control. Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command, unless the user explicitly asked to continue without Vifty cooling after seeing the structured failure.
+Use this pattern for developer machines only. Remote CI machines, unsupported Macs, and non-macOS runners should run the workload normally without Vifty fan control. Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly asked to continue without Vifty cooling after seeing the structured failure.
 
 ## Failure Handling
 
@@ -129,5 +134,6 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
 - `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry.
+- Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

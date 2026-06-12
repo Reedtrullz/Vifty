@@ -38,6 +38,12 @@ rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. The guarded
 wrapper still checks `supportsForceRetry` before passing `--force`. Leave it
 unset for local agents unless the user explicitly approved retrying.
 
+When the user explicitly approves running the workload without Vifty cooling
+after seeing the structured readiness block, set
+`VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The wrapper still runs read-only
+capabilities and diagnose checks, still refuses to request cooling, prints the
+diagnose JSON, and then execs the child directly. It will not use this fallback when Vifty recommends `backOffWorkload` or `restoreAutoBeforeRetry`.
+
 ## Scripts
 
 | Script | Delegates To |

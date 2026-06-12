@@ -13,6 +13,9 @@ Environment:
   VIFTYCTL  Path to viftyctl. Defaults to /Applications/Vifty.app/Contents/MacOS/viftyctl.
   VIFTY_GUARDED_RUN_FORCE_RETRY
             Set to 1/true/yes to pass --force to viftyctl run. Defaults to off.
+  VIFTY_GUARDED_RUN_ALLOW_UNCOOLED
+            Set to 1/true/yes to run the child without Vifty cooling after a
+            valid readiness report blocks cooling. Defaults to off.
 USAGE
 }
 
@@ -121,6 +124,29 @@ print_readiness_recovery_action() {
   esac
 }
 
+finish_without_cooling_request() {
+  message="$1"
+  shift
+
+  echo "guarded-run: $message" >&2
+  print_readiness_recovery_action "$recommended_recovery_action"
+  printf '%s\n' "$diagnose_json" >&2
+
+  if [ "$allow_uncooled" -eq 1 ]; then
+    case "$recommended_recovery_action" in
+      backOffWorkload|restoreAutoBeforeRetry)
+        echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling." >&2
+        exit 75
+        ;;
+    esac
+
+    echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling." >&2
+    exec "$@"
+  fi
+
+  exit 75
+}
+
 is_positive_integer() {
   printf '%s\n' "$1" | /usr/bin/awk '/^[0-9]+$/ { exit !(($0 + 0) > 0) } { exit 1 }'
 }
@@ -204,6 +230,7 @@ preflight_child_command "$1"
 
 viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"
+allow_uncooled="${VIFTY_GUARDED_RUN_ALLOW_UNCOOLED:-0}"
 
 if [ ! -x "$viftyctl" ]; then
   echo "guarded-run: viftyctl is not executable at $viftyctl" >&2
@@ -219,6 +246,19 @@ case "$force_retry" in
     ;;
   *)
     echo "guarded-run: VIFTY_GUARDED_RUN_FORCE_RETRY must be 1/true/yes or 0/false/no." >&2
+    exit 64
+    ;;
+esac
+
+case "$allow_uncooled" in
+  1|true|yes)
+    allow_uncooled=1
+    ;;
+  0|false|no|"")
+    allow_uncooled=0
+    ;;
+  *)
+    echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED must be 1/true/yes or 0/false/no." >&2
     exit 64
     ;;
 esac
@@ -472,34 +512,26 @@ case "$recommended_recovery_action" in
 esac
 
 if [ "$state" = "blocked" ]; then
-  echo "guarded-run: Vifty readiness is blocked; refusing to request cooling." >&2
-  print_readiness_recovery_action "$recommended_recovery_action"
-  printf '%s\n' "$diagnose_json" >&2
-  exit 75
+  finish_without_cooling_request "Vifty readiness is blocked; refusing to request cooling." "$@"
 fi
 
 if [ "$safe_to_request" != "true" ]; then
   case "$recommended_action" in
     restoreAutoBeforeRequestingCooling)
-      echo "guarded-run: Vifty recommends restoring Auto before requesting new cooling." >&2
+      no_cooling_message="Vifty recommends restoring Auto before requesting new cooling."
       ;;
     doNotRequestCooling)
-      echo "guarded-run: Vifty recommends not requesting cooling." >&2
+      no_cooling_message="Vifty recommends not requesting cooling."
       ;;
     *)
-      echo "guarded-run: Vifty reports safeToRequestCooling=$safe_to_request for action '$recommended_action'; refusing to request cooling." >&2
+      no_cooling_message="Vifty reports safeToRequestCooling=$safe_to_request for action '$recommended_action'; refusing to request cooling."
       ;;
   esac
-  print_readiness_recovery_action "$recommended_recovery_action"
-  printf '%s\n' "$diagnose_json" >&2
-  exit 75
+  finish_without_cooling_request "$no_cooling_message" "$@"
 fi
 
 if [ "$daemon_control_path_ready" != "true" ]; then
-  echo "guarded-run: Vifty daemon control path is not ready; refusing to request cooling." >&2
-  print_readiness_recovery_action "$recommended_recovery_action"
-  printf '%s\n' "$diagnose_json" >&2
-  exit 75
+  finish_without_cooling_request "Vifty daemon control path is not ready; refusing to request cooling." "$@"
 fi
 
 case "$recommended_action" in
