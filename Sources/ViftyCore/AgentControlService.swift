@@ -91,6 +91,16 @@ public actor AgentControlService {
         try beginOperation()
         defer { endOperation() }
         let prepareRestoreGeneration = restoreRequestGeneration
+        guard let request = request.normalizedMetadata else {
+            let decision = AgentControlDecision.denied(
+                .invalidArguments,
+                message: request.metadataValidationFailureMessage ?? "Agent cooling request metadata is invalid."
+            )
+            lastDecision = decision
+            lastErrorCode = decision.errorCode
+            appendAudit(action: "prepare-denied", leaseID: nil, message: decision.message)
+            return status()
+        }
 
         if let lease = activeLease,
            lease.request.idempotencyKey == request.idempotencyKey,

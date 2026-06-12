@@ -28,6 +28,73 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertTrue(audit.contains("\"message\":\"Build\""))
     }
 
+    func testPrepareNormalizesMetadataBeforeSavingLeaseAndAudit() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "  Build  ",
+            idempotencyKey: "  key  "
+        )
+
+        let status = try await service.prepare(request)
+
+        XCTAssertEqual(status.activeLease?.request.reason, "Build")
+        XCTAssertEqual(status.activeLease?.request.idempotencyKey, "key")
+        let savedLease = try store.loadActiveLease()
+        XCTAssertEqual(savedLease?.request.reason, "Build")
+        XCTAssertEqual(savedLease?.request.idempotencyKey, "key")
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"message\":\"Build\""))
+        XCTAssertFalse(audit.contains("\"message\":\"  Build  \""))
+    }
+
+    func testPrepareRejectsBlankMetadataBeforeHardwareAccess() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "   ",
+            idempotencyKey: "key"
+        )
+
+        let status = try await service.prepare(request)
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertEqual(status.lastErrorCode, .invalidArguments)
+        XCTAssertEqual(status.lastDecision?.message, "Agent cooling reason must not be blank.")
+        let snapshotCallCount = await hardware.snapshotCallCount
+        XCTAssertEqual(snapshotCallCount, 0)
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [])
+        XCTAssertNil(try store.loadActiveLease())
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"action\":\"prepare-denied\""))
+        XCTAssertTrue(audit.contains("Agent cooling reason must not be blank."))
+    }
+
     func testRestoreAutoRestoresFansAndClearsLease() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let store = AgentControlStore(directory: temporaryDirectory())

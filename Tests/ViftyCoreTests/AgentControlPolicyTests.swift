@@ -42,6 +42,34 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertEqual(decision.errorCode, .thermalCritical)
     }
 
+    func testDeniesBlankReasonAndIdempotencyKeyMetadata() {
+        let policy = AgentControlPolicy(enabled: true)
+        let blankReason = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "   ",
+            idempotencyKey: "key"
+        )
+        let blankKey = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "Build",
+            idempotencyKey: "   "
+        )
+
+        let reasonDecision = policy.evaluate(blankReason, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
+        let keyDecision = policy.evaluate(blankKey, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
+
+        XCTAssertFalse(reasonDecision.allowed)
+        XCTAssertEqual(reasonDecision.errorCode, .invalidArguments)
+        XCTAssertEqual(reasonDecision.message, "Agent cooling reason must not be blank.")
+        XCTAssertFalse(keyDecision.allowed)
+        XCTAssertEqual(keyDecision.errorCode, .invalidArguments)
+        XCTAssertEqual(keyDecision.message, "Agent cooling idempotency key must not be blank.")
+    }
+
     func testCriticalThermalPressureTakesPrecedenceOverMissingSensorsAndMalformedFans() {
         let policy = AgentControlPolicy(enabled: true)
         let snapshot = HardwareSnapshot(

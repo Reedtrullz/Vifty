@@ -27,6 +27,12 @@ public struct AgentControlPolicy: Equatable, Sendable {
 
     public func evaluate(_ request: AgentControlRequest, snapshot: HardwareSnapshot, thermalPressure: ThermalPressure) -> AgentControlDecision {
         guard enabled else { return .denied(.disabled, message: "Agent fan control is disabled in Vifty settings.") }
+        guard request.metadataValidationFailureMessage == nil else {
+            return .denied(
+                .invalidArguments,
+                message: request.metadataValidationFailureMessage ?? "Agent cooling request metadata is invalid."
+            )
+        }
         guard snapshot.isAppleSilicon, snapshot.isMacBookPro else { return .denied(.unsupportedHardware, message: "Agent fan control is only supported on Apple Silicon MacBook Pro hardware.") }
         guard thermalPressure != .critical else { return .denied(.thermalCritical, message: "Thermal pressure is critical; the workload should pause or reduce CPU/GPU work instead.") }
         guard !snapshot.temperatureSensors.isEmpty else { return .denied(.temperatureSensorUnavailable, message: "At least one temperature sensor is required before agent fan control can run.") }

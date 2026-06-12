@@ -50,6 +50,29 @@ public struct AgentControlRequest: Codable, Equatable, Sendable {
         self.reason = reason
         self.idempotencyKey = idempotencyKey
     }
+
+    public var metadataValidationFailureMessage: String? {
+        if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Agent cooling reason must not be blank."
+        }
+        if idempotencyKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Agent cooling idempotency key must not be blank."
+        }
+        return nil
+    }
+
+    public var normalizedMetadata: AgentControlRequest? {
+        guard metadataValidationFailureMessage == nil else {
+            return nil
+        }
+        return AgentControlRequest(
+            workload: workload,
+            durationSeconds: durationSeconds,
+            maxRPMPercent: maxRPMPercent,
+            reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
+            idempotencyKey: idempotencyKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
 }
 
 public struct AgentControlDecision: Codable, Equatable, Sendable {
