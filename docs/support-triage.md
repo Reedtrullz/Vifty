@@ -47,6 +47,8 @@ For `v1.1.1`, source-first release issues should focus on source tag/CI readines
 
 If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect the read-only agent evidence bundle, `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
 
+The lightweight agent evidence bundle includes schema-backed `agent-cooling-evidence-summary.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`; treat that summary as the machine-readable index for helper-unreachable and agent-cooling support bundles.
+
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
 Before asking someone to attach a bundle publicly, check `privacy-review.tsv`.

@@ -53,6 +53,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(installProvenance.contains("trustBoundary\tInstall source was not recorded"))
         let schemaResources = try harness.read("schema-resources.tsv")
         XCTAssertTrue(schemaResources.contains("schema\tsha256\tbytes\tbundlePath"))
+        XCTAssertTrue(schemaResources.contains("agent-cooling-evidence-summary.schema.json"))
         XCTAssertTrue(schemaResources.contains("release-artifact-summary.schema.json"))
         XCTAssertTrue(schemaResources.contains("release-readiness.schema.json"))
         XCTAssertTrue(schemaResources.contains("validation-report-index.schema.json"))
@@ -108,7 +109,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewSummary.contains("privacy-review\t0\t0\tpublic-report-privacy"))
         XCTAssertTrue(reviewSummary.contains("release-artifact-summary\tskipped\t0 or skipped\trelease-trust"))
         XCTAssertTrue(reviewSummary.contains("release-checklist\tskipped\t0 or skipped\trelease-trust"))
-        XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\trelease-and-agent-contract"))
+        XCTAssertTrue(reviewSummary.contains("schema-resources\t0\t0\tsupport-release-and-agent-contract"))
         XCTAssertTrue(reviewSummary.contains("capabilities-schema-resources\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("capabilities-contract\t0\t0\tagent-contract"))
         XCTAssertTrue(reviewSummary.contains("launchdaemon-teamid\t0\t0 for public release\trelease-trust"))
@@ -163,7 +164,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
             check["name"] as? String == "schema-resources"
                 && check["status"] as? String == "0"
                 && check["expected"] as? String == "0"
-                && check["scope"] as? String == "release-and-agent-contract"
+                && check["scope"] as? String == "support-release-and-agent-contract"
         })
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "capabilities-schema-resources"
@@ -1019,6 +1020,7 @@ private final class ValidationEvidenceHarness {
 
     private func writeSchemaResources(at schemasURL: URL) throws {
         let schemaIDs = [
+            "agent-cooling-evidence-summary.schema.json": "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json",
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
             "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "validation-report-index.schema.json": "https://vifty.local/schemas/validation-report-index.schema.json",

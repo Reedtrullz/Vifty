@@ -237,6 +237,7 @@ Tasks:
 - Keep all SMC write paths behind allowlists and tests.
 - Keep agent lease audit history private and bounded.
 - Keep `viftyctl audit` read-only, bounded, and local; avoid persistent telemetry creep beyond agent-control audit events.
+- Keep the lightweight agent/helper support bundle schema-backed through `agent-cooling-evidence-summary.json` and `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`.
 - Add fault-injection tests for daemon unavailable, XPC timeout, interrupted child process, helper permission failures, and restore failures.
 - Document private API risk honestly.
 

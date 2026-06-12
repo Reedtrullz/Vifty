@@ -107,6 +107,7 @@ MANIFEST_PATH="${OUTPUT_DIR}/manifest.tsv"
 CHECKSUM_PATH="${OUTPUT_DIR}/checksums.tsv"
 SUMMARY_JSON_PATH="${OUTPUT_DIR}/agent-cooling-evidence-summary.json"
 GENERATED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+AGENT_COOLING_EVIDENCE_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
 
 printf 'name\tstatus\tstdout\tstderr\n' > "${MANIFEST_PATH}"
 
@@ -195,7 +196,7 @@ EOF
 
 write_summary_json() {
   ruby -rjson -e '
-    manifest_path, generated_at, viftyctl, audit_limit = ARGV
+    manifest_path, generated_at, viftyctl, audit_limit, schema_id = ARGV
     checks = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
       name, status, stdout, stderr = line.split("\t", 4)
       {
@@ -208,6 +209,7 @@ write_summary_json() {
     end
     puts JSON.pretty_generate({
       "schemaVersion" => 1,
+      "schemaID" => schema_id,
       "generatedAtUTC" => generated_at,
       "readOnly" => true,
       "coolingCommandsRun" => false,
@@ -215,7 +217,7 @@ write_summary_json() {
       "auditLimit" => audit_limit.to_i,
       "commands" => checks
     })
-  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "${AUDIT_LIMIT}" > "${SUMMARY_JSON_PATH}"
+  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "${AUDIT_LIMIT}" "${AGENT_COOLING_EVIDENCE_SUMMARY_SCHEMA_ID}" > "${SUMMARY_JSON_PATH}"
 }
 
 capture_privacy_review() {

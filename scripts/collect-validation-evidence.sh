@@ -159,6 +159,7 @@ DAEMON_PLIST="${APP_PATH}/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemo
 DAEMON_LABEL="tech.reidar.vifty.daemon"
 RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/release-artifact-summary.schema.json"
 EXPECTED_SCHEMA_FILES=(
+  "agent-cooling-evidence-summary.schema.json"
   "release-artifact-summary.schema.json"
   "release-readiness.schema.json"
   "validation-report-index.schema.json"
@@ -997,7 +998,7 @@ write_review_summary() {
   summary_row "privacy-review" "0" "public-report-privacy" "Evidence bundle should not contain local hostnames, /Users paths, serial labels, or hardware identifier labels."
   summary_row "release-artifact-summary" "0 or skipped" "release-trust" "Optional verifier summary should pass and match the installed app version when supplied."
   summary_row "release-checklist" "0 or skipped" "release-trust" "Optional release checklist should match the installed app version and include post-publication trust follow-up when supplied."
-  summary_row "schema-resources" "0" "release-and-agent-contract" "Bundled release and viftyctl JSON Schemas should be present and hashed."
+  summary_row "schema-resources" "0" "support-release-and-agent-contract" "Bundled support, release, validation, and viftyctl JSON Schemas should be present and hashed."
   summary_row "launchdaemon-lint" "0" "release-trust" "Bundled LaunchDaemon plist should be valid."
   summary_row "launchdaemon-teamid" "0 for public release" "release-trust" "Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty."
   summary_row "launchctl-print-daemon" "0 when installed" "hardware-validation" "Nonzero means the daemon was not registered or not visible to launchctl."

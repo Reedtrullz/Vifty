@@ -1138,6 +1138,7 @@ private final class ValidationEvidenceReviewHarness {
 
     static let defaultSchemaResourcesTSV = """
     schema\tsha256\tbytes\tbundlePath
+    agent-cooling-evidence-summary.schema.json\t\(String(repeating: "1", count: 64))\t2100\tContents/Resources/schemas/agent-cooling-evidence-summary.schema.json
     release-artifact-summary.schema.json\t\(String(repeating: "f", count: 64))\t3300\tContents/Resources/schemas/release-artifact-summary.schema.json
     release-readiness.schema.json\t\(String(repeating: "0", count: 64))\t2600\tContents/Resources/schemas/release-readiness.schema.json
     validation-report-index.schema.json\t\(String(repeating: "9", count: 64))\t3100\tContents/Resources/schemas/validation-report-index.schema.json

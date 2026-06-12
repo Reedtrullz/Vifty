@@ -61,6 +61,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         let summary = try harness.readJSON("agent-cooling-evidence-summary.json")
         XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            summary["schemaID"] as? String,
+            "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
+        )
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(summary["auditLimit"] as? Int, 20)
@@ -190,6 +194,32 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.outputURL.path))
     }
+
+    func testEvidenceSummarySchemaDocumentsCollectorContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/agent-cooling-evidence-summary.schema.json")
+        let schema = try AgentCoolingEvidenceHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(
+            schema["$id"] as? String,
+            "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
+        )
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "generatedAtUTC",
+            "readOnly",
+            "coolingCommandsRun",
+            "viftyctl",
+            "auditLimit",
+            "commands"
+        ] {
+            XCTAssertTrue(required.contains(field), "schema should require \(field)")
+        }
+    }
 }
 
 private struct AgentCoolingEvidenceProcessResult {
@@ -262,7 +292,11 @@ private final class AgentCoolingEvidenceHarness {
     }
 
     func readJSON(_ relativePath: String) throws -> [String: Any] {
-        let data = try Data(contentsOf: outputURL.appendingPathComponent(relativePath))
+        try Self.readJSON(outputURL.appendingPathComponent(relativePath))
+    }
+
+    static func readJSON(_ url: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 

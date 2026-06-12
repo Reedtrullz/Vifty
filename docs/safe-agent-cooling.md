@@ -120,6 +120,8 @@ scripts/collect-agent-cooling-evidence.sh \
 
 This read-only support bundle captures capabilities, diagnose, status, audit,
 command exit statuses, launchd/helper install evidence, a manifest,
+schema-backed `agent-cooling-evidence-summary.json` with
+`schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`,
 `privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
 calling `ViftyHelper`, using `sudo`, or writing SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
