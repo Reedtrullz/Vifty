@@ -12,11 +12,11 @@ body:
         scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
         ```
 
-        For source-first `v1.1.0` reports, add `--install-source source-build-tag --source-ref v1.1.0 --source-sha f7d2c636ebf582ac3809998c3fac819d5d87eb72` when you built from source, or `--install-source source-first-unsigned-dev-zip --source-ref v1.1.0 --source-sha f7d2c636ebf582ac3809998c3fac819d5d87eb72 --source-artifact ./Vifty-v1.1.0-unsigned-dev.zip` when you installed the unsigned tester zip and still have it locally.
+        For source-first `v1.1.1` reports, add `--install-source source-build-tag --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972` when you built from source, or `--install-source source-first-unsigned-dev-zip --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip` when you installed the unsigned tester zip and still have it locally.
 
         The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, Gatekeeper, and privacy-review evidence for the app, CLI, helper, and daemon. Check privacy-review.tsv before posting publicly; redact files it flags or share them privately with maintainers.
 
-        For `v1.1.0`, choose **Source build from tag** when you built from source, or **Source-first unsigned-dev zip** when you used the tester convenience artifact. Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release.
+        For `v1.1.1`, choose **Source build from tag** when you built from source, or **Source-first unsigned-dev zip** when you used the tester convenience artifact. Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release.
 
         Or run these commands manually:
 
@@ -41,7 +41,7 @@ body:
     id: install-source
     attributes:
       label: Install source
-      description: How did you install this build? For v1.1.0, prefer Source build from tag or Source-first unsigned-dev zip; do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
+      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip; do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
       options:
         - Source build from tag
         - Source-first unsigned-dev zip
@@ -58,7 +58,7 @@ body:
     attributes:
       label: Source/ref or artifact checksum
       description: For source-first reports, paste the tag/ref, immutable source commit SHA, and the unsigned-dev zip SHA-256 if applicable. These should match install-provenance.tsv.
-      placeholder: e.g. v1.1.0 / f7d2c636ebf582ac3809998c3fac819d5d87eb72 / Vifty-v1.1.0-unsigned-dev.zip sha256 ...
+      placeholder: e.g. v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256 ...
     validations:
       required: false
 

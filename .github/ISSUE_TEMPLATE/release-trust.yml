@@ -10,16 +10,16 @@ body:
 
         Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
 
-        Vifty v1.1.0 is source-first because the project does not currently have Apple Developer Program credentials. A source tag, passing CI run, unsigned-dev convenience build, local ad-hoc build, or CI artifact is not a trusted public binary release. Future public binary trust requires signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
+        Vifty v1.1.1 is the current source-first hotfix release because the project does not currently have Apple Developer Program credentials. A source tag, passing CI run, unsigned-dev convenience build, local ad-hoc build, or CI artifact is not a trusted public binary release. Future public binary trust requires signed/notarized GitHub Release assets, matching Homebrew cask checksum, and a passing release verifier/reviewer path described in docs/release-status.md.
 
-        The published v1.1.0 source/unsigned-dev release has a known helper-unreachable issue that was fixed later on main. Do not retag v1.1.0 or replace its unsigned-dev assets with a main build; report it here so maintainers can cut a new source-first hotfix release.
+        The published v1.1.0 source/unsigned-dev release has a known helper-unreachable issue that was fixed by v1.1.1. Do not retag v1.1.0 or replace its unsigned-dev assets with a main build; report it here and use the v1.1.1 source-first hotfix path.
 
   - type: input
     id: release-version
     attributes:
       label: Release version
       description: Which Vifty release is affected?
-      placeholder: e.g. 1.1.0
+      placeholder: e.g. 1.1.1
     validations:
       required: true
 
@@ -82,8 +82,8 @@ body:
       placeholder: |
         brew install --cask vifty
         git fetch origin main --tags
-        scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json
-        scripts/check-release-readiness.sh --mode developer-id --version 1.1.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
+        scripts/check-release-readiness.sh --mode source-first --version 1.1.1 --repo Reedtrullz/Vifty --json
+        scripts/check-release-readiness.sh --mode developer-id --version 1.1.1 --repo Reedtrullz/Vifty --require-source-ref origin/main --json
         scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
     validations:
       required: true
@@ -97,7 +97,7 @@ body:
       placeholder: |
         {
           "schemaID": "https://vifty.local/schemas/release-readiness.schema.json",
-          "version": "1.1.0",
+          "version": "1.1.1",
           "releaseMode": "source-first",
           "sourceCommit": "...",
           "status": "blocked",
@@ -110,7 +110,7 @@ body:
     id: release-assets
     attributes:
       label: GitHub Release assets
-      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Source-first v1.1.0 may include only the unsigned-dev zip/checksum convenience assets; trusted Developer ID releases should include the canonical zip, checksum, verifier summary, and release checklist.
+      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Source-first v1.1.1 includes only the unsigned-dev zip/checksum convenience assets; trusted Developer ID releases should include the canonical zip, checksum, verifier summary, and release checklist.
       render: text
       placeholder: |
         Vifty-v<version>-unsigned-dev.zip

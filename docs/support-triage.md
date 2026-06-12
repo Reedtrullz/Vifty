@@ -29,9 +29,9 @@ scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json
 ```
 
-For `v1.1.0`, source-first release issues should focus on source tag/CI readiness, release-note warnings, unsigned-dev artifact naming/checksum, and the known helper-unreachable issue in the published source/unsigned-dev release. Do not ask users to verify Developer ID signing, notarization, stapling, or Homebrew trust for `v1.1.0`; those checks apply only to a future `--mode developer-id` release.
+For `v1.1.1`, source-first release issues should focus on source tag/CI readiness, release-note warnings, unsigned-dev artifact naming/checksum, and the explicit source-first trust boundary. Do not ask users to verify Developer ID signing, notarization, stapling, or Homebrew trust for `v1.1.1`; those checks apply only to a future `--mode developer-id` release.
 
-If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect read-only `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to a current source build for local testing and cut a new source-first hotfix release for public users.
+If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect read-only `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
 
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
@@ -88,7 +88,7 @@ Escalate a report before suggesting any fan-write test when:
 
 ## Compatibility Claims
 
-Only update [compatibility.md](compatibility.md) from reviewed `review-result.json` files. Use [hardware-validation.md](hardware-validation.md) for collection and `scripts/summarize-validation-reports.sh` for indexes. Keep `installSource`, `sourceRef`, `sourceSHA`, and `sourceArtifactSHA256` visible when moving reports into compatibility indexes, especially for source-first `v1.1.0` reports. A supported-hardware report becomes validated hardware evidence only when the review result includes:
+Only update [compatibility.md](compatibility.md) from reviewed `review-result.json` files. Use [hardware-validation.md](hardware-validation.md) for collection and `scripts/summarize-validation-reports.sh` for indexes. Keep `installSource`, `sourceRef`, `sourceSHA`, and `sourceArtifactSHA256` visible when moving reports into compatibility indexes, especially for source-first `v1.1.1` reports. A supported-hardware report becomes validated hardware evidence only when the review result includes:
 
 ```json
 "manualSmokeTestResult": "passed-auto-restored"

@@ -6,7 +6,7 @@ Contributor reports should use the GitHub **Hardware Validation Report** issue t
 
 The public compatibility status is tracked in [compatibility.md](compatibility.md). Do not treat the intended support scope as broad validation until the compatibility page links to real reports. Unsupported machines should follow [unsupported-hardware.md](unsupported-hardware.md): collect read-only evidence, expect a blocked report, and do not run manual fan-write smoke tests.
 
-For `v1.1.0`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.0-unsigned-dev.zip` tester artifact. Those reports can still prove hardware behavior, but they do not prove Developer ID signing, notarization, Homebrew trust, or trusted binary distribution. Future Developer ID or Homebrew reports should choose the corresponding install source only after that trusted-binary lane exists.
+For `v1.1.1`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.1-unsigned-dev.zip` tester artifact. Those reports can still prove hardware behavior, but they do not prove Developer ID signing, notarization, Homebrew trust, or trusted binary distribution. Future Developer ID or Homebrew reports should choose the corresponding install source only after that trusted-binary lane exists.
 
 ## Evidence Collector
 
@@ -16,22 +16,22 @@ For release candidates and contributor reports, the easiest read-only collection
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 ```
 
-For a `v1.1.0` source-first report, record the install source explicitly:
+For a `v1.1.1` source-first report, record the install source explicitly:
 
 ```sh
 # Source build from the immutable release tag.
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
   --install-source source-build-tag \
-  --source-ref v1.1.0 \
-  --source-sha f7d2c636ebf582ac3809998c3fac819d5d87eb72
+  --source-ref v1.1.1 \
+  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972
 
 # Optional unsigned tester zip. Include the artifact path when it is available
 # so install-provenance.tsv records the zip SHA-256 alongside the source tag.
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
   --install-source source-first-unsigned-dev-zip \
-  --source-ref v1.1.0 \
-  --source-sha f7d2c636ebf582ac3809998c3fac819d5d87eb72 \
-  --source-artifact ./Vifty-v1.1.0-unsigned-dev.zip
+  --source-ref v1.1.1 \
+  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 \
+  --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip
 ```
 
 When validating a published release, include the verifier summary too:
@@ -54,7 +54,7 @@ Review the bundle before sharing it publicly, especially any files named by `pri
 
 The helper probe fan rows include `hardwareMode`, `hardwareModeRawValue`, `hardwareModeKey`, and `targetRPM` fields in addition to current/min/max RPM. Use those fields to confirm whether Vifty and macOS agree about Auto, Forced, or System-managed fan state before and after a smoke test, including whether the machine reports uppercase `F{n}Md` or lowercase `F{n}md` fan mode keys.
 
-Source-first and unsigned-dev `v1.1.0` hardware reports may leave release-artifact verifier evidence skipped or absent. Do not use those reports as proof of public binary trust; use them only for hardware behavior, agent readiness, helper telemetry, and manual smoke-test evidence.
+Source-first and unsigned-dev `v1.1.1` hardware reports may leave release-artifact verifier evidence skipped or absent. Do not use those reports as proof of public binary trust; use them only for hardware behavior, agent readiness, helper telemetry, and manual smoke-test evidence.
 
 Maintainers can review a captured bundle without rerunning any diagnostics:
 

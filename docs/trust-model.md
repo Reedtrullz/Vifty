@@ -115,7 +115,7 @@ Public releases should be:
 
 Ad-hoc CI artifacts, local builds, and source-first unsigned-dev convenience zips are useful for development and tester convenience, but they are not a substitute for signed, notarized public releases.
 
-Vifty `v1.1.0` is source-first because the project does not currently have Apple Developer Program credentials. Its recommended trust path is building from source. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and should not use the canonical `Vifty-v<version>.zip` release artifact name.
+Vifty `v1.1.1` is the current source-first hotfix because the project does not currently have Apple Developer Program credentials. It supersedes `v1.1.0` for users who hit the helper-unreachable update issue. The recommended trust path is building from source. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and should not use the canonical `Vifty-v<version>.zip` release artifact name.
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 
