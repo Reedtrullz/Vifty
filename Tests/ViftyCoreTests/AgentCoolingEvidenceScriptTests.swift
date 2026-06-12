@@ -114,7 +114,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
     func testCollectorPreservesBlockedDiagnoseExitAsEvidence() throws {
         let harness = try AgentCoolingEvidenceHarness(
-            diagnoseJSON: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
             diagnoseExitCode: 75
         )
 
@@ -223,12 +223,19 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewSummary["readOnly"] as? Bool, true)
         XCTAssertEqual(reviewSummary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(reviewSummary["commandsReviewed"] as? Int, 8)
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["exitStatus"] as? Int, 0)
+        XCTAssertEqual(diagnoseDecision["state"] as? String, "ready")
+        XCTAssertEqual(diagnoseDecision["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(diagnoseDecision["recommendedRecoveryAction"] as? String, "none")
+        XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
     }
 
     func testReviewerAcceptsBlockedDiagnoseAsReadOnlyEvidence() throws {
         let harness = try AgentCoolingEvidenceHarness(
-            diagnoseJSON: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
             diagnoseExitCode: 75
         )
 
@@ -244,6 +251,72 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
         XCTAssertTrue(reviewResult.stdout.contains("Agent cooling evidence OK"))
+    }
+
+    func testReviewerRejectsDiagnoseDecisionDrift() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":false,"recommendedRecoveryAction":"none","checks":[]}"#,
+            diagnoseExitCode: 75
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("blocked diagnose must recommend doNotRequestCooling"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("blocked diagnose must set safeToRequestCooling false"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("daemonControlPathReady false must recommend repairHelper"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["state"] as? String, "blocked")
+        XCTAssertEqual(diagnoseDecision["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, false)
+    }
+
+    func testReviewerKeepsMalformedDiagnoseDecisionSummarySchemaSafe() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"{"state":"mystery","recommendedAgentAction":"fullSend","safeToRequestCooling":"yes","daemonControlPathReady":"no","recommendedRecoveryAction":"shrug","checks":[]}"#
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("state is missing or unsupported"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("recommendedAgentAction is missing or unsupported"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("safeToRequestCooling must be boolean"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("daemonControlPathReady must be boolean"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["exitStatus"] as? Int, 0)
+        XCTAssertTrue(diagnoseDecision["state"] is NSNull)
+        XCTAssertTrue(diagnoseDecision["recommendedAgentAction"] is NSNull)
+        XCTAssertTrue(diagnoseDecision["recommendedRecoveryAction"] is NSNull)
+        XCTAssertTrue(diagnoseDecision["safeToRequestCooling"] is NSNull)
+        XCTAssertTrue(diagnoseDecision["daemonControlPathReady"] is NSNull)
     }
 
     func testReviewerRejectsPrivacyFindings() throws {
@@ -358,10 +431,25 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "readOnly",
             "coolingCommandsRun",
             "commandsReviewed",
+            "diagnoseDecision",
             "failures",
             "warnings"
         ] {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
+        }
+
+        let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let diagnoseDecision = try XCTUnwrap(defs["diagnoseDecision"] as? [String: Any])
+        let diagnoseRequired = try XCTUnwrap(diagnoseDecision["required"] as? [String])
+        for field in [
+            "exitStatus",
+            "state",
+            "recommendedAgentAction",
+            "recommendedRecoveryAction",
+            "safeToRequestCooling",
+            "daemonControlPathReady"
+        ] {
+            XCTAssertTrue(diagnoseRequired.contains(field), "diagnoseDecision should require \(field)")
         }
     }
 }
@@ -383,7 +471,7 @@ private final class AgentCoolingEvidenceHarness {
     private let includePrivacyLeak: Bool
 
     init(
-        diagnoseJSON: String = #"{"state":"ready","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
+        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
         diagnoseExitCode: Int = 0,
         includePrivacyLeak: Bool = false
     ) throws {

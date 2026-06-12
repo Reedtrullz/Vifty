@@ -14,6 +14,7 @@
     "readOnly",
     "coolingCommandsRun",
     "commandsReviewed",
+    "diagnoseDecision",
     "failures",
     "warnings"
   ],
@@ -46,6 +47,9 @@
       "type": "integer",
       "minimum": 0
     },
+    "diagnoseDecision": {
+      "$ref": "#/$defs/diagnoseDecision"
+    },
     "failures": {
       "$ref": "#/$defs/stringArray"
     },
@@ -54,6 +58,78 @@
     }
   },
   "$defs": {
+    "diagnoseDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exitStatus",
+        "state",
+        "recommendedAgentAction",
+        "recommendedRecoveryAction",
+        "safeToRequestCooling",
+        "daemonControlPathReady"
+      ],
+      "properties": {
+        "exitStatus": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ready",
+            "degraded",
+            "blocked",
+            null
+          ]
+        },
+        "recommendedAgentAction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "requestCooling",
+            "requestCoolingWithCaution",
+            "restoreAutoBeforeRequestingCooling",
+            "doNotRequestCooling",
+            null
+          ]
+        },
+        "recommendedRecoveryAction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "none",
+            "repairHelper",
+            "restoreAutoBeforeRetry",
+            "backOffWorkload",
+            "inspectPolicy",
+            "collectHardwareEvidence",
+            null
+          ]
+        },
+        "safeToRequestCooling": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "daemonControlPathReady": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
     "stringArray": {
       "type": "array",
       "items": {

@@ -135,9 +135,14 @@ scripts/review-agent-cooling-evidence.sh \
 ```
 
 The reviewer accepts blocked diagnose exit `75` as evidence and rejects privacy
-findings, schema drift, manifest/status drift, checksum drift, or any record
-that cooling commands were run. Its JSON summary declares
+findings, schema drift, manifest/status drift, checksum drift, missing or
+contradictory diagnose decision fields, or any record that cooling commands
+were run. Its JSON summary declares
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`.
+The `diagnoseDecision` summary records the diagnose exit status, readiness
+state, `recommendedAgentAction`, `recommendedRecoveryAction`,
+`safeToRequestCooling`, and `daemonControlPathReady` so maintainers can route
+blocked readiness without parsing human text.
 If the repository scripts are not available, collect the same core evidence manually:
 
 ```sh

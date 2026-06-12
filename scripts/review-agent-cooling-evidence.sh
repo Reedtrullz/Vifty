@@ -69,6 +69,21 @@ summary_path = summary_path.empty? ? nil : File.expand_path(summary_path)
 
 EXPECTED_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
 REVIEW_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
+DIAGNOSE_STATES = %w[ready degraded blocked].freeze
+DIAGNOSE_AGENT_ACTIONS = %w[
+  requestCooling
+  requestCoolingWithCaution
+  restoreAutoBeforeRequestingCooling
+  doNotRequestCooling
+].freeze
+DIAGNOSE_RECOVERY_ACTIONS = %w[
+  none
+  repairHelper
+  restoreAutoBeforeRetry
+  backOffWorkload
+  inspectPolicy
+  collectHardwareEvidence
+].freeze
 REQUIRED_FILES = %w[
   agent-cooling-evidence-summary.json
   manifest.tsv
@@ -88,6 +103,14 @@ REQUIRED_COMMANDS = %w[
 
 failures = []
 warnings = []
+diagnose_decision = {
+  "exitStatus" => nil,
+  "state" => nil,
+  "recommendedAgentAction" => nil,
+  "recommendedRecoveryAction" => nil,
+  "safeToRequestCooling" => nil,
+  "daemonControlPathReady" => nil
+}
 
 def bundle_entry?(value)
   value.is_a?(String) &&
@@ -134,7 +157,7 @@ def integer_value(value)
   Integer(value.to_s, exception: false)
 end
 
-def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, failures, warnings)
+def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, failures, warnings)
   return unless summary_path
 
   FileUtils.mkdir_p(File.dirname(summary_path))
@@ -147,6 +170,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "readOnly" => read_only,
     "coolingCommandsRun" => cooling_commands_run,
     "commandsReviewed" => commands_reviewed,
+    "diagnoseDecision" => diagnose_decision,
     "failures" => failures,
     "warnings" => warnings
   }
@@ -260,10 +284,63 @@ end
 end
 
 diagnose_status = integer_value(commands_by_name.dig("viftyctl-diagnose", "status"))
+diagnose_decision["exitStatus"] = diagnose_status
 unless [0, 75].include?(diagnose_status)
   failures << "viftyctl-diagnose must exit 0 or 75 for reviewed read-only evidence"
 end
 warnings << "viftyctl-diagnose exited 75; blocked readiness is accepted as evidence" if diagnose_status == 75
+
+diagnose_path = File.join(bundle, "viftyctl-diagnose.json")
+if File.file?(diagnose_path)
+  begin
+    diagnose = JSON.parse(File.read(diagnose_path))
+    unless diagnose.is_a?(Hash)
+      failures << "viftyctl-diagnose.json must contain a JSON object"
+    else
+      state = diagnose["state"]
+      agent_action = diagnose["recommendedAgentAction"]
+      recovery_action = diagnose["recommendedRecoveryAction"]
+      safe_to_request = diagnose["safeToRequestCooling"]
+      daemon_ready = diagnose["daemonControlPathReady"]
+
+      diagnose_decision["state"] = state if DIAGNOSE_STATES.include?(state)
+      diagnose_decision["recommendedAgentAction"] = agent_action if DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
+      diagnose_decision["recommendedRecoveryAction"] = recovery_action if DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
+      diagnose_decision["safeToRequestCooling"] = safe_to_request if [true, false].include?(safe_to_request)
+      diagnose_decision["daemonControlPathReady"] = daemon_ready if [true, false].include?(daemon_ready)
+
+      failures << "viftyctl-diagnose.json state is missing or unsupported" unless DIAGNOSE_STATES.include?(state)
+      failures << "viftyctl-diagnose.json recommendedAgentAction is missing or unsupported" unless DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
+      failures << "viftyctl-diagnose.json recommendedRecoveryAction is missing or unsupported" unless DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
+      failures << "viftyctl-diagnose.json safeToRequestCooling must be boolean" unless [true, false].include?(safe_to_request)
+      failures << "viftyctl-diagnose.json daemonControlPathReady must be boolean" unless [true, false].include?(daemon_ready)
+
+      if diagnose_status == 75 && state != "blocked"
+        failures << "viftyctl-diagnose exit 75 must report state blocked"
+      end
+      if diagnose_status == 0 && state == "blocked"
+        failures << "viftyctl-diagnose state blocked must use blocked-readiness exit 75"
+      end
+      if state == "blocked" && agent_action != "doNotRequestCooling"
+        failures << "blocked diagnose must recommend doNotRequestCooling"
+      end
+      if state == "blocked" && safe_to_request != false
+        failures << "blocked diagnose must set safeToRequestCooling false"
+      end
+      expected_safe = %w[requestCooling requestCoolingWithCaution].include?(agent_action)
+      if DIAGNOSE_AGENT_ACTIONS.include?(agent_action) && [true, false].include?(safe_to_request) && safe_to_request != expected_safe
+        failures << "safeToRequestCooling does not match recommendedAgentAction"
+      end
+      if daemon_ready == false && recovery_action != "repairHelper"
+        failures << "daemonControlPathReady false must recommend repairHelper"
+      end
+    end
+  rescue JSON::ParserError => error
+    failures << "invalid viftyctl-diagnose.json: #{error.message}"
+  end
+else
+  failures << "missing viftyctl-diagnose.json"
+end
 
 %w[launchctl-print-daemon launchdaemon-plist helper-file-metadata].each do |name|
   status = integer_value(commands_by_name.dig(name, "status"))
@@ -333,7 +410,7 @@ checksum_by_file.each_key do |entry|
 end
 
 status = failures.empty? ? "passed" : "failed"
-write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, failures, warnings)
+write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, failures, warnings)
 
 warnings.each { |warning| warn "warning: #{warning}" }
 
