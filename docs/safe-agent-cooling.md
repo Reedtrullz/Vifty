@@ -22,7 +22,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, and the `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, the advertised unavailable exit code, and the `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test

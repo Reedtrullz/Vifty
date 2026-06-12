@@ -48,6 +48,18 @@ final class GuardedRunScriptTests: XCTestCase {
         )
     }
 
+    func testGuardedRunRejectsUnexpectedCapabilitiesFailureEvenWhenContractLooksSafe() throws {
+        let harness = try ScriptHarness(state: "ready", capabilitiesExitCode: 42)
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("capabilities exited 42 instead of advertised unavailable exit 69"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunFailsClosedWhenRunLifecycleIsUnsafe() throws {
         let harness = try ScriptHarness(
             state: "ready",
@@ -574,9 +586,10 @@ private final class ScriptHarness {
         let supportsForceRetryValue = supportsForceRetry ? "true" : "false"
         let commandsJSON = Self.jsonStringArray(capabilityCommands)
         let workloadsJSON = Self.jsonStringArray(capabilityWorkloads)
+        let exitCodes = #""exitCodes":{"unavailable":69}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue)}"#
-            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle)}"#)
+            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(exitCodes)}"#
+            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu

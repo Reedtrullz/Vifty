@@ -106,6 +106,7 @@ set -e
 
 capability_commands="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract commands json -o - - 2>/dev/null || printf '')"
 capability_workloads="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract workloads json -o - - 2>/dev/null || printf '')"
+capabilities_unavailable_exit="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract exitCodes.unavailable raw -o - - 2>/dev/null || printf '')"
 run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
@@ -118,6 +119,15 @@ supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -ex
 [ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
+[ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
+
+if [ "$capabilities_status" -ne 0 ] && [ "$capabilities_status" != "$capabilities_unavailable_exit" ]; then
+  echo "guarded-run: viftyctl capabilities exited $capabilities_status instead of advertised unavailable exit ${capabilities_unavailable_exit:-unknown}; refusing to request cooling." >&2
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
 
 if ! printf '%s\n' "$capability_commands" | /usr/bin/grep -F '"run"' >/dev/null 2>&1; then
   echo "guarded-run: viftyctl capabilities does not advertise run command support; refusing to request cooling." >&2
