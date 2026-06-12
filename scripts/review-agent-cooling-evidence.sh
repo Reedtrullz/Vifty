@@ -233,6 +233,24 @@ def helper_repair_diagnose?(diagnose_decision)
     diagnose_decision["daemonControlPathReady"] == false
 end
 
+def infer_daemon_control_path_ready(state, agent_action, recovery_action, safe_to_request)
+  if %w[ready degraded].include?(state) &&
+      %w[requestCooling requestCoolingWithCaution].include?(agent_action) &&
+      safe_to_request == true &&
+      recovery_action != "repairHelper"
+    return true
+  end
+
+  if state == "blocked" &&
+      agent_action == "doNotRequestCooling" &&
+      safe_to_request == false &&
+      recovery_action == "repairHelper"
+    return false
+  end
+
+  nil
+end
+
 def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, accepted_command_errors, failures, warnings)
   return unless summary_path
 
@@ -374,6 +392,7 @@ if File.file?(capabilities_path)
       run_lifecycle = capabilities["runLifecycle"]
       direct_lifecycle = capabilities["directControlLifecycle"]
       metadata_limits = capabilities["metadataLimits"]
+      metadata_limits_present = capabilities.key?("metadataLimits")
 
       capabilities_decision["daemonStatusAvailable"] = daemon_status_available if boolean?(daemon_status_available)
       capabilities_decision["policySource"] = policy_source if %w[daemonStatus fallbackUnavailable].include?(policy_source)
@@ -430,7 +449,11 @@ if File.file?(capabilities_path)
         idempotency_key_limit &&
         idempotency_key_limit.positive?
       capabilities_decision["metadataLimitsPresent"] = metadata_present
-      failures << "viftyctl-capabilities.json metadataLimits are missing or invalid" unless metadata_present
+      if metadata_limits_present
+        failures << "viftyctl-capabilities.json metadataLimits are invalid" unless metadata_present
+      else
+        warnings << "viftyctl-capabilities.json is missing metadataLimits; accepted as legacy read-only evidence"
+      end
     end
   rescue JSON::ParserError => error
     failures << "invalid viftyctl-capabilities.json: #{error.message}"
@@ -458,18 +481,36 @@ if File.file?(diagnose_path)
       recovery_action = diagnose["recommendedRecoveryAction"]
       safe_to_request = diagnose["safeToRequestCooling"]
       daemon_ready = diagnose["daemonControlPathReady"]
+      daemon_ready_present = diagnose.key?("daemonControlPathReady")
 
       diagnose_decision["state"] = state if DIAGNOSE_STATES.include?(state)
       diagnose_decision["recommendedAgentAction"] = agent_action if DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
       diagnose_decision["recommendedRecoveryAction"] = recovery_action if DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
       diagnose_decision["safeToRequestCooling"] = safe_to_request if [true, false].include?(safe_to_request)
-      diagnose_decision["daemonControlPathReady"] = daemon_ready if [true, false].include?(daemon_ready)
+      if [true, false].include?(daemon_ready)
+        diagnose_decision["daemonControlPathReady"] = daemon_ready
+      elsif daemon_ready_present
+        failures << "viftyctl-diagnose.json daemonControlPathReady must be boolean"
+      else
+        inferred_daemon_ready = infer_daemon_control_path_ready(
+          state,
+          agent_action,
+          recovery_action,
+          safe_to_request
+        )
+        if [true, false].include?(inferred_daemon_ready)
+          daemon_ready = inferred_daemon_ready
+          diagnose_decision["daemonControlPathReady"] = inferred_daemon_ready
+          warnings << "viftyctl-diagnose.json is missing daemonControlPathReady; inferred #{inferred_daemon_ready} from legacy readiness fields"
+        else
+          failures << "viftyctl-diagnose.json daemonControlPathReady is missing and could not be inferred"
+        end
+      end
 
       failures << "viftyctl-diagnose.json state is missing or unsupported" unless DIAGNOSE_STATES.include?(state)
       failures << "viftyctl-diagnose.json recommendedAgentAction is missing or unsupported" unless DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
       failures << "viftyctl-diagnose.json recommendedRecoveryAction is missing or unsupported" unless DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
       failures << "viftyctl-diagnose.json safeToRequestCooling must be boolean" unless [true, false].include?(safe_to_request)
-      failures << "viftyctl-diagnose.json daemonControlPathReady must be boolean" unless [true, false].include?(daemon_ready)
 
       if diagnose_status == 75 && state != "blocked"
         failures << "viftyctl-diagnose exit 75 must report state blocked"

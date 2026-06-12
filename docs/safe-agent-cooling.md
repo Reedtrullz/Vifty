@@ -142,11 +142,14 @@ were run. Its JSON summary declares
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 `safeToRequestCooling`, and `daemonControlPathReady` so maintainers can route
-blocked readiness without parsing human text. The `capabilitiesDecision`
-summary records whether the bundle advertised `viftyctl run`, force-retry
-discovery, safe `runLifecycle`, safe direct prepare/restore lifecycle,
-metadata limits, daemon status, and the unavailable-exit contract before the
-report is treated as agent-safe evidence. In helper-unreachable reports, the
+blocked readiness without parsing human text. Legacy `v1.1.x` bundles that
+omit `daemonControlPathReady` may pass only when the reviewer can infer it from
+structured readiness/recovery fields. The `capabilitiesDecision` summary
+records whether the bundle advertised `viftyctl run`, force-retry discovery,
+safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
+daemon status, and the unavailable-exit contract before the report is treated
+as agent-safe evidence; absent legacy `metadataLimits` is a warning, not proof
+that automation should skip local argument limits. In helper-unreachable reports, the
 reviewer may also list `viftyctl-status` or `viftyctl-audit` under
 `acceptedCommandErrors`, but only when blocked `diagnose` recommends
 `repairHelper` and those commands emitted structured `HELPER_UNREACHABLE`

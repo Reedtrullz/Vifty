@@ -64,10 +64,14 @@ It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 records a `diagnoseDecision` object with the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 `safeToRequestCooling`, and `daemonControlPathReady`. Missing or contradictory
-diagnose decision fields fail review. It also records `capabilitiesDecision`
-for the advertised `viftyctl run` support, force-retry discovery, safe
-run/direct-control lifecycle, metadata limits, daemon status, and unavailable
-exit-code contract; missing or unsafe capabilities contract fields fail review.
+diagnose decision fields fail review, except legacy `v1.1.x` bundles that omit
+`daemonControlPathReady` may pass only when the reviewer can infer the same
+boolean from structured readiness and recovery fields. It also records
+`capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
+discovery, safe run/direct-control lifecycle, metadata limits, daemon status,
+and unavailable exit-code contract; missing or unsafe capabilities contract
+fields fail review, except absent legacy `metadataLimits` is a warning rather
+than a blocker for read-only triage evidence.
 If `diagnoseDecision` proves blocked readiness with `repairHelper`, the reviewer
 may list `viftyctl-status` or `viftyctl-audit` in `acceptedCommandErrors`, but
 only when their JSON is a structured `HELPER_UNREACHABLE` command error with
