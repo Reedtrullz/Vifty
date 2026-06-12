@@ -160,6 +160,7 @@ DAEMON_LABEL="tech.reidar.vifty.daemon"
 RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/release-artifact-summary.schema.json"
 EXPECTED_SCHEMA_FILES=(
   "agent-cooling-evidence-summary.schema.json"
+  "agent-cooling-evidence-review.schema.json"
   "release-artifact-summary.schema.json"
   "release-readiness.schema.json"
   "validation-report-index.schema.json"

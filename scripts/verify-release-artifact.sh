@@ -354,6 +354,7 @@ done
 
 for schema_reference in \
   "agent-cooling-evidence-summary.schema.json|https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json" \
+  "agent-cooling-evidence-review.schema.json|https://vifty.local/schemas/agent-cooling-evidence-review.schema.json" \
   "release-artifact-summary.schema.json|https://vifty.local/schemas/release-artifact-summary.schema.json" \
   "release-readiness.schema.json|https://vifty.local/schemas/release-readiness.schema.json" \
   "validation-report-index.schema.json|https://vifty.local/schemas/validation-report-index.schema.json" \

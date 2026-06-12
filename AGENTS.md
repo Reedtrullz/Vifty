@@ -77,7 +77,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `docs/release-status.md` — point-in-time public release trust status, including source-first, unsigned-dev tester artifact, future Developer ID, Homebrew trust, and operator checks.
 - `docs/unsupported-hardware.md` — canonical policy for unsupported-machine safe blocks, read-only evidence, and forbidden fan-write bypasses.
 - `docs/support-triage.md` — maintainer triage guide for release trust, hardware validation, unsupported hardware, helper install, SMC telemetry, agent-cooling, and UI reports.
-- `docs/schemas/` — release and agent-facing JSON Schemas for release readiness plus `viftyctl` capabilities, audit, diagnose, status/prepare/restore-auto, and command-error reports.
+- `docs/schemas/` — release, validation, lightweight agent/helper evidence, and agent-facing JSON Schemas for release readiness plus `viftyctl` capabilities, audit, diagnose, status/prepare/restore-auto, and command-error reports.
 - `docs/examples/viftyctl/` — canonical `viftyctl` JSON fixtures decoded by tests to keep agent examples current.
 - `examples/viftyctl/` — guarded-run shell wrapper and tested convenience wrappers for Swift, Xcode, Make, npm, cargo, pytest, local-model, and custom workloads.
 - `scripts/install-vifty.sh` and `Install Vifty.command` — local install path into `/Applications` or `~/Applications`.

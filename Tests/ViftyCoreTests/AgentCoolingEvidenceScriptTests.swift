@@ -215,6 +215,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         XCTAssertEqual(reviewSummary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            reviewSummary["schemaID"] as? String,
+            "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
+        )
         XCTAssertEqual(reviewSummary["status"] as? String, "passed")
         XCTAssertEqual(reviewSummary["readOnly"] as? Bool, true)
         XCTAssertEqual(reviewSummary["coolingCommandsRun"] as? Bool, false)
@@ -328,6 +332,34 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "viftyctl",
             "auditLimit",
             "commands"
+        ] {
+            XCTAssertTrue(required.contains(field), "schema should require \(field)")
+        }
+    }
+
+    func testEvidenceReviewSchemaDocumentsReviewerContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/agent-cooling-evidence-review.schema.json")
+        let schema = try AgentCoolingEvidenceHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(
+            schema["$id"] as? String,
+            "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
+        )
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "generatedAtUTC",
+            "bundlePath",
+            "status",
+            "readOnly",
+            "coolingCommandsRun",
+            "commandsReviewed",
+            "failures",
+            "warnings"
         ] {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
         }

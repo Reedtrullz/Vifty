@@ -68,6 +68,7 @@ summary_path = ARGV.fetch(1, "").to_s
 summary_path = summary_path.empty? ? nil : File.expand_path(summary_path)
 
 EXPECTED_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
+REVIEW_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
 REQUIRED_FILES = %w[
   agent-cooling-evidence-summary.json
   manifest.tsv
@@ -139,6 +140,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
   FileUtils.mkdir_p(File.dirname(summary_path))
   review = {
     "schemaVersion" => 1,
+    "schemaID" => REVIEW_SCHEMA_ID,
     "generatedAtUTC" => Time.now.utc.iso8601,
     "bundlePath" => bundle,
     "status" => status,

@@ -58,7 +58,9 @@ scripts/review-agent-cooling-evidence.sh \
 
 The reviewer rejects schema drift, manifest/status/checksum drift,
 `redaction-needed` privacy findings, and any evidence that says cooling commands
-were run. It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence.
+were run. Its JSON summary declares
+`schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`.
+It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:

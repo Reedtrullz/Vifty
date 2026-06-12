@@ -178,6 +178,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
   EXPECTED_SCHEMA_RESOURCES = {
     "agent-cooling-evidence-summary.schema.json" => "Contents/Resources/schemas/agent-cooling-evidence-summary.schema.json",
+    "agent-cooling-evidence-review.schema.json" => "Contents/Resources/schemas/agent-cooling-evidence-review.schema.json",
     "release-artifact-summary.schema.json" => "Contents/Resources/schemas/release-artifact-summary.schema.json",
     "release-readiness.schema.json" => "Contents/Resources/schemas/release-readiness.schema.json",
     "validation-report-index.schema.json" => "Contents/Resources/schemas/validation-report-index.schema.json",
