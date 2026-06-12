@@ -518,7 +518,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(workplan.contains("Post-release local hardening is on `main` after the published `v1.1.0` source tag"))
         XCTAssertTrue(workplan.contains("`f7d2c636ebf582ac3809998c3fac819d5d87eb72`"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 462 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies 463 XCTest cases"))
+        XCTAssertTrue(workplan.contains("command-error recovery-action metadata"))
         XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("validation report index schema"))
         XCTAssertTrue(workplan.contains("validation review-result schema"))

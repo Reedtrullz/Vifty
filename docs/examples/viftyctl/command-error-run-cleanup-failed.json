@@ -6,6 +6,7 @@
   "errorCode": "RESTORE_FAILED",
   "generatedAt": 700000002,
   "message": "The child command failed to launch after Vifty prepared a cooling lease. Auto restore also failed; run status and audit before starting more work.",
+  "recommendedRecoveryAction": "runDiagnose",
   "safeToProceed": false,
   "schemaVersion": 1
 }

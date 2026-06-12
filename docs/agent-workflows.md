@@ -194,10 +194,13 @@ For JSON command/parse/transport failures, Vifty emits:
 - `errorCode`
 - `message`
 - `safeToProceed: false`
+- `recommendedRecoveryAction`
 - `coolingLeasePrepared`
 - `autoRestoreAttempted`
 - `autoRestoreSucceeded`
 - `retryAfterSeconds` when the error is `PREPARE_RATE_LIMITED` and Vifty can report a retry wait
+
+`recommendedRecoveryAction` is the stable machine-readable next step for command failures. Current values are `runDiagnose`, `repairHelper`, `fixArguments`, `fixChildCommand`, `restoreAutoBeforeRetry`, and `waitBeforeRetry`. Agents should prefer this field over parsing `message` text.
 
 ### `audit --json`
 

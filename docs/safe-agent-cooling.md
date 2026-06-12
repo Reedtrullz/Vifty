@@ -70,10 +70,11 @@ Decision table:
 | `state: "degraded"` and `safeToRequestCooling: true` | Use a shorter duration, lower RPM percent, and surface the warning to the user. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto or wait. |
 | `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that. |
-| `PREPARE_RATE_LIMITED` from `viftyctl run` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
-| `CHILD_COMMAND_FAILED` from `viftyctl run` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |
+| `recommendedRecoveryAction: "waitBeforeRetry"` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
+| `recommendedRecoveryAction: "fixChildCommand"` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |
+| `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes. |
 
-Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `safeToRequestCooling`, `checks`, and `agentControl`.
+Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `safeToRequestCooling`, `checks`, `agentControl`, and command-error `recommendedRecoveryAction`.
 
 ## Conservative Workload Limits
 

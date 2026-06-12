@@ -6,6 +6,7 @@
   "errorCode": "CHILD_COMMAND_FAILED",
   "generatedAt": 700000003,
   "message": "Child command was not found on PATH: missing-tool",
+  "recommendedRecoveryAction": "fixChildCommand",
   "safeToProceed": false,
   "schemaVersion": 1
 }

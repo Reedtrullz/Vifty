@@ -118,9 +118,12 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `blocked` readiness: do not request cooling; show the JSON.
 - `restoreAutoBeforeRequestingCooling`: ask the user whether to restore Auto before retrying.
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
-- `HELPER_UNREACHABLE`: ask the user to open Vifty and reinstall or approve the helper.
-- `CHILD_COMMAND_FAILED`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
-- `PREPARE_RATE_LIMITED`: wait for `retryAfterSeconds`; do not busy-loop retries.
+- `recommendedRecoveryAction: "repairHelper"`: ask the user to open Vifty and use Repair/Reinstall Helper or approve Login Items.
+- `recommendedRecoveryAction: "fixChildCommand"`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
+- `recommendedRecoveryAction: "waitBeforeRetry"`: wait for `retryAfterSeconds`; do not busy-loop retries.
+- `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto before requesting another lease.
+- `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
+- `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

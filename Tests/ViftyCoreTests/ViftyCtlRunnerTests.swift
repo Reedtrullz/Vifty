@@ -3,6 +3,16 @@ import XCTest
 @testable import ViftyCore
 
 final class ViftyCtlRunnerTests: XCTestCase {
+    func testCommandErrorRecoveryActionsMapSafeNextSteps() {
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .helperUnreachable), .repairHelper)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .invalidArguments), .fixArguments)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .childCommandFailed), .fixChildCommand)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .restoreRequested), .restoreAutoBeforeRetry)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .prepareRateLimited), .waitBeforeRetry)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .thermalCritical), .runDiagnose)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: nil), .runDiagnose)
+    }
+
     func testStatusReturnsJSONAndDoesNotMutate() async throws {
         let client = FakeAgentControlClient(
             status: AgentControlStatus(
@@ -46,6 +56,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "status")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.repairHelper.rawValue)
         XCTAssertTrue((json["message"] as? String)?.contains("Daemon request timed out") == true)
     }
 
@@ -452,6 +463,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "audit")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.repairHelper.rawValue)
         XCTAssertTrue((json["message"] as? String)?.contains("Daemon request timed out") == true)
     }
 
@@ -650,6 +662,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "prepare")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.repairHelper.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
@@ -690,6 +703,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "restore-auto")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.repairHelper.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
@@ -805,6 +819,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.childCommandFailed.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.fixChildCommand.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
@@ -837,6 +852,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.restoreFailed.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.runDiagnose.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, false)
@@ -901,6 +917,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.unsupportedHardware.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.runDiagnose.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
@@ -992,6 +1009,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.childCommandFailed.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.fixChildCommand.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
@@ -1103,6 +1121,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "prepare")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.prepareRateLimited.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.waitBeforeRetry.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertEqual(json["retryAfterSeconds"] as? Int, 2)
@@ -1166,6 +1185,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.prepareRateLimited.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.waitBeforeRetry.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)
@@ -1204,6 +1224,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["command"] as? String, "run")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.prepareRateLimited.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.waitBeforeRetry.rawValue)
         XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(json["autoRestoreSucceeded"] is NSNull)

@@ -12,7 +12,7 @@ Files:
 - [audit.json](audit.json) - `viftyctl audit --json`
 - [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
-- [command-error.json](command-error.json) - structured `--json` command failure
+- [command-error.json](command-error.json) - structured `--json` command failure with `recommendedRecoveryAction`
 - [command-error-run-child-command-failed.json](command-error-run-child-command-failed.json) - `viftyctl run --json` child-command failure before any cooling lease is prepared
 - [command-error-run-cleanup-restored.json](command-error-run-cleanup-restored.json) - `viftyctl run --json` launch failure after a prepared lease with Auto restore confirmed
 - [command-error-run-cleanup-failed.json](command-error-run-cleanup-failed.json) - `viftyctl run --json` launch failure after a prepared lease where Auto restore failed

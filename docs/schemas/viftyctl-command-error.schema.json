@@ -10,6 +10,7 @@
     "errorCode",
     "message",
     "safeToProceed",
+    "recommendedRecoveryAction",
     "coolingLeasePrepared",
     "autoRestoreAttempted",
     "autoRestoreSucceeded",
@@ -53,6 +54,17 @@
     },
     "safeToProceed": {
       "const": false
+    },
+    "recommendedRecoveryAction": {
+      "description": "Machine-readable next safe step. Agents should use this field instead of parsing message text.",
+      "enum": [
+        "runDiagnose",
+        "repairHelper",
+        "fixArguments",
+        "fixChildCommand",
+        "restoreAutoBeforeRetry",
+        "waitBeforeRetry"
+      ]
     },
     "coolingLeasePrepared": {
       "description": "True only when viftyctl run successfully prepared a matching cooling lease before reporting this error.",

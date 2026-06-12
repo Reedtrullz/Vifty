@@ -245,12 +245,49 @@ public struct ViftyCtlExitCodes: Codable, Equatable, Sendable {
     }
 }
 
+public enum ViftyCtlCommandErrorRecoveryAction: String, Codable, Equatable, Sendable {
+    case runDiagnose = "runDiagnose"
+    case repairHelper = "repairHelper"
+    case fixArguments = "fixArguments"
+    case fixChildCommand = "fixChildCommand"
+    case restoreAutoBeforeRetry = "restoreAutoBeforeRetry"
+    case waitBeforeRetry = "waitBeforeRetry"
+
+    public static func recommended(for errorCode: AgentControlErrorCode?) -> ViftyCtlCommandErrorRecoveryAction {
+        switch errorCode {
+        case .helperUnreachable:
+            return .repairHelper
+        case .invalidArguments:
+            return .fixArguments
+        case .childCommandFailed:
+            return .fixChildCommand
+        case .restoreRequested:
+            return .restoreAutoBeforeRetry
+        case .prepareRateLimited:
+            return .waitBeforeRetry
+        case nil,
+             .disabled,
+             .unsupportedHardware,
+             .temperatureSensorUnavailable,
+             .noControllableFans,
+             .policyDenied,
+             .durationTooLong,
+             .rpmOutOfRange,
+             .thermalCritical,
+             .leaseNotFound,
+             .restoreFailed:
+            return .runDiagnose
+        }
+    }
+}
+
 public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var command: String
     public var errorCode: AgentControlErrorCode?
     public var message: String
     public var safeToProceed: Bool
+    public var recommendedRecoveryAction: ViftyCtlCommandErrorRecoveryAction
     public var coolingLeasePrepared: Bool
     public var autoRestoreAttempted: Bool
     public var autoRestoreSucceeded: Bool?
@@ -263,6 +300,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         errorCode: AgentControlErrorCode?,
         message: String,
         safeToProceed: Bool = false,
+        recommendedRecoveryAction: ViftyCtlCommandErrorRecoveryAction? = nil,
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
         autoRestoreSucceeded: Bool? = nil,
@@ -274,6 +312,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         self.errorCode = errorCode
         self.message = message
         self.safeToProceed = safeToProceed
+        self.recommendedRecoveryAction = recommendedRecoveryAction ?? .recommended(for: errorCode)
         self.coolingLeasePrepared = coolingLeasePrepared
         self.autoRestoreAttempted = autoRestoreAttempted
         self.autoRestoreSucceeded = autoRestoreSucceeded
@@ -287,6 +326,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         case errorCode
         case message
         case safeToProceed
+        case recommendedRecoveryAction
         case coolingLeasePrepared
         case autoRestoreAttempted
         case autoRestoreSucceeded
@@ -301,6 +341,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         errorCode = try container.decodeIfPresent(AgentControlErrorCode.self, forKey: .errorCode)
         message = try container.decode(String.self, forKey: .message)
         safeToProceed = try container.decode(Bool.self, forKey: .safeToProceed)
+        recommendedRecoveryAction = try container.decodeIfPresent(
+            ViftyCtlCommandErrorRecoveryAction.self,
+            forKey: .recommendedRecoveryAction
+        ) ?? .recommended(for: errorCode)
         coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? false
         autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? false
         autoRestoreSucceeded = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreSucceeded)
@@ -315,6 +359,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         try container.encode(errorCode, forKey: .errorCode)
         try container.encode(message, forKey: .message)
         try container.encode(safeToProceed, forKey: .safeToProceed)
+        try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
         try container.encode(coolingLeasePrepared, forKey: .coolingLeasePrepared)
         try container.encode(autoRestoreAttempted, forKey: .autoRestoreAttempted)
         if let autoRestoreSucceeded {
