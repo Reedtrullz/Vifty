@@ -106,6 +106,7 @@ check_contains "support-no-raw-smc" "SUPPORT.md" "raw SMC tools" "Support forbid
 check_contains "support-no-setfixed" "SUPPORT.md" "sudo ViftyHelper setFixed" "Support forbids manual helper writes in unsafe states."
 check_contains "support-blocked-state" "SUPPORT.md" 'state: "blocked"' "Support treats blocked readiness as a stop signal."
 check_contains "support-safe-to-request" "SUPPORT.md" "safeToRequestCooling: false" "Support treats unsafe cooling decisions as stop signals."
+check_contains "support-daemon-control-path" "SUPPORT.md" "daemonControlPathReady: false" "Support treats unavailable daemon control paths as stop signals."
 check_contains "support-unsupported-readonly" "SUPPORT.md" "read-only evidence only" "Support keeps unsupported hardware on read-only evidence."
 
 check_contains "security-advisories" "SECURITY.md" "GitHub Security Advisories" "Security policy uses private vulnerability reporting."
@@ -115,6 +116,7 @@ check_contains "security-release-status" "SECURITY.md" "[docs/release-status.md]
 check_contains "pr-safety-impact" ".github/PULL_REQUEST_TEMPLATE.md" "## Safety Impact" "PR template requires safety impact."
 check_contains "pr-make-verify" ".github/PULL_REQUEST_TEMPLATE.md" "make verify" "PR template asks for the local trust gate."
 check_contains "pr-agent-gates" ".github/PULL_REQUEST_TEMPLATE.md" "safeToRequestCooling" "PR template protects agent cooling gates."
+check_contains "pr-agent-daemon-control-path" ".github/PULL_REQUEST_TEMPLATE.md" "daemonControlPathReady" "PR template protects daemon control readiness gates."
 
 check_contains "bug-readonly" ".github/ISSUE_TEMPLATE/bug-report.yml" "read-only diagnostics" "Bug report template starts fan reports with read-only diagnostics."
 check_contains "bug-no-raw-smc" ".github/ISSUE_TEMPLATE/bug-report.yml" "do not run manual fan-write commands or raw SMC tools" "Bug report template blocks unsafe fan-write evidence."

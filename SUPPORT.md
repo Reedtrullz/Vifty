@@ -54,7 +54,7 @@ hardware UUID label that should be redacted or shared privately.
 
 - Do not run `sudo ViftyHelper setFixed`, raw SMC tools, or manual fan-write
   smoke tests when `diagnose --json` reports `state: "blocked"` or
-  `safeToRequestCooling: false`.
+  `safeToRequestCooling: false` or `daemonControlPathReady: false`.
 - Do not retry `viftyctl prepare` or `viftyctl run` while readiness is blocked,
   thermal pressure is critical, sensors are missing, no controllable fans are
   present, fan IDs or RPM ranges are invalid, or Auto restore is pending.

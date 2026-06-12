@@ -109,6 +109,17 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: daemon-control-path-ready
+    attributes:
+      label: Daemon control path ready
+      description: What did `daemonControlPathReady` report in `viftyctl diagnose --json`? Supported-hardware validation should be true; false means repair the helper before manual or agent cooling.
+      options:
+        - "true"
+        - "false"
+    validations:
+      required: true
+
   - type: textarea
     id: diagnose-json
     attributes:

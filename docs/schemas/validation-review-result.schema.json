@@ -26,6 +26,7 @@
     "diagnoseState",
     "recommendedAgentAction",
     "safeToRequestCooling",
+    "daemonControlPathReady",
     "modelIdentifier",
     "isAppleSilicon",
     "isMacBookPro",
@@ -103,6 +104,9 @@
       "$ref": "#/$defs/nullableString"
     },
     "safeToRequestCooling": {
+      "$ref": "#/$defs/nullableBoolean"
+    },
+    "daemonControlPathReady": {
       "$ref": "#/$defs/nullableBoolean"
     },
     "modelIdentifier": {

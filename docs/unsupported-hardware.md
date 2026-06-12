@@ -2,7 +2,7 @@
 
 Vifty's fan-control support scope is intentionally narrow: Apple Silicon MacBook Pro models on macOS 15+, validated by real reports. Other Macs should remain under macOS automatic fan control.
 
-Unsupported hardware safe block is expected behavior, not a bug to bypass. When a machine is outside the write-control scope, `viftyctl diagnose --json` should report `state: "blocked"`, `safeToRequestCooling: false`, and a recovery action such as `collectHardwareEvidence` or `backOffWorkload`; the app, helper, daemon, and local agent paths should refuse manual or agent cooling.
+Unsupported hardware safe block is expected behavior, not a bug to bypass. When a machine is outside the write-control scope, `viftyctl diagnose --json` should report `state: "blocked"`, `safeToRequestCooling: false`, `daemonControlPathReady: true`, and a recovery action such as `collectHardwareEvidence` or `backOffWorkload`; the app, helper, daemon, and local agent paths should refuse manual or agent cooling. If `daemonControlPathReady` is false, treat the report as helper/daemon repair evidence rather than unsupported-hardware proof.
 
 ## Unsupported Scope
 
@@ -24,11 +24,12 @@ On unsupported hardware, Vifty should:
 - fail closed for manual, curve, and agent-cooling requests;
 - return a blocked readiness report from `viftyctl diagnose --json`;
 - set `safeToRequestCooling: false`;
+- keep `daemonControlPathReady: true` when the daemon paths are available so the report proves hardware policy rather than helper outage;
 - set a machine-readable `recommendedRecoveryAction` for the follow-up path;
 - avoid raw SMC writes and helper fan-write fallback paths;
 - preserve read-only evidence for triage and compatibility reporting.
 
-Local agents must treat `safeToRequestCooling: false`, `recommendedAgentAction: "doNotRequestCooling"`, and `state: "blocked"` as hard stops, then follow `recommendedRecoveryAction` without parsing check prose. They may continue the workload without Vifty cooling only when the user explicitly wants that.
+Local agents must treat `safeToRequestCooling: false`, `daemonControlPathReady: false`, `recommendedAgentAction: "doNotRequestCooling"`, and `state: "blocked"` as hard stops, then follow `recommendedRecoveryAction` without parsing check prose. They may continue the workload without Vifty cooling only when the user explicitly wants that.
 
 ## Safe Evidence To Collect
 

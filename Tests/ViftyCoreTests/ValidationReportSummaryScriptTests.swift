@@ -81,6 +81,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(json["manualSmokePassedReports"] as? Int, 1)
         XCTAssertEqual(json["agentRunSmokePassedReports"] as? Int, 1)
         XCTAssertEqual(json["validatedHardwareReports"] as? Int, 1)
+        let reports = try XCTUnwrap(json["reports"] as? [[String: Any]])
+        XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
         XCTAssertEqual(countsByClaim["validated-hardware-evidence"], 1)
@@ -122,6 +124,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(claimValues.contains("supported-hardware-evidence-needs-manual-smoke"))
         XCTAssertTrue(claimValues.contains("release-trust-evidence"))
         XCTAssertTrue(claimValues.contains("safe-block-evidence"))
+        let report = try XCTUnwrap(defs["report"] as? [String: Any])
+        let reportRequired = try XCTUnwrap(report["required"] as? [String])
+        XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
         let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
         let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
         XCTAssertTrue(installSourceValues.contains(""))
@@ -147,6 +152,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "sourceSHA",
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
+            "daemonControlPathReady",
             "manualSmokeTestResult",
             "agentRunSmokeResult",
             "failures",
@@ -257,6 +263,23 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("sourceArtifactBytes must be a positive integer"))
     }
 
+    func testSummarizerRejectsReviewResultWithoutDaemonControlPathReadiness() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "missing-control-path-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            includeDaemonControlPathReady: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("daemonControlPathReady must be true or false"))
+    }
+
     func testSummarizerRejectsReviewResultThatRanCoolingCommands() throws {
         let harness = try ValidationReportSummaryHarness()
         let reviewURL = try harness.writeReviewResult(
@@ -330,6 +353,8 @@ private final class ValidationReportSummaryHarness {
         mode: String,
         modelIdentifier: String,
         safeToRequestCooling: Bool,
+        daemonControlPathReady: Bool = true,
+        includeDaemonControlPathReady: Bool = true,
         manualSmokeTestResult: String = "not-recorded",
         manualSmokeTestSource: String = "",
         agentRunSmokeResult: String = "not-recorded",
@@ -381,6 +406,9 @@ private final class ValidationReportSummaryHarness {
         ]
         if includeSchemaID {
             json["schemaID"] = schemaID
+        }
+        if includeDaemonControlPathReady {
+            json["daemonControlPathReady"] = daemonControlPathReady
         }
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: url)

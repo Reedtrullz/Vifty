@@ -196,6 +196,11 @@ ruby -rjson -rcsv -rfileutils -e '
       valid = false
     end
 
+    unless [true, false].include?(result["daemonControlPathReady"])
+      failures << "#{path} daemonControlPathReady must be true or false"
+      valid = false
+    end
+
     unless result["warnings"].is_a?(Array)
       failures << "#{path} warnings must be an array"
       valid = false
@@ -288,6 +293,7 @@ ruby -rjson -rcsv -rfileutils -e '
       "isMacBookPro" => boolean_string(result["isMacBookPro"]),
       "diagnoseState" => result["diagnoseState"].to_s,
       "safeToRequestCooling" => boolean_string(result["safeToRequestCooling"]),
+      "daemonControlPathReady" => boolean_string(result["daemonControlPathReady"]),
       "manualSmokeRequired" => boolean_string(manual_smoke_required),
       "warningCount" => warnings.count.to_s,
       "failureCount" => failures_list.count.to_s
@@ -352,6 +358,7 @@ ruby -rjson -rcsv -rfileutils -e '
     isMacBookPro
     diagnoseState
     safeToRequestCooling
+    daemonControlPathReady
     manualSmokeRequired
     warningCount
     failureCount

@@ -66,7 +66,7 @@ Vifty refuses or restores control when safety inputs are not trustworthy, includ
 - sensor loss during curve or lease control;
 - helper or daemon uncertainty on fan writes.
 
-Unsupported-hardware behavior is defined in [unsupported-hardware.md](unsupported-hardware.md). A safe block keeps the Mac under macOS Auto, reports `safeToRequestCooling: false`, and must not be bypassed with helper or raw SMC fan writes.
+Unsupported-hardware behavior is defined in [unsupported-hardware.md](unsupported-hardware.md). A safe block keeps the Mac under macOS Auto, reports `safeToRequestCooling: false` with `daemonControlPathReady: true` when daemon paths are available, and must not be bypassed with helper or raw SMC fan writes.
 
 Manual control uses an unclean-exit marker so the next launch can restore Auto if Vifty exited while manual fan control was active.
 

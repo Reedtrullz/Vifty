@@ -49,6 +49,23 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "support-safe-to-request", in: checks), "blocked")
     }
 
+    func testCheckerRejectsMissingDaemonControlPathSupportGate() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let supportURL = harness.rootURL.appendingPathComponent("SUPPORT.md")
+        let support = try String(contentsOf: supportURL, encoding: .utf8)
+            .replacingOccurrences(of: " or `daemonControlPathReady: false`", with: "")
+        try support.write(to: supportURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try result.json()
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "support-daemon-control-path", in: checks), "blocked")
+    }
+
     private func checkStatus(named name: String, in checks: [[String: Any]]) -> String? {
         checks.first { $0["name"] as? String == name }?["status"] as? String
     }

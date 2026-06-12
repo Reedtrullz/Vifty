@@ -605,6 +605,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "diagnoseState" => diagnose["state"],
       "recommendedAgentAction" => diagnose["recommendedAgentAction"],
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
+      "daemonControlPathReady" => diagnose["daemonControlPathReady"],
       "modelIdentifier" => diagnose["modelIdentifier"],
       "isAppleSilicon" => diagnose["isAppleSilicon"],
       "isMacBookPro" => diagnose["isMacBookPro"],
@@ -760,6 +761,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     unless diagnose["safeToRequestCooling"] == true
       failures << "supported hardware reports must have safeToRequestCooling=true"
     end
+    unless diagnose["daemonControlPathReady"] == true
+      failures << "supported hardware reports must have daemonControlPathReady=true"
+    end
     unless %w[requestCooling requestCoolingWithCaution].include?(diagnose["recommendedAgentAction"].to_s)
       failures << "supported hardware reports must recommend requestCooling or requestCoolingWithCaution"
     end
@@ -812,6 +816,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     unless diagnose["safeToRequestCooling"] == false
       failures << "unsupported hardware reports must have safeToRequestCooling=false"
+    end
+    unless diagnose["daemonControlPathReady"] == true
+      failures << "unsupported hardware reports must have daemonControlPathReady=true so the safe block proves hardware policy, not helper outage"
     end
     unless diagnose["recommendedAgentAction"].to_s == "doNotRequestCooling"
       failures << "unsupported hardware reports must recommend doNotRequestCooling"

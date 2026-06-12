@@ -166,7 +166,7 @@ Use this output rather than hardcoding policy limits, schema paths/resource path
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 
-Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
+Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
 
 For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell runners, see [agent-integrations.md](agent-integrations.md).
 

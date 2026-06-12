@@ -13,6 +13,15 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("manual fan-write smoke-test result is not recorded"))
     }
 
+    func testReviewRejectsSupportedHardwareWhenDaemonControlPathIsNotReady() throws {
+        let harness = try ValidationEvidenceReviewHarness(daemonControlPathReady: false)
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("supported hardware reports must have daemonControlPathReady=true"))
+    }
+
     func testReviewAcceptsCapabilitiesUnavailableWhenStaticContractEvidencePasses() throws {
         let harness = try ValidationEvidenceReviewHarness(capabilitiesStatus: "69")
 
@@ -173,6 +182,19 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode unsupported-hardware"))
+    }
+
+    func testReviewRejectsUnsupportedHardwareWhenDaemonControlPathIsNotReady() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            diagnoseStatus: "75",
+            diagnose: .unsupportedBlocked,
+            daemonControlPathReady: false
+        )
+
+        let result = try harness.runReview(mode: "unsupported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("unsupported hardware reports must have daemonControlPathReady=true"))
     }
 
     func testReviewAcceptsInstalledReleaseTrustEvidenceBundle() throws {
@@ -348,6 +370,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["diagnoseState"] as? String, "ready")
         XCTAssertEqual(summary["recommendedAgentAction"] as? String, "requestCooling")
         XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(summary["isAppleSilicon"] as? Bool, true)
         XCTAssertEqual(summary["isMacBookPro"] as? Bool, true)
@@ -498,6 +521,10 @@ private enum ValidationEvidenceDiagnoseFixture {
         }
     }
 
+    var daemonControlPathReady: Bool {
+        true
+    }
+
     var isAppleSilicon: Bool {
         switch self {
         case .supportedReady:
@@ -545,6 +572,7 @@ private final class ValidationEvidenceReviewHarness {
         schemaResourcesText: String? = nil,
         capabilitiesSchemaResourcesText: String? = nil,
         capabilitiesContractText: String? = nil,
+        daemonControlPathReady: Bool? = nil,
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
@@ -622,7 +650,7 @@ private final class ValidationEvidenceReviewHarness {
             contents: capabilitiesSchemaResourcesText ?? Self.defaultCapabilitiesSchemaResourcesTSV
         )
         try writeText("capabilities-contract.tsv", contents: capabilitiesContractText ?? Self.defaultCapabilitiesContractTSV)
-        try writeDiagnose(diagnose)
+        try writeDiagnose(diagnose, daemonControlPathReady: daemonControlPathReady ?? diagnose.daemonControlPathReady)
         try writeJSON(
             "viftyctl-audit.json",
             [
@@ -853,7 +881,10 @@ private final class ValidationEvidenceReviewHarness {
         )
     }
 
-    private func writeDiagnose(_ fixture: ValidationEvidenceDiagnoseFixture) throws {
+    private func writeDiagnose(
+        _ fixture: ValidationEvidenceDiagnoseFixture,
+        daemonControlPathReady: Bool
+    ) throws {
         let supportedPasses = fixture.supportedHardwareCheckPasses
         let json: [String: Any] = [
             "schemaVersion": 1,
@@ -861,6 +892,7 @@ private final class ValidationEvidenceReviewHarness {
             "state": fixture.status,
             "recommendedAgentAction": fixture.recommendedAgentAction,
             "safeToRequestCooling": fixture.safeToRequestCooling,
+            "daemonControlPathReady": daemonControlPathReady,
             "modelIdentifier": supportedPasses ? "MacBookPro18,3" : "Mac14,2",
             "isAppleSilicon": fixture.isAppleSilicon,
             "isMacBookPro": fixture.isMacBookPro,
@@ -911,6 +943,14 @@ private final class ValidationEvidenceReviewHarness {
                     "severity": "info",
                     "passed": true,
                     "message": "Agent control status is available."
+                ],
+                [
+                    "id": "daemonControlPathReady",
+                    "severity": "error",
+                    "passed": daemonControlPathReady,
+                    "message": daemonControlPathReady
+                        ? "Daemon-backed control path is ready for bounded agent cooling requests."
+                        : "Daemon-backed control path is unavailable; repair the helper before requesting cooling."
                 ],
                 [
                     "id": "supportedHardware",

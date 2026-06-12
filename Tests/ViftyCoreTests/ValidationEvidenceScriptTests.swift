@@ -1070,7 +1070,7 @@ private final class ValidationEvidenceHarness {
         fi
 
         if [ "$#" -eq 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
-          printf '{"schemaVersion":1,"state":"\(diagnoseState)","checks":[]}\\n'
+          printf '{"schemaVersion":1,"state":"\(diagnoseState)","safeToRequestCooling":\(diagnoseState == "blocked" ? "false" : "true"),"daemonControlPathReady":\(diagnoseState == "blocked" ? "false" : "true"),"checks":[]}\\n'
           exit \(diagnoseExitCode)
         fi
 

@@ -88,7 +88,7 @@ Escalate a report before suggesting any fan-write test when:
 
 ## Compatibility Claims
 
-Only update [compatibility.md](compatibility.md) from reviewed `review-result.json` files. Use [hardware-validation.md](hardware-validation.md) for collection and `scripts/summarize-validation-reports.sh` for indexes. Keep `installSource`, `sourceRef`, `sourceSHA`, `sourceArtifactSHA256`, `agentRunSmokeResult`, and `agentRunSmokeSource` visible when moving reports into compatibility indexes, especially for source-first `v1.1.1` reports. A supported-hardware report becomes validated hardware evidence only when the review result includes:
+Only update [compatibility.md](compatibility.md) from reviewed `review-result.json` files. Use [hardware-validation.md](hardware-validation.md) for collection and `scripts/summarize-validation-reports.sh` for indexes. Keep `installSource`, `sourceRef`, `sourceSHA`, `sourceArtifactSHA256`, `daemonControlPathReady`, `agentRunSmokeResult`, and `agentRunSmokeSource` visible when moving reports into compatibility indexes, especially for source-first `v1.1.1` reports. A supported-hardware report becomes validated hardware evidence only when the review result includes:
 
 ```json
 "manualSmokeTestResult": "passed-auto-restored"

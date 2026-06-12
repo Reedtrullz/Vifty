@@ -77,6 +77,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentCoolingTemplate.contains("Auto restore state"))
         XCTAssertTrue(agentCoolingTemplate.contains("I did not run raw SMC commands"))
         XCTAssertTrue(agentCoolingTemplate.contains("safeToRequestCooling: false"))
+        XCTAssertTrue(agentCoolingTemplate.contains("daemonControlPathReady: false"))
         XCTAssertTrue(agentCoolingTemplate.contains("restoreAutoBeforeRequestingCooling"))
         XCTAssertTrue(triage.contains("Release trust"))
         XCTAssertTrue(triage.contains("Hardware validation"))
@@ -100,6 +101,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("Do not ask reporters to run raw SMC writes"))
         XCTAssertTrue(triage.contains("manualSmokeTestResult"))
         XCTAssertTrue(triage.contains("passed-auto-restored"))
+        XCTAssertTrue(triage.contains("daemonControlPathReady"))
     }
 
     func testAgentCoolingTemplateKeepsBlockedReadinessEvidenceOnly() throws {
@@ -107,6 +109,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(agentCoolingTemplate.contains("state: \"blocked\""))
         XCTAssertTrue(agentCoolingTemplate.contains("safeToRequestCooling: false"))
+        XCTAssertTrue(agentCoolingTemplate.contains("daemonControlPathReady: false"))
         XCTAssertTrue(agentCoolingTemplate.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
         XCTAssertTrue(agentCoolingTemplate.contains("paste the blocked diagnose JSON plus `status --json` and `audit --limit 20 --json` instead"))
         XCTAssertTrue(agentCoolingTemplate.contains("Readiness blocked before cooling request"))
@@ -319,7 +322,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let bugReportTemplate = try read(".github/ISSUE_TEMPLATE/bug-report.yml")
 
         XCTAssertTrue(bugReportTemplate.contains("For fan, sensor, helper, or agent-cooling bugs, start with read-only diagnostics where possible."))
-        XCTAssertTrue(bugReportTemplate.contains("If `viftyctl diagnose --json` reports unsupported hardware or `safeToRequestCooling: false`"))
+        XCTAssertTrue(bugReportTemplate.contains("If `viftyctl diagnose --json` reports unsupported hardware, `safeToRequestCooling: false`, or `daemonControlPathReady: false`"))
         XCTAssertTrue(bugReportTemplate.contains("do not run manual fan-write commands or raw SMC tools"))
         XCTAssertTrue(bugReportTemplate.contains("leave helper probe output blank unless a maintainer asks for it"))
         XCTAssertTrue(bugReportTemplate.contains("For supported Apple Silicon MacBook Pro hardware/sensor/fan bugs"))
@@ -352,6 +355,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(template.contains("reject arbitrary keys"))
         XCTAssertTrue(template.contains("invalid fan IDs"))
         XCTAssertTrue(template.contains("safeToRequestCooling"))
+        XCTAssertTrue(template.contains("daemonControlPathReady"))
         XCTAssertTrue(template.contains("recommendedAgentAction"))
         XCTAssertTrue(template.contains("fail closed"))
         XCTAssertTrue(template.contains("manual fan-write smoke tests when readiness is blocked"))
@@ -559,9 +563,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(workplan.contains("Post-release local hardening is on `main` after the published `v1.1.1` source-first hotfix tag"))
         XCTAssertTrue(workplan.contains("`a82f2237ff39c24a6b366dca8f95a17ee54fd972`"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies 469 XCTest cases"))
+        XCTAssertTrue(workplan.contains("current local trust gate verifies the full XCTest suite"))
         XCTAssertTrue(workplan.contains("command-error recovery-action metadata"))
         XCTAssertTrue(workplan.contains("readiness recovery-action metadata"))
+        XCTAssertTrue(workplan.contains("daemon control-path readiness evidence"))
         XCTAssertTrue(workplan.contains("guarded-run readiness recovery-action checks"))
         XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("validation report index schema"))
@@ -580,12 +585,14 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("directControlLifecycle"))
         XCTAssertTrue(workplan.contains("restore-auto scoped-option rejection"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
+        XCTAssertTrue(workplan.contains("`recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady`"))
         XCTAssertTrue(workplan.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
         XCTAssertTrue(workplan.contains("duplicate wrapper options"))
         XCTAssertTrue(workplan.contains("do not retag `v1.1.0` or `v1.1.1`"))
         XCTAssertTrue(workplan.contains("not a silent retag"))
         XCTAssertTrue(workplan.contains("do not promote Homebrew until the future Developer ID lane passes"))
         XCTAssertFalse(workplan.contains("435 XCTest cases"))
+        XCTAssertFalse(workplan.contains("469 XCTest cases"))
         XCTAssertFalse(workplan.contains("current local trust gate verifies 463 XCTest cases"))
         XCTAssertFalse(workplan.contains("446 XCTest cases"))
         XCTAssertFalse(workplan.contains("445 XCTest cases"))
