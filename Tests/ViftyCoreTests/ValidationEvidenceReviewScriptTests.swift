@@ -22,6 +22,15 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("supported hardware reports must have daemonControlPathReady=true"))
     }
 
+    func testReviewRejectsDiagnoseWithoutRecommendedRecoveryAction() throws {
+        let harness = try ValidationEvidenceReviewHarness(includeRecommendedRecoveryAction: false)
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("viftyctl-diagnose.json recommendedRecoveryAction must be one of"))
+    }
+
     func testReviewAcceptsCapabilitiesUnavailableWhenStaticContractEvidencePasses() throws {
         let harness = try ValidationEvidenceReviewHarness(capabilitiesStatus: "69")
 
@@ -369,6 +378,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "12345")
         XCTAssertEqual(summary["diagnoseState"] as? String, "ready")
         XCTAssertEqual(summary["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(summary["recommendedRecoveryAction"] as? String, "none")
         XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,3")
@@ -512,6 +522,15 @@ private enum ValidationEvidenceDiagnoseFixture {
         }
     }
 
+    var recommendedRecoveryAction: String {
+        switch self {
+        case .supportedReady:
+            "none"
+        case .unsupportedBlocked:
+            "collectHardwareEvidence"
+        }
+    }
+
     var safeToRequestCooling: Bool {
         switch self {
         case .supportedReady:
@@ -573,6 +592,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaResourcesText: String? = nil,
         capabilitiesContractText: String? = nil,
         daemonControlPathReady: Bool? = nil,
+        includeRecommendedRecoveryAction: Bool = true,
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
         releaseArtifactStatus: String = "skipped",
@@ -650,7 +670,11 @@ private final class ValidationEvidenceReviewHarness {
             contents: capabilitiesSchemaResourcesText ?? Self.defaultCapabilitiesSchemaResourcesTSV
         )
         try writeText("capabilities-contract.tsv", contents: capabilitiesContractText ?? Self.defaultCapabilitiesContractTSV)
-        try writeDiagnose(diagnose, daemonControlPathReady: daemonControlPathReady ?? diagnose.daemonControlPathReady)
+        try writeDiagnose(
+            diagnose,
+            daemonControlPathReady: daemonControlPathReady ?? diagnose.daemonControlPathReady,
+            includeRecommendedRecoveryAction: includeRecommendedRecoveryAction
+        )
         try writeJSON(
             "viftyctl-audit.json",
             [
@@ -883,10 +907,11 @@ private final class ValidationEvidenceReviewHarness {
 
     private func writeDiagnose(
         _ fixture: ValidationEvidenceDiagnoseFixture,
-        daemonControlPathReady: Bool
+        daemonControlPathReady: Bool,
+        includeRecommendedRecoveryAction: Bool
     ) throws {
         let supportedPasses = fixture.supportedHardwareCheckPasses
-        let json: [String: Any] = [
+        var json: [String: Any] = [
             "schemaVersion": 1,
             "generatedAt": 700000000,
             "state": fixture.status,
@@ -962,6 +987,9 @@ private final class ValidationEvidenceReviewHarness {
                 ]
             ]
         ]
+        if includeRecommendedRecoveryAction {
+            json["recommendedRecoveryAction"] = fixture.recommendedRecoveryAction
+        }
         try writeJSON("viftyctl-diagnose.json", json)
     }
 

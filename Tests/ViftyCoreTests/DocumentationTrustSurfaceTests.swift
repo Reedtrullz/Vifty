@@ -573,7 +573,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("validation report index schema"))
         XCTAssertTrue(workplan.contains("validation review-result schema"))
-        XCTAssertTrue(workplan.contains("preserves daemon control-path readiness in compatibility indexes"))
+        XCTAssertTrue(workplan.contains("preserves recovery guidance and daemon control-path readiness in compatibility indexes"))
         XCTAssertTrue(workplan.contains("source-first Source Provenance enforcement"))
         XCTAssertTrue(workplan.contains("Source-first release operations now have Makefile targets"))
         XCTAssertTrue(workplan.contains("source-provenance section"))

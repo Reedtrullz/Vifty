@@ -25,6 +25,7 @@
     "sourceArtifactBytes",
     "diagnoseState",
     "recommendedAgentAction",
+    "recommendedRecoveryAction",
     "safeToRequestCooling",
     "daemonControlPathReady",
     "modelIdentifier",
@@ -102,6 +103,9 @@
     },
     "recommendedAgentAction": {
       "$ref": "#/$defs/nullableString"
+    },
+    "recommendedRecoveryAction": {
+      "$ref": "#/$defs/nullableReadinessRecoveryAction"
     },
     "safeToRequestCooling": {
       "$ref": "#/$defs/nullableBoolean"
@@ -201,6 +205,27 @@
         "local-developer-id-build",
         "local-ad-hoc-build",
         "other"
+      ]
+    },
+    "readinessRecoveryAction": {
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence"
+      ]
+    },
+    "nullableReadinessRecoveryAction": {
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence",
+        null
       ]
     },
     "gitSHA": {

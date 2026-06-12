@@ -62,6 +62,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
         XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3"))
+        XCTAssertTrue(tsv.contains("MacBookPro18,3\ttrue\ttrue\tready\tnone\ttrue\ttrue"))
+        XCTAssertTrue(tsv.contains("Mac14,2\ttrue\tfalse\tblocked\tcollectHardwareEvidence\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
@@ -83,6 +85,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(json["validatedHardwareReports"] as? Int, 1)
         let reports = try XCTUnwrap(json["reports"] as? [[String: Any]])
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
+        XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
         XCTAssertEqual(countsByClaim["validated-hardware-evidence"], 1)
@@ -127,6 +130,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let report = try XCTUnwrap(defs["report"] as? [String: Any])
         let reportRequired = try XCTUnwrap(report["required"] as? [String])
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
+        XCTAssertTrue(reportRequired.contains("recommendedRecoveryAction"))
         let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
         let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
         XCTAssertTrue(installSourceValues.contains(""))
@@ -152,6 +156,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "sourceSHA",
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
+            "recommendedRecoveryAction",
             "daemonControlPathReady",
             "manualSmokeTestResult",
             "agentRunSmokeResult",
@@ -280,6 +285,23 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("daemonControlPathReady must be true or false"))
     }
 
+    func testSummarizerRejectsReviewResultWithoutRecommendedRecoveryAction() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "missing-recovery-action-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            includeRecommendedRecoveryAction: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("recommendedRecoveryAction is not a supported value"))
+    }
+
     func testSummarizerRejectsReviewResultThatRanCoolingCommands() throws {
         let harness = try ValidationReportSummaryHarness()
         let reviewURL = try harness.writeReviewResult(
@@ -355,6 +377,7 @@ private final class ValidationReportSummaryHarness {
         safeToRequestCooling: Bool,
         daemonControlPathReady: Bool = true,
         includeDaemonControlPathReady: Bool = true,
+        includeRecommendedRecoveryAction: Bool = true,
         manualSmokeTestResult: String = "not-recorded",
         manualSmokeTestSource: String = "",
         agentRunSmokeResult: String = "not-recorded",
@@ -409,6 +432,9 @@ private final class ValidationReportSummaryHarness {
         }
         if includeDaemonControlPathReady {
             json["daemonControlPathReady"] = daemonControlPathReady
+        }
+        if includeRecommendedRecoveryAction {
+            json["recommendedRecoveryAction"] = mode == "unsupported-hardware" ? "collectHardwareEvidence" : "none"
         }
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: url)

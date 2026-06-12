@@ -523,6 +523,19 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "#{field} must be a lowercase 64-character SHA-256 checksum"
   end
 
+  def require_recommended_recovery_action(value, field, failures)
+    return if %w[
+      none
+      repairHelper
+      restoreAutoBeforeRetry
+      backOffWorkload
+      inspectPolicy
+      collectHardwareEvidence
+    ].include?(value.to_s)
+
+    failures << "#{field} must be one of none, repairHelper, restoreAutoBeforeRetry, backOffWorkload, inspectPolicy, collectHardwareEvidence"
+  end
+
   def require_git_sha(value, field, failures)
     return if value.to_s.empty? || value.to_s.match?(/\A[0-9a-f]{40}\z/)
 
@@ -604,6 +617,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "sourceArtifactBytes" => install_fields["sourceArtifactBytes"].to_s,
       "diagnoseState" => diagnose["state"],
       "recommendedAgentAction" => diagnose["recommendedAgentAction"],
+      "recommendedRecoveryAction" => diagnose["recommendedRecoveryAction"],
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
       "daemonControlPathReady" => diagnose["daemonControlPathReady"],
       "modelIdentifier" => diagnose["modelIdentifier"],
@@ -749,6 +763,11 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     next unless check.is_a?(Hash) && check["id"]
     diagnose_checks[check["id"].to_s] = check
   end
+  require_recommended_recovery_action(
+    diagnose["recommendedRecoveryAction"],
+    "viftyctl-diagnose.json recommendedRecoveryAction",
+    failures
+  )
 
   case mode
   when "supported-hardware"

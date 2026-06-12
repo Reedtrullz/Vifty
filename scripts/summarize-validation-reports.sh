@@ -158,6 +158,18 @@ ruby -rjson -rcsv -rfileutils -e '
       valid = false
     end
 
+    unless %w[
+      none
+      repairHelper
+      restoreAutoBeforeRetry
+      backOffWorkload
+      inspectPolicy
+      collectHardwareEvidence
+    ].include?(result.fetch("recommendedRecoveryAction", "").to_s)
+      failures << "#{path} recommendedRecoveryAction is not a supported value"
+      valid = false
+    end
+
     install_source = result.fetch("installSource", "").to_s
     unless install_source.empty? || %w[
       not-recorded
@@ -292,6 +304,7 @@ ruby -rjson -rcsv -rfileutils -e '
       "isAppleSilicon" => boolean_string(result["isAppleSilicon"]),
       "isMacBookPro" => boolean_string(result["isMacBookPro"]),
       "diagnoseState" => result["diagnoseState"].to_s,
+      "recommendedRecoveryAction" => result["recommendedRecoveryAction"].to_s,
       "safeToRequestCooling" => boolean_string(result["safeToRequestCooling"]),
       "daemonControlPathReady" => boolean_string(result["daemonControlPathReady"]),
       "manualSmokeRequired" => boolean_string(manual_smoke_required),
@@ -357,6 +370,7 @@ ruby -rjson -rcsv -rfileutils -e '
     isAppleSilicon
     isMacBookPro
     diagnoseState
+    recommendedRecoveryAction
     safeToRequestCooling
     daemonControlPathReady
     manualSmokeRequired

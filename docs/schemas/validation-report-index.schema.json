@@ -130,6 +130,16 @@
         "other"
       ]
     },
+    "readinessRecoveryAction": {
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence"
+      ]
+    },
     "gitSHA": {
       "type": "string",
       "pattern": "^([0-9a-f]{40})?$"
@@ -169,6 +179,7 @@
         "isAppleSilicon",
         "isMacBookPro",
         "diagnoseState",
+        "recommendedRecoveryAction",
         "safeToRequestCooling",
         "daemonControlPathReady",
         "manualSmokeRequired",
@@ -235,6 +246,9 @@
         },
         "diagnoseState": {
           "type": "string"
+        },
+        "recommendedRecoveryAction": {
+          "$ref": "#/$defs/readinessRecoveryAction"
         },
         "safeToRequestCooling": {
           "$ref": "#/$defs/booleanString"
