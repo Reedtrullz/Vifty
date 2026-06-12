@@ -102,6 +102,7 @@ check_contains "support-readiness" "SUPPORT.md" "viftyctl diagnose --json" "Supp
 check_contains "support-audit" "SUPPORT.md" "viftyctl audit --limit 20 --json" "Support includes read-only audit evidence."
 check_contains "support-agent-evidence-collector" "SUPPORT.md" "scripts/collect-agent-cooling-evidence.sh" "Support links the read-only agent/helper evidence collector."
 check_contains "support-agent-launchd-evidence" "SUPPORT.md" "read-only launchd/helper install files" "Support explains helper evidence includes launchd/install files."
+check_contains "support-agent-no-sudo" "SUPPORT.md" '`sudo`, or write SMC keys' "Support explains the agent/helper evidence collector does not use sudo."
 check_contains "support-agent-privacy-review" "SUPPORT.md" "redaction-needed" "Support tells reporters how to handle flagged agent evidence bundles."
 check_contains "support-source-first" "SUPPORT.md" "source-first" "Support preserves current source-first release language."
 check_contains "support-unsigned" "SUPPORT.md" 'unsigned `.app` zip is tester convenience only' "Support distinguishes unsigned tester artifacts."

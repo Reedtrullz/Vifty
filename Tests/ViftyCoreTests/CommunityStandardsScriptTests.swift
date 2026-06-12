@@ -14,6 +14,7 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "support-safe-to-request", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "support-agent-evidence-collector", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "support-agent-launchd-evidence", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "support-agent-no-sudo", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "support-agent-privacy-review", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "agent-template-evidence-collector", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "agent-template-launchd-evidence", in: checks), "passed")

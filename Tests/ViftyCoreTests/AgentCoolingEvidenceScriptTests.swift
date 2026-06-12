@@ -26,6 +26,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         })
 
         XCTAssertTrue(try harness.read("README.txt").contains("does not request cooling leases"))
+        XCTAssertTrue(try harness.read("README.txt").contains("use sudo, or write SMC keys"))
         XCTAssertTrue(try harness.read("README.txt").contains("safeToRequestCooling=false"))
         XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("launchctl-print-daemon.txt"))
