@@ -1,4 +1,4 @@
-.PHONY: app install pkg agent-cooling-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg agent-cooling-evidence agent-cooling-evidence-review source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -9,6 +9,8 @@ UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
 RELEASE_METADATA_MODE ?= source-first
 VIFTYCTL ?= /Applications/Vifty.app/Contents/MacOS/viftyctl
 AGENT_EVIDENCE_OUTPUT ?=
+AGENT_EVIDENCE_BUNDLE ?=
+AGENT_EVIDENCE_REVIEW_SUMMARY ?=
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -47,6 +49,10 @@ pkg: ## Build an unsigned installer .pkg
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
 	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)
+
+agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle
+	@if [ -z "$(AGENT_EVIDENCE_BUNDLE)" ]; then echo "AGENT_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
+	./scripts/review-agent-cooling-evidence.sh --bundle "$(AGENT_EVIDENCE_BUNDLE)" $(if $(AGENT_EVIDENCE_REVIEW_SUMMARY),--summary "$(AGENT_EVIDENCE_REVIEW_SUMMARY)",)
 
 source-first-release-notes: ## Write source-first release notes for the current version
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)"

@@ -125,8 +125,19 @@ schema-backed `agent-cooling-evidence-summary.json` with
 `privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
 calling `ViftyHelper`, using `sudo`, or writing SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
-privately if it reports `redaction-needed`. If the repository scripts are not
-available, collect the same core evidence manually:
+privately if it reports `redaction-needed`. Maintainers can review a collected
+bundle with:
+
+```sh
+scripts/review-agent-cooling-evidence.sh \
+  --bundle <bundle-dir> \
+  --summary <bundle-dir>/agent-cooling-evidence-review.json
+```
+
+The reviewer accepts blocked diagnose exit `75` as evidence and rejects privacy
+findings, schema drift, manifest/status drift, checksum drift, or any record
+that cooling commands were run. If the repository scripts are not available,
+collect the same core evidence manually:
 
 ```sh
 viftyctl capabilities --json

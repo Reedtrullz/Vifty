@@ -195,6 +195,118 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.outputURL.path))
     }
 
+    func testReviewerAcceptsCollectorBundleAndWritesSummary() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stdout.contains("Agent cooling evidence OK"))
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        XCTAssertEqual(reviewSummary["readOnly"] as? Bool, true)
+        XCTAssertEqual(reviewSummary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(reviewSummary["commandsReviewed"] as? Int, 8)
+        XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewerAcceptsBlockedDiagnoseAsReadOnlyEvidence() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseExitCode: 75
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stdout.contains("Agent cooling evidence OK"))
+    }
+
+    func testReviewerRejectsPrivacyFindings() throws {
+        let harness = try AgentCoolingEvidenceHarness(includePrivacyLeak: true)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("privacy-review"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("redaction-needed"), reviewResult.stderr)
+    }
+
+    func testReviewerRejectsSummarySchemaIDDrift() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        var summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        summary["schemaID"] = "https://example.invalid/schema.json"
+        let driftedSummary = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+        try driftedSummary.write(to: harness.outputURL.appendingPathComponent("agent-cooling-evidence-summary.json"))
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("schemaID"), reviewResult.stderr)
+    }
+
+    func testReviewerRejectsMissingChecksumEntry() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let checksums = try harness.read("checksums.tsv")
+        let filteredChecksums = checksums
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.contains("\tviftyctl-diagnose.json") }
+            .joined(separator: "\n")
+        try harness.write("checksums.tsv", filteredChecksums + "\n")
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("checksum"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-diagnose.json"), reviewResult.stderr)
+    }
+
     func testEvidenceSummarySchemaDocumentsCollectorContract() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/agent-cooling-evidence-summary.schema.json")
@@ -287,8 +399,33 @@ private final class AgentCoolingEvidenceHarness {
         )
     }
 
+    func runReviewer(_ arguments: [String]) throws -> AgentCoolingEvidenceProcessResult {
+        let script = repositoryRoot.appendingPathComponent("scripts/review-agent-cooling-evidence.sh")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.currentDirectoryURL = repositoryRoot
+        process.arguments = [script.path] + arguments
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+
+        return AgentCoolingEvidenceProcessResult(
+            exitCode: process.terminationStatus,
+            stdout: String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
+            stderr: String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        )
+    }
+
     func read(_ relativePath: String) throws -> String {
         try String(contentsOf: outputURL.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    func write(_ relativePath: String, _ contents: String) throws {
+        try contents.write(to: outputURL.appendingPathComponent(relativePath), atomically: true, encoding: .utf8)
     }
 
     func readJSON(_ relativePath: String) throws -> [String: Any] {

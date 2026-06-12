@@ -48,6 +48,18 @@ Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`.
 
+Maintainers can review the bundle before triage with:
+
+```sh
+scripts/review-agent-cooling-evidence.sh \
+  --bundle <bundle-dir> \
+  --summary <bundle-dir>/agent-cooling-evidence-review.json
+```
+
+The reviewer rejects schema drift, manifest/status/checksum drift,
+`redaction-needed` privacy findings, and any evidence that says cooling commands
+were run. It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence.
+
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:
 

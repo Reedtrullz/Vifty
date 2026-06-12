@@ -18,8 +18,19 @@ scripts/collect-agent-cooling-evidence.sh \
 It captures `capabilities --json`, `diagnose --json`, `status --json`, and
 `audit --limit 20 --json` plus exit statuses, launchd/helper install evidence,
 a manifest, `privacy-review.tsv`, and checksums. It does not request cooling,
-restore Auto, invoke `ViftyHelper`, use `sudo`, or write SMC keys. If a reporter
-cannot run the script, ask for the same read-only commands manually:
+restore Auto, invoke `ViftyHelper`, use `sudo`, or write SMC keys. Review the
+bundle locally before triage:
+
+```sh
+scripts/review-agent-cooling-evidence.sh \
+  --bundle <bundle-dir> \
+  --summary <bundle-dir>/agent-cooling-evidence-review.json
+```
+
+The reviewer fails on `redaction-needed` privacy findings, schema drift,
+manifest/status/checksum drift, or any evidence that cooling commands were run.
+It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence. If a
+reporter cannot run the script, ask for the same read-only commands manually:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
@@ -47,7 +58,7 @@ For `v1.1.1`, source-first release issues should focus on source tag/CI readines
 
 If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect the read-only agent evidence bundle, `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
 
-The lightweight agent evidence bundle includes schema-backed `agent-cooling-evidence-summary.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`; treat that summary as the machine-readable index for helper-unreachable and agent-cooling support bundles.
+The lightweight agent evidence bundle includes schema-backed `agent-cooling-evidence-summary.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`; treat that summary as the machine-readable index for helper-unreachable and agent-cooling support bundles, and use `scripts/review-agent-cooling-evidence.sh` as the lightweight reviewer before a report becomes evidence.
 
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 

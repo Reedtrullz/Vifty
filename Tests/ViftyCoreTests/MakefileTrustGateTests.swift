@@ -7,6 +7,7 @@ final class MakefileTrustGateTests: XCTestCase {
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
         XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
+        XCTAssertTrue(makefile.contains("agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle"))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))
@@ -14,6 +15,8 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("RELEASE_REPO ?= Reedtrullz/Vifty"))
         XCTAssertTrue(makefile.contains("UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)"))
         XCTAssertTrue(makefile.contains("RELEASE_METADATA_MODE ?= source-first"))
+        XCTAssertTrue(makefile.contains("AGENT_EVIDENCE_BUNDLE ?="))
+        XCTAssertTrue(makefile.contains("AGENT_EVIDENCE_REVIEW_SUMMARY ?="))
         XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh --mode \"$(RELEASE_METADATA_MODE)\""))
@@ -33,10 +36,12 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg agent-cooling-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install pkg agent-cooling-evidence agent-cooling-evidence-review source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
         XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
         XCTAssertTrue(makefile.contains("scripts/collect-agent-cooling-evidence.sh --viftyctl \"$(VIFTYCTL)\""))
+        XCTAssertTrue(makefile.contains("agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle"))
+        XCTAssertTrue(makefile.contains("scripts/review-agent-cooling-evidence.sh --bundle \"$(AGENT_EVIDENCE_BUNDLE)\""))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))

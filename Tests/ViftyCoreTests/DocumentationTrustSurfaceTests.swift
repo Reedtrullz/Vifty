@@ -16,6 +16,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("[docs/agent-integrations.md](docs/agent-integrations.md)"))
         XCTAssertTrue(readme.contains("[examples/viftyctl](examples/viftyctl/README.md)"))
         XCTAssertTrue(readme.contains("scripts/collect-agent-cooling-evidence.sh"))
+        XCTAssertTrue(readme.contains("scripts/review-agent-cooling-evidence.sh"))
     }
 
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
@@ -37,6 +38,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(support.contains("Hardware Validation Report"))
         XCTAssertTrue(support.contains("Agent Cooling Report"))
         XCTAssertTrue(support.contains("scripts/collect-agent-cooling-evidence.sh"))
+        XCTAssertTrue(support.contains("scripts/review-agent-cooling-evidence.sh"))
         XCTAssertTrue(support.contains("It does not request cooling"))
         XCTAssertTrue(support.contains("SMC keys"))
         XCTAssertTrue(support.contains("read-only launchd/helper install files"))
@@ -44,6 +46,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(support.contains("agent-cooling-evidence-summary.json"))
         XCTAssertTrue(support.contains("https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"))
         XCTAssertTrue(support.contains("redaction-needed"))
+        XCTAssertTrue(support.contains("blocked-readiness evidence"))
         XCTAssertTrue(support.contains("`v1.1.1`"))
         XCTAssertTrue(support.contains("source-first"))
         XCTAssertTrue(support.contains("unsigned `.app` zip is tester convenience only"))
@@ -108,9 +111,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("UI or copy"))
         XCTAssertTrue(triage.contains("read-only agent evidence bundle"))
         XCTAssertTrue(triage.contains("scripts/collect-agent-cooling-evidence.sh"))
+        XCTAssertTrue(triage.contains("scripts/review-agent-cooling-evidence.sh"))
         XCTAssertTrue(triage.contains("It captures `capabilities --json`, `diagnose --json`, `status --json`, and"))
         XCTAssertTrue(triage.contains("launchd/helper install evidence"))
         XCTAssertTrue(triage.contains("use `sudo`, or write SMC keys"))
+        XCTAssertTrue(triage.contains("manifest/status/checksum drift"))
+        XCTAssertTrue(triage.contains("blocked-readiness evidence"))
         XCTAssertTrue(triage.contains("lightweight agent"))
         XCTAssertTrue(triage.contains("evidence bundle"))
         XCTAssertTrue(triage.contains("fuller validation evidence bundle"))
