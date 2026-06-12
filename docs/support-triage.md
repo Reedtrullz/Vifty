@@ -6,7 +6,19 @@ Do not ask reporters to run raw SMC writes, `sudo ViftyHelper setFixed`, or manu
 
 ## First Response
 
-Ask for the least invasive evidence that answers the triage question:
+Ask for the least invasive evidence that answers the triage question. For
+agent/build/test cooling, helper-unreachable, rate-limit, expired-lease, and
+restore-failure reports, prefer the read-only agent evidence bundle:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+It captures `capabilities --json`, `diagnose --json`, `status --json`, and
+`audit --limit 20 --json` plus exit statuses, a manifest, and checksums. It does
+not request cooling, restore Auto, invoke `ViftyHelper`, or write SMC keys. If a
+reporter cannot run the script, ask for the same read-only commands manually:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
@@ -32,7 +44,7 @@ scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --s
 
 For `v1.1.1`, source-first release issues should focus on source tag/CI readiness, release-note warnings, unsigned-dev artifact naming/checksum, and the explicit source-first trust boundary. Do not ask users to verify Developer ID signing, notarization, stapling, or Homebrew trust for `v1.1.1`; those checks apply only to a future `--mode developer-id` release.
 
-If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect read-only `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
+If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect the read-only agent evidence bundle, `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
 
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
@@ -45,9 +57,9 @@ Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A
 | Release trust | Source-first warning drift, unsigned-dev artifact naming/checksum, known source-first helper issue, Gatekeeper, notarization, cask SHA, TeamID, missing release assets, release-readiness blocker, stale release tag, or bundle-version mismatch | Release Trust Report issue, `scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --json`, optional `--require-source-ref <candidate-ref-or-sha>` for unpublished candidates, future Developer ID `--mode developer-id` readiness, `scripts/verify-release-artifact.sh --team-id <TEAMID>`, collector bundle, `review-result.json` | Do not promote the release or cask until the correct mode's readiness passes; do not treat unsigned-dev artifacts as trusted binaries, and cut a new source-first hotfix instead of retagging a flawed source release. |
 | Hardware validation | New Apple Silicon MacBook Pro model, missing compatibility row, or smoke-test report | Hardware Validation Report issue, `diagnose --json`, `probeLocal`, collector bundle | Keep the model as needs validation until review passes and manual smoke records Auto restore. |
 | Unsupported hardware safe block | Non-MacBook-Pro, Intel, or unsupported Apple Silicon reports `blocked` | `diagnose --json`, optional collector bundle, [unsupported-hardware.md](unsupported-hardware.md) | Treat safe blocking as expected behavior; do not suggest bypasses. |
-| Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, fallback fan telemetry with daemon not responding, Login Items approval, empty fan snapshot, or manual controls blocked by helper state | `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper so the app copies the daemon, strips quarantine, and restarts launchd, approve Login Items if macOS asks, then rerun read-only diagnostics. |
+| Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, fallback fan telemetry with daemon not responding, Login Items approval, empty fan snapshot, or manual controls blocked by helper state | Read-only agent evidence bundle, `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper so the app copies the daemon, strips quarantine, and restarts launchd, approve Login Items if macOS asks, then rerun read-only diagnostics. |
 | SMC key or fan telemetry drift | Fan count/range/mode missing, `hardwareMode` unknown, fan mode-key casing drift, no controllable fans on supported hardware | `probeLocal`, `diagnose --json`, model identifier, macOS version | Keep fan writes blocked until fan IDs, ranges, mode-key casing, and mode/target telemetry are understood. |
-| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json` | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending. |
+| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, read-only agent evidence bundle or manual `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json` | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending. |
 | UI or copy | Confusing owner/helper state, profile preset behavior, power/thermal display | screenshot, macOS version, `diagnose --json` if fan state is involved | Fix copy/state without changing SMC behavior unless evidence shows a control bug. |
 
 ## Labels

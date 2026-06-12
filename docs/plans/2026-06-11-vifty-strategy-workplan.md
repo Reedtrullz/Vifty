@@ -198,6 +198,7 @@ Current progress:
 - Agent audit history is now local, private by default, capped to the most recent 2,000 events, and available through a bounded read-only `viftyctl audit` export so lease observability does not become unbounded local retention.
 - `docs/support-triage.md` routes release trust, hardware validation, unsupported hardware, helper install, SMC telemetry drift, agent-cooling, and UI reports to read-only evidence and escalation rules before maintainers ask for any fan-write tests.
 - `.github/ISSUE_TEMPLATE/agent-cooling.yml` collects exact `viftyctl` commands, diagnose/status/audit JSON, stdout/stderr, Auto-restore state, and no-raw-SMC safety confirmations for agent/build/test cooling failures; blocked readiness is explicitly evidence-only and tells reporters: do not retry `viftyctl prepare` or `viftyctl run` while diagnose says cooling is unsafe.
+- `scripts/collect-agent-cooling-evidence.sh` gives agent/helper reports a narrow read-only bundle path that captures `capabilities`, `diagnose`, `status`, and bounded `audit` JSON plus exit statuses, a manifest, and checksums without requesting cooling, restoring Auto, calling `ViftyHelper`, or writing SMC keys.
 
 Exit criteria:
 

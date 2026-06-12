@@ -10,6 +10,14 @@ body:
 
         Please collect read-only evidence first. Do not run raw SMC commands, `sudo ViftyHelper setFixed`, or manual fan-write tests when readiness is blocked.
 
+        Preferred evidence bundle:
+
+        ```sh
+        scripts/collect-agent-cooling-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+        ```
+
+        This captures `capabilities --json`, `diagnose --json`, `status --json`, and `audit --limit 20 --json` plus command status files, a manifest, and checksums. It does not request cooling, restore Auto, call `ViftyHelper`, or write SMC keys.
+
         If `diagnose --json` reports `state: "blocked"`, `safeToRequestCooling: false`, or `daemonControlPathReady: false`, do not retry `viftyctl prepare` or `viftyctl run`; paste the blocked diagnose JSON plus `capabilities --json`, `status --json`, and `audit --limit 20 --json` instead.
 
         Maintainers triage these reports with docs/support-triage.md and docs/safe-agent-cooling.md.
@@ -72,7 +80,7 @@ body:
     id: diagnose-json
     attributes:
       label: viftyctl diagnose --json
-      description: Paste the full read-only readiness JSON from immediately before the cooling request if possible.
+      description: Paste the full read-only readiness JSON from immediately before the cooling request if possible, or attach the file from scripts/collect-agent-cooling-evidence.sh.
       render: json
       placeholder: |
         {
@@ -89,7 +97,7 @@ body:
     id: capabilities-json
     attributes:
       label: viftyctl capabilities --json
-      description: Paste the read-only capabilities JSON from the same app/CLI build. This captures runLifecycle, policy limits, metadataLimits, supported workloads, and force-retry support used by guarded wrappers.
+      description: Paste the read-only capabilities JSON from the same app/CLI build, or attach the file from scripts/collect-agent-cooling-evidence.sh. This captures runLifecycle, policy limits, metadataLimits, supported workloads, and force-retry support used by guarded wrappers.
       render: json
       placeholder: |
         {
@@ -107,7 +115,7 @@ body:
     id: status-json
     attributes:
       label: viftyctl status --json
-      description: Paste status JSON after the failure or unexpected behavior.
+      description: Paste status JSON after the failure or unexpected behavior, or attach the file from scripts/collect-agent-cooling-evidence.sh.
       render: json
       placeholder: |
         {
@@ -123,7 +131,7 @@ body:
     id: audit-json
     attributes:
       label: viftyctl audit --limit 20 --json
-      description: Paste the bounded read-only audit export after the failure or unexpected behavior.
+      description: Paste the bounded read-only audit export after the failure or unexpected behavior, or attach the file from scripts/collect-agent-cooling-evidence.sh.
       render: json
       placeholder: |
         {

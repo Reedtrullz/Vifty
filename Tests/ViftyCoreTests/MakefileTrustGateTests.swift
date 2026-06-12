@@ -6,6 +6,7 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))
@@ -32,8 +33,10 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install pkg agent-cooling-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
+        XCTAssertTrue(makefile.contains("scripts/collect-agent-cooling-evidence.sh --viftyctl \"$(VIFTYCTL)\""))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))

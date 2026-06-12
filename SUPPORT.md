@@ -30,7 +30,21 @@ Maintainers triage reports with [docs/support-triage.md](docs/support-triage.md)
 
 ## Safe First Evidence
 
-Start with these read-only commands when Vifty is installed:
+For agent/build/test cooling, helper-unreachable, and restore-failure reports,
+the quickest read-only bundle is:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+The script writes `viftyctl-diagnose.json`, `viftyctl-capabilities.json`,
+`viftyctl-status.json`, `viftyctl-audit.json`, command status files, a manifest,
+and a checksum list. It does not request cooling, restore Auto, call
+`ViftyHelper`, or write SMC keys.
+
+If you prefer to paste commands manually, start with these read-only commands
+when Vifty is installed:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json

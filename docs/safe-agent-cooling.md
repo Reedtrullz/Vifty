@@ -114,11 +114,24 @@ When readiness is degraded, reduce one or both numbers. A good degraded default 
 If readiness is blocked:
 
 ```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+This read-only support bundle captures capabilities, diagnose, status, audit,
+command exit statuses, a manifest, and checksums without requesting cooling,
+restoring Auto, calling `ViftyHelper`, or writing SMC keys. If the repository
+scripts are not available, collect the same core evidence manually:
+
+```sh
+viftyctl capabilities --json
+viftyctl diagnose --json
 viftyctl status --json
 viftyctl audit --limit 20 --json
 ```
 
-Show both outputs to the user. `audit --json` is read-only and declares `coolingCommandsRun: false`.
+Show the bundle or manual outputs to the user. `audit --json` is read-only and
+declares `coolingCommandsRun: false`.
 
 If `viftyctl run` reports an Auto-restore failure after the child exits, treat it as a Vifty safety failure even when the child succeeded. Show stderr plus:
 

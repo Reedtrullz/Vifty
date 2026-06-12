@@ -1,4 +1,4 @@
-.PHONY: app install pkg source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg agent-cooling-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -7,6 +7,8 @@ RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersi
 RELEASE_REPO ?= Reedtrullz/Vifty
 UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
 RELEASE_METADATA_MODE ?= source-first
+VIFTYCTL ?= /Applications/Vifty.app/Contents/MacOS/viftyctl
+AGENT_EVIDENCE_OUTPUT ?=
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -42,6 +44,9 @@ install: ## Build and install to /Applications
 
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
+
+agent-cooling-evidence: ## Collect read-only agent/helper support evidence
+	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)
 
 source-first-release-notes: ## Write source-first release notes for the current version
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)"
