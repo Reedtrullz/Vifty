@@ -145,6 +145,33 @@ ruby -rjson -rcsv -rfileutils -e '
       valid = false
     end
 
+    install_source = result.fetch("installSource", "").to_s
+    unless install_source.empty? || %w[
+      not-recorded
+      source-build-tag
+      source-first-unsigned-dev-zip
+      notarized-github-release
+      homebrew-cask
+      local-developer-id-build
+      local-ad-hoc-build
+      other
+    ].include?(install_source)
+      failures << "#{path} installSource is not a supported value"
+      valid = false
+    end
+
+    source_sha = result.fetch("sourceSHA", "").to_s
+    unless source_sha.empty? || source_sha.match?(/\A[0-9a-f]{40}\z/)
+      failures << "#{path} sourceSHA must be a lowercase 40-character git commit SHA"
+      valid = false
+    end
+
+    source_artifact_sha = result.fetch("sourceArtifactSHA256", "").to_s
+    unless source_artifact_sha.empty? || source_artifact_sha.match?(/\A[0-9a-f]{64}\z/)
+      failures << "#{path} sourceArtifactSHA256 must be a lowercase 64-character SHA-256 checksum"
+      valid = false
+    end
+
     unless result["failures"].is_a?(Array)
       failures << "#{path} failures must be an array"
       valid = false
@@ -223,6 +250,11 @@ ruby -rjson -rcsv -rfileutils -e '
       "status" => result["status"].to_s,
       "mode" => result["mode"].to_s,
       "claim" => claim,
+      "installSource" => result["installSource"].to_s,
+      "sourceRef" => result["sourceRef"].to_s,
+      "sourceSHA" => result["sourceSHA"].to_s,
+      "sourceArtifactName" => result["sourceArtifactName"].to_s,
+      "sourceArtifactSHA256" => result["sourceArtifactSHA256"].to_s,
       "manualSmokeTestResult" => manual_smoke_result,
       "manualSmokeTestSource" => result["manualSmokeTestSource"].to_s,
       "manualSmokeValidated" => boolean_string(manual_smoke_validated),
@@ -245,10 +277,12 @@ ruby -rjson -rcsv -rfileutils -e '
   passed_rows = rows.select { |row| row["status"] == "passed" }
   counts_by_mode = Hash.new(0)
   counts_by_claim = Hash.new(0)
+  counts_by_install_source = Hash.new(0)
   counts_by_model = Hash.new(0)
   rows.each do |row|
     counts_by_mode[row["mode"]] += 1
     counts_by_claim[row["claim"]] += 1
+    counts_by_install_source[row["installSource"]] += 1 unless row["installSource"].empty?
     counts_by_model[row["modelIdentifier"]] += 1 unless row["modelIdentifier"].empty?
   end
 
@@ -266,6 +300,7 @@ ruby -rjson -rcsv -rfileutils -e '
     "validatedHardwareReports" => rows.count { |row| row["claim"] == "validated-hardware-evidence" },
     "countsByMode" => counts_by_mode.sort.to_h,
     "countsByClaim" => counts_by_claim.sort.to_h,
+    "countsByInstallSource" => counts_by_install_source.sort.to_h,
     "countsByModelIdentifier" => counts_by_model.sort.to_h,
     "reports" => rows
   }
@@ -275,6 +310,11 @@ ruby -rjson -rcsv -rfileutils -e '
     status
     mode
     claim
+    installSource
+    sourceRef
+    sourceSHA
+    sourceArtifactName
+    sourceArtifactSHA256
     manualSmokeTestResult
     manualSmokeTestSource
     manualSmokeValidated

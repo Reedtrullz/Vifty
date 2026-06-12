@@ -15,6 +15,16 @@ Options:
   --release-checklist <path>
                             Copy the GitHub Release checklist into the evidence
                             bundle and summarize its version/follow-up coverage.
+  --install-source <source>
+                            Record where this installed app came from. Supported
+                            values: not-recorded, source-build-tag,
+                            source-first-unsigned-dev-zip,
+                            notarized-github-release, homebrew-cask,
+                            local-developer-id-build, local-ad-hoc-build, other.
+  --source-ref <ref>        Record the source tag/ref/commit used for the build.
+  --source-sha <sha>        Record the immutable 40-character source commit SHA.
+  --source-artifact <path>  Hash the source-first tester zip or release artifact
+                            that was installed, when available locally.
   --include-probe-local     Also run ViftyHelper probeLocal. Run the script with sudo if
                             direct SMC fan probe output is required.
   -h, --help                Show this help.
@@ -29,6 +39,10 @@ APP_PATH="${VIFTY_APP_PATH:-/Applications/Vifty.app}"
 OUTPUT_DIR="${VIFTY_VALIDATION_OUTPUT_DIR:-}"
 RELEASE_SUMMARY_PATH="${VIFTY_RELEASE_ARTIFACT_SUMMARY:-}"
 RELEASE_CHECKLIST_PATH="${VIFTY_RELEASE_CHECKLIST:-}"
+INSTALL_SOURCE="${VIFTY_INSTALL_SOURCE:-not-recorded}"
+SOURCE_REF="${VIFTY_SOURCE_REF:-}"
+SOURCE_SHA="${VIFTY_SOURCE_SHA:-}"
+SOURCE_ARTIFACT_PATH="${VIFTY_SOURCE_ARTIFACT:-}"
 INCLUDE_PROBE_LOCAL=0
 
 while [[ $# -gt 0 ]]; do
@@ -63,6 +77,38 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       RELEASE_CHECKLIST_PATH="$2"
+      shift 2
+      ;;
+    --install-source)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --install-source requires a value" >&2
+        exit 64
+      fi
+      INSTALL_SOURCE="$2"
+      shift 2
+      ;;
+    --source-ref)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --source-ref requires a value" >&2
+        exit 64
+      fi
+      SOURCE_REF="$2"
+      shift 2
+      ;;
+    --source-sha)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --source-sha requires a value" >&2
+        exit 64
+      fi
+      SOURCE_SHA="$2"
+      shift 2
+      ;;
+    --source-artifact)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --source-artifact requires a path" >&2
+        exit 64
+      fi
+      SOURCE_ARTIFACT_PATH="$2"
       shift 2
       ;;
     --include-probe-local)
@@ -321,6 +367,99 @@ capture_bundle_executables() {
     fi
     printf '%s\t%s\t%s\t%s\n' "${executable}" "${digest}" "${bytes}" "${bundle_path}" >> "${stdout_path}"
   done
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
+capture_install_provenance() {
+  local name="install-provenance"
+  local stdout_name="install-provenance.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local status=0
+  local installed_app_version=""
+  local artifact_name=""
+  local artifact_sha256=""
+  local artifact_bytes=""
+  local trust_boundary=""
+  local normalized_source_sha="${SOURCE_SHA}"
+
+  : > "${stderr_path}"
+
+  case "${INSTALL_SOURCE}" in
+    not-recorded)
+      trust_boundary="Install source was not recorded; treat as incomplete provenance."
+      ;;
+    source-build-tag)
+      trust_boundary="Source build from a tag can support hardware compatibility evidence, but is not Developer ID signed or notarized binary trust."
+      ;;
+    source-first-unsigned-dev-zip)
+      trust_boundary="Unsigned source-first tester zip is convenience evidence only; it is not Developer ID signed, notarized, Homebrew-trusted, or an official trusted binary."
+      ;;
+    notarized-github-release|homebrew-cask)
+      trust_boundary="Trusted public binary claims still require matching release verifier and release-review evidence."
+      ;;
+    local-developer-id-build)
+      trust_boundary="Local Developer ID build evidence is not a public binary claim unless release verifier and review evidence pass."
+      ;;
+    local-ad-hoc-build)
+      trust_boundary="Local ad-hoc build evidence is not Developer ID signed, notarized, or public binary trust evidence."
+      ;;
+    other)
+      trust_boundary="Install source requires reporter explanation before trust or compatibility claims."
+      ;;
+    *)
+      printf 'unsupported install source: %s\n' "${INSTALL_SOURCE}" >> "${stderr_path}"
+      trust_boundary="Unsupported install source value."
+      status=1
+      ;;
+  esac
+
+  if [[ -n "${SOURCE_SHA}" ]]; then
+    if [[ ! "${SOURCE_SHA}" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+      printf 'source SHA must be a 40-character git commit SHA: %s\n' "${SOURCE_SHA}" >> "${stderr_path}"
+      status=1
+    else
+      normalized_source_sha="$(printf '%s' "${SOURCE_SHA}" | /usr/bin/tr '[:upper:]' '[:lower:]')"
+    fi
+  fi
+
+  if [[ -n "${SOURCE_ARTIFACT_PATH}" ]]; then
+    artifact_name="$(basename "${SOURCE_ARTIFACT_PATH}")"
+    if [[ ! -f "${SOURCE_ARTIFACT_PATH}" ]]; then
+      printf 'source artifact not found: %s\n' "${SOURCE_ARTIFACT_PATH}" >> "${stderr_path}"
+      status=1
+    else
+      if ! artifact_sha256="$(/usr/bin/shasum -a 256 "${SOURCE_ARTIFACT_PATH}" | /usr/bin/awk '{print $1}')"; then
+        printf 'could not hash source artifact: %s\n' "${SOURCE_ARTIFACT_PATH}" >> "${stderr_path}"
+        status=1
+      fi
+      if ! artifact_bytes="$(/usr/bin/stat -f '%z' "${SOURCE_ARTIFACT_PATH}")"; then
+        printf 'could not stat source artifact: %s\n' "${SOURCE_ARTIFACT_PATH}" >> "${stderr_path}"
+        status=1
+      fi
+    fi
+  fi
+
+  if ! installed_app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}" 2>> "${stderr_path}")"; then
+    installed_app_version=""
+    printf 'installed app bundle version could not be read from Info.plist\n' >> "${stderr_path}"
+    status=1
+  fi
+
+  printf 'field\tvalue\n' > "${stdout_path}"
+  printf 'installSource\t%s\n' "${INSTALL_SOURCE}" >> "${stdout_path}"
+  printf 'sourceRef\t%s\n' "${SOURCE_REF}" >> "${stdout_path}"
+  printf 'sourceSHA\t%s\n' "${normalized_source_sha}" >> "${stdout_path}"
+  printf 'sourceArtifactPath\t%s\n' "${SOURCE_ARTIFACT_PATH}" >> "${stdout_path}"
+  printf 'sourceArtifactName\t%s\n' "${artifact_name}" >> "${stdout_path}"
+  printf 'sourceArtifactSHA256\t%s\n' "${artifact_sha256}" >> "${stdout_path}"
+  printf 'sourceArtifactBytes\t%s\n' "${artifact_bytes}" >> "${stdout_path}"
+  printf 'installedAppBundleVersion\t%s\n' "${installed_app_version}" >> "${stdout_path}"
+  printf 'trustBoundary\t%s\n' "${trust_boundary}" >> "${stdout_path}"
 
   printf '%s\n' "${status}" > "${status_path}"
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
@@ -815,11 +954,24 @@ write_review_summary() {
     printf '  "releaseChecklistPath": '
     json_string "${RELEASE_CHECKLIST_PATH}"
     printf ',\n'
+    printf '  "installSource": '
+    json_string "${INSTALL_SOURCE}"
+    printf ',\n'
+    printf '  "sourceRef": '
+    json_string "${SOURCE_REF}"
+    printf ',\n'
+    printf '  "sourceSHA": '
+    json_string "${SOURCE_SHA}"
+    printf ',\n'
+    printf '  "sourceArtifactPath": '
+    json_string "${SOURCE_ARTIFACT_PATH}"
+    printf ',\n'
     printf '  "checks": [\n'
   } > "${SUMMARY_JSON_PATH}"
 
   summary_row "system-hw-model" "0" "hardware-validation" "Machine model source for the report."
   summary_row "app-info-plist" "0" "release-and-hardware" "Bundle metadata identifies the tested app version."
+  summary_row "install-provenance" "0" "source-and-release-trust" "Records install source, source ref/SHA, and optional artifact checksum without implying binary trust."
   summary_row "bundle-executables" "0" "release-and-hardware" "Bundled app/helper/daemon/CLI executables should be present, executable, and hashed."
   summary_row "privacy-review" "0" "public-report-privacy" "Evidence bundle should not contain local hostnames, /Users paths, serial labels, or hardware identifier labels."
   summary_row "release-artifact-summary" "0 or skipped" "release-trust" "Optional verifier summary should pass and match the installed app version when supplied."
@@ -855,9 +1007,14 @@ Vifty validation evidence bundle.
 Attach these files to a Hardware Validation Report issue when validating real
 hardware. The viftyctl JSON files are read-only diagnostics and audit evidence. Bundle plist,
 bundled executable hashes, bundled schema resource hashes, advertised schema
-resource paths, capabilities-contract.tsv, privacy-review.tsv, LaunchDaemon, signing, notarization, and Gatekeeper files
+resource paths, install-provenance.tsv, capabilities-contract.tsv,
+privacy-review.tsv, LaunchDaemon, signing, notarization, and Gatekeeper files
 identify exactly what
-app/helper/daemon/CLI contract was tested. If --release-summary was supplied,
+app/helper/daemon/CLI contract was tested. install-provenance.tsv records the
+declared install source, source ref/SHA, and optional source artifact checksum;
+source-first and unsigned-dev values remain compatibility evidence unless
+trusted release verifier evidence is also present and passing. If
+--release-summary was supplied,
 release-artifact-summary.json is a copy of the verifier output and
 release-artifact-summary.tsv summarizes its pass/fail state. If
 --release-checklist was supplied, release-checklist.md is a copy of the GitHub
@@ -884,6 +1041,10 @@ README
   echo "daemonLabel=${DAEMON_LABEL}"
   echo "releaseArtifactSummaryPath=${RELEASE_SUMMARY_PATH}"
   echo "releaseChecklistPath=${RELEASE_CHECKLIST_PATH}"
+  echo "installSource=${INSTALL_SOURCE}"
+  echo "sourceRef=${SOURCE_REF}"
+  echo "sourceSHA=${SOURCE_SHA}"
+  echo "sourceArtifactPath=${SOURCE_ARTIFACT_PATH}"
   echo "includeProbeLocal=${INCLUDE_PROBE_LOCAL}"
   echo "readOnly=true"
   echo "coolingCommandsRun=false"
@@ -894,6 +1055,7 @@ run_capture "system-uname" "system-uname.txt" /usr/bin/uname -srm
 run_capture "system-hw-model" "system-hw-model.txt" /usr/sbin/sysctl -n hw.model
 
 run_capture "app-info-plist" "app-info-plist.txt" /usr/libexec/PlistBuddy -c Print "${INFO_PLIST}"
+capture_install_provenance
 capture_bundle_executables
 capture_release_artifact_summary
 capture_release_checklist

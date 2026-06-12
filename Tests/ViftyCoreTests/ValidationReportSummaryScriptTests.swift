@@ -55,13 +55,14 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.isEmpty)
         let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
-        XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tmanualSmokeTestResult"))
-        XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tnot-recorded"))
-        XCTAssertTrue(tsv.contains("validated-hardware-evidence\tpassed-auto-restored"))
+        XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult"))
+        XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
+        XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
+        XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
         XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tMacBookPro18,3"))
-        XCTAssertTrue(tsv.contains("safe-block-evidence\tnot-recorded"))
-        XCTAssertTrue(tsv.contains("release-trust-evidence\tnot-recorded"))
-        XCTAssertTrue(tsv.contains("rejected\tnot-recorded"))
+        XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
+        XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
+        XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
 
         let json = try harness.readJSON(jsonURL)
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
@@ -83,6 +84,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsByClaim["safe-block-evidence"], 1)
         XCTAssertEqual(countsByClaim["release-trust-evidence"], 1)
         XCTAssertEqual(countsByClaim["rejected"], 1)
+        let countsByInstallSource = try XCTUnwrap(json["countsByInstallSource"] as? [String: Int])
+        XCTAssertEqual(countsByInstallSource["source-build-tag"], 5)
     }
 
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
@@ -101,6 +104,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "coolingCommandsRun",
             "totalReports",
             "validatedHardwareReports",
+            "countsByInstallSource",
             "countsByClaim",
             "reports"
         ] {
@@ -114,6 +118,10 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(claimValues.contains("supported-hardware-evidence-needs-manual-smoke"))
         XCTAssertTrue(claimValues.contains("release-trust-evidence"))
         XCTAssertTrue(claimValues.contains("safe-block-evidence"))
+        let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
+        let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
+        XCTAssertTrue(installSourceValues.contains("source-build-tag"))
+        XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
     }
 
     func testSummarizerPrintsTSVToStdoutWhenNoOutputTSVIsProvided() throws {
@@ -254,6 +262,11 @@ private final class ValidationReportSummaryHarness {
             "readOnly": readOnly,
             "coolingCommandsRun": coolingCommandsRun,
             "appPath": "/Applications/Vifty.app",
+            "installSource": "source-build-tag",
+            "sourceRef": "v1.1.0",
+            "sourceSHA": String(repeating: "a", count: 40),
+            "sourceArtifactName": "",
+            "sourceArtifactSHA256": "",
             "diagnoseState": mode == "unsupported-hardware" ? "blocked" : "ready",
             "recommendedAgentAction": mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling",
             "safeToRequestCooling": safeToRequestCooling,

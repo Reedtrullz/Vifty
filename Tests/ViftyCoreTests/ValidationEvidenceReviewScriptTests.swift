@@ -188,6 +188,40 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode release"))
     }
 
+    func testReviewRejectsSourceFirstUnsignedZipAsReleaseTrustEvidence() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            installSource: "source-first-unsigned-dev-zip",
+            sourceRef: "v1.1.0",
+            sourceSHA: String(repeating: "c", count: 40),
+            sourceArtifactName: "Vifty-v1.1.0-unsigned-dev.zip",
+            sourceArtifactSHA256: String(repeating: "d", count: 64)
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("release mode requires installSource notarized-github-release, homebrew-cask, or local-developer-id-build"))
+    }
+
+    func testReviewWarnsWhenSourceFirstUnsignedZipOmitsArtifactChecksum() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            installSource: "source-first-unsigned-dev-zip",
+            sourceRef: "v1.1.0",
+            sourceSHA: String(repeating: "c", count: 40),
+            sourceArtifactName: "",
+            sourceArtifactSHA256: "",
+            sourceArtifactBytes: ""
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stderr.contains("source-first unsigned-dev zip evidence should include sourceArtifactSHA256"))
+    }
+
     func testReviewRejectsReleaseEvidenceWhenReleaseSummaryCheckWasSkipped() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
@@ -301,6 +335,12 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["bundlePath"] as? String, harness.bundleURL.path)
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(summary["installSource"] as? String, "local-developer-id-build")
+        XCTAssertEqual(summary["sourceRef"] as? String, "v1.2.3")
+        XCTAssertEqual(summary["sourceSHA"] as? String, String(repeating: "a", count: 40))
+        XCTAssertEqual(summary["sourceArtifactName"] as? String, "Vifty-v1.2.3.zip")
+        XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, String(repeating: "b", count: 64))
+        XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "12345")
         XCTAssertEqual(summary["diagnoseState"] as? String, "ready")
         XCTAssertEqual(summary["recommendedAgentAction"] as? String, "requestCooling")
         XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, true)
@@ -470,7 +510,13 @@ private final class ValidationEvidenceReviewHarness {
         releaseSummaryActualSHA: String = String(repeating: "a", count: 64),
         releaseSummaryCheckStatus: String = "passed",
         releaseChecklistVersion: String = "1.2.3",
-        launchDaemonTeamID: String = "TEAMID1234"
+        launchDaemonTeamID: String = "TEAMID1234",
+        installSource: String = "local-developer-id-build",
+        sourceRef: String = "v1.2.3",
+        sourceSHA: String = String(repeating: "a", count: 40),
+        sourceArtifactName: String = "Vifty-v1.2.3.zip",
+        sourceArtifactSHA256: String = String(repeating: "b", count: 64),
+        sourceArtifactBytes: String = "12345"
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-validation-review-\(UUID().uuidString)", isDirectory: true)
@@ -479,6 +525,7 @@ private final class ValidationEvidenceReviewHarness {
 
         var statuses: [String: String] = [
             "app-info-plist": "0",
+            "install-provenance": "0",
             "bundle-executables": "0",
             "privacy-review": privacyReviewStatus,
             "schema-resources": "0",
@@ -513,6 +560,14 @@ private final class ValidationEvidenceReviewHarness {
         )
         try writeText("review-summary.tsv", contents: tsvSummary(reviewSummaryTSVStatuses))
         try writeText("metadata.txt", contents: "readOnly=true\ncoolingCommandsRun=false\n")
+        try writeInstallProvenance(
+            installSource: installSource,
+            sourceRef: sourceRef,
+            sourceSHA: sourceSHA,
+            sourceArtifactName: sourceArtifactName,
+            sourceArtifactSHA256: sourceArtifactSHA256,
+            sourceArtifactBytes: sourceArtifactBytes
+        )
         try writeText("bundle-executables.tsv", contents: bundleExecutablesTSV)
         try writeText("privacy-review.tsv", contents: privacyReviewText)
         try writeText("schema-resources.tsv", contents: schemaResourcesText ?? Self.defaultSchemaResourcesTSV)
@@ -704,6 +759,7 @@ private final class ValidationEvidenceReviewHarness {
     private func defaultManifestStdoutName(for name: String) -> String {
         switch name {
         case "bundle-executables",
+            "install-provenance",
             "privacy-review",
             "schema-resources",
             "capabilities-schema-resources",
@@ -716,6 +772,31 @@ private final class ValidationEvidenceReviewHarness {
         default:
             "\(name).txt"
         }
+    }
+
+    private func writeInstallProvenance(
+        installSource: String,
+        sourceRef: String,
+        sourceSHA: String,
+        sourceArtifactName: String,
+        sourceArtifactSHA256: String,
+        sourceArtifactBytes: String
+    ) throws {
+        try writeText(
+            "install-provenance.tsv",
+            contents: """
+            field\tvalue
+            installSource\t\(installSource)
+            sourceRef\t\(sourceRef)
+            sourceSHA\t\(sourceSHA)
+            sourceArtifactPath\t/tmp/\(sourceArtifactName)
+            sourceArtifactName\t\(sourceArtifactName)
+            sourceArtifactSHA256\t\(sourceArtifactSHA256)
+            sourceArtifactBytes\t\(sourceArtifactBytes)
+            installedAppBundleVersion\t1.2.3
+            trustBoundary\tFixture trust boundary.
+            """
+        )
     }
 
     private func writeDiagnose(_ fixture: ValidationEvidenceDiagnoseFixture) throws {

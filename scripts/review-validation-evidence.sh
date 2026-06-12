@@ -168,6 +168,23 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "directControlLifecycle.preferRunForSingleChildWorkloads" => "true"
   }.freeze
 
+  SUPPORTED_INSTALL_SOURCES = %w[
+    not-recorded
+    source-build-tag
+    source-first-unsigned-dev-zip
+    notarized-github-release
+    homebrew-cask
+    local-developer-id-build
+    local-ad-hoc-build
+    other
+  ].freeze
+
+  RELEASE_INSTALL_SOURCES = %w[
+    notarized-github-release
+    homebrew-cask
+    local-developer-id-build
+  ].freeze
+
   REQUIRED_COMMON_FILES = %w[
     review-summary.json
     review-summary.tsv
@@ -176,6 +193,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     metadata.txt
     viftyctl-diagnose.json
     viftyctl-audit.json
+    install-provenance.tsv
     bundle-executables.tsv
     privacy-review.tsv
     schema-resources.tsv
@@ -185,6 +203,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
   COMMON_ZERO_CHECKS = %w[
     app-info-plist
+    install-provenance
     bundle-executables
     privacy-review
     schema-resources
@@ -463,7 +482,65 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "#{field} must be a lowercase 64-character SHA-256 checksum"
   end
 
-  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, manual_smoke_result, manual_smoke_source)
+  def require_git_sha(value, field, failures)
+    return if value.to_s.empty? || value.to_s.match?(/\A[0-9a-f]{40}\z/)
+
+    failures << "#{field} must be a lowercase 40-character git commit SHA"
+  end
+
+  def field_rows_to_map(rows, relative_path, failures)
+    if rows.empty?
+      failures << "#{relative_path} must include field rows"
+      return {}
+    end
+
+    missing_headers = %w[field value].reject { |header| rows.first.key?(header) }
+    unless missing_headers.empty?
+      failures << "#{relative_path} is missing required header(s): #{missing_headers.join(", ")}"
+      return {}
+    end
+
+    fields = {}
+    rows.each do |row|
+      field = row["field"].to_s
+      next if field.empty?
+      if fields.key?(field)
+        failures << "#{relative_path} has duplicate field #{field}"
+        next
+      end
+      fields[field] = row["value"].to_s
+    end
+    fields
+  end
+
+  def validate_install_provenance(fields, failures, warnings)
+    install_source = fields["installSource"].to_s
+    unless SUPPORTED_INSTALL_SOURCES.include?(install_source)
+      failures << "install-provenance.tsv installSource #{install_source.inspect} is not supported"
+    end
+
+    require_git_sha(fields["sourceSHA"], "install-provenance.tsv sourceSHA", failures)
+    unless fields["sourceArtifactSHA256"].to_s.empty?
+      require_sha256(fields["sourceArtifactSHA256"], "install-provenance.tsv sourceArtifactSHA256", failures)
+    end
+    unless fields["sourceArtifactBytes"].to_s.empty?
+      require_positive_integer(fields["sourceArtifactBytes"], "install-provenance.tsv sourceArtifactBytes", failures)
+    end
+
+    if install_source.empty? || install_source == "not-recorded"
+      warnings << "install source provenance is not recorded; keep compatibility and trust claims conservative"
+    end
+    if %w[source-build-tag source-first-unsigned-dev-zip].include?(install_source) &&
+        fields["sourceRef"].to_s.empty? &&
+        fields["sourceSHA"].to_s.empty?
+      warnings << "#{install_source} evidence should record sourceRef or sourceSHA before promotion"
+    end
+    if install_source == "source-first-unsigned-dev-zip" && fields["sourceArtifactSHA256"].to_s.empty?
+      warnings << "source-first unsigned-dev zip evidence should include sourceArtifactSHA256 when the tester zip is available"
+    end
+  end
+
+  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
     return if path.to_s.empty?
 
     payload = {
@@ -477,6 +554,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "appPath" => review_summary["appPath"],
       "releaseArtifactSummaryPath" => review_summary["releaseArtifactSummaryPath"],
       "releaseChecklistPath" => review_summary["releaseChecklistPath"],
+      "installSource" => install_fields["installSource"].to_s,
+      "sourceRef" => install_fields["sourceRef"].to_s,
+      "sourceSHA" => install_fields["sourceSHA"].to_s,
+      "sourceArtifactName" => install_fields["sourceArtifactName"].to_s,
+      "sourceArtifactSHA256" => install_fields["sourceArtifactSHA256"].to_s,
+      "sourceArtifactBytes" => install_fields["sourceArtifactBytes"].to_s,
       "diagnoseState" => diagnose["state"],
       "recommendedAgentAction" => diagnose["recommendedAgentAction"],
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
@@ -538,6 +621,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     require_status(checks, name, ["0"], failures)
   end
   require_status(checks, "viftyctl-capabilities", ["0", "69"], failures)
+
+  install_rows = parse_tsv(bundle, "install-provenance.tsv", failures)
+  install_fields = field_rows_to_map(install_rows, "install-provenance.tsv", failures)
+  validate_install_provenance(install_fields, failures, warnings)
 
   executable_rows = parse_tsv(bundle, "bundle-executables.tsv", failures)
   executable_by_name = executable_rows.to_h { |row| [row["executable"], row] }
@@ -719,6 +806,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     if summary["releaseChecklistPath"].to_s.empty?
       failures << "release mode requires review-summary.json releaseChecklistPath"
     end
+    unless RELEASE_INSTALL_SOURCES.include?(install_fields["installSource"].to_s)
+      failures << "release mode requires installSource notarized-github-release, homebrew-cask, or local-developer-id-build"
+    end
 
     release_summary = parse_json(bundle, "release-artifact-summary.json", failures) || {}
     unless release_summary["schemaVersion"] == 1
@@ -817,14 +907,14 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
 
   if failures.empty?
-    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, manual_smoke_result, manual_smoke_source)
+    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
     puts "Validation evidence review OK: mode #{mode}"
     puts "Bundle: #{bundle}"
     warnings.each { |warning| warn "warning: #{warning}" }
     exit 0
   end
 
-  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, manual_smoke_result, manual_smoke_source)
+  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
   warn "Validation evidence review failed: mode #{mode}"
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }

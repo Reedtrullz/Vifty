@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import XCTest
 
 private let expectedReadOnlyViftyCtlInvocations = [
@@ -24,8 +25,10 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("metadata.txt").contains("schemaDir="))
         XCTAssertTrue(try harness.read("metadata.txt").contains("daemonPlist="))
         XCTAssertTrue(try harness.read("metadata.txt").contains("releaseArtifactSummaryPath="))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("installSource=not-recorded"))
         XCTAssertTrue(try harness.read("README.txt").contains("review-summary.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("review-summary.json"))
+        XCTAssertTrue(try harness.read("README.txt").contains("install-provenance.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-artifact-summary.json"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-artifact-summary.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("release-checklist.md"))
@@ -43,6 +46,11 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(bundleExecutables.contains("ViftyDaemon\t"))
         XCTAssertTrue(bundleExecutables.contains("viftyctl\t"))
         XCTAssertTrue(bundleExecutables.contains("Contents/MacOS/viftyctl"))
+        let installProvenance = try harness.read("install-provenance.tsv")
+        XCTAssertTrue(installProvenance.contains("field\tvalue"))
+        XCTAssertTrue(installProvenance.contains("installSource\tnot-recorded"))
+        XCTAssertTrue(installProvenance.contains("installedAppBundleVersion\t1.2.3"))
+        XCTAssertTrue(installProvenance.contains("trustBoundary\tInstall source was not recorded"))
         let schemaResources = try harness.read("schema-resources.tsv")
         XCTAssertTrue(schemaResources.contains("schema\tsha256\tbytes\tbundlePath"))
         XCTAssertTrue(schemaResources.contains("release-artifact-summary.schema.json"))
@@ -72,6 +80,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
 
         let manifest = try harness.read("manifest.tsv")
         XCTAssertTrue(manifest.contains("app-info-plist\t0\tapp-info-plist.txt"))
+        XCTAssertTrue(manifest.contains("install-provenance\t0\tinstall-provenance.tsv"))
         XCTAssertTrue(manifest.contains("bundle-executables\t0\tbundle-executables.tsv"))
         XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv"))
         XCTAssertTrue(manifest.contains("schema-resources\t0\tschema-resources.tsv"))
@@ -91,6 +100,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let reviewSummary = try harness.read("review-summary.tsv")
         XCTAssertTrue(reviewSummary.contains("name\tstatus\texpected\tscope\tnote"))
         XCTAssertTrue(reviewSummary.contains("app-info-plist\t0\t0\trelease-and-hardware"))
+        XCTAssertTrue(reviewSummary.contains("install-provenance\t0\t0\tsource-and-release-trust"))
         XCTAssertTrue(reviewSummary.contains("bundle-executables\t0\t0\trelease-and-hardware"))
         XCTAssertTrue(reviewSummary.contains("privacy-review\t0\t0\tpublic-report-privacy"))
         XCTAssertTrue(reviewSummary.contains("release-artifact-summary\tskipped\t0 or skipped\trelease-trust"))
@@ -112,6 +122,9 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewSummaryJSON["includeProbeLocal"] as? Bool, false)
         XCTAssertEqual(reviewSummaryJSON["releaseArtifactSummaryPath"] as? String, "")
         XCTAssertEqual(reviewSummaryJSON["releaseChecklistPath"] as? String, "")
+        XCTAssertEqual(reviewSummaryJSON["installSource"] as? String, "not-recorded")
+        XCTAssertEqual(reviewSummaryJSON["sourceRef"] as? String, "")
+        XCTAssertEqual(reviewSummaryJSON["sourceSHA"] as? String, "")
         let checks = try XCTUnwrap(reviewSummaryJSON["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "release-artifact-summary"
@@ -130,6 +143,12 @@ final class ValidationEvidenceScriptTests: XCTestCase {
                 && check["status"] as? String == "0"
                 && check["expected"] as? String == "0"
                 && check["scope"] as? String == "release-and-hardware"
+        })
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "install-provenance"
+                && check["status"] as? String == "0"
+                && check["expected"] as? String == "0"
+                && check["scope"] as? String == "source-and-release-trust"
         })
         XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "privacy-review"
@@ -175,6 +194,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let checksums = try harness.read("checksums.tsv")
         XCTAssertTrue(checksums.contains("sha256\tbytes\tfile"))
         XCTAssertTrue(checksums.contains("\tapp-info-plist.txt"))
+        XCTAssertTrue(checksums.contains("\tinstall-provenance.tsv"))
         XCTAssertTrue(checksums.contains("\tbundle-executables.tsv"))
         XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
         XCTAssertTrue(checksums.contains("\tschema-resources.tsv"))
@@ -232,6 +252,43 @@ final class ValidationEvidenceScriptTests: XCTestCase {
             }
             XCTAssertEqual(try harness.read(statusFile).trimmingCharacters(in: .whitespacesAndNewlines), status)
         }
+    }
+
+    func testCollectorRecordsSourceFirstInstallProvenanceAndArtifactChecksum() throws {
+        let harness = try ValidationEvidenceHarness()
+        let artifactData = Data("unsigned tester zip fixture\n".utf8)
+        let artifactURL = harness.rootURL.appendingPathComponent("Vifty-v1.1.0-unsigned-dev.zip")
+        try artifactData.write(to: artifactURL)
+        let expectedArtifactSHA = SHA256.hash(data: artifactData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        let sourceSHA = String(repeating: "A", count: 40)
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path,
+            "--install-source", "source-first-unsigned-dev-zip",
+            "--source-ref", "v1.1.0",
+            "--source-sha", sourceSHA,
+            "--source-artifact", artifactURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let provenance = try harness.read("install-provenance.tsv")
+        XCTAssertTrue(provenance.contains("installSource\tsource-first-unsigned-dev-zip"))
+        XCTAssertTrue(provenance.contains("sourceRef\tv1.1.0"))
+        XCTAssertTrue(provenance.contains("sourceSHA\t\(sourceSHA.lowercased())"))
+        XCTAssertTrue(provenance.contains("sourceArtifactName\tVifty-v1.1.0-unsigned-dev.zip"))
+        XCTAssertTrue(provenance.contains("sourceArtifactSHA256\t\(expectedArtifactSHA)"))
+        XCTAssertTrue(provenance.contains("sourceArtifactBytes\t\(artifactData.count)"))
+        XCTAssertTrue(provenance.contains("not Developer ID signed, notarized, Homebrew-trusted, or an official trusted binary"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("install-provenance\t0\t0\tsource-and-release-trust"))
+
+        let summary = try harness.readJSON("review-summary.json")
+        XCTAssertEqual(summary["installSource"] as? String, "source-first-unsigned-dev-zip")
+        XCTAssertEqual(summary["sourceRef"] as? String, "v1.1.0")
+        XCTAssertEqual(summary["sourceSHA"] as? String, sourceSHA)
+        XCTAssertEqual(summary["sourceArtifactPath"] as? String, artifactURL.path)
     }
 
     func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {
