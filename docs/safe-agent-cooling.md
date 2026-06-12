@@ -119,9 +119,10 @@ scripts/collect-agent-cooling-evidence.sh \
 ```
 
 This read-only support bundle captures capabilities, diagnose, status, audit,
-command exit statuses, a manifest, `privacy-review.tsv`, and checksums without
-requesting cooling, restoring Auto, calling `ViftyHelper`, or writing SMC keys.
-Check `privacy-review.tsv` before posting the bundle publicly; redact or share
+command exit statuses, launchd/helper install evidence, a manifest,
+`privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
+calling `ViftyHelper`, using `sudo`, or writing SMC keys. Check
+`privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`. If the repository scripts are not
 available, collect the same core evidence manually:
 

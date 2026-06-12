@@ -49,7 +49,7 @@ V1 targets Apple Silicon MacBook Pro models on macOS 15+. Compatibility claims a
 
 Vifty intentionally excludes HDD/SSD S.M.A.R.T., Boot Camp, Windows support, analytics, cloud sync, and non-MacBook-Pro fan control. Unsupported Macs should remain under macOS automatic fan control; see [docs/unsupported-hardware.md](docs/unsupported-hardware.md) for the safe-block policy.
 
-For help or reports, start with [SUPPORT.md](SUPPORT.md). For agent/build/test cooling, helper-unreachable, and restore-failure reports, `scripts/collect-agent-cooling-evidence.sh` collects a read-only support bundle with `privacy-review.tsv` before sharing, without requesting cooling or writing fan state. Maintainers should triage reports with [docs/support-triage.md](docs/support-triage.md) so release, hardware, helper, SMC telemetry, agent-cooling, and UI issues stay evidence-based.
+For help or reports, start with [SUPPORT.md](SUPPORT.md). For agent/build/test cooling, helper-unreachable, and restore-failure reports, `scripts/collect-agent-cooling-evidence.sh` collects a read-only support bundle with viftyctl JSON, launchd/helper install evidence, and `privacy-review.tsv` before sharing, without requesting cooling or writing fan state. Maintainers should triage reports with [docs/support-triage.md](docs/support-triage.md) so release, hardware, helper, SMC telemetry, agent-cooling, and UI issues stay evidence-based.
 
 ## Install and launch
 

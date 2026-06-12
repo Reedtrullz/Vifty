@@ -16,10 +16,10 @@ scripts/collect-agent-cooling-evidence.sh \
 ```
 
 It captures `capabilities --json`, `diagnose --json`, `status --json`, and
-`audit --limit 20 --json` plus exit statuses, a manifest, `privacy-review.tsv`,
-and checksums. It does not request cooling, restore Auto, invoke `ViftyHelper`,
-or write SMC keys. If a reporter cannot run the script, ask for the same
-read-only commands manually:
+`audit --limit 20 --json` plus exit statuses, launchd/helper install evidence,
+a manifest, `privacy-review.tsv`, and checksums. It does not request cooling,
+restore Auto, invoke `ViftyHelper`, use `sudo`, or write SMC keys. If a reporter
+cannot run the script, ask for the same read-only commands manually:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json

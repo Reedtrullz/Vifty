@@ -28,6 +28,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("does not request cooling leases"))
         XCTAssertTrue(try harness.read("README.txt").contains("safeToRequestCooling=false"))
         XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
+        XCTAssertTrue(try harness.read("README.txt").contains("launchctl-print-daemon.txt"))
+        XCTAssertTrue(try harness.read("README.txt").contains("Nonzero status rows for these files are evidence"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=true"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=false"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("auditLimit=20"))
@@ -38,10 +40,19 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(manifest.contains("viftyctl-diagnose\t0\tviftyctl-diagnose.json\tviftyctl-diagnose.stderr"))
         XCTAssertTrue(manifest.contains("viftyctl-status\t0\tviftyctl-status.json\tviftyctl-status.stderr"))
         XCTAssertTrue(manifest.contains("viftyctl-audit\t0\tviftyctl-audit.json\tviftyctl-audit.stderr"))
+        XCTAssertTrue(manifest.contains("launchctl-print-daemon\t"))
+        XCTAssertTrue(manifest.contains("\tlaunchctl-print-daemon.txt\tlaunchctl-print-daemon.stderr"))
+        XCTAssertTrue(manifest.contains("launchdaemon-plist\t"))
+        XCTAssertTrue(manifest.contains("\tlaunchdaemon-plist.txt\tlaunchdaemon-plist.stderr"))
+        XCTAssertTrue(manifest.contains("helper-file-metadata\t"))
+        XCTAssertTrue(manifest.contains("\thelper-file-metadata.txt\thelper-file-metadata.stderr"))
         XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv\tprivacy-review.stderr"))
         XCTAssertEqual(try harness.read("viftyctl-diagnose.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
         XCTAssertEqual(try harness.read("privacy-review.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
         XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
+        XCTAssertFalse(try harness.read("launchctl-print-daemon.status").isEmpty)
+        XCTAssertFalse(try harness.read("launchdaemon-plist.status").isEmpty)
+        XCTAssertFalse(try harness.read("helper-file-metadata.status").isEmpty)
 
         XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"daemonStatusAvailable\":true"))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
@@ -53,11 +64,23 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(summary["auditLimit"] as? Int, 20)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
-        XCTAssertEqual(commands.count, 5)
+        XCTAssertEqual(commands.count, 8)
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "viftyctl-audit"
                 && command["status"] as? Int == 0
                 && command["stdout"] as? String == "viftyctl-audit.json"
+        })
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "launchctl-print-daemon"
+                && command["stdout"] as? String == "launchctl-print-daemon.txt"
+        })
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "launchdaemon-plist"
+                && command["stdout"] as? String == "launchdaemon-plist.txt"
+        })
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "helper-file-metadata"
+                && command["stdout"] as? String == "helper-file-metadata.txt"
         })
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "privacy-review"
@@ -75,6 +98,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tviftyctl-diagnose.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-status.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-audit.json"))
+        XCTAssertTrue(checksums.contains("\tlaunchctl-print-daemon.txt"))
+        XCTAssertTrue(checksums.contains("\tlaunchctl-print-daemon.status"))
+        XCTAssertTrue(checksums.contains("\tlaunchdaemon-plist.txt"))
+        XCTAssertTrue(checksums.contains("\thelper-file-metadata.txt"))
         XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
         XCTAssertTrue(checksums.contains("\tprivacy-review.status"))
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))

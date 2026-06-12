@@ -16,7 +16,7 @@ body:
         scripts/collect-agent-cooling-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
         ```
 
-        This captures `capabilities --json`, `diagnose --json`, `status --json`, and `audit --limit 20 --json` plus command status files, a manifest, `privacy-review.tsv`, and checksums. It does not request cooling, restore Auto, call `ViftyHelper`, or write SMC keys. Check `privacy-review.tsv` before posting publicly; redact or share privately if it reports `redaction-needed`.
+        This captures `capabilities --json`, `diagnose --json`, `status --json`, and `audit --limit 20 --json` plus command status files, read-only launchd/helper install evidence, a manifest, `privacy-review.tsv`, and checksums. It does not request cooling, restore Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check `privacy-review.tsv` before posting publicly; redact or share privately if it reports `redaction-needed`.
 
         If `diagnose --json` reports `state: "blocked"`, `safeToRequestCooling: false`, or `daemonControlPathReady: false`, do not retry `viftyctl prepare` or `viftyctl run`; paste the blocked diagnose JSON plus `capabilities --json`, `status --json`, and `audit --limit 20 --json` instead.
 

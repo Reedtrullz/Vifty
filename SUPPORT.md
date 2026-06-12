@@ -40,10 +40,10 @@ scripts/collect-agent-cooling-evidence.sh \
 
 The script writes `viftyctl-diagnose.json`, `viftyctl-capabilities.json`,
 `viftyctl-status.json`, `viftyctl-audit.json`, command status files, a manifest,
-`privacy-review.tsv`, and a checksum list. It does not request cooling, restore
-Auto, call `ViftyHelper`, or write SMC keys. Check `privacy-review.tsv` before
-posting the bundle publicly; redact or share privately if it reports
-`redaction-needed`.
+read-only launchd/helper install files, `privacy-review.tsv`, and a checksum
+list. It does not request cooling, restore Auto, call `ViftyHelper`, use
+`sudo`, or write SMC keys. Check `privacy-review.tsv` before posting the bundle
+publicly; redact or share privately if it reports `redaction-needed`.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:

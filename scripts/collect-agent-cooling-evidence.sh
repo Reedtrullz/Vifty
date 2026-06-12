@@ -20,6 +20,10 @@ This script is read-only. It runs only:
   viftyctl diagnose --json
   viftyctl status --json
   viftyctl audit --limit <count> --json
+  launchctl print system/tech.reidar.vifty.daemon
+  plutil -p /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+  ls -ldO@ /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+           /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
 
 It does not request cooling leases, restore Auto, call ViftyHelper, or write SMC
 keys. If diagnose exits nonzero because readiness is blocked, the JSON and exit
@@ -134,6 +138,14 @@ run_capture "viftyctl-status" "viftyctl-status.json" \
   "${VIFTYCTL}" status --json
 run_capture "viftyctl-audit" "viftyctl-audit.json" \
   "${VIFTYCTL}" audit --limit "${AUDIT_LIMIT}" --json
+run_capture "launchctl-print-daemon" "launchctl-print-daemon.txt" \
+  /bin/launchctl print system/tech.reidar.vifty.daemon
+run_capture "launchdaemon-plist" "launchdaemon-plist.txt" \
+  /usr/bin/plutil -p /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
+run_capture "helper-file-metadata" "helper-file-metadata.txt" \
+  /bin/ls -ldO@ \
+    /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist \
+    /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
 
 cat > "${OUTPUT_DIR}/README.txt" <<EOF
 Vifty agent/helper support evidence
@@ -151,6 +163,9 @@ Attach or paste:
 - viftyctl-capabilities.json
 - viftyctl-status.json
 - viftyctl-audit.json
+- launchctl-print-daemon.txt
+- launchdaemon-plist.txt
+- helper-file-metadata.txt
 - manifest.tsv
 - agent-cooling-evidence-summary.json
 - privacy-review.tsv
@@ -158,6 +173,12 @@ Attach or paste:
 If viftyctl-diagnose.status is 75, readiness was blocked. Do not retry prepare
 or run while diagnose reports blocked readiness, safeToRequestCooling=false, or
 daemonControlPathReady=false.
+
+If the helper is unreachable, launchctl-print-daemon.txt, launchdaemon-plist.txt,
+and helper-file-metadata.txt show whether launchd can see the privileged daemon,
+which plist is installed, and whether helper/plist files exist with expected
+ownership and permissions. Nonzero status rows for these files are evidence; do
+not rerun with sudo just to make them pass.
 
 Before sharing publicly, check privacy-review.tsv. A nonzero privacy review
 means the named files may contain private local paths, hostnames, serial-number
