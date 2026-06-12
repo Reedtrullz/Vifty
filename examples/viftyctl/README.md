@@ -4,7 +4,7 @@ These scripts are small convenience wrappers around `guarded-run.sh`. They keep
 common developer workloads on Vifty's safe path:
 
 1. preflight that the child command is a regular executable path or resolves to one on `PATH`;
-2. read-only `viftyctl capabilities --json` and require the safe `runLifecycle` contract used by `viftyctl run`;
+2. read-only `viftyctl capabilities --json`, require advertised `run` command support, require the requested workload name, and require the safe `runLifecycle` contract used by `viftyctl run`;
 3. read-only `viftyctl diagnose --json`;
 4. fail closed when readiness is blocked or `safeToRequestCooling` is false;
 5. delegate to `viftyctl run --json` with one bounded lease;

@@ -104,6 +104,8 @@ capabilities_json="$("$viftyctl" capabilities --json)"
 capabilities_status=$?
 set -e
 
+capability_commands="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract commands json -o - - 2>/dev/null || printf '')"
+capability_workloads="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract workloads json -o - - 2>/dev/null || printf '')"
 run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
@@ -116,6 +118,28 @@ supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -ex
 [ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
+
+if ! printf '%s\n' "$capability_commands" | /usr/bin/grep -F '"run"' >/dev/null 2>&1; then
+  echo "guarded-run: viftyctl capabilities does not advertise run command support; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if ! printf '%s\n' "$capability_workloads" | /usr/bin/grep -F "\"$workload\"" >/dev/null 2>&1; then
+  echo "guarded-run: viftyctl capabilities does not advertise workload '$workload'; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
 
 case "$signals_forwarded" in
   *'"INT"'*) forwards_int=1 ;;

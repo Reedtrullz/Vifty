@@ -64,6 +64,38 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRequiresCapabilitiesRunCommandSupport() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilityCommands: ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto"]
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise run command support"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""commands":["status","capabilities","diagnose","audit","prepare","restore-auto"]"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRequiresRequestedWorkloadSupport() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilityWorkloads: ["build", "localModel", "custom"]
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise workload 'test'"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""workloads":["build","localModel","custom"]"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunForceRetryIsOptIn() throws {
         let harness = try ScriptHarness(state: "ready")
 
@@ -414,6 +446,8 @@ private final class ScriptHarness {
         capabilitiesExitCode: Int = 0,
         includeRunLifecycle: Bool = true,
         supportsForceRetry: Bool = true,
+        capabilityCommands: [String] = ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"],
+        capabilityWorkloads: [String] = ["build", "test", "localModel", "custom"],
         runLifecycleOverride: String? = nil,
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
@@ -439,6 +473,8 @@ private final class ScriptHarness {
                 capabilitiesExitCode: capabilitiesExitCode,
                 includeRunLifecycle: includeRunLifecycle,
                 supportsForceRetry: supportsForceRetry,
+                capabilityCommands: capabilityCommands,
+                capabilityWorkloads: capabilityWorkloads,
                 runLifecycleOverride: runLifecycleOverride,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
@@ -522,6 +558,8 @@ private final class ScriptHarness {
         capabilitiesExitCode: Int,
         includeRunLifecycle: Bool,
         supportsForceRetry: Bool,
+        capabilityCommands: [String],
+        capabilityWorkloads: [String],
         runLifecycleOverride: String?,
         capabilitiesOutputOverride: String?
     ) throws {
@@ -534,9 +572,11 @@ private final class ScriptHarness {
             ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
             : "")
         let supportsForceRetryValue = supportsForceRetry ? "true" : "false"
+        let commandsJSON = Self.jsonStringArray(capabilityCommands)
+        let workloadsJSON = Self.jsonStringArray(capabilityWorkloads)
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"supportsForceRetry":\#(supportsForceRetryValue)}"#
-            : #"{"schemaVersion":1,"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle)}"#)
+            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue)}"#
+            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle)}"#)
         let script = """
         #!/bin/sh
         set -eu
@@ -586,5 +626,10 @@ private final class ScriptHarness {
 
     private static func defaultSafeToRequestCooling(for state: String) -> Bool {
         state == "ready" || state == "degraded"
+    }
+
+    private static func jsonStringArray(_ values: [String]) -> String {
+        let data = try! JSONSerialization.data(withJSONObject: values)
+        return String(decoding: data, as: UTF8.self)
     }
 }
