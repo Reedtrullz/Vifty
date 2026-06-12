@@ -20,6 +20,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .task {
+            model.start()
+        }
     }
 
     private var helperNeedsAttention: Bool {
