@@ -480,6 +480,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
         XCTAssertTrue(workplan.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
+        XCTAssertTrue(workplan.contains("duplicate wrapper options"))
         XCTAssertTrue(workplan.contains("do not retag it"))
         XCTAssertTrue(workplan.contains("do not promote Homebrew until the future Developer ID lane passes"))
         XCTAssertFalse(workplan.contains("401 XCTest cases"))

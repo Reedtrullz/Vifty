@@ -52,6 +52,16 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .unknownOption("--rpm"))
     }
 
+    func testPrepareDuplicateOptionThrows() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--duration", "20m",
+            "--max-rpm-percent", "75"
+        ], equals: .duplicateOption("--duration"))
+    }
+
     func testPrepareUnexpectedPositionalArgumentThrows() {
         assertParseError([
             "prepare",
@@ -231,6 +241,35 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .missingChildCommand)
     }
 
+    func testRunDuplicateWrapperOptionThrowsBeforeChildSeparator() {
+        assertParseError([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--max-rpm-percent", "90",
+            "--",
+            "swift", "test"
+        ], equals: .duplicateOption("--max-rpm-percent"))
+    }
+
+    func testRunAllowsDuplicateChildOptionsAfterSeparator() throws {
+        let command = try ViftyCtlArguments.parse([
+            "run",
+            "--workload", "test",
+            "--duration", "10m",
+            "--max-rpm-percent", "70",
+            "--",
+            "swift", "test", "--filter", "A", "--filter", "B"
+        ])
+
+        guard case let .run(_, childArguments, _, _) = command else {
+            return XCTFail("Expected run command")
+        }
+
+        XCTAssertEqual(childArguments, ["swift", "test", "--filter", "A", "--filter", "B"])
+    }
+
     func testRequestsJSONDetectsPrepareFlagForParseErrors() {
         XCTAssertTrue(ViftyCtlArguments.requestsJSON([
             "prepare",
@@ -268,6 +307,7 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(ViftyCtlArguments.commandNameHint([]), "unknown")
         XCTAssertEqual(ViftyCtlArguments.commandNameHint(["prepare", "--json"]), "prepare")
         XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.invalidDuration), "invalid or missing --duration")
+        XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.duplicateOption("--duration")), "duplicate option '--duration'")
         XCTAssertEqual(
             ViftyCtlArguments.humanReadableParseError(.unknownCommand("frobnicate")),
             "unknown command 'frobnicate'"

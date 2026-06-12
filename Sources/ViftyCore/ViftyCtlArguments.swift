@@ -108,6 +108,8 @@ public enum ViftyCtlArguments {
             return "run requires -- followed by a child command"
         case .unknownOption(let option):
             return "unknown option '\(option)'"
+        case .duplicateOption(let option):
+            return "duplicate option '\(option)'"
         case .unexpectedArgument(let argument):
             return "unexpected argument '\(argument)'"
         }
@@ -128,6 +130,7 @@ public enum ViftyCtlArguments {
     ) throws {
         let allowedFlags = flagOnly.union(valueFlags)
         var index = arguments.startIndex
+        var seenOptions = Set<String>()
 
         while index < arguments.endIndex {
             let argument = arguments[index]
@@ -136,6 +139,9 @@ public enum ViftyCtlArguments {
             }
             guard allowedFlags.contains(argument) else {
                 throw ViftyCtlParseError.unknownOption(argument)
+            }
+            guard seenOptions.insert(argument).inserted else {
+                throw ViftyCtlParseError.duplicateOption(argument)
             }
 
             let valueIndex = arguments.index(after: index)
@@ -250,5 +256,6 @@ public enum ViftyCtlParseError: Error, Equatable, Sendable {
     case invalidLimit
     case missingChildCommand
     case unknownOption(String)
+    case duplicateOption(String)
     case unexpectedArgument(String)
 }
