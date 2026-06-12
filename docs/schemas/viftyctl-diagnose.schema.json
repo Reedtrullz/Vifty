@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
   "title": "viftyctl diagnose --json readiness report",
-  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked or safeToRequestCooling=false as a hard stop before requesting Vifty cooling.",
+  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked, safeToRequestCooling=false, or daemonControlPathReady=false as a hard stop before requesting Vifty cooling.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -11,6 +11,7 @@
     "recommendedAgentAction",
     "recommendedRecoveryAction",
     "safeToRequestCooling",
+    "daemonControlPathReady",
     "modelIdentifier",
     "isAppleSilicon",
     "isMacBookPro",
@@ -58,6 +59,10 @@
       ]
     },
     "safeToRequestCooling": {
+      "type": "boolean"
+    },
+    "daemonControlPathReady": {
+      "description": "True only when diagnose reached the daemon-backed snapshot and agent-control status paths required before preparing bounded cooling. If false, agents must repair the helper instead of inferring write readiness from fallback telemetry.",
       "type": "boolean"
     },
     "modelIdentifier": {
@@ -228,6 +233,7 @@
           "enum": [
             "daemonSnapshotAvailable",
             "agentControlStatusAvailable",
+            "daemonControlPathReady",
             "supportedHardware",
             "agentControlEnabled",
             "temperatureSensorsPresent",

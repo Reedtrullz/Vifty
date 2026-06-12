@@ -278,11 +278,13 @@ state="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract state raw -o 
 recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedAgentAction raw -o - - 2>/dev/null || printf '')"
 recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedRecoveryAction raw -o - - 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
+daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$recommended_action" = "null" ] && recommended_action=""
 [ "$recommended_recovery_action" = "null" ] && recommended_recovery_action=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
+[ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
   echo "guarded-run: Vifty diagnose failed; refusing to request cooling." >&2
@@ -306,13 +308,26 @@ case "$state" in
     ;;
 esac
 
-if [ -z "$recommended_action" ] || [ -z "$recommended_recovery_action" ] || [ -z "$safe_to_request" ]; then
+if [ -z "$recommended_action" ] ||
+   [ -z "$recommended_recovery_action" ] ||
+   [ -z "$safe_to_request" ] ||
+   [ -z "$daemon_control_path_ready" ]; then
   echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
   printf '%s\n' "$diagnose_json" >&2
   exit 75
 fi
 
 case "$safe_to_request" in
+  true|false)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    printf '%s\n' "$diagnose_json" >&2
+    exit 75
+    ;;
+esac
+
+case "$daemon_control_path_ready" in
   true|false)
     ;;
   *)
@@ -361,6 +376,13 @@ if [ "$safe_to_request" != "true" ]; then
       echo "guarded-run: Vifty reports safeToRequestCooling=$safe_to_request for action '$recommended_action'; refusing to request cooling." >&2
       ;;
   esac
+  print_readiness_recovery_action "$recommended_recovery_action"
+  printf '%s\n' "$diagnose_json" >&2
+  exit 75
+fi
+
+if [ "$daemon_control_path_ready" != "true" ]; then
+  echo "guarded-run: Vifty daemon control path is not ready; refusing to request cooling." >&2
   print_readiness_recovery_action "$recommended_recovery_action"
   printf '%s\n' "$diagnose_json" >&2
   exit 75

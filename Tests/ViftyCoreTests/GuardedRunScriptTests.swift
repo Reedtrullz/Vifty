@@ -290,7 +290,11 @@ final class GuardedRunScriptTests: XCTestCase {
     }
 
     func testGuardedRunBlocksBeforeRunWhenDiagnoseBlocks() throws {
-        let harness = try ScriptHarness(state: "blocked", recommendedRecoveryAction: "repairHelper")
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "repairHelper",
+            daemonControlPathReady: false
+        )
 
         let result = try harness.runGuardedRun([
             "test", "20m", "70", "swift test", "--", "swift", "test"
@@ -300,6 +304,25 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("readiness is blocked"))
         XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
         XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunBlocksBeforeRunWhenDaemonControlPathIsNotReady() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            recommendedRecoveryAction: "repairHelper",
+            safeToRequestCooling: true,
+            daemonControlPathReady: false
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon control path is not ready"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""daemonControlPathReady":false"#), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -519,6 +542,7 @@ private final class ScriptHarness {
         recommendedAction: String? = nil,
         recommendedRecoveryAction: String? = nil,
         safeToRequestCooling: Bool? = nil,
+        daemonControlPathReady: Bool = true,
         diagnoseExitCode: Int = 0,
         emitReadinessOnDiagnoseFailure: Bool = false,
         includeDecisionFields: Bool = true,
@@ -551,6 +575,7 @@ private final class ScriptHarness {
                         recommendedAction: recommendedAction ?? Self.defaultRecommendedAction(for: state)
                     ),
                 safeToRequestCooling: safeToRequestCooling ?? Self.defaultSafeToRequestCooling(for: state),
+                daemonControlPathReady: daemonControlPathReady,
                 diagnoseExitCode: diagnoseExitCode,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
                 includeDecisionFields: includeDecisionFields,
@@ -637,6 +662,7 @@ private final class ScriptHarness {
         recommendedAction: String,
         recommendedRecoveryAction: String,
         safeToRequestCooling: Bool,
+        daemonControlPathReady: Bool,
         diagnoseExitCode: Int,
         emitReadinessOnDiagnoseFailure: Bool,
         includeDecisionFields: Bool,
@@ -652,7 +678,7 @@ private final class ScriptHarness {
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
         let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
-            ? #","recommendedAgentAction":"\#(recommendedAction)","recommendedRecoveryAction":"\#(recommendedRecoveryAction)","safeToRequestCooling":\#(safeToRequestCooling)"#
+            ? #","recommendedAgentAction":"\#(recommendedAction)","recommendedRecoveryAction":"\#(recommendedRecoveryAction)","safeToRequestCooling":\#(safeToRequestCooling),"daemonControlPathReady":\#(daemonControlPathReady)"#
             : "")
         let commandError = commandErrorOverride ?? #"{"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle

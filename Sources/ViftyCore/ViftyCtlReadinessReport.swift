@@ -89,6 +89,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var recommendedAgentAction: ViftyCtlRecommendedAgentAction?
     public var recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction
     public var safeToRequestCooling: Bool?
+    public var daemonControlPathReady: Bool
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
     public var isMacBookPro: Bool
@@ -111,6 +112,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case recommendedAgentAction
         case recommendedRecoveryAction
         case safeToRequestCooling
+        case daemonControlPathReady
         case modelIdentifier
         case isAppleSilicon
         case isMacBookPro
@@ -134,6 +136,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         recommendedAgentAction: ViftyCtlRecommendedAgentAction? = nil,
         recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction? = nil,
         safeToRequestCooling: Bool? = nil,
+        daemonControlPathReady: Bool? = nil,
         modelIdentifier: String,
         isAppleSilicon: Bool,
         isMacBookPro: Bool,
@@ -157,6 +160,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.recommendedRecoveryAction = recommendedRecoveryAction
             ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
+        self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
         self.isMacBookPro = isMacBookPro
@@ -190,6 +194,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 forKey: .recommendedRecoveryAction
             ),
             safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
+            daemonControlPathReady: try container.decodeIfPresent(Bool.self, forKey: .daemonControlPathReady),
             modelIdentifier: try container.decode(String.self, forKey: .modelIdentifier),
             isAppleSilicon: try container.decode(Bool.self, forKey: .isAppleSilicon),
             isMacBookPro: try container.decode(Bool.self, forKey: .isMacBookPro),
@@ -221,6 +226,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encodeIfPresent(recommendedAgentAction, forKey: .recommendedAgentAction)
         try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
+        try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
         try container.encode(modelIdentifier, forKey: .modelIdentifier)
         try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
         try container.encode(isMacBookPro, forKey: .isMacBookPro)
@@ -264,6 +270,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             state: state,
             recommendedAgentAction: recommendedAgentAction,
             safeToRequestCooling: safeToRequestCooling(for: recommendedAgentAction),
+            daemonControlPathReady: daemonControlPathReady(from: checks),
             modelIdentifier: snapshot.modelIdentifier,
             isAppleSilicon: snapshot.isAppleSilicon,
             isMacBookPro: snapshot.isMacBookPro,
@@ -292,6 +299,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         [
             daemonSnapshotAvailableCheck(daemonSnapshotError),
             agentControlStatusAvailableCheck(agentControlStatusError),
+            daemonControlPathReadyCheck(
+                daemonSnapshotError: daemonSnapshotError,
+                agentControlStatusError: agentControlStatusError
+            ),
             supportedHardwareCheck(snapshot),
             agentControlEnabledCheck(agentControl),
             temperatureSensorsPresentCheck(snapshot),
@@ -338,6 +349,21 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             severity: .info,
             passed: true,
             message: "Daemon agent-control status is available."
+        )
+    }
+
+    private static func daemonControlPathReadyCheck(
+        daemonSnapshotError: String?,
+        agentControlStatusError: String?
+    ) -> ViftyCtlReadinessCheck {
+        let passed = daemonSnapshotError == nil && agentControlStatusError == nil
+        return ViftyCtlReadinessCheck(
+            id: "daemonControlPathReady",
+            severity: .error,
+            passed: passed,
+            message: passed
+                ? "Daemon-backed control path is ready for bounded agent cooling requests."
+                : "Daemon-backed control path is unavailable; repair the helper before requesting cooling."
         )
     }
 
@@ -541,7 +567,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         checks: [ViftyCtlReadinessCheck]
     ) -> ViftyCtlReadinessRecoveryAction {
         if failedCheck("daemonSnapshotAvailable", in: checks)
-            || failedCheck("agentControlStatusAvailable", in: checks) {
+            || failedCheck("agentControlStatusAvailable", in: checks)
+            || failedCheck("daemonControlPathReady", in: checks) {
             return .repairHelper
         }
 
@@ -572,6 +599,14 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case .restoreAutoBeforeRequestingCooling, .doNotRequestCooling:
             return false
         }
+    }
+
+    private static func daemonControlPathReady(from checks: [ViftyCtlReadinessCheck]) -> Bool {
+        if checks.contains(where: { $0.id == "daemonControlPathReady" }) {
+            return !failedCheck("daemonControlPathReady", in: checks)
+        }
+        return !failedCheck("daemonSnapshotAvailable", in: checks)
+            && !failedCheck("agentControlStatusAvailable", in: checks)
     }
 
     private static func failedCheck(_ id: String, in checks: [ViftyCtlReadinessCheck]) -> Bool {

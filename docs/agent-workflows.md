@@ -61,12 +61,13 @@ The readiness report has `schemaVersion: 1` and a top-level `state`:
 - `degraded` - no hard blocker, but one or more warning checks failed.
 - `blocked` - at least one error check failed; do not request cooling.
 
-It also includes `recommendedAgentAction` and `safeToRequestCooling` so agents do not need to infer the next step from prose:
+It also includes `recommendedAgentAction`, `safeToRequestCooling`, and `daemonControlPathReady` so agents do not need to infer the next step from prose or fallback telemetry:
 
 - `requestCooling` / `safeToRequestCooling: true` - safe to request a normal bounded lease.
 - `requestCoolingWithCaution` / `safeToRequestCooling: true` - a warning exists; reduce duration/RPM or be ready to back off.
 - `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease is active; restore Auto or wait before requesting new cooling.
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
+- `daemonControlPathReady: false` - the daemon-backed snapshot or agent-control path is unavailable; repair the helper before requesting cooling, even if other telemetry exists.
 
 `recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
 
@@ -88,6 +89,7 @@ Important fields:
 - `recommendedAgentAction`
 - `recommendedRecoveryAction`
 - `safeToRequestCooling`
+- `daemonControlPathReady`
 - `fanCount`
 - `controllableFanCount`
 - `temperatureSensorCount`
@@ -103,6 +105,7 @@ Important readiness check IDs:
 
 - `daemonSnapshotAvailable`
 - `agentControlStatusAvailable`
+- `daemonControlPathReady`
 - `supportedHardware`
 - `agentControlEnabled`
 - `temperatureSensorsPresent`
@@ -247,8 +250,9 @@ The wrapper:
 - treats nonzero blocked diagnose reports as readiness blocks,
 - fails closed and prints any structured diagnose failure before requesting cooling,
 - refuses to continue on `blocked`,
-- requires `recommendedAgentAction`, `recommendedRecoveryAction`, and `safeToRequestCooling` to be present,
+- requires `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady` to be present,
 - treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease case,
+- treats `daemonControlPathReady: false` as a hard stop before cooling,
 - prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,

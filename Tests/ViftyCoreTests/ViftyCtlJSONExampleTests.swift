@@ -65,6 +65,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
+        XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertEqual(report.controllableFanCount, 2)
@@ -78,6 +79,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
     func testDiagnoseLegacyPayloadDecodesWithRecoveryDefault() throws {
         var payload = try readJSON(fixtureURL("diagnose-ready.json"))
         payload.removeValue(forKey: "recommendedRecoveryAction")
+        payload.removeValue(forKey: "daemonControlPathReady")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let report = try JSONDecoder().decode(ViftyCtlReadinessReport.self, from: data)
@@ -86,6 +88,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
+        XCTAssertTrue(report.daemonControlPathReady)
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
@@ -191,6 +194,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "recommendedAgentAction",
             "recommendedRecoveryAction",
             "safeToRequestCooling",
+            "daemonControlPathReady",
             "isAppleSilicon",
             "isMacBookPro",
             "thermalPressure",
@@ -236,6 +240,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(enumValues(named: "id", in: checkProperties), [
             "daemonSnapshotAvailable",
             "agentControlStatusAvailable",
+            "daemonControlPathReady",
             "supportedHardware",
             "agentControlEnabled",
             "temperatureSensorsPresent",

@@ -21,10 +21,58 @@
       "severity": "info"
     },
     {
+      "id": "agentControlStatusAvailable",
+      "message": "Daemon agent-control status is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "daemonControlPathReady",
+      "message": "Daemon-backed control path is ready for bounded agent cooling requests.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
       "id": "supportedHardware",
       "message": "Apple Silicon MacBook Pro hardware detected.",
       "passed": true,
-      "severity": "info"
+      "severity": "error"
+    },
+    {
+      "id": "agentControlEnabled",
+      "message": "Agent cooling policy is enabled in the daemon.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "temperatureSensorsPresent",
+      "message": "2 temperature sensor(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "controllableFansPresent",
+      "message": "2 controllable fan(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsValid",
+      "message": "Controllable fan IDs are valid.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsUnique",
+      "message": "Controllable fan IDs are unique.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanRangesValid",
+      "message": "Controllable fan RPM ranges are valid.",
+      "passed": true,
+      "severity": "error"
     },
     {
       "id": "thermalPressureSafe",
@@ -37,9 +85,16 @@
       "message": "No active agent cooling lease.",
       "passed": true,
       "severity": "warning"
+    },
+    {
+      "id": "fanModeTelemetry",
+      "message": "Fan hardware mode telemetry is available.",
+      "passed": true,
+      "severity": "info"
     }
   ],
   "controllableFanCount": 2,
+  "daemonControlPathReady": true,
   "daemonSnapshotError": null,
   "fanCount": 2,
   "fans": [
