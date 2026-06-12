@@ -4,6 +4,8 @@ import ViftyCore
 struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @StateObject private var daemonInstaller = DaemonInstaller()
+    @State private var helperRefreshTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -79,6 +81,14 @@ struct MenuBarView: View {
                     .lineLimit(3)
             }
 
+            if model.helperHealthNeedsAttention {
+                Button(daemonInstaller.actionTitle) {
+                    performHelperAction()
+                }
+                .disabled(!model.helperHealthNeedsAttention || !daemonInstaller.canInstall)
+                .help(daemonInstaller.actionHelp)
+            }
+
             Divider()
 
             HStack {
@@ -100,8 +110,27 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 320)
+        .onAppear {
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
         .task {
             model.start()
+        }
+    }
+
+    private func performHelperAction() {
+        helperRefreshTask?.cancel()
+        daemonInstaller.installOrOpenApproval()
+        helperRefreshTask = Task { @MainActor in
+            await model.pollOnce()
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            daemonInstaller.refresh()
+            await model.pollOnce()
         }
     }
 

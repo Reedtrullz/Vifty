@@ -26,7 +26,7 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 - **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
 - **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
-- **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
+- **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible state and daemon-owned expiry.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
@@ -210,7 +210,7 @@ When `VIFTY_XPC_ALLOWED_TEAM_ID` is set, the root daemon only accepts XPC client
 
 If manual fan control misbehaves, restore Auto before trying anything else:
 
-> `AppleSMC call failed with kIOReturnNotPrivileged (-536870207)` means macOS rejected a direct fan write because it was not running through the privileged helper/root path. In the app, use **Reinstall Helper** and approve the helper if System Settings asks. From Terminal, direct `ViftyHelper setFixed` / `auto` writes require `sudo`.
+> `AppleSMC call failed with kIOReturnNotPrivileged (-536870207)` means macOS rejected a direct fan write because it was not running through the privileged helper/root path. In the app or menu bar, use **Reinstall Helper** or **Repair Helper** and approve the helper if System Settings asks. From Terminal, direct `ViftyHelper setFixed` / `auto` writes require `sudo`.
 
 1. In the Vifty UI, select **Auto** in the Mode picker and click **Apply**.
 2. If the UI is unavailable, use the helper CLI from the repo root after building release binaries. First inspect supported fans and their limits:
