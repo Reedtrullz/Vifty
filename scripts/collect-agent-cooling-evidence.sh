@@ -153,13 +153,15 @@ Attach or paste:
 - viftyctl-audit.json
 - manifest.tsv
 - agent-cooling-evidence-summary.json
+- privacy-review.tsv
 
 If viftyctl-diagnose.status is 75, readiness was blocked. Do not retry prepare
 or run while diagnose reports blocked readiness, safeToRequestCooling=false, or
 daemonControlPathReady=false.
 
-Before sharing publicly, review the JSON for private local paths, hostnames, or
-other identifiers.
+Before sharing publicly, check privacy-review.tsv. A nonzero privacy review
+means the named files may contain private local paths, hostnames, serial-number
+labels, hardware-identifier labels, or other identifiers.
 EOF
 
 cat > "${OUTPUT_DIR}/metadata.txt" <<EOF
@@ -170,28 +172,112 @@ viftyctl=${VIFTYCTL}
 auditLimit=${AUDIT_LIMIT}
 EOF
 
-ruby -rjson -e '
-  manifest_path, output_path, generated_at, viftyctl, audit_limit = ARGV
-  checks = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
-    name, status, stdout, stderr = line.split("\t", 4)
-    {
-      "name" => name,
-      "status" => status.to_i,
-      "stdout" => stdout,
-      "stderr" => stderr,
-      "statusFile" => "#{name}.status"
+write_summary_json() {
+  ruby -rjson -e '
+    manifest_path, generated_at, viftyctl, audit_limit = ARGV
+    checks = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
+      name, status, stdout, stderr = line.split("\t", 4)
+      {
+        "name" => name,
+        "status" => status.to_i,
+        "stdout" => stdout,
+        "stderr" => stderr,
+        "statusFile" => "#{name}.status"
+      }
+    end
+    puts JSON.pretty_generate({
+      "schemaVersion" => 1,
+      "generatedAtUTC" => generated_at,
+      "readOnly" => true,
+      "coolingCommandsRun" => false,
+      "viftyctl" => viftyctl,
+      "auditLimit" => audit_limit.to_i,
+      "commands" => checks
+    })
+  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "${AUDIT_LIMIT}" > "${SUMMARY_JSON_PATH}"
+}
+
+capture_privacy_review() {
+  local name="privacy-review"
+  local stdout_name="privacy-review.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local host_name=""
+  local short_host_name=""
+  local status
+
+  host_name="$(/bin/hostname 2>/dev/null || true)"
+  short_host_name="$(/bin/hostname -s 2>/dev/null || true)"
+
+  set +e
+  ruby -e '
+    bundle, home_path, host_name, short_host_name = ARGV
+    ignored = {
+      "privacy-review.tsv" => true,
+      "privacy-review.stderr" => true,
+      "privacy-review.status" => true,
+      "checksums.tsv" => true
     }
-  end
-  puts JSON.pretty_generate({
-    "schemaVersion" => 1,
-    "generatedAtUTC" => generated_at,
-    "readOnly" => true,
-    "coolingCommandsRun" => false,
-    "viftyctl" => viftyctl,
-    "auditLimit" => audit_limit.to_i,
-    "commands" => checks
-  })
-' "${MANIFEST_PATH}" "${OUTPUT_DIR}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "${AUDIT_LIMIT}" > "${SUMMARY_JSON_PATH}"
+    common_host_tokens = %w[localhost mac macbook macbookpro]
+    host_tokens = [host_name, short_host_name]
+      .map(&:to_s)
+      .map(&:strip)
+      .uniq
+      .select { |value| value.length >= 5 }
+      .reject { |value| common_host_tokens.include?(value.downcase.gsub(/[^a-z0-9]/, "")) }
+    patterns = [
+      ["serial-number-label", /serial\s+number|IOPlatformSerialNumber/i],
+      ["hardware-uuid-label", /hardware\s+uuid|platform\s+uuid|IOPlatformUUID/i],
+      ["user-home-path", %r{/Users/[^/\s]+}]
+    ]
+    if home_path.to_s.start_with?("/Users/")
+      patterns << ["current-home-path", Regexp.new(Regexp.escape(home_path))]
+    end
+    host_tokens.each do |token|
+      patterns << ["local-hostname", Regexp.new(Regexp.escape(token), Regexp::IGNORECASE)]
+    end
+
+    findings = []
+    Dir.children(bundle).sort.each do |entry|
+      next if ignored[entry]
+      path = File.join(bundle, entry)
+      next unless File.file?(path)
+      begin
+        File.foreach(path).with_index(1) do |line, line_number|
+          patterns.each do |kind, pattern|
+            findings << [entry, line_number, kind] if line.match?(pattern)
+          end
+        end
+      rescue ArgumentError
+        next
+      end
+    end
+
+    puts "finding\tfile\tline\tkind"
+    if findings.empty?
+      puts "none\t-\t-\tpassed"
+      exit 0
+    end
+
+    findings.each do |file, line, kind|
+      puts "redaction-needed\t#{file}\t#{line}\t#{kind}"
+    end
+    warn "privacy review found local identifiers; review or redact the named files before sharing the bundle"
+    exit 1
+  ' "${OUTPUT_DIR}" "${HOME:-}" "${host_name}" "${short_host_name}" > "${stdout_path}" 2> "${stderr_path}"
+  status=$?
+  set -e
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
+# Write a provisional summary so privacy review also scans generated summary JSON.
+write_summary_json
+capture_privacy_review
+write_summary_json
 
 printf 'sha256\tbytes\tfile\n' > "${CHECKSUM_PATH}"
 while IFS= read -r -d '' file_path; do

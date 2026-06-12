@@ -16,9 +16,10 @@ scripts/collect-agent-cooling-evidence.sh \
 ```
 
 It captures `capabilities --json`, `diagnose --json`, `status --json`, and
-`audit --limit 20 --json` plus exit statuses, a manifest, and checksums. It does
-not request cooling, restore Auto, invoke `ViftyHelper`, or write SMC keys. If a
-reporter cannot run the script, ask for the same read-only commands manually:
+`audit --limit 20 --json` plus exit statuses, a manifest, `privacy-review.tsv`,
+and checksums. It does not request cooling, restore Auto, invoke `ViftyHelper`,
+or write SMC keys. If a reporter cannot run the script, ask for the same
+read-only commands manually:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
@@ -48,7 +49,11 @@ If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collec
 
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
-Before asking someone to attach a bundle publicly, check `privacy-review.tsv`. A nonzero `privacy-review` row means the named files may contain a hostname, `/Users/...` path, serial-number label, or hardware UUID label and should be redacted or shared privately.
+Before asking someone to attach a bundle publicly, check `privacy-review.tsv`.
+A nonzero `privacy-review` row means the named files may contain a hostname,
+`/Users/...` path, serial-number label, or hardware UUID label and should be
+redacted or shared privately. This applies to both the lightweight agent
+evidence bundle and the fuller validation evidence bundle.
 
 ## Triage Buckets
 

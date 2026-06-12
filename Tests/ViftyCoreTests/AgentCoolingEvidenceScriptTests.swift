@@ -27,6 +27,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         XCTAssertTrue(try harness.read("README.txt").contains("does not request cooling leases"))
         XCTAssertTrue(try harness.read("README.txt").contains("safeToRequestCooling=false"))
+        XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=true"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=false"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("auditLimit=20"))
@@ -37,7 +38,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(manifest.contains("viftyctl-diagnose\t0\tviftyctl-diagnose.json\tviftyctl-diagnose.stderr"))
         XCTAssertTrue(manifest.contains("viftyctl-status\t0\tviftyctl-status.json\tviftyctl-status.stderr"))
         XCTAssertTrue(manifest.contains("viftyctl-audit\t0\tviftyctl-audit.json\tviftyctl-audit.stderr"))
+        XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv\tprivacy-review.stderr"))
         XCTAssertEqual(try harness.read("viftyctl-diagnose.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertEqual(try harness.read("privacy-review.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
 
         XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"daemonStatusAvailable\":true"))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
@@ -49,11 +53,16 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(summary["auditLimit"] as? Int, 20)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
-        XCTAssertEqual(commands.count, 4)
+        XCTAssertEqual(commands.count, 5)
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "viftyctl-audit"
                 && command["status"] as? Int == 0
                 && command["stdout"] as? String == "viftyctl-audit.json"
+        })
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "privacy-review"
+                && command["status"] as? Int == 0
+                && command["stdout"] as? String == "privacy-review.tsv"
         })
 
         let checksums = try harness.read("checksums.tsv")
@@ -66,6 +75,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tviftyctl-diagnose.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-status.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-audit.json"))
+        XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
+        XCTAssertTrue(checksums.contains("\tprivacy-review.status"))
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))
     }
 
@@ -104,6 +115,39 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         })
     }
 
+    func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {
+        let harness = try AgentCoolingEvidenceHarness(includePrivacyLeak: true)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertEqual(
+            try harness.loggedArguments(),
+            [
+                "capabilities --json",
+                "diagnose --json",
+                "status --json",
+                "audit --limit 20 --json"
+            ]
+        )
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("redaction-needed\tviftyctl-status.json"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("serial-number-label"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("user-home-path"))
+        XCTAssertTrue(try harness.read("privacy-review.stderr").contains("privacy review found local identifiers"))
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("privacy-review\t1\tprivacy-review.tsv"))
+
+        let summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "privacy-review"
+                && command["status"] as? Int == 1
+                && command["stdout"] as? String == "privacy-review.tsv"
+        })
+    }
+
     func testCollectorRejectsUnboundedAuditLimitBeforeCallingViftyCtl() throws {
         let harness = try AgentCoolingEvidenceHarness()
 
@@ -134,10 +178,12 @@ private final class AgentCoolingEvidenceHarness {
     let logURL: URL
     private let diagnoseJSON: String
     private let diagnoseExitCode: Int
+    private let includePrivacyLeak: Bool
 
     init(
         diagnoseJSON: String = #"{"state":"ready","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
-        diagnoseExitCode: Int = 0
+        diagnoseExitCode: Int = 0,
+        includePrivacyLeak: Bool = false
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
@@ -147,6 +193,7 @@ private final class AgentCoolingEvidenceHarness {
         logURL = rootURL.appendingPathComponent("viftyctl.log")
         self.diagnoseJSON = diagnoseJSON
         self.diagnoseExitCode = diagnoseExitCode
+        self.includePrivacyLeak = includePrivacyLeak
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         try writeFakeViftyCtl()
@@ -219,7 +266,11 @@ private final class AgentCoolingEvidenceHarness {
             ;;
           status)
             test "${2:-}" = "--json"
-            printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null}'
+            if [ "\(includePrivacyLeak ? "1" : "0")" = "1" ]; then
+              printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null,"debug":"Serial Number: C02SECRET1234 /Users/private-user/Vifty.app"}'
+            else
+              printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null}'
+            fi
             ;;
           audit)
             test "${2:-}" = "--limit"

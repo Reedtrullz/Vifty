@@ -40,8 +40,10 @@ scripts/collect-agent-cooling-evidence.sh \
 
 The script writes `viftyctl-diagnose.json`, `viftyctl-capabilities.json`,
 `viftyctl-status.json`, `viftyctl-audit.json`, command status files, a manifest,
-and a checksum list. It does not request cooling, restore Auto, call
-`ViftyHelper`, or write SMC keys.
+`privacy-review.tsv`, and a checksum list. It does not request cooling, restore
+Auto, call `ViftyHelper`, or write SMC keys. Check `privacy-review.tsv` before
+posting the bundle publicly; redact or share privately if it reports
+`redaction-needed`.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:
@@ -61,9 +63,10 @@ sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
 ```
 
 Do not attach evidence publicly until you have checked for private data. The
-validation collector writes `privacy-review.tsv`; a nonzero privacy row means
-the bundle may contain a hostname, `/Users/...` path, serial-number label, or
-hardware UUID label that should be redacted or shared privately.
+agent evidence collector and validation collector both write `privacy-review.tsv`;
+a nonzero privacy row means the bundle may contain a hostname, `/Users/...`
+path, serial-number label, or hardware UUID label that should be redacted or
+shared privately.
 
 ## Safety Rules
 
