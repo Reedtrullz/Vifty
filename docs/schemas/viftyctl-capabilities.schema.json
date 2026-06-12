@@ -18,6 +18,7 @@
     "supportsForceRetry",
     "runLifecycle",
     "directControlLifecycle",
+    "metadataLimits",
     "exitCodes"
   ],
   "properties": {
@@ -80,6 +81,9 @@
     },
     "directControlLifecycle": {
       "$ref": "#/$defs/directControlLifecycle"
+    },
+    "metadataLimits": {
+      "$ref": "#/$defs/metadataLimits"
     },
     "exitCodes": {
       "$ref": "#/$defs/exitCodes"
@@ -301,6 +305,26 @@
         "preferRunForSingleChildWorkloads": {
           "type": "boolean",
           "description": "True when agents should prefer viftyctl run for ordinary single child workloads so prepare, child execution, signal forwarding, and Auto restore remain one lifecycle."
+        }
+      }
+    },
+    "metadataLimits": {
+      "type": "object",
+      "description": "Machine-readable prepare/run metadata limits. Agents should use these values before constructing reason or idempotency-key strings instead of hardcoding local guesses.",
+      "required": [
+        "maximumReasonLength",
+        "maximumIdempotencyKeyLength"
+      ],
+      "properties": {
+        "maximumReasonLength": {
+          "type": "integer",
+          "const": 512,
+          "description": "Maximum number of characters accepted for prepare/run reason metadata after trimming."
+        },
+        "maximumIdempotencyKeyLength": {
+          "type": "integer",
+          "const": 256,
+          "description": "Maximum number of characters accepted for prepare/run idempotency-key metadata after trimming."
         }
       }
     }

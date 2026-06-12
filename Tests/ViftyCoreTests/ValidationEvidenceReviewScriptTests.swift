@@ -1170,5 +1170,7 @@ private final class ValidationEvidenceReviewHarness {
     directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse
     directControlLifecycle.restoreAutoScopedByIdempotencyKey\tfalse\tfalse
     directControlLifecycle.preferRunForSingleChildWorkloads\ttrue\ttrue
+    metadataLimits.maximumReasonLength\t512\t512
+    metadataLimits.maximumIdempotencyKeyLength\t256\t256
     """
 }

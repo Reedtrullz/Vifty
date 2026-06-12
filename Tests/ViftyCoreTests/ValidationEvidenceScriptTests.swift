@@ -75,6 +75,8 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse"))
         XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.restoreAutoScopedByIdempotencyKey\tfalse\tfalse"))
         XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.preferRunForSingleChildWorkloads\ttrue\ttrue"))
+        XCTAssertTrue(capabilitiesContract.contains("metadataLimits.maximumReasonLength\t512\t512"))
+        XCTAssertTrue(capabilitiesContract.contains("metadataLimits.maximumIdempotencyKeyLength\t256\t256"))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
         XCTAssertTrue(try harness.read("viftyctl-audit.json").contains("\"readOnly\":true"))
         XCTAssertTrue(try harness.read("viftyhelper-probeLocal.txt").contains("Skipped"))
@@ -1051,7 +1053,7 @@ private final class ValidationEvidenceHarness {
         printf '%s\\n' "$*" >> "${FAKE_VIFTYCTL_LOG:?}"
 
         if [ "$#" -eq 2 ] && [ "$1" = "capabilities" ] && [ "$2" = "--json" ]; then
-          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true}}\\n'
+          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}\\n'
           exit 0
         fi
 

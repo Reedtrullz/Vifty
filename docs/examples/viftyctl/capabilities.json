@@ -42,6 +42,10 @@
     "restoreAutoAcceptsIdempotencyKey": false,
     "restoreAutoScopedByIdempotencyKey": false
   },
+  "metadataLimits": {
+    "maximumIdempotencyKeyLength": 256,
+    "maximumReasonLength": 512
+  },
   "schemaVersion": 1,
   "schemaIDs": {
     "audit": "https://vifty.local/schemas/viftyctl-audit.schema.json",

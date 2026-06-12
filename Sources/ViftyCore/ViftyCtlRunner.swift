@@ -68,6 +68,24 @@ public struct ViftyCtlDirectControlLifecycleCapabilities: Codable, Equatable, Se
     )
 }
 
+public struct ViftyCtlMetadataLimits: Codable, Equatable, Sendable {
+    public var maximumReasonLength: Int
+    public var maximumIdempotencyKeyLength: Int
+
+    public init(
+        maximumReasonLength: Int = AgentControlRequest.maximumReasonLength,
+        maximumIdempotencyKeyLength: Int = AgentControlRequest.maximumIdempotencyKeyLength
+    ) {
+        self.maximumReasonLength = maximumReasonLength
+        self.maximumIdempotencyKeyLength = maximumIdempotencyKeyLength
+    }
+
+    public static let unsupported = ViftyCtlMetadataLimits(
+        maximumReasonLength: 0,
+        maximumIdempotencyKeyLength: 0
+    )
+}
+
 public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var commands: [String]
@@ -82,6 +100,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var supportsForceRetry: Bool
     public var runLifecycle: ViftyCtlRunLifecycleCapabilities
     public var directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities
+    public var metadataLimits: ViftyCtlMetadataLimits
     public var exitCodes: ViftyCtlExitCodes
 
     public init(
@@ -98,6 +117,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         supportsForceRetry: Bool = true,
         runLifecycle: ViftyCtlRunLifecycleCapabilities = ViftyCtlRunLifecycleCapabilities(),
         directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities = ViftyCtlDirectControlLifecycleCapabilities(),
+        metadataLimits: ViftyCtlMetadataLimits = ViftyCtlMetadataLimits(),
         exitCodes: ViftyCtlExitCodes = ViftyCtlExitCodes()
     ) {
         self.schemaVersion = schemaVersion
@@ -113,6 +133,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.supportsForceRetry = supportsForceRetry
         self.runLifecycle = runLifecycle
         self.directControlLifecycle = directControlLifecycle
+        self.metadataLimits = metadataLimits
         self.exitCodes = exitCodes
     }
 
@@ -130,6 +151,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         case supportsForceRetry
         case runLifecycle
         case directControlLifecycle
+        case metadataLimits
         case exitCodes
     }
 
@@ -154,6 +176,10 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
             ViftyCtlDirectControlLifecycleCapabilities.self,
             forKey: .directControlLifecycle
         ) ?? .unsupported
+        metadataLimits = try container.decodeIfPresent(
+            ViftyCtlMetadataLimits.self,
+            forKey: .metadataLimits
+        ) ?? .unsupported
         exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
     }
 
@@ -176,6 +202,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         try container.encode(supportsForceRetry, forKey: .supportsForceRetry)
         try container.encode(runLifecycle, forKey: .runLifecycle)
         try container.encode(directControlLifecycle, forKey: .directControlLifecycle)
+        try container.encode(metadataLimits, forKey: .metadataLimits)
         try container.encode(exitCodes, forKey: .exitCodes)
     }
 }

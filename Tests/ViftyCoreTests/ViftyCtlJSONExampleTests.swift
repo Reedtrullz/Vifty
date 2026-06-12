@@ -25,6 +25,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoAcceptsIdempotencyKey, false)
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoScopedByIdempotencyKey, false)
         XCTAssertEqual(capabilities.directControlLifecycle.preferRunForSingleChildWorkloads, true)
+        XCTAssertEqual(capabilities.metadataLimits.maximumReasonLength, AgentControlRequest.maximumReasonLength)
+        XCTAssertEqual(capabilities.metadataLimits.maximumIdempotencyKeyLength, AgentControlRequest.maximumIdempotencyKeyLength)
         XCTAssertEqual(capabilities.exitCodes.blockedReadiness, 75)
         XCTAssertEqual(capabilities.schemas.capabilities, "docs/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemas.audit, "docs/schemas/viftyctl-audit.schema.json")
@@ -48,6 +50,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "supportsForceRetry")
         payload.removeValue(forKey: "runLifecycle")
         payload.removeValue(forKey: "directControlLifecycle")
+        payload.removeValue(forKey: "metadataLimits")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
@@ -55,6 +58,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertFalse(capabilities.supportsForceRetry)
         XCTAssertEqual(capabilities.runLifecycle, .unsupported)
         XCTAssertEqual(capabilities.directControlLifecycle, .unsupported)
+        XCTAssertEqual(capabilities.metadataLimits, .unsupported)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -328,6 +332,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             in: capabilitiesDefinitions,
             arePresentIn: capabilitiesExample["directControlLifecycle"] as? [String: Any],
             context: "capabilities directControlLifecycle"
+        )
+        try assertRequiredFields(
+            definition: "metadataLimits",
+            in: capabilitiesDefinitions,
+            arePresentIn: capabilitiesExample["metadataLimits"] as? [String: Any],
+            context: "capabilities metadataLimits"
         )
         try assertRequiredFields(
             definition: "schemaPathReferences",

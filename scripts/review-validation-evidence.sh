@@ -206,7 +206,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "directControlLifecycle.prepareUsesIdempotencyKey" => "true",
     "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => "false",
     "directControlLifecycle.restoreAutoScopedByIdempotencyKey" => "false",
-    "directControlLifecycle.preferRunForSingleChildWorkloads" => "true"
+    "directControlLifecycle.preferRunForSingleChildWorkloads" => "true",
+    "metadataLimits.maximumReasonLength" => "512",
+    "metadataLimits.maximumIdempotencyKeyLength" => "256"
   }.freeze
 
   SUPPORTED_INSTALL_SOURCES = %w[

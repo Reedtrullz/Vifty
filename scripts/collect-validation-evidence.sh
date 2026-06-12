@@ -555,6 +555,12 @@ capture_capabilities_contract() {
       direct_lifecycle = {}
     end
 
+    metadata_limits = data["metadataLimits"]
+    unless metadata_limits.is_a?(Hash)
+      warn "viftyctl capabilities JSON did not include metadataLimits"
+      metadata_limits = {}
+    end
+
     ok = true
     expected_booleans = {
       "supportsForceRetry" => data["supportsForceRetry"],
@@ -595,6 +601,19 @@ capture_capabilities_contract() {
     missing_signals = expected_signals - signals
     unless missing_signals.empty?
       warn "runLifecycle.signalsForwardedToChild missing #{missing_signals.join(",")}"
+      ok = false
+    end
+
+    expected_integer_limits = {
+      "metadataLimits.maximumReasonLength" => [metadata_limits["maximumReasonLength"], 512],
+      "metadataLimits.maximumIdempotencyKeyLength" => [metadata_limits["maximumIdempotencyKeyLength"], 256]
+    }
+
+    expected_integer_limits.each do |field, (actual, expected)|
+      puts "#{field}\t#{actual}\t#{expected}"
+      next if actual == expected
+
+      warn "#{field} #{actual.inspect} did not match #{expected}"
       ok = false
     end
 
@@ -990,7 +1009,7 @@ write_review_summary() {
   summary_row "stapler-validate-app" "0 for public release" "release-trust" "Stapled notarization ticket should validate for public releases."
   summary_row "viftyctl-capabilities" "0 or 69" "agent-contract" "69 still preserves static JSON but means daemon status was unavailable."
   summary_row "capabilities-schema-resources" "0" "agent-contract" "Capabilities output should advertise installed schema resource paths."
-  summary_row "capabilities-contract" "0" "agent-contract" "Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, and supervised force-retry support."
+  summary_row "capabilities-contract" "0" "agent-contract" "Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, metadata limits, and supervised force-retry support."
   summary_row "viftyctl-status" "0" "agent-contract" "Nonzero means agent status could not be read."
   summary_row "viftyctl-diagnose" "0 or 75" "hardware-and-agent" "75 means a structured blocked readiness report was captured."
   summary_row "viftyctl-audit" "0" "agent-contract" "Read-only recent agent-control audit export should be captured."
