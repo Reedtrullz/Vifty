@@ -42,6 +42,32 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
     )
 }
 
+public struct ViftyCtlDirectControlLifecycleCapabilities: Codable, Equatable, Sendable {
+    public var prepareUsesIdempotencyKey: Bool
+    public var restoreAutoAcceptsIdempotencyKey: Bool
+    public var restoreAutoScopedByIdempotencyKey: Bool
+    public var preferRunForSingleChildWorkloads: Bool
+
+    public init(
+        prepareUsesIdempotencyKey: Bool = true,
+        restoreAutoAcceptsIdempotencyKey: Bool = false,
+        restoreAutoScopedByIdempotencyKey: Bool = false,
+        preferRunForSingleChildWorkloads: Bool = true
+    ) {
+        self.prepareUsesIdempotencyKey = prepareUsesIdempotencyKey
+        self.restoreAutoAcceptsIdempotencyKey = restoreAutoAcceptsIdempotencyKey
+        self.restoreAutoScopedByIdempotencyKey = restoreAutoScopedByIdempotencyKey
+        self.preferRunForSingleChildWorkloads = preferRunForSingleChildWorkloads
+    }
+
+    public static let unsupported = ViftyCtlDirectControlLifecycleCapabilities(
+        prepareUsesIdempotencyKey: false,
+        restoreAutoAcceptsIdempotencyKey: true,
+        restoreAutoScopedByIdempotencyKey: true,
+        preferRunForSingleChildWorkloads: false
+    )
+}
+
 public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var commands: [String]
@@ -55,6 +81,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var agentControlStatusError: String?
     public var supportsForceRetry: Bool
     public var runLifecycle: ViftyCtlRunLifecycleCapabilities
+    public var directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities
     public var exitCodes: ViftyCtlExitCodes
 
     public init(
@@ -70,6 +97,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         agentControlStatusError: String? = nil,
         supportsForceRetry: Bool = true,
         runLifecycle: ViftyCtlRunLifecycleCapabilities = ViftyCtlRunLifecycleCapabilities(),
+        directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities = ViftyCtlDirectControlLifecycleCapabilities(),
         exitCodes: ViftyCtlExitCodes = ViftyCtlExitCodes()
     ) {
         self.schemaVersion = schemaVersion
@@ -84,6 +112,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.agentControlStatusError = agentControlStatusError
         self.supportsForceRetry = supportsForceRetry
         self.runLifecycle = runLifecycle
+        self.directControlLifecycle = directControlLifecycle
         self.exitCodes = exitCodes
     }
 
@@ -100,6 +129,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         case agentControlStatusError
         case supportsForceRetry
         case runLifecycle
+        case directControlLifecycle
         case exitCodes
     }
 
@@ -119,6 +149,10 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         runLifecycle = try container.decodeIfPresent(
             ViftyCtlRunLifecycleCapabilities.self,
             forKey: .runLifecycle
+        ) ?? .unsupported
+        directControlLifecycle = try container.decodeIfPresent(
+            ViftyCtlDirectControlLifecycleCapabilities.self,
+            forKey: .directControlLifecycle
         ) ?? .unsupported
         exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
     }
@@ -141,6 +175,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         }
         try container.encode(supportsForceRetry, forKey: .supportsForceRetry)
         try container.encode(runLifecycle, forKey: .runLifecycle)
+        try container.encode(directControlLifecycle, forKey: .directControlLifecycle)
         try container.encode(exitCodes, forKey: .exitCodes)
     }
 }

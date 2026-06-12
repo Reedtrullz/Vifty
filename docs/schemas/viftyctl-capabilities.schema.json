@@ -17,6 +17,7 @@
     "agentControlStatusError",
     "supportsForceRetry",
     "runLifecycle",
+    "directControlLifecycle",
     "exitCodes"
   ],
   "properties": {
@@ -76,6 +77,9 @@
     },
     "runLifecycle": {
       "$ref": "#/$defs/runLifecycle"
+    },
+    "directControlLifecycle": {
+      "$ref": "#/$defs/directControlLifecycle"
     },
     "exitCodes": {
       "$ref": "#/$defs/exitCodes"
@@ -269,6 +273,34 @@
         "cleanupStateReportedOnLaunchFailure": {
           "type": "boolean",
           "description": "True when launch failures after a prepared lease report whether cleanup was attempted and whether Auto restore succeeded."
+        }
+      }
+    },
+    "directControlLifecycle": {
+      "type": "object",
+      "description": "Machine-readable direct prepare/restore lifecycle contract. Agents should prefer viftyctl run for single child workloads and use this object before deciding whether direct prepare/restore is safe for a supervised multi-step workflow.",
+      "required": [
+        "prepareUsesIdempotencyKey",
+        "restoreAutoAcceptsIdempotencyKey",
+        "restoreAutoScopedByIdempotencyKey",
+        "preferRunForSingleChildWorkloads"
+      ],
+      "properties": {
+        "prepareUsesIdempotencyKey": {
+          "type": "boolean",
+          "description": "True when direct prepare/run requests carry idempotency keys so repeated prepare calls can return the existing active lease instead of reapplying cooling."
+        },
+        "restoreAutoAcceptsIdempotencyKey": {
+          "type": "boolean",
+          "description": "False when restore-auto rejects --idempotency-key instead of accepting a no-op scoped option."
+        },
+        "restoreAutoScopedByIdempotencyKey": {
+          "type": "boolean",
+          "description": "False when restore-auto restores the active supervised lease rather than selecting a lease by idempotency key."
+        },
+        "preferRunForSingleChildWorkloads": {
+          "type": "boolean",
+          "description": "True when agents should prefer viftyctl run for ordinary single child workloads so prepare, child execution, signal forwarding, and Auto restore remain one lifecycle."
         }
       }
     }

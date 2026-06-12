@@ -36,6 +36,12 @@
     ],
     "structuredPreChildFailures": true
   },
+  "directControlLifecycle": {
+    "prepareUsesIdempotencyKey": true,
+    "preferRunForSingleChildWorkloads": true,
+    "restoreAutoAcceptsIdempotencyKey": false,
+    "restoreAutoScopedByIdempotencyKey": false
+  },
   "schemaVersion": 1,
   "schemaIDs": {
     "audit": "https://vifty.local/schemas/viftyctl-audit.schema.json",

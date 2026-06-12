@@ -61,6 +61,10 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(capabilitiesContract.contains("supportsForceRetry\ttrue\ttrue"))
         XCTAssertTrue(capabilitiesContract.contains("runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue"))
         XCTAssertTrue(capabilitiesContract.contains("runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP"))
+        XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.prepareUsesIdempotencyKey\ttrue\ttrue"))
+        XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse"))
+        XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.restoreAutoScopedByIdempotencyKey\tfalse\tfalse"))
+        XCTAssertTrue(capabilitiesContract.contains("directControlLifecycle.preferRunForSingleChildWorkloads\ttrue\ttrue"))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
         XCTAssertTrue(try harness.read("viftyctl-audit.json").contains("\"readOnly\":true"))
         XCTAssertTrue(try harness.read("viftyhelper-probeLocal.txt").contains("Skipped"))
@@ -985,7 +989,7 @@ private final class ValidationEvidenceHarness {
         printf '%s\\n' "$*" >> "${FAKE_VIFTYCTL_LOG:?}"
 
         if [ "$#" -eq 2 ] && [ "$1" = "capabilities" ] && [ "$2" = "--json" ]; then
-          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}}\\n'
+          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true}}\\n'
           exit 0
         fi
 

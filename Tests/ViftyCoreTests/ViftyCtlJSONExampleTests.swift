@@ -21,6 +21,10 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.runLifecycle.autoRestoreAfterChildExit, true)
         XCTAssertEqual(capabilities.runLifecycle.structuredPreChildFailures, true)
         XCTAssertEqual(capabilities.runLifecycle.cleanupStateReportedOnLaunchFailure, true)
+        XCTAssertEqual(capabilities.directControlLifecycle.prepareUsesIdempotencyKey, true)
+        XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoAcceptsIdempotencyKey, false)
+        XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoScopedByIdempotencyKey, false)
+        XCTAssertEqual(capabilities.directControlLifecycle.preferRunForSingleChildWorkloads, true)
         XCTAssertEqual(capabilities.exitCodes.blockedReadiness, 75)
         XCTAssertEqual(capabilities.schemas.capabilities, "docs/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemas.audit, "docs/schemas/viftyctl-audit.schema.json")
@@ -43,12 +47,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         var payload = try readJSON(fixtureURL("capabilities.json"))
         payload.removeValue(forKey: "supportsForceRetry")
         payload.removeValue(forKey: "runLifecycle")
+        payload.removeValue(forKey: "directControlLifecycle")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
 
         XCTAssertFalse(capabilities.supportsForceRetry)
         XCTAssertEqual(capabilities.runLifecycle, .unsupported)
+        XCTAssertEqual(capabilities.directControlLifecycle, .unsupported)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -282,6 +288,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             in: capabilitiesDefinitions,
             arePresentIn: capabilitiesExample["runLifecycle"] as? [String: Any],
             context: "capabilities runLifecycle"
+        )
+        try assertRequiredFields(
+            definition: "directControlLifecycle",
+            in: capabilitiesDefinitions,
+            arePresentIn: capabilitiesExample["directControlLifecycle"] as? [String: Any],
+            context: "capabilities directControlLifecycle"
         )
         try assertRequiredFields(
             definition: "schemaPathReferences",

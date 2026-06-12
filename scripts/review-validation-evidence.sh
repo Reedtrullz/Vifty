@@ -161,7 +161,11 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "runLifecycle.autoRestoreAfterChildExit" => "true",
     "runLifecycle.structuredPreChildFailures" => "true",
     "runLifecycle.cleanupStateReportedOnLaunchFailure" => "true",
-    "runLifecycle.signalsForwardedToChild" => "INT,TERM,HUP"
+    "runLifecycle.signalsForwardedToChild" => "INT,TERM,HUP",
+    "directControlLifecycle.prepareUsesIdempotencyKey" => "true",
+    "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => "false",
+    "directControlLifecycle.restoreAutoScopedByIdempotencyKey" => "false",
+    "directControlLifecycle.preferRunForSingleChildWorkloads" => "true"
   }.freeze
 
   REQUIRED_COMMON_FILES = %w[

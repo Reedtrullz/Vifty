@@ -391,19 +391,27 @@ capture_capabilities_contract() {
       exit 1
     end
 
-    lifecycle = data["runLifecycle"]
-    unless lifecycle.is_a?(Hash)
+    run_lifecycle = data["runLifecycle"]
+    unless run_lifecycle.is_a?(Hash)
       warn "viftyctl capabilities JSON did not include runLifecycle"
-      lifecycle = {}
+      run_lifecycle = {}
+    end
+
+    direct_lifecycle = data["directControlLifecycle"]
+    unless direct_lifecycle.is_a?(Hash)
+      warn "viftyctl capabilities JSON did not include directControlLifecycle"
+      direct_lifecycle = {}
     end
 
     ok = true
     expected_booleans = {
       "supportsForceRetry" => data["supportsForceRetry"],
-      "runLifecycle.childCommandPreflightBeforeCooling" => lifecycle["childCommandPreflightBeforeCooling"],
-      "runLifecycle.autoRestoreAfterChildExit" => lifecycle["autoRestoreAfterChildExit"],
-      "runLifecycle.structuredPreChildFailures" => lifecycle["structuredPreChildFailures"],
-      "runLifecycle.cleanupStateReportedOnLaunchFailure" => lifecycle["cleanupStateReportedOnLaunchFailure"]
+      "runLifecycle.childCommandPreflightBeforeCooling" => run_lifecycle["childCommandPreflightBeforeCooling"],
+      "runLifecycle.autoRestoreAfterChildExit" => run_lifecycle["autoRestoreAfterChildExit"],
+      "runLifecycle.structuredPreChildFailures" => run_lifecycle["structuredPreChildFailures"],
+      "runLifecycle.cleanupStateReportedOnLaunchFailure" => run_lifecycle["cleanupStateReportedOnLaunchFailure"],
+      "directControlLifecycle.prepareUsesIdempotencyKey" => direct_lifecycle["prepareUsesIdempotencyKey"],
+      "directControlLifecycle.preferRunForSingleChildWorkloads" => direct_lifecycle["preferRunForSingleChildWorkloads"]
     }
 
     expected_booleans.each do |field, actual|
@@ -414,7 +422,20 @@ capture_capabilities_contract() {
       ok = false
     end
 
-    signals = lifecycle["signalsForwardedToChild"]
+    expected_false_booleans = {
+      "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => direct_lifecycle["restoreAutoAcceptsIdempotencyKey"],
+      "directControlLifecycle.restoreAutoScopedByIdempotencyKey" => direct_lifecycle["restoreAutoScopedByIdempotencyKey"]
+    }
+
+    expected_false_booleans.each do |field, actual|
+      puts "#{field}\t#{actual}\tfalse"
+      next if actual == false
+
+      warn "#{field} #{actual.inspect} did not match false"
+      ok = false
+    end
+
+    signals = run_lifecycle["signalsForwardedToChild"]
     signals = [] unless signals.is_a?(Array)
     expected_signals = %w[INT TERM HUP]
     actual_signal_list = signals.join(",")
@@ -804,7 +825,7 @@ write_review_summary() {
   summary_row "stapler-validate-app" "0 for public release" "release-trust" "Stapled notarization ticket should validate for public releases."
   summary_row "viftyctl-capabilities" "0 or 69" "agent-contract" "69 still preserves static JSON but means daemon status was unavailable."
   summary_row "capabilities-schema-resources" "0" "agent-contract" "Capabilities output should advertise installed schema resource paths."
-  summary_row "capabilities-contract" "0" "agent-contract" "Capabilities output should advertise the safe run lifecycle and supervised force-retry support."
+  summary_row "capabilities-contract" "0" "agent-contract" "Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, and supervised force-retry support."
   summary_row "viftyctl-status" "0" "agent-contract" "Nonzero means agent status could not be read."
   summary_row "viftyctl-diagnose" "0 or 75" "hardware-and-agent" "75 means a structured blocked readiness report was captured."
   summary_row "viftyctl-audit" "0" "agent-contract" "Read-only recent agent-control audit export should be captured."

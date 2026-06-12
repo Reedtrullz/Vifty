@@ -959,5 +959,9 @@ private final class ValidationEvidenceReviewHarness {
     runLifecycle.structuredPreChildFailures\ttrue\ttrue
     runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
     runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
+    directControlLifecycle.prepareUsesIdempotencyKey\ttrue\ttrue
+    directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse
+    directControlLifecycle.restoreAutoScopedByIdempotencyKey\tfalse\tfalse
+    directControlLifecycle.preferRunForSingleChildWorkloads\ttrue\ttrue
     """
 }

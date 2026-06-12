@@ -478,6 +478,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("Source-first release operations now have Makefile targets"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
+        XCTAssertTrue(workplan.contains("capabilities run-lifecycle/direct-control coverage"))
+        XCTAssertTrue(workplan.contains("directControlLifecycle"))
         XCTAssertTrue(workplan.contains("restore-auto scoped-option rejection"))
         XCTAssertTrue(workplan.contains("blocked readiness is explicitly evidence-only"))
         XCTAssertTrue(workplan.contains("do not retry `viftyctl prepare` or `viftyctl run`"))
