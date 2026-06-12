@@ -159,6 +159,8 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
+        XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 1))
+        XCTAssertFalse(model.helperHealthNeedsAttention)
         XCTAssertNil(model.helperRecoverySuggestion)
     }
 
@@ -176,6 +178,8 @@ final class AppModelTests: XCTestCase {
         model.lastError = "The fan helper rejected the command"
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperHealthState, .error)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
     }
 
@@ -192,6 +196,8 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
+        XCTAssertEqual(model.helperHealthState, .noFanData)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Do not start manual or agent cooling until fans appear.")
     }
 
@@ -211,6 +217,8 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 2 fans")
+        XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 2))
+        XCTAssertFalse(model.helperHealthNeedsAttention)
     }
 
     func testHelperHealthSummaryWarnsWhenTelemetryFallbackWorksButDaemonDoesNotRespond() {
@@ -226,6 +234,8 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
     }
 
@@ -250,6 +260,8 @@ final class AppModelTests: XCTestCase {
         model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
 
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
+        XCTAssertEqual(model.helperHealthState, .unreachable)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds.")
     }
 
@@ -378,6 +390,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.daemonReachable)
         XCTAssertFalse(model.daemonResponding)
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
     }
 
@@ -396,6 +410,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.daemonResponding)
         XCTAssertEqual(model.agentControlStatus?.enabled, true)
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperHealthState, .error)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
         XCTAssertTrue(model.lastError?.contains("Snapshot failed") == true)
     }

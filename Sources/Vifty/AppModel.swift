@@ -2,6 +2,51 @@ import Foundation
 import SwiftUI
 import ViftyCore
 
+enum HelperHealthState: Equatable {
+    case healthy(fanCount: Int)
+    case error
+    case telemetryOnly
+    case unreachable
+    case noFanData
+
+    var needsAttention: Bool {
+        if case .healthy = self {
+            return false
+        }
+        return true
+    }
+
+    var summary: String {
+        switch self {
+        case .healthy(let fanCount):
+            return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
+        case .error:
+            return "Fan helper error"
+        case .telemetryOnly:
+            return "Fan telemetry available · daemon not responding"
+        case .unreachable:
+            return "Fan helper unreachable"
+        case .noFanData:
+            return "Fan helper reachable · no fan data"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .healthy:
+            return nil
+        case .error:
+            return "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck."
+        case .telemetryOnly:
+            return "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds."
+        case .unreachable:
+            return "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds."
+        case .noFanData:
+            return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var snapshot: HardwareSnapshot?
@@ -367,38 +412,33 @@ final class AppModel: ObservableObject {
             || !autoMissingModeFans.isEmpty
     }
 
-    var helperHealthSummary: String {
+    var helperHealthState: HelperHealthState {
         if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
-            return "Fan helper error"
+            return .error
         }
         guard daemonReachable else {
-            return "Fan helper unreachable"
+            return .unreachable
         }
         let fanCount = snapshot?.fans.count ?? 0
         if fanCount > 0 {
             guard daemonResponding else {
-                return "Fan telemetry available · daemon not responding"
+                return .telemetryOnly
             }
-            return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
+            return .healthy(fanCount: fanCount)
         }
-        return "Fan helper reachable · no fan data"
+        return .noFanData
+    }
+
+    var helperHealthSummary: String {
+        helperHealthState.summary
+    }
+
+    var helperHealthNeedsAttention: Bool {
+        helperHealthState.needsAttention
     }
 
     var helperRecoverySuggestion: String? {
-        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
-            return "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck."
-        }
-        guard daemonReachable else {
-            return "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds."
-        }
-        let fanCount = snapshot?.fans.count ?? 0
-        if fanCount > 0 {
-            guard daemonResponding else {
-                return "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds."
-            }
-            return nil
-        }
-        return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+        helperHealthState.recoverySuggestion
     }
 
     var manualFanControlAvailable: Bool {

@@ -104,16 +104,17 @@ struct MenuBarView: View {
     }
 
     private var helperNeedsAttention: Bool {
-        !model.helperHealthSummary.hasPrefix("Fan helper healthy")
+        model.helperHealthNeedsAttention
     }
 
     private var helperHealthSystemImage: String {
-        if !model.daemonReachable {
-            "xmark.shield"
-        } else if helperNeedsAttention {
-            "exclamationmark.shield"
-        } else {
+        switch model.helperHealthState {
+        case .healthy:
             "checkmark.shield"
+        case .unreachable:
+            "xmark.shield"
+        case .error, .telemetryOnly, .noFanData:
+            "exclamationmark.shield"
         }
     }
 
