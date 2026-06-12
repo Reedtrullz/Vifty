@@ -98,6 +98,10 @@ struct MenuBarView: View {
             }
 
             if model.helperHealthNeedsAttention {
+                Label(daemonInstaller.actionDescription, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
                 Button(daemonInstaller.actionTitle) {
                     performHelperAction()
                 }

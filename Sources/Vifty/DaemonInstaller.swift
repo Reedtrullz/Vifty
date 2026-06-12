@@ -42,6 +42,21 @@ final class DaemonInstaller: ObservableObject {
         }
     }
 
+    var actionDescription: String {
+        guard canInstall else { return statusText }
+
+        switch actionTitle {
+        case "Approve Helper":
+            return "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty and wait for healthy fan status."
+        case "Install Helper":
+            return "Installs the root LaunchDaemon used for fan reads and writes. macOS may ask for administrator approval."
+        case "Reinstall Helper":
+            return "Recopies the bundled daemon, removes quarantine attributes, fixes LaunchDaemon ownership, and restarts launchd."
+        default:
+            return "Repairs the privileged helper install, fixes LaunchDaemon ownership, strips quarantine, and restarts launchd."
+        }
+    }
+
     func refresh() {
         if #available(macOS 13.0, *) {
             switch service.status {

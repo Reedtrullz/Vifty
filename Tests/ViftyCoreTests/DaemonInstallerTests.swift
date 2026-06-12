@@ -5,16 +5,26 @@ import XCTest
 final class DaemonInstallerTests: XCTestCase {
     func testHelperActionCopyMatchesInstallerStatus() {
         let installer = DaemonInstaller()
-        let cases: [(status: String, canInstall: Bool, title: String, help: String)] = [
-            ("Checking helper", true, "Install Helper", "Install the privileged fan helper"),
-            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper"),
-            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper"),
-            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
-            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
-            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper"),
-            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper"),
-            ("Fan helper plist not found in app bundle", true, "Repair Helper", "Repair the privileged fan helper"),
-            ("macOS 13 or newer is required for bundled daemon install", false, "Helper Unavailable", "macOS 13 or newer is required for bundled daemon install")
+        let installDetail = "Installs the root LaunchDaemon used for fan reads and writes. macOS may ask for administrator approval."
+        let approveDetail = "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty and wait for healthy fan status."
+        let reinstallDetail = "Recopies the bundled daemon, removes quarantine attributes, fixes LaunchDaemon ownership, and restarts launchd."
+        let repairDetail = "Repairs the privileged helper install, fixes LaunchDaemon ownership, strips quarantine, and restarts launchd."
+        let cases: [(status: String, canInstall: Bool, title: String, help: String, detail: String)] = [
+            ("Checking helper", true, "Install Helper", "Install the privileged fan helper", installDetail),
+            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper", installDetail),
+            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper", approveDetail),
+            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
+            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
+            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
+            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper", repairDetail),
+            ("Fan helper plist not found in app bundle", true, "Repair Helper", "Repair the privileged fan helper", repairDetail),
+            (
+                "macOS 13 or newer is required for bundled daemon install",
+                false,
+                "Helper Unavailable",
+                "macOS 13 or newer is required for bundled daemon install",
+                "macOS 13 or newer is required for bundled daemon install"
+            )
         ]
 
         for testCase in cases {
@@ -23,6 +33,7 @@ final class DaemonInstallerTests: XCTestCase {
 
             XCTAssertEqual(installer.actionTitle, testCase.title, testCase.status)
             XCTAssertEqual(installer.actionHelp, testCase.help, testCase.status)
+            XCTAssertEqual(installer.actionDescription, testCase.detail, testCase.status)
         }
     }
 

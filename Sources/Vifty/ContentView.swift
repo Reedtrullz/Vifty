@@ -135,6 +135,12 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(3)
                     }
+                    if let actionDescription = helperNeedsAttention ? daemonInstaller.actionDescription : nil {
+                        Text(actionDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
                 }
                 Spacer()
                 Button(daemonInstaller.actionTitle) {

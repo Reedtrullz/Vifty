@@ -12,8 +12,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("daemonInstaller.installOrOpenApproval()"))
         XCTAssertTrue(menuBarView.contains("try? await Task.sleep(for: .milliseconds(750))"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.refresh()"))
+        XCTAssertTrue(menuBarView.contains("daemonInstaller.actionDescription"))
         XCTAssertEqual(menuBarView.components(separatedBy: "await model.pollOnce()").count - 1, 2)
         XCTAssertTrue(menuBarView.contains("helperRefreshTask?.cancel()"))
+    }
+
+    func testMainWindowHelperHealthShowsInstallerActionDescription() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("daemonInstaller.actionDescription"))
+        XCTAssertTrue(contentView.contains("helperNeedsAttention ? daemonInstaller.actionDescription : nil"))
     }
 
     func testMenuBarAgentCoolingSurfaceShowsTitleRecoveryAndContextualAuto() throws {
