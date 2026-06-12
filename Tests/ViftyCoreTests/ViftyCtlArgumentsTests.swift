@@ -204,6 +204,15 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertFalse(request.idempotencyKey.isEmpty)
     }
 
+    func testRestoreAutoRejectsIdempotencyKeyBecauseRestoreIsNotScoped() {
+        assertParseError([
+            "restore-auto",
+            "--reason", "done",
+            "--idempotency-key", "key-1",
+            "--json"
+        ], equals: .unknownOption("--idempotency-key"))
+    }
+
     func testFlagCannotBeUsedAsOptionValue() throws {
         let command = try ViftyCtlArguments.parse([
             "prepare",

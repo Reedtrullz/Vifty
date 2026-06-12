@@ -6,7 +6,7 @@ public enum ViftyCtlCommand: Equatable, Sendable {
     case diagnose(json: Bool)
     case audit(limit: Int, json: Bool)
     case prepare(AgentControlRequest, json: Bool, force: Bool)
-    case restoreAuto(reason: String, idempotencyKey: String?, json: Bool)
+    case restoreAuto(reason: String, json: Bool)
     case run(AgentControlRequest, childArguments: [String], json: Bool, force: Bool)
 }
 
@@ -37,10 +37,9 @@ public enum ViftyCtlArguments {
             try validateRequestOptions(rest)
             return .prepare(try parseRequest(rest), json: rest.contains("--json"), force: rest.contains("--force"))
         case "restore-auto":
-            try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--reason", "--idempotency-key"])
+            try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--reason"])
             return .restoreAuto(
                 reason: value(for: "--reason", in: rest) ?? "manual restore",
-                idempotencyKey: value(for: "--idempotency-key", in: rest),
                 json: rest.contains("--json")
             )
         case "run":

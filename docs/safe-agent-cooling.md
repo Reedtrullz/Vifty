@@ -152,3 +152,5 @@ PREPARED=1
 ```
 
 For normal build/test/model commands, prefer `viftyctl run` or `guarded-run.sh` so child validation, cooling lease creation, signal forwarding, and Auto restore remain one lifecycle. Direct prepare is the exception because the shell now owns cleanup; keep the restore trap in the same script as the prepare call.
+
+`restore-auto` is intentionally not scoped by idempotency key. Use a stable `--idempotency-key` when preparing directly, then keep the unkeyed restore call in the same supervised script.

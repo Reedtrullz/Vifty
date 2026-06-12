@@ -457,7 +457,7 @@ public struct ViftyCtlRunner: Sendable {
                     stdout: stdout,
                     exitCode: prepareSucceeded(status, request: request) ? 0 : 1
                 )
-            case .restoreAuto(let reason, _, let json):
+            case .restoreAuto(let reason, let json):
                 let status = try await client.restore(reason: reason)
                 let stdout = try format(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
@@ -570,7 +570,7 @@ public struct ViftyCtlRunner: Sendable {
              .audit(_, let json):
             return json
         case .prepare(_, let json, _),
-             .restoreAuto(_, _, let json):
+             .restoreAuto(_, let json):
             return json
         case .run(_, _, let json, _):
             return json

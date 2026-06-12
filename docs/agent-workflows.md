@@ -26,6 +26,7 @@ Agents should treat `viftyctl` as a local safety contract:
 4. Use `viftyctl run` for child workloads whenever possible so Vifty prepares cooling, launches the resolved child command, and restores Auto afterward.
 5. Use `prepare` and `restore-auto` directly only when a wrapper command cannot model the workload lifecycle.
 6. Always include a human-readable `--reason` and a stable `--idempotency-key` when preparing directly.
+7. Do not pass `--idempotency-key` to `restore-auto`; restore is intentionally tied to the supervised lifecycle, not a scoped key.
 
 Vifty never exposes raw SMC writes through `viftyctl`. Agents request intent: workload type, maximum duration, maximum RPM percent, and reason. The daemon evaluates policy, writes bounded fan targets if allowed, records the lease, and owns expiry.
 
@@ -377,6 +378,8 @@ PREPARED=1
 ```
 
 This pattern still has more moving parts than `viftyctl run`, so use it only when a single child command cannot model the workload. Keep the trap installed for `EXIT`, `INT`, `TERM`, and `HUP`; do not put more fan-control commands inside the work section.
+
+`restore-auto` is intentionally not scoped by idempotency key. Keep the restore call in the same supervised script that prepared cooling instead of trying to restore by key from a later agent step.
 
 If prepare returns `PREPARE_RATE_LIMITED`, use `lastDecision.retryAfterSeconds` or call again with `--force` for human-driven workflows. Agents should prefer the explicit retry value so they do not hide repeated thermal thrashing.
 

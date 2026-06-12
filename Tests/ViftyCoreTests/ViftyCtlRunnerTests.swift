@@ -651,7 +651,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let processRunner = FakeProcessRunner(exitCode: 0)
         let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
 
-        let result = try await runner.run(.restoreAuto(reason: "done", idempotencyKey: nil, json: true))
+        let result = try await runner.run(.restoreAuto(reason: "done", json: true))
 
         XCTAssertEqual(result.exitCode, 0)
         let restoreReasons = await client.restoreReasons
@@ -669,7 +669,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
-        let result = try await runner.run(.restoreAuto(reason: "done", idempotencyKey: nil, json: true))
+        let result = try await runner.run(.restoreAuto(reason: "done", json: true))
 
         XCTAssertEqual(result.exitCode, 1)
         XCTAssertEqual(result.stderr, "")
