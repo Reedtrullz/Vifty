@@ -148,6 +148,7 @@ final class AppModelTests: XCTestCase {
 
     func testHelperHealthSummaryReportsHealthyWhenDaemonAndFansAvailable() {
         let model = AppModel()
+        model.daemonResponding = true
         model.daemonReachable = true
         model.snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
@@ -163,6 +164,7 @@ final class AppModelTests: XCTestCase {
 
     func testHelperHealthSummaryReportsHelperErrorBeforeHealthyState() {
         let model = AppModel()
+        model.daemonResponding = true
         model.daemonReachable = true
         model.snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
@@ -179,6 +181,7 @@ final class AppModelTests: XCTestCase {
 
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
         let model = AppModel()
+        model.daemonResponding = true
         model.daemonReachable = true
         model.snapshot = HardwareSnapshot(
             fans: [],
@@ -194,6 +197,7 @@ final class AppModelTests: XCTestCase {
 
     func testHelperHealthSummaryPluralizesFanCount() {
         let model = AppModel()
+        model.daemonResponding = true
         model.daemonReachable = true
         model.snapshot = HardwareSnapshot(
             fans: [
@@ -209,6 +213,22 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 2 fans")
     }
 
+    func testHelperHealthSummaryWarnsWhenTelemetryFallbackWorksButDaemonDoesNotRespond() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
+    }
+
     func testHelperHealthSummaryReportsUnreachableDaemon() {
         let model = AppModel()
         model.daemonReachable = false
@@ -220,6 +240,7 @@ final class AppModelTests: XCTestCase {
 
     func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {
         let model = AppModel()
+        model.daemonResponding = true
         model.daemonReachable = true
         model.controlState = ControlState(mode: .auto)
         model.snapshot = HardwareSnapshot(
@@ -340,8 +361,9 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
 
         XCTAssertTrue(model.daemonReachable)
-        XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
-        XCTAssertNil(model.helperRecoverySuggestion)
+        XCTAssertFalse(model.daemonResponding)
+        XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
     }
 
     func testPollOnceRefreshesHelperStatusAfterSnapshotFailure() async {
@@ -356,6 +378,7 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
 
         XCTAssertTrue(model.daemonReachable)
+        XCTAssertTrue(model.daemonResponding)
         XCTAssertEqual(model.agentControlStatus?.enabled, true)
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")

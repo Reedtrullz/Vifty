@@ -217,7 +217,7 @@ Tasks:
 Current progress:
 
 - The curve editor includes safe developer presets for tests, builds, and local model runs; preset RPM percentages stay under the default agent policy ceiling and loading a preset clears stale per-fan overrides.
-- Helper health surfaces now include recovery guidance for helper errors, unreachable daemon state, and reachable helpers with no fan data, so users see when to repair/reinstall and when not to start manual or agent cooling.
+- Helper health surfaces now include recovery guidance for helper errors, unreachable daemon state, fallback fan telemetry while the daemon is not responding, and reachable helpers with no fan data, so users see when to repair/reinstall and when not to start manual or agent cooling.
 - Helper action labels now distinguish first install, Login Items approval, reinstall, repair, and unavailable states instead of always saying reinstall.
 
 Exit criteria:

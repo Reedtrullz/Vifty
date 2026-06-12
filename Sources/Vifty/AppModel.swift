@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     @Published var selectedSensorID: String?
     @Published var lastError: String?
     @Published var fanAccessMessage: String?
+    @Published var daemonResponding = false
     @Published var daemonReachable = false
     @Published var isRunning = false
     @Published var powerSnapshot: PowerSnapshot?
@@ -107,16 +108,18 @@ final class AppModel: ObservableObject {
                 thermalPressure: currentThermalPressure
             ))
             lastError = nil
-            daemonReachable = await daemonPing() || !nextSnapshot.fans.isEmpty
+            daemonResponding = await daemonPing()
+            daemonReachable = daemonResponding || !nextSnapshot.fans.isEmpty
             agentControlStatus = await agentStatusReader()
             fanAccessMessage = nextSnapshot.fans.isEmpty
-                ? (daemonReachable ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
+                ? (daemonResponding ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
                 : nil
             syncCurveDefaultsIfNeeded(from: nextSnapshot)
             await syncState()
         } catch {
             lastError = error.localizedDescription
-            daemonReachable = await daemonPing()
+            daemonResponding = await daemonPing()
+            daemonReachable = daemonResponding
             agentControlStatus = await agentStatusReader()
             await coordinator.forceAuto()
             await syncState()
@@ -364,10 +367,13 @@ final class AppModel: ObservableObject {
             return "Fan helper unreachable"
         }
         let fanCount = snapshot?.fans.count ?? 0
-        guard fanCount > 0 else {
-            return "Fan helper reachable · no fan data"
+        if fanCount > 0 {
+            guard daemonResponding else {
+                return "Fan telemetry available · daemon not responding"
+            }
+            return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
         }
-        return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
+        return "Fan helper reachable · no fan data"
     }
 
     var helperRecoverySuggestion: String? {
@@ -378,10 +384,13 @@ final class AppModel: ObservableObject {
             return "Use Repair/Reinstall to copy the daemon, strip quarantine, and restart launchd; fan writes stay blocked until it responds."
         }
         let fanCount = snapshot?.fans.count ?? 0
-        guard fanCount > 0 else {
-            return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+        if fanCount > 0 {
+            guard daemonResponding else {
+                return "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds."
+            }
+            return nil
         }
-        return nil
+        return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
     }
 
     private var autoControlOwnershipSummary: String {
