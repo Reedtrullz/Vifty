@@ -13,6 +13,15 @@ public enum ViftyCtlRecommendedAgentAction: String, Codable, Equatable, Sendable
     case doNotRequestCooling
 }
 
+public enum ViftyCtlReadinessRecoveryAction: String, Codable, Equatable, Sendable {
+    case none
+    case repairHelper
+    case restoreAutoBeforeRetry
+    case backOffWorkload
+    case inspectPolicy
+    case collectHardwareEvidence
+}
+
 public enum ViftyCtlReadinessSeverity: String, Codable, Equatable, Sendable {
     case info
     case warning
@@ -78,6 +87,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var generatedAt: Date
     public var state: ViftyCtlReadinessState
     public var recommendedAgentAction: ViftyCtlRecommendedAgentAction?
+    public var recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction
     public var safeToRequestCooling: Bool?
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
@@ -94,11 +104,35 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var agentControlStatusError: String?
     public var checks: [ViftyCtlReadinessCheck]
 
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case generatedAt
+        case state
+        case recommendedAgentAction
+        case recommendedRecoveryAction
+        case safeToRequestCooling
+        case modelIdentifier
+        case isAppleSilicon
+        case isMacBookPro
+        case thermalPressure
+        case fanCount
+        case controllableFanCount
+        case temperatureSensorCount
+        case highestTemperatureCelsius
+        case fans
+        case temperatureSensors
+        case agentControl
+        case daemonSnapshotError
+        case agentControlStatusError
+        case checks
+    }
+
     public init(
         schemaVersion: Int = 1,
         generatedAt: Date,
         state: ViftyCtlReadinessState,
         recommendedAgentAction: ViftyCtlRecommendedAgentAction? = nil,
+        recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction? = nil,
         safeToRequestCooling: Bool? = nil,
         modelIdentifier: String,
         isAppleSilicon: Bool,
@@ -120,6 +154,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.state = state
         let resolvedAction = recommendedAgentAction ?? Self.recommendedAgentAction(for: state, checks: checks)
         self.recommendedAgentAction = resolvedAction
+        self.recommendedRecoveryAction = recommendedRecoveryAction
+            ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
@@ -135,6 +171,70 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.daemonSnapshotError = daemonSnapshotError
         self.agentControlStatusError = agentControlStatusError
         self.checks = checks
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let state = try container.decode(ViftyCtlReadinessState.self, forKey: .state)
+        let checks = try container.decode([ViftyCtlReadinessCheck].self, forKey: .checks)
+        self.init(
+            schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
+            generatedAt: try container.decode(Date.self, forKey: .generatedAt),
+            state: state,
+            recommendedAgentAction: try container.decodeIfPresent(
+                ViftyCtlRecommendedAgentAction.self,
+                forKey: .recommendedAgentAction
+            ),
+            recommendedRecoveryAction: try container.decodeIfPresent(
+                ViftyCtlReadinessRecoveryAction.self,
+                forKey: .recommendedRecoveryAction
+            ),
+            safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
+            modelIdentifier: try container.decode(String.self, forKey: .modelIdentifier),
+            isAppleSilicon: try container.decode(Bool.self, forKey: .isAppleSilicon),
+            isMacBookPro: try container.decode(Bool.self, forKey: .isMacBookPro),
+            thermalPressure: try container.decode(ThermalPressure.self, forKey: .thermalPressure),
+            fanCount: try container.decode(Int.self, forKey: .fanCount),
+            controllableFanCount: try container.decode(Int.self, forKey: .controllableFanCount),
+            temperatureSensorCount: try container.decode(Int.self, forKey: .temperatureSensorCount),
+            highestTemperatureCelsius: try container.decodeIfPresent(
+                Double.self,
+                forKey: .highestTemperatureCelsius
+            ),
+            fans: try container.decode([ViftyCtlFanReport].self, forKey: .fans),
+            temperatureSensors: try container.decode(
+                [ViftyCtlTemperatureSensorReport].self,
+                forKey: .temperatureSensors
+            ),
+            agentControl: try container.decode(AgentControlStatus.self, forKey: .agentControl),
+            daemonSnapshotError: try container.decodeIfPresent(String.self, forKey: .daemonSnapshotError),
+            agentControlStatusError: try container.decodeIfPresent(String.self, forKey: .agentControlStatusError),
+            checks: checks
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(generatedAt, forKey: .generatedAt)
+        try container.encode(state, forKey: .state)
+        try container.encodeIfPresent(recommendedAgentAction, forKey: .recommendedAgentAction)
+        try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
+        try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
+        try container.encode(modelIdentifier, forKey: .modelIdentifier)
+        try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
+        try container.encode(isMacBookPro, forKey: .isMacBookPro)
+        try container.encode(thermalPressure, forKey: .thermalPressure)
+        try container.encode(fanCount, forKey: .fanCount)
+        try container.encode(controllableFanCount, forKey: .controllableFanCount)
+        try container.encode(temperatureSensorCount, forKey: .temperatureSensorCount)
+        try container.encodeIfPresent(highestTemperatureCelsius, forKey: .highestTemperatureCelsius)
+        try container.encode(fans, forKey: .fans)
+        try container.encode(temperatureSensors, forKey: .temperatureSensors)
+        try container.encode(agentControl, forKey: .agentControl)
+        try container.encodeIfPresent(daemonSnapshotError, forKey: .daemonSnapshotError)
+        try container.encodeIfPresent(agentControlStatusError, forKey: .agentControlStatusError)
+        try container.encode(checks, forKey: .checks)
     }
 
     public static func make(
@@ -435,6 +535,36 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         return .requestCooling
     }
 
+    private static func recommendedRecoveryAction(
+        for state: ViftyCtlReadinessState,
+        agentAction: ViftyCtlRecommendedAgentAction,
+        checks: [ViftyCtlReadinessCheck]
+    ) -> ViftyCtlReadinessRecoveryAction {
+        if failedCheck("daemonSnapshotAvailable", in: checks)
+            || failedCheck("agentControlStatusAvailable", in: checks) {
+            return .repairHelper
+        }
+
+        if agentAction == .restoreAutoBeforeRequestingCooling
+            || failedCheck("activeLeaseClear", in: checks) {
+            return .restoreAutoBeforeRetry
+        }
+
+        if failedErrorCheck("thermalPressureSafe", in: checks) {
+            return .backOffWorkload
+        }
+
+        if failedCheck("agentControlEnabled", in: checks) {
+            return .inspectPolicy
+        }
+
+        if state == .blocked {
+            return .collectHardwareEvidence
+        }
+
+        return .none
+    }
+
     private static func safeToRequestCooling(for action: ViftyCtlRecommendedAgentAction) -> Bool {
         switch action {
         case .requestCooling, .requestCoolingWithCaution:
@@ -442,6 +572,14 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case .restoreAutoBeforeRequestingCooling, .doNotRequestCooling:
             return false
         }
+    }
+
+    private static func failedCheck(_ id: String, in checks: [ViftyCtlReadinessCheck]) -> Bool {
+        checks.contains { $0.id == id && !$0.passed }
+    }
+
+    private static func failedErrorCheck(_ id: String, in checks: [ViftyCtlReadinessCheck]) -> Bool {
+        checks.contains { $0.id == id && !$0.passed && $0.severity == .error }
     }
 }
 

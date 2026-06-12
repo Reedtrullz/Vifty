@@ -68,6 +68,15 @@ It also includes `recommendedAgentAction` and `safeToRequestCooling` so agents d
 - `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease is active; restore Auto or wait before requesting new cooling.
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
 
+`recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
+
+- `none` - no recovery is needed before following `recommendedAgentAction`.
+- `repairHelper` - open Vifty and use Repair/Reinstall Helper; do not attempt direct SMC writes.
+- `restoreAutoBeforeRetry` - restore Auto or wait for the active lease to clear before retrying.
+- `backOffWorkload` - thermal pressure is critical; pause or reduce the workload instead of fighting system thermals.
+- `inspectPolicy` - agent cooling policy is disabled; inspect local policy/status before retrying.
+- `collectHardwareEvidence` - hardware/fan/sensor evidence is missing or inconsistent; collect read-only validation evidence before considering support.
+
 `diagnose` exits `0` for `ready` and `degraded`. It exits with `capabilities.exitCodes.blockedReadiness` for `blocked` after printing the same structured readiness report, so shell automation can fail closed without losing machine-readable evidence.
 
 Important fields:
@@ -77,6 +86,7 @@ Important fields:
 - `isMacBookPro`
 - `thermalPressure`
 - `recommendedAgentAction`
+- `recommendedRecoveryAction`
 - `safeToRequestCooling`
 - `fanCount`
 - `controllableFanCount`
@@ -153,7 +163,7 @@ Use this output rather than hardcoding policy limits, schema paths/resource path
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 
-Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `safeToRequestCooling`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
+Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
 
 For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell runners, see [agent-integrations.md](agent-integrations.md).
 

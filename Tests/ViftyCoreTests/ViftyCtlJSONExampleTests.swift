@@ -63,6 +63,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.schemaVersion, 1)
         XCTAssertEqual(report.state, .ready)
         XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
@@ -72,6 +73,19 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(report.checks.contains { $0.id == "supportedHardware" && $0.passed })
         XCTAssertNil(report.daemonSnapshotError)
         XCTAssertNil(report.agentControlStatusError)
+    }
+
+    func testDiagnoseLegacyPayloadDecodesWithRecoveryDefault() throws {
+        var payload = try readJSON(fixtureURL("diagnose-ready.json"))
+        payload.removeValue(forKey: "recommendedRecoveryAction")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        let report = try JSONDecoder().decode(ViftyCtlReadinessReport.self, from: data)
+
+        XCTAssertEqual(report.state, .ready)
+        XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.safeToRequestCooling, true)
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
@@ -175,6 +189,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "schemaVersion",
             "state",
             "recommendedAgentAction",
+            "recommendedRecoveryAction",
             "safeToRequestCooling",
             "isAppleSilicon",
             "isMacBookPro",
@@ -197,6 +212,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "requestCoolingWithCaution",
             "restoreAutoBeforeRequestingCooling",
             "doNotRequestCooling"
+        ])
+        XCTAssertEqual(enumValues(named: "recommendedRecoveryAction", in: properties), [
+            "none",
+            "repairHelper",
+            "restoreAutoBeforeRetry",
+            "backOffWorkload",
+            "inspectPolicy",
+            "collectHardwareEvidence"
         ])
         XCTAssertEqual(enumValues(named: "thermalPressure", in: properties), [
             "nominal",

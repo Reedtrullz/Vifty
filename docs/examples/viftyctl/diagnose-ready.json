@@ -74,6 +74,7 @@
   "isMacBookPro": true,
   "modelIdentifier": "MacBookPro18,3",
   "recommendedAgentAction": "requestCooling",
+  "recommendedRecoveryAction": "none",
   "safeToRequestCooling": true,
   "schemaVersion": 1,
   "state": "ready",

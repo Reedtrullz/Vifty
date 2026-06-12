@@ -249,6 +249,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
         XCTAssertEqual(json["state"] as? String, "ready")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.requestCooling.rawValue)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.none.rawValue)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(json["thermalPressure"] as? String, "nominal")
@@ -290,6 +291,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["state"] as? String, "blocked")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "unknown")
         XCTAssertTrue((json["daemonSnapshotError"] as? String)?.contains("Daemon request timed out") == true)
@@ -324,6 +326,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["state"] as? String, "blocked")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertTrue((json["agentControlStatusError"] as? String)?.contains("Could not create daemon proxy") == true)
@@ -370,6 +373,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.contains("state=degraded"))
         XCTAssertTrue(result.stdout.contains("agentAction=restoreAutoBeforeRequestingCooling safeToRequestCooling=false"))
+        XCTAssertTrue(result.stdout.contains("recoveryAction=restoreAutoBeforeRetry"))
         XCTAssertTrue(result.stdout.contains("[warn] activeLeaseClear"))
         XCTAssertTrue(result.stdout.contains("[warn] fanModeTelemetry"))
         XCTAssertTrue(result.stdout.contains("[warn] thermalPressureSafe"))
@@ -483,6 +487,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .requestCoolingWithCaution)
+        XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
     }
 
@@ -509,6 +514,27 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+    }
+
+    func testReadinessReportRecommendsPolicyInspectionWhenAgentCoolingIsDisabled() {
+        let report = ViftyCtlReadinessReport.make(
+            snapshot: Self.readySnapshot(),
+            agentControl: AgentControlStatus(
+                enabled: false,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: false).snapshot
+            ),
+            thermalPressure: .nominal,
+            generatedAt: Date(timeIntervalSince1970: 1_000)
+        )
+
+        XCTAssertEqual(report.state, .blocked)
+        XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .inspectPolicy)
         XCTAssertEqual(report.safeToRequestCooling, false)
     }
 
@@ -529,6 +555,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
         XCTAssertEqual(report.state, .blocked)
         XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .backOffWorkload)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.checks.contains { $0.id == "supportedHardware" && !$0.passed && $0.severity == .error })
         XCTAssertTrue(report.checks.contains { $0.id == "temperatureSensorsPresent" && !$0.passed && $0.severity == .error })
@@ -590,6 +617,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         )
 
         XCTAssertEqual(report.state, .blocked)
+        XCTAssertEqual(report.recommendedRecoveryAction, .collectHardwareEvidence)
         let validIDsCheck = try XCTUnwrap(report.checks.first { $0.id == "fanIDsValid" })
         XCTAssertFalse(validIDsCheck.passed)
         XCTAssertEqual(validIDsCheck.severity, .error)

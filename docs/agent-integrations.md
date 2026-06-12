@@ -118,7 +118,11 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `blocked` readiness: do not request cooling; show the JSON.
 - `restoreAutoBeforeRequestingCooling`: ask the user whether to restore Auto before retrying.
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
-- `recommendedRecoveryAction: "repairHelper"`: ask the user to open Vifty and use Repair/Reinstall Helper or approve Login Items.
+- Diagnose `recommendedRecoveryAction: "repairHelper"`: ask the user to open Vifty and use Repair/Reinstall Helper or approve Login Items.
+- Diagnose `recommendedRecoveryAction: "backOffWorkload"`: pause or reduce the workload; do not fight critical system thermals.
+- Diagnose `recommendedRecoveryAction: "inspectPolicy"`: inspect local policy/status before retrying.
+- Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"`: collect read-only validation evidence before considering hardware support.
+- Command-error `recommendedRecoveryAction: "repairHelper"`: recover daemon/transport failures through the Vifty helper repair path; do not attempt direct SMC writes.
 - `recommendedRecoveryAction: "fixChildCommand"`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
 - `recommendedRecoveryAction: "waitBeforeRetry"`: wait for `retryAfterSeconds`; do not busy-loop retries.
 - `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto before requesting another lease.

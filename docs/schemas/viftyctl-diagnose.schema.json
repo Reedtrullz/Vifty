@@ -9,6 +9,7 @@
     "generatedAt",
     "state",
     "recommendedAgentAction",
+    "recommendedRecoveryAction",
     "safeToRequestCooling",
     "modelIdentifier",
     "isAppleSilicon",
@@ -43,6 +44,17 @@
         "requestCoolingWithCaution",
         "restoreAutoBeforeRequestingCooling",
         "doNotRequestCooling"
+      ]
+    },
+    "recommendedRecoveryAction": {
+      "description": "Machine-readable operator or agent follow-up when readiness is blocked or requires cleanup. Use this field instead of parsing check messages.",
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence"
       ]
     },
     "safeToRequestCooling": {

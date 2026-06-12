@@ -10,7 +10,7 @@ Files:
 
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`
 - [audit.json](audit.json) - `viftyctl audit --json`
-- [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware
+- [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware with `recommendedRecoveryAction`
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
 - [command-error.json](command-error.json) - structured `--json` command failure with `recommendedRecoveryAction`
 - [command-error-run-child-command-failed.json](command-error-run-child-command-failed.json) - `viftyctl run --json` child-command failure before any cooling lease is prepared

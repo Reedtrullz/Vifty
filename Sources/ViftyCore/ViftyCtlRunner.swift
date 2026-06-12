@@ -808,6 +808,7 @@ public struct ViftyCtlRunner: Sendable {
         var lines = [
             "state=\(report.state.rawValue)",
             "agentAction=\(report.recommendedAgentAction?.rawValue ?? "unknown") safeToRequestCooling=\(report.safeToRequestCooling.map(String.init) ?? "unknown")",
+            "recoveryAction=\(report.recommendedRecoveryAction.rawValue)",
             "model=\(report.modelIdentifier) appleSilicon=\(report.isAppleSilicon) macBookPro=\(report.isMacBookPro)",
             "fans=\(report.fanCount) controllable=\(report.controllableFanCount) temperatures=\(report.temperatureSensorCount) thermal=\(report.thermalPressure.displayName)",
             "agentControl=\(report.agentControl.enabled ? "enabled" : "disabled")"
