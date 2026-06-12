@@ -125,6 +125,33 @@ is_positive_integer() {
   printf '%s\n' "$1" | /usr/bin/awk '/^[0-9]+$/ { exit !(($0 + 0) > 0) } { exit 1 }'
 }
 
+duration_within_maximum() {
+  duration_value="$1"
+  maximum_seconds="$2"
+
+  case "$duration_value" in
+    *m)
+      duration_number="${duration_value%?}"
+      duration_multiplier=60
+      ;;
+    *h)
+      duration_number="${duration_value%?}"
+      duration_multiplier=3600
+      ;;
+    *)
+      duration_number="$duration_value"
+      duration_multiplier=1
+      ;;
+  esac
+
+  /usr/bin/awk -v number="$duration_number" -v multiplier="$duration_multiplier" -v maximum="$maximum_seconds" '
+    BEGIN {
+      seconds = (number + 0) * (multiplier + 0)
+      exit !(seconds >= 1 && seconds <= (maximum + 0))
+    }
+  '
+}
+
 trimmed_character_count() {
   printf '%s' "$1" | /usr/bin/awk '
     {
@@ -212,6 +239,7 @@ signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extra
 supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract supportsForceRetry raw -o - - 2>/dev/null || printf '')"
 minimum_agent_rpm_percent="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.minimumAgentRPMPercent raw -o - - 2>/dev/null || printf '')"
 maximum_allowed_rpm_percent="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.maximumAllowedRPMPercent raw -o - - 2>/dev/null || printf '')"
+max_duration_seconds="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.maxDurationSeconds raw -o - - 2>/dev/null || printf '')"
 maximum_reason_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumReasonLength raw -o - - 2>/dev/null || printf '')"
 maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumIdempotencyKeyLength raw -o - - 2>/dev/null || printf '')"
 
@@ -223,6 +251,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
 [ "$minimum_agent_rpm_percent" = "null" ] && minimum_agent_rpm_percent=""
 [ "$maximum_allowed_rpm_percent" = "null" ] && maximum_allowed_rpm_percent=""
+[ "$max_duration_seconds" = "null" ] && max_duration_seconds=""
 [ "$maximum_reason_length" = "null" ] && maximum_reason_length=""
 [ "$maximum_idempotency_key_length" = "null" ] && maximum_idempotency_key_length=""
 
@@ -303,6 +332,22 @@ fi
 
 if ! /usr/bin/awk -v value="$max_rpm_percent" -v minimum="$minimum_agent_rpm_percent" -v maximum="$maximum_allowed_rpm_percent" 'BEGIN { exit !((value + 0) >= (minimum + 0) && (value + 0) <= (maximum + 0)) }'; then
   echo "guarded-run: max-rpm-percent $max_rpm_percent is outside advertised policy range $minimum_agent_rpm_percent...$maximum_allowed_rpm_percent." >&2
+  exit 64
+fi
+
+if ! is_positive_integer "$max_duration_seconds"; then
+  echo "guarded-run: viftyctl capabilities does not advertise a usable duration policy limit; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if ! duration_within_maximum "$duration" "$max_duration_seconds"; then
+  echo "guarded-run: duration $duration exceeds advertised policy maximum $max_duration_seconds seconds." >&2
   exit 64
 fi
 

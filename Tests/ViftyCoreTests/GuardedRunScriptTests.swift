@@ -226,6 +226,36 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRequiresAdvertisedDurationPolicyLimit() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyOverride: #""policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"prepareCooldownSeconds":30}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise a usable duration policy limit"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsDurationOutsideAdvertisedPolicyLimit() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyOverride: #""policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":600,"prepareCooldownSeconds":30}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("duration 20m exceeds advertised policy maximum 600 seconds"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsEmptyReasonBeforeViftyCtl() throws {
         let harness = try ScriptHarness(state: "ready")
 
