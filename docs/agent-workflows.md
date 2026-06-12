@@ -217,7 +217,7 @@ For `viftyctl run --json`, wrapper failures before the child process starts use 
 
 If `--force` is waiting for a `PREPARE_RATE_LIMITED` cooldown retry and the wait is interrupted before a lease is prepared, JSON callers receive `errorCode: PREPARE_RATE_LIMITED`, `coolingLeasePrepared: false`, `autoRestoreAttempted: false`, and `retryAfterSeconds` from the rate-limit decision or policy fallback.
 
-Unknown wrapper options, duplicate wrapper options, and unexpected positional arguments fail with `INVALID_ARGUMENTS` instead of being ignored or silently choosing one value. For `viftyctl run`, only arguments before `--` are parsed as Vifty wrapper options; child arguments after `--` are passed through to the child command.
+Unknown wrapper options, duplicate wrapper options, missing option values, and unexpected positional arguments fail with `INVALID_ARGUMENTS` instead of being ignored, silently choosing one value, or generating a default value. For `viftyctl run`, only arguments before `--` are parsed as Vifty wrapper options; child arguments after `--` are passed through to the child command.
 
 ## Preferred Wrapper
 
@@ -405,7 +405,7 @@ Recommended agent behavior:
 ## Safety Notes
 
 - `viftyctl run` resolves the child executable before requesting cooling.
-- `viftyctl` rejects unknown or duplicate wrapper options instead of silently ignoring them or choosing one value.
+- `viftyctl` rejects unknown, duplicate, or missing-value wrapper options instead of silently ignoring them, choosing one value, or generating a default value.
 - `viftyctl run` refuses to launch the child if prepare is denied or does not return a matching active lease.
 - `viftyctl run` restores Auto after normal child exit, handled signal exit, or child launch failure.
 - If Auto restore fails after a successful child exit, `viftyctl run` exits nonzero and prints the restore failure.

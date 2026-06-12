@@ -111,6 +111,8 @@ public enum ViftyCtlArguments {
             return "duplicate option '\(option)'"
         case .unexpectedArgument(let argument):
             return "unexpected argument '\(argument)'"
+        case .missingOptionValue(let option):
+            return "missing value for option '\(option)'"
         }
     }
 
@@ -144,9 +146,12 @@ public enum ViftyCtlArguments {
             }
 
             let valueIndex = arguments.index(after: index)
-            if valueFlags.contains(argument),
-               valueIndex < arguments.endIndex,
-               !arguments[valueIndex].hasPrefix("--") {
+            if valueFlags.contains(argument) {
+                guard valueIndex < arguments.endIndex,
+                      !arguments[valueIndex].isEmpty,
+                      !arguments[valueIndex].hasPrefix("--") else {
+                    throw ViftyCtlParseError.missingOptionValue(argument)
+                }
                 index = arguments.index(after: valueIndex)
             } else {
                 index = valueIndex
@@ -257,4 +262,5 @@ public enum ViftyCtlParseError: Error, Equatable, Sendable {
     case unknownOption(String)
     case duplicateOption(String)
     case unexpectedArgument(String)
+    case missingOptionValue(String)
 }

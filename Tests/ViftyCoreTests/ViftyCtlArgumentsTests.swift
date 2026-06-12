@@ -213,21 +213,41 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .unknownOption("--idempotency-key"))
     }
 
-    func testFlagCannotBeUsedAsOptionValue() throws {
-        let command = try ViftyCtlArguments.parse([
+    func testFlagCannotBeUsedAsOptionValue() {
+        assertParseError([
             "prepare",
             "--workload", "build",
             "--duration", "1h",
             "--max-rpm-percent", "80",
             "--reason", "--json"
-        ])
+        ], equals: .missingOptionValue("--reason"))
+    }
 
-        guard case let .prepare(request, json, _) = command else {
-            return XCTFail("Expected prepare command")
-        }
+    func testOptionalIdempotencyKeyRequiresValueWhenPresent() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "1h",
+            "--max-rpm-percent", "80",
+            "--idempotency-key",
+            "--json"
+        ], equals: .missingOptionValue("--idempotency-key"))
+    }
 
-        XCTAssertTrue(json)
-        XCTAssertEqual(request.reason, "Agent workload")
+    func testRestoreAutoReasonRequiresValueWhenPresent() {
+        assertParseError([
+            "restore-auto",
+            "--reason",
+            "--json"
+        ], equals: .missingOptionValue("--reason"))
+    }
+
+    func testAuditLimitRequiresValueWhenPresent() {
+        assertParseError([
+            "audit",
+            "--limit",
+            "--json"
+        ], equals: .missingOptionValue("--limit"))
     }
 
     func testRunWithoutSeparatorThrowsMissingChildCommand() {
@@ -317,6 +337,10 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(ViftyCtlArguments.commandNameHint(["prepare", "--json"]), "prepare")
         XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.invalidDuration), "invalid or missing --duration")
         XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.duplicateOption("--duration")), "duplicate option '--duration'")
+        XCTAssertEqual(
+            ViftyCtlArguments.humanReadableParseError(.missingOptionValue("--reason")),
+            "missing value for option '--reason'"
+        )
         XCTAssertEqual(
             ViftyCtlArguments.humanReadableParseError(.unknownCommand("frobnicate")),
             "unknown command 'frobnicate'"
