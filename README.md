@@ -55,13 +55,15 @@ For help or reports, start with [SUPPORT.md](SUPPORT.md). Maintainers should tri
 
 ### Current release trust status
 
-Vifty `v1.1.0` is a source-first release because the project does not currently have Apple Developer Program credentials. The recommended path is to build from source. There is no Developer ID signed or notarized public binary for `v1.1.0`, and the canonical notarized artifact name `Vifty-v1.1.0.zip` is reserved for a future Developer ID release.
+The latest published public release is Vifty `v1.1.0`, a source-first release because the project does not currently have Apple Developer Program credentials. There is no Developer ID signed or notarized public binary for `v1.1.0`, and the canonical notarized artifact name `Vifty-v1.1.0.zip` is reserved for a future Developer ID release.
 
 The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.0` source release unless a future release is cut.
 
 An optional `Vifty-v1.1.0-unsigned-dev.zip` convenience app may be attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
 Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening on `main` and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use a current source build for local testing and cut a new source-first hotfix release for public users.
+
+The current source tree is prepared as Vifty `v1.1.1`, a source-first hotfix candidate for that helper issue. Until `v1.1.1` is tagged and published, the recommended local path is building from current source. After publication, use the `v1.1.1` source tag. Any `Vifty-v1.1.1-unsigned-dev.zip` asset must remain clearly marked as unsigned, ad-hoc signed, not notarized, and tester convenience only.
 
 ### From source
 
@@ -84,19 +86,19 @@ open /Applications/Vifty.app
 
 ### Unsigned tester zip
 
-For v1.1.0 tester convenience only:
+For v1.1.1 tester convenience after the source tag is published:
 
 ```sh
 git fetch origin main --tags
-git checkout v1.1.0
+git checkout v1.1.1
 make source-first-release-notes
 make unsigned-dev-artifact
 make source-first-readiness
 ```
 
-This writes `.build/Vifty-v1.1.0-source-first-release-notes.md`, creates `.build/Vifty-v1.1.0-unsigned-dev.zip` plus `.build/Vifty-v1.1.0-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.0` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.0.zip`; that name is reserved for a future signed and notarized release.
+This writes `.build/Vifty-v1.1.1-source-first-release-notes.md`, creates `.build/Vifty-v1.1.1-unsigned-dev.zip` plus `.build/Vifty-v1.1.1-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.1` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.1.zip`; that name is reserved for a future signed and notarized release.
 
-Because `v1.1.0` has the helper issue noted above, this target is for reproducing the already-published release boundary only. Do not use it to refresh public tester assets from post-release `main`; cut a new source-first hotfix version instead.
+To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RELEASE_VERSION=1.1.0`. Do not use the `v1.1.0` artifact target to refresh public tester assets from post-release `main`; use the `v1.1.1` hotfix release instead.
 
 ### Homebrew
 
@@ -105,14 +107,14 @@ brew tap Reedtrullz/vifty https://github.com/Reedtrullz/Vifty
 brew install --cask vifty
 ```
 
-Do not use Homebrew as the recommended or trusted `v1.1.0` install path. The Homebrew cask is for the future Developer ID/notarized release lane and should not be updated to point at the unsigned-dev artifact. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
+Do not use Homebrew as the recommended or trusted source-first install path. The Homebrew cask is for the future Developer ID/notarized release lane and must not point at unsigned-dev artifacts. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
 
 ## Build and verify
 
 Requires macOS 15, Xcode 16, and Swift 6.
 
 ```sh
-# Run local trust gates: community/support surface, release metadata, tests,
+# Run local trust gates: community/support surface, source-first release metadata, tests,
 # warnings-as-errors, release bundle, plist lint, codesign verification,
 # and viftyctl identifier check
 make verify

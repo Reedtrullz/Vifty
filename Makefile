@@ -6,6 +6,7 @@ VIFTY_XPC_ALLOWED_TEAM_ID ?=
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
 UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
+RELEASE_METADATA_MODE ?= source-first
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -57,7 +58,7 @@ test: ## Run the XCTest suite
 verify: ## Run local trust gates without installing
 	/bin/bash -n scripts/*.sh examples/viftyctl/*.sh
 	scripts/check-community-standards.sh
-	scripts/validate-release-metadata.sh
+	scripts/validate-release-metadata.sh --mode "$(RELEASE_METADATA_MODE)"
 	swift test
 	swift build -Xswiftc -warnings-as-errors
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"

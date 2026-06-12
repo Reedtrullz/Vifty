@@ -10,8 +10,10 @@ read-only evidence and conservative safety gates.
 - **Release trust:** use the **Release Trust Report** issue template for
   source-first release warnings, unsigned-dev asset naming or checksum issues,
   Gatekeeper, Developer ID, notarization, Homebrew, TeamID, release-readiness,
-  verifier, or reviewer problems. For `v1.1.0`, remember that the release is
-  source-first and the optional unsigned `.app` zip is tester convenience only.
+  verifier, or reviewer problems. For source-first releases, remember that the
+  optional unsigned `.app` zip is tester convenience only; `v1.1.0` also has a
+  known helper-unreachable issue that should be handled as release-trust
+  evidence, not as proof of trusted binary distribution.
 - **Hardware validation:** use the **Hardware Validation Report** issue
   template and follow [docs/hardware-validation.md](docs/hardware-validation.md).
 - **Agent/build/test cooling:** use the **Agent Cooling Report** issue template

@@ -4,6 +4,51 @@ set -euo pipefail
 ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${ROOT_DIR}"
 
+RELEASE_METADATA_MODE="developer-id"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: scripts/validate-release-metadata.sh [--mode developer-id|source-first]
+
+Validates release metadata. Developer ID mode is strict and requires the app
+bundle version to match the Homebrew cask version. Source-first mode keeps the
+future Developer ID workflow and cask shape strict, but allows the app bundle
+version to advance without updating Homebrew while Apple Developer Program
+credentials are unavailable.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --mode)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --mode requires a value" >&2
+        exit 64
+      fi
+      RELEASE_METADATA_MODE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      usage
+      exit 64
+      ;;
+  esac
+done
+
+case "${RELEASE_METADATA_MODE}" in
+  developer-id|source-first)
+    ;;
+  *)
+    echo "error: --mode must be developer-id or source-first" >&2
+    exit 64
+    ;;
+esac
+
 CASK_PATH="Casks/vifty.rb"
 CI_WORKFLOW=".github/workflows/ci.yml"
 RELEASE_WORKFLOW=".github/workflows/release.yml"
@@ -18,7 +63,7 @@ if [[ -z "${cask_version}" ]]; then
   exit 1
 fi
 
-if [[ "${bundle_version}" != "${cask_version}" ]]; then
+if [[ "${RELEASE_METADATA_MODE}" = "developer-id" && "${bundle_version}" != "${cask_version}" ]]; then
   echo "error: bundle version ${bundle_version} does not match cask version ${cask_version}" >&2
   exit 1
 fi
@@ -218,4 +263,12 @@ if ! grep -Fq -- '--verify-tag' "${RELEASE_WORKFLOW}"; then
   exit 1
 fi
 
-echo "Release metadata OK: version ${bundle_version}, artifact Vifty-v${bundle_version}.zip"
+if [[ "${RELEASE_METADATA_MODE}" = "source-first" ]]; then
+  if [[ "${bundle_version}" = "${cask_version}" ]]; then
+    echo "Source-first release metadata OK: bundle version ${bundle_version}; Homebrew cask remains canonical for the future Developer ID lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+  else
+    echo "Source-first release metadata OK: bundle version ${bundle_version}, cask version ${cask_version}; Homebrew may remain on its prior trusted-binary lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+  fi
+else
+  echo "Release metadata OK: version ${bundle_version}, artifact Vifty-v${bundle_version}.zip"
+fi

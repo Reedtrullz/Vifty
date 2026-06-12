@@ -59,7 +59,7 @@ jobs:
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
       - name: Validate release metadata
-        run: scripts/validate-release-metadata.sh
+        run: scripts/validate-release-metadata.sh --mode developer-id
 
       - name: Require signing and notarization secrets
         env:

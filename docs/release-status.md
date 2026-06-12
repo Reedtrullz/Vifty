@@ -4,13 +4,13 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-06-12, `v1.1.0` is a source-first public release because the project does not currently have Apple Developer Program credentials. The immutable `v1.1.0` source tag resolves to `f7d2c636ebf582ac3809998c3fac819d5d87eb72`; later `main` commits are post-release hardening until a future release is cut.
+As of 2026-06-12, the latest published public release is `v1.1.0`, a source-first release because the project does not currently have Apple Developer Program credentials. The immutable `v1.1.0` source tag resolves to `f7d2c636ebf582ac3809998c3fac819d5d87eb72`. The current source tree is prepared as `v1.1.1`, a source-first hotfix candidate for the `v1.1.0` helper issue.
 
 Release lanes:
 
-1. **Trusted notarized Developer ID release:** unavailable until the project has Apple Developer Program credentials. Do not claim that `v1.1.0` is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
-2. **Source release:** canonical and recommended path for `v1.1.0`. Users should build from source after checking out the `v1.1.0` tag at `f7d2c636ebf582ac3809998c3fac819d5d87eb72`.
-3. **Unsigned convenience app zip:** optional tester convenience only. If attached, it must be named `Vifty-v1.1.0-unsigned-dev.zip` with `Vifty-v1.1.0-unsigned-dev.zip.sha256`. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
+1. **Trusted notarized Developer ID release:** unavailable until the project has Apple Developer Program credentials. Do not claim that `v1.1.0`, `v1.1.1`, or any source-first unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
+2. **Source release:** canonical and recommended path while Apple credentials are unavailable. `v1.1.0` is the latest published source tag but has the helper issue below. `v1.1.1` should become the recommended source tag after its hotfix release is published.
+3. **Unsigned convenience app zip:** optional tester convenience only. If attached for the hotfix, it must be named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
 Current facts:
 
@@ -18,13 +18,34 @@ Current facts:
 - Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main` (`6b0690b`, `4f729d7`, and `3064b9e`). Users may see "Fan helper unreachable" after updating even on supported hardware.
 - Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary. The honest remediation is a new source-first hotfix release, still unsigned/not notarized until Apple Developer Program credentials exist.
 - `main` has moved after `v1.1.0` was published. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
+- `Resources/Info.plist` now carries `1.1.1`; `Casks/vifty.rb` remains on `1.1.0` because source-first releases must not move Homebrew to an unsigned artifact. Source-first metadata validation allows this cask hold, while Developer ID metadata validation still requires bundle/cask alignment before any future notarized cask release.
 - `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json` is the published source-first release preflight. It currently reports `ready` for source commit `f7d2c636ebf582ac3809998c3fac819d5d87eb72`, source-tag CI readiness, and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
 - Source-first readiness proves the release notes/assets/trust boundaries for the immutable tag. It does not prove the release has no post-publication functional defects; helper reports still need `viftyctl diagnose --json`, launchd evidence, and a hotfix release decision.
 - Before tagging a source-first candidate, maintainers may add `--require-source-ref <candidate-ref-or-sha>` to reject a stale tag. After publication, use the immutable release commit SHA if a source-ref check is still needed.
 - `scripts/check-release-readiness.sh --mode developer-id ...` remains the strict future trusted-binary preflight. It still requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
-- No unsigned build may use `Vifty-v1.1.0.zip` or `Vifty-v1.1.0.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
-- Do not update the Homebrew cask for this source-first release, and do not point Homebrew at the unsigned-dev artifact.
+- No unsigned build may use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
+- Do not update the Homebrew cask checksum for a source-first release, and do not point Homebrew at unsigned-dev artifacts.
 - The older `v1.0.0` public asset is not trust-complete because release verification found a bundle-version mismatch between the extracted app and cask metadata.
+
+## Source-First v1.1.1 Hotfix Candidate Checks
+
+Use these checks before tagging and publishing the hotfix from current `main`:
+
+```sh
+git fetch origin main --tags
+make verify
+scripts/check-release-readiness.sh --mode source-first --version 1.1.1 --repo Reedtrullz/Vifty --source-sha "$(git rev-parse HEAD)" --require-source-ref HEAD --json
+RELEASE_VERSION=1.1.1 UNSIGNED_DEV_SOURCE_REF=HEAD make source-first-release-notes unsigned-dev-artifact
+```
+
+Before publication, source-first readiness may block on `github-release` because `v1.1.1` is not published yet. After the tag and release exist, rerun:
+
+```sh
+git fetch origin main --tags
+RELEASE_VERSION=1.1.1 make source-first-readiness
+```
+
+The hotfix release notes must repeat the source-first warning, name the immutable source tag commit in the published GitHub Release body, explain that the unsigned app is not signed/notarized/trusted, and call out the helper-install/app-polling fixes that supersede `v1.1.0`.
 
 ## Source-First v1.1.0 Operator Checks
 

@@ -252,9 +252,9 @@ else
   add_check "release-mode" "passed" "Developer ID mode: require signed, notarized, stapled canonical release assets and Apple release credentials."
 fi
 
-if metadata_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/validate-release-metadata.sh" 2>&1)"; then
+if metadata_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/validate-release-metadata.sh" --mode "${RELEASE_MODE}" 2>&1)"; then
   if [ "${RELEASE_MODE}" = "source-first" ]; then
-    add_check "release-metadata" "passed" "Developer ID release metadata remains internally aligned for a future notarized release; source-first mode does not publish or require Vifty-v${VERSION}.zip."
+    add_check "release-metadata" "passed" "${metadata_output}"
   else
     add_check "release-metadata" "passed" "${metadata_output}"
   fi

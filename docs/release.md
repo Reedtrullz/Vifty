@@ -2,7 +2,7 @@
 
 Vifty has two release modes:
 
-- **Source-first release:** used for `v1.1.0` because the project does not currently have Apple Developer Program credentials. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
+- **Source-first release:** used while the project does not currently have Apple Developer Program credentials. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
 - **Developer ID release:** future trusted binary lane. Artifacts should be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
@@ -11,9 +11,9 @@ For the current public release trust state, see [release-status.md](release-stat
 
 Use this mode when Apple Developer Program credentials are unavailable. It does not create a trusted public binary and must not claim Developer ID signing, notarization, stapling, Gatekeeper approval, or Homebrew trust.
 
-The required `v1.1.0` release-note warning is:
+The required source-first release-note warning is:
 
-> This is a source-first release. Vifty v1.1.0 does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
+> This is a source-first release. Vifty v<version> does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
 >
 > A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
 
@@ -87,9 +87,9 @@ Configure these repository secrets before running the `Release` workflow:
 - `DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64` — base64-encoded `.p12` Developer ID Application certificate.
 - `DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD` — password for the `.p12`.
 
-## Version Requirements
+## Developer ID Version Requirements
 
-Before tagging, update all release-facing versions to the same value:
+Before tagging a Developer ID release, update all trusted-binary release-facing versions to the same value:
 
 - `Resources/Info.plist` `CFBundleShortVersionString`
 - `Casks/vifty.rb` `version`
@@ -125,7 +125,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 3. Confirm the local tree is clean and tests pass:
 
    ```sh
-   make verify
+   RELEASE_METADATA_MODE=developer-id make verify
    ```
 
 4. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.

@@ -11,6 +11,26 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Release metadata OK: version 1.0.0"))
     }
 
+    func testDeveloperIDValidatorRejectsBundleCaskVersionDrift() throws {
+        let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("bundle version 1.1.1 does not match cask version 1.1.0"))
+    }
+
+    func testSourceFirstValidatorAllowsBundleVersionWithoutUpdatingHomebrew() throws {
+        let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
+
+        let result = try harness.runValidator(["--mode", "source-first"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Source-first release metadata OK: bundle version 1.1.1, cask version 1.1.0"))
+        XCTAssertTrue(result.stdout.contains("Homebrew may remain on its prior trusted-binary lane"))
+        XCTAssertTrue(result.stdout.contains("source-first mode does not publish or require Vifty-v1.1.1.zip"))
+    }
+
     func testValidatorRejectsInvalidCaskSHA() throws {
         let harness = try ReleaseMetadataHarness(caskSHA: "not-a-real-sha")
 
@@ -572,6 +592,38 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("unsigned tester assets") == true)
     }
 
+    func testSourceFirstReadinessAllowsHomebrewCaskToRemainOnPriorVersion() throws {
+        let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            version: "1.1.1",
+            assetNames: [
+                "Vifty-v1.1.1-unsigned-dev.zip",
+                "Vifty-v1.1.1-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.1.1")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.1.1",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "ready")
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("bundle version 1.1.1, cask version 1.1.0") == true)
+        XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("source-first mode does not publish or require Vifty-v1.1.1.zip") == true)
+    }
+
     func testSourceFirstReadinessRejectsCanonicalTrustedBinaryAssets() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
@@ -861,6 +913,7 @@ private final class ReleaseMetadataHarness {
 
     init(
         version: String = "1.0.0",
+        caskVersion: String? = nil,
         caskSHA: String = String(repeating: "a", count: 64),
         includeAdHocSigningIdentity: Bool = false,
         privilegedHelperCleanupPath: String? = "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
@@ -903,7 +956,7 @@ private final class ReleaseMetadataHarness {
 
         try writeInfoPlist(version: version)
         try writeCask(
-            version: version,
+            version: caskVersion ?? version,
             sha: caskSHA,
             includeAdHocSigningIdentity: includeAdHocSigningIdentity,
             privilegedHelperCleanupPath: privilegedHelperCleanupPath
@@ -934,13 +987,14 @@ private final class ReleaseMetadataHarness {
         )
     }
 
-    func runValidator() throws -> ReleaseMetadataProcessResult {
+    func runValidator(_ arguments: [String] = []) throws -> ReleaseMetadataProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/validate-release-metadata.sh")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
 
         let process = Process()
         process.executableURL = scriptURL
+        process.arguments = arguments
         process.environment = ProcessInfo.processInfo.environment.merging(
             ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
             uniquingKeysWith: { _, new in new }

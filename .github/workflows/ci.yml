@@ -44,7 +44,7 @@ jobs:
           swift --version
 
       - name: Validate release metadata
-        run: scripts/validate-release-metadata.sh
+        run: scripts/validate-release-metadata.sh --mode source-first
 
       - name: Run tests
         run: swift test
