@@ -334,11 +334,19 @@ ruby -rjson -rcsv -rfileutils -e '
   counts_by_claim = Hash.new(0)
   counts_by_install_source = Hash.new(0)
   counts_by_model = Hash.new(0)
+  counts_by_agent_action = Hash.new(0)
+  counts_by_recovery_action = Hash.new(0)
+  counts_by_safe_to_request = Hash.new(0)
+  counts_by_daemon_control_path = Hash.new(0)
   rows.each do |row|
     counts_by_mode[row["mode"]] += 1
     counts_by_claim[row["claim"]] += 1
     counts_by_install_source[row["installSource"]] += 1 unless row["installSource"].empty?
     counts_by_model[row["modelIdentifier"]] += 1 unless row["modelIdentifier"].empty?
+    counts_by_agent_action[row["recommendedAgentAction"]] += 1 unless row["recommendedAgentAction"].empty?
+    counts_by_recovery_action[row["recommendedRecoveryAction"]] += 1 unless row["recommendedRecoveryAction"].empty?
+    counts_by_safe_to_request[row["safeToRequestCooling"]] += 1 unless row["safeToRequestCooling"].empty?
+    counts_by_daemon_control_path[row["daemonControlPathReady"]] += 1 unless row["daemonControlPathReady"].empty?
   end
 
   summary = {
@@ -358,6 +366,10 @@ ruby -rjson -rcsv -rfileutils -e '
     "countsByClaim" => counts_by_claim.sort.to_h,
     "countsByInstallSource" => counts_by_install_source.sort.to_h,
     "countsByModelIdentifier" => counts_by_model.sort.to_h,
+    "countsByRecommendedAgentAction" => counts_by_agent_action.sort.to_h,
+    "countsByRecommendedRecoveryAction" => counts_by_recovery_action.sort.to_h,
+    "countsBySafeToRequestCooling" => counts_by_safe_to_request.sort.to_h,
+    "countsByDaemonControlPathReady" => counts_by_daemon_control_path.sort.to_h,
     "reports" => rows
   }
 

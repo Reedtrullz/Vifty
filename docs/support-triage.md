@@ -94,4 +94,4 @@ Only update [compatibility.md](compatibility.md) from reviewed `review-result.js
 "manualSmokeTestResult": "passed-auto-restored"
 ```
 
-Until then, keep the report as candidate evidence that still needs manual smoke confirmation. `agentRunSmokeResult: "passed-auto-restored"` is useful developer-workload proof for guarded `viftyctl run`, but it does not promote a row to validated hardware evidence without the manual smoke result above.
+Until then, keep the report as candidate evidence that still needs manual smoke confirmation. `agentRunSmokeResult: "passed-auto-restored"` is useful developer-workload proof for guarded `viftyctl run`, but it does not promote a row to validated hardware evidence without the manual smoke result above. When reviewing many reports, use the index `countsByRecommendedAgentAction`, `countsByRecommendedRecoveryAction`, `countsBySafeToRequestCooling`, and `countsByDaemonControlPathReady` fields to find stop-before-cooling, helper-repair, and unsafe-readiness clusters before updating compatibility claims.

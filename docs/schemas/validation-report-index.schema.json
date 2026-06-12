@@ -21,6 +21,10 @@
     "countsByClaim",
     "countsByInstallSource",
     "countsByModelIdentifier",
+    "countsByRecommendedAgentAction",
+    "countsByRecommendedRecoveryAction",
+    "countsBySafeToRequestCooling",
+    "countsByDaemonControlPathReady",
     "reports"
   ],
   "properties": {
@@ -77,6 +81,18 @@
       "$ref": "#/$defs/countMap"
     },
     "countsByModelIdentifier": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByRecommendedAgentAction": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByRecommendedRecoveryAction": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsBySafeToRequestCooling": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByDaemonControlPathReady": {
       "$ref": "#/$defs/countMap"
     },
     "reports": {

@@ -95,6 +95,17 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsByClaim["rejected"], 1)
         let countsByInstallSource = try XCTUnwrap(json["countsByInstallSource"] as? [String: Int])
         XCTAssertEqual(countsByInstallSource["source-build-tag"], 5)
+        let countsByRecommendedAgentAction = try XCTUnwrap(json["countsByRecommendedAgentAction"] as? [String: Int])
+        XCTAssertEqual(countsByRecommendedAgentAction["requestCooling"], 4)
+        XCTAssertEqual(countsByRecommendedAgentAction["doNotRequestCooling"], 1)
+        let countsByRecommendedRecoveryAction = try XCTUnwrap(json["countsByRecommendedRecoveryAction"] as? [String: Int])
+        XCTAssertEqual(countsByRecommendedRecoveryAction["none"], 4)
+        XCTAssertEqual(countsByRecommendedRecoveryAction["collectHardwareEvidence"], 1)
+        let countsBySafeToRequestCooling = try XCTUnwrap(json["countsBySafeToRequestCooling"] as? [String: Int])
+        XCTAssertEqual(countsBySafeToRequestCooling["true"], 4)
+        XCTAssertEqual(countsBySafeToRequestCooling["false"], 1)
+        let countsByDaemonControlPathReady = try XCTUnwrap(json["countsByDaemonControlPathReady"] as? [String: Int])
+        XCTAssertEqual(countsByDaemonControlPathReady["true"], 5)
     }
 
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
@@ -116,6 +127,10 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "agentRunSmokePassedReports",
             "countsByInstallSource",
             "countsByClaim",
+            "countsByRecommendedAgentAction",
+            "countsByRecommendedRecoveryAction",
+            "countsBySafeToRequestCooling",
+            "countsByDaemonControlPathReady",
             "reports"
         ] {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
