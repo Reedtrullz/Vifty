@@ -363,7 +363,8 @@ final class AppModelTests: XCTestCase {
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { expectedPower },
             thermalReader: { .nominal },
-            daemonPing: { false }
+            daemonPing: { false },
+            agentStatusReader: { nil }
         )
 
         await model.pollOnce()
@@ -382,7 +383,8 @@ final class AppModelTests: XCTestCase {
         ))
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
-            daemonPing: { false }
+            daemonPing: { false },
+            agentStatusReader: { nil }
         )
 
         await model.pollOnce()
@@ -430,7 +432,8 @@ final class AppModelTests: XCTestCase {
             powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: -12.5) },
             thermalReader: { .fair },
             now: { now },
-            daemonPing: { true }
+            daemonPing: { true },
+            agentStatusReader: { nil }
         )
 
         await model.pollOnce()
@@ -455,7 +458,8 @@ final class AppModelTests: XCTestCase {
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .serious },
-            daemonPing: { true }
+            daemonPing: { true },
+            agentStatusReader: { nil }
         )
 
         await model.pollOnce()
@@ -479,7 +483,8 @@ final class AppModelTests: XCTestCase {
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
             now: { clock.now },
-            daemonPing: { true }
+            daemonPing: { true },
+            agentStatusReader: { nil }
         )
         model.snapshot = snapshot
         model.daemonReachable = true
@@ -514,7 +519,8 @@ final class AppModelTests: XCTestCase {
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
             now: { now },
-            daemonPing: { true }
+            daemonPing: { true },
+            agentStatusReader: { nil }
         )
         model.snapshot = snapshot
         model.daemonReachable = true
@@ -541,7 +547,8 @@ final class AppModelTests: XCTestCase {
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
-            daemonPing: { false }
+            daemonPing: { false },
+            agentStatusReader: { nil }
         )
         model.snapshot = snapshot
         model.daemonReachable = true
@@ -583,6 +590,78 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuTitle.contains("Agent cooling"))
     }
 
+    func testPollOnceSurfacesAgentControlStatusFailure() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
+            daemonPing: { true },
+            agentStatusReader: {
+                throw ViftyError.helperRejected("Daemon request timed out.")
+            }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertNil(model.agentControlStatus)
+        XCTAssertTrue(model.agentControlStatusError?.contains("Daemon request timed out") == true)
+        XCTAssertEqual(model.agentCoolingMenuSummary, "Agent status unavailable")
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent status unavailable")
+        XCTAssertEqual(model.agentCoolingSummary, "Agent cooling status unavailable; repair helper before requesting cooling.")
+        XCTAssertTrue(model.agentCoolingNeedsAttention)
+        XCTAssertTrue(model.menuTitle.contains("Agent status unavailable"))
+    }
+
+    func testPollOnceClearsAgentControlStatusFailureAfterSuccessfulRefresh() async {
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let statusSequence = AgentStatusSequence(
+            results: [
+                .failure(ViftyError.helperRejected("Daemon request timed out.")),
+                .success(AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil))
+            ]
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
+            daemonPing: { true },
+            agentStatusReader: {
+                try await statusSequence.next()
+            }
+        )
+
+        await model.pollOnce()
+        XCTAssertTrue(model.agentControlStatusError?.contains("Daemon request timed out") == true)
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent status unavailable")
+
+        await model.pollOnce()
+        XCTAssertNil(model.agentControlStatusError)
+        XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent cooling active")
+        XCTAssertEqual(model.agentCoolingMenuSummary, "Agent cooling")
+    }
+
+    func testAgentCoolingSummaryKeepsKnownLeaseVisibleWhenStatusRefreshFails() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(model.agentCoolingMenuSummary, "Agent status warning")
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent status warning")
+        XCTAssertTrue(model.agentCoolingNeedsAttention)
+        XCTAssertTrue(model.agentCoolingSummary?.contains("Agent Build cooling until") == true)
+        XCTAssertTrue(model.agentCoolingSummary?.contains("status refresh failed; do not start another workload") == true)
+    }
+
     func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {
         let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
         model.agentControlStatus = AgentControlStatus(
@@ -593,6 +672,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.agentCoolingMenuSummary, "Agent cooling")
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent cooling active")
         XCTAssertFalse(model.agentCoolingNeedsAttention)
         XCTAssertTrue(model.agentCoolingSummary?.contains("Agent Build cooling until") == true)
         XCTAssertTrue(model.agentCoolingSummary?.contains("F0 3600 RPM, F1 3700 RPM") == true)
@@ -611,6 +691,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.agentCoolingMenuSummary, "Agent restore pending")
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent restore pending")
         XCTAssertTrue(model.agentCoolingNeedsAttention)
         XCTAssertTrue(model.agentCoolingSummary?.contains("expired; waiting for Auto restore") == true)
         XCTAssertTrue(model.menuTitle.contains("Agent restore pending"))
@@ -783,5 +864,18 @@ private actor AgentRestoreRecorder {
         reasons.append(reason)
         currentStatus = AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)
         return currentStatus
+    }
+}
+
+private actor AgentStatusSequence {
+    private var results: [Result<AgentControlStatus?, Error>]
+
+    init(results: [Result<AgentControlStatus?, Error>]) {
+        self.results = results
+    }
+
+    func next() throws -> AgentControlStatus? {
+        guard !results.isEmpty else { return nil }
+        return try results.removeFirst().get()
     }
 }

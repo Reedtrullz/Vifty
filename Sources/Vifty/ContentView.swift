@@ -142,7 +142,7 @@ struct ContentView: View {
                     Image(systemName: "cpu")
                         .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.agentCoolingNeedsAttention ? "Agent restore pending" : "Agent cooling active")
+                        Text(model.agentCoolingPanelTitle)
                             .font(.caption.weight(.semibold))
                         Text(agentCoolingSummary)
                             .font(.caption)

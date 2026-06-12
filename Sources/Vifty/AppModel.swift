@@ -73,6 +73,7 @@ final class AppModel: ObservableObject {
     @Published var manualRunLimit: ManualRunLimit = .indefinitely
     @Published var manualSessionExpiresAt: Date?
     @Published var agentControlStatus: AgentControlStatus?
+    @Published var agentControlStatusError: String?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
@@ -81,7 +82,7 @@ final class AppModel: ObservableObject {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
     private let daemonPing: @Sendable () async -> Bool
-    private let agentStatusReader: @Sendable () async -> AgentControlStatus?
+    private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
     private var pollingTask: Task<Void, Never>?
@@ -92,8 +93,8 @@ final class AppModel: ObservableObject {
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
-        agentStatusReader: @escaping @Sendable () async -> AgentControlStatus? = {
-            try? await ViftyDaemonClient().agentControlStatus()
+        agentStatusReader: @escaping @Sendable () async throws -> AgentControlStatus? = {
+            try await ViftyDaemonClient().agentControlStatus()
         },
         agentRestore: @escaping @Sendable (String) async throws -> AgentControlStatus? = { reason in
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
@@ -155,7 +156,7 @@ final class AppModel: ObservableObject {
             lastError = nil
             daemonResponding = await daemonPing()
             daemonReachable = daemonResponding || !nextSnapshot.fans.isEmpty
-            agentControlStatus = await agentStatusReader()
+            await refreshAgentControlStatus()
             fanAccessMessage = nextSnapshot.fans.isEmpty
                 ? (daemonResponding ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
                 : nil
@@ -165,7 +166,7 @@ final class AppModel: ObservableObject {
             lastError = error.localizedDescription
             daemonResponding = await daemonPing()
             daemonReachable = daemonResponding
-            agentControlStatus = await agentStatusReader()
+            await refreshAgentControlStatus()
             await coordinator.forceAuto()
             await syncState()
         }
@@ -353,12 +354,27 @@ final class AppModel: ObservableObject {
     }
 
     var agentCoolingMenuSummary: String? {
-        guard let lease = agentControlStatus?.activeLease else { return nil }
+        guard let lease = agentControlStatus?.activeLease else {
+            return agentControlStatusError == nil ? nil : "Agent status unavailable"
+        }
+        if agentControlStatusError != nil {
+            return "Agent status warning"
+        }
         return lease.isActive(at: now()) ? "Agent cooling" : "Agent restore pending"
     }
 
+    var agentCoolingPanelTitle: String {
+        if agentControlStatusError != nil {
+            return agentControlStatus?.activeLease == nil ? "Agent status unavailable" : "Agent status warning"
+        }
+        return agentCoolingNeedsAttention ? "Agent restore pending" : "Agent cooling active"
+    }
+
     var agentCoolingSummary: String? {
-        guard let lease = agentControlStatus?.activeLease else { return nil }
+        guard let lease = agentControlStatus?.activeLease else {
+            guard agentControlStatusError != nil else { return nil }
+            return "Agent cooling status unavailable; repair helper before requesting cooling."
+        }
 
         let state = if lease.isActive(at: now()) {
             "Agent \(lease.request.workload.displayName) cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))"
@@ -371,10 +387,17 @@ final class AppModel: ObservableObject {
             .map { "F\($0.key) \($0.value) RPM" }
             .joined(separator: ", ")
 
-        return targets.isEmpty ? state : "\(state) · \(targets)"
+        let baseSummary = targets.isEmpty ? state : "\(state) · \(targets)"
+        if agentControlStatusError != nil {
+            return "\(baseSummary) · status refresh failed; do not start another workload"
+        }
+        return baseSummary
     }
 
     var agentCoolingNeedsAttention: Bool {
+        if agentControlStatusError != nil {
+            return true
+        }
         guard let lease = agentControlStatus?.activeLease else { return false }
         return !lease.isActive(at: now())
     }
@@ -597,9 +620,20 @@ final class AppModel: ObservableObject {
         guard agentControlStatus?.activeLease != nil else { return nil }
         do {
             agentControlStatus = try await agentRestore("User selected Auto in Vifty")
+            agentControlStatusError = nil
             return nil
         } catch {
+            agentControlStatusError = error.localizedDescription
             return "Failed to clear agent cooling lease after Auto restore: \(error.localizedDescription)"
+        }
+    }
+
+    private func refreshAgentControlStatus() async {
+        do {
+            agentControlStatus = try await agentStatusReader()
+            agentControlStatusError = nil
+        } catch {
+            agentControlStatusError = error.localizedDescription
         }
     }
 
