@@ -324,6 +324,44 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "64 C | 2500 RPM | 16.9 W drain")
     }
 
+    func testPollOnceTreatsFanSnapshotAsReachableWhenPingFails() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            daemonPing: { false }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertTrue(model.daemonReachable)
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
+        XCTAssertNil(model.helperRecoverySuggestion)
+    }
+
+    func testPollOnceRefreshesHelperStatusAfterSnapshotFailure() async {
+        let hardware = AppModelFailingHardware(error: ViftyError.helperRejected("Snapshot failed"))
+        let expectedStatus = AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            daemonPing: { true },
+            agentStatusReader: { expectedStatus }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertTrue(model.daemonReachable)
+        XCTAssertEqual(model.agentControlStatus?.enabled, true)
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair to reinstall or approve the helper. Restore Auto first if fans appear stuck.")
+        XCTAssertTrue(model.lastError?.contains("Snapshot failed") == true)
+    }
+
     func testPollOnceAppendsTelemetryHistorySample() async {
         let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
@@ -616,6 +654,26 @@ private actor AppModelFakeHardware: HardwareService {
     func apply(_ command: FanCommand, fan: Fan) async throws {}
 
     func restoreAuto(fan: Fan) async throws { restoredFanIDs.append(fan.id) }
+}
+
+private actor AppModelFailingHardware: HardwareService {
+    let error: Error
+
+    init(error: Error) {
+        self.error = error
+    }
+
+    func snapshot() async throws -> HardwareSnapshot {
+        throw error
+    }
+
+    func apply(_ command: FanCommand, fan: Fan) async throws {
+        throw error
+    }
+
+    func restoreAuto(fan: Fan) async throws {
+        throw error
+    }
 }
 
 private actor AgentRestoreRecorder {

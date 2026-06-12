@@ -107,7 +107,7 @@ final class AppModel: ObservableObject {
                 thermalPressure: currentThermalPressure
             ))
             lastError = nil
-            daemonReachable = await daemonPing()
+            daemonReachable = await daemonPing() || !nextSnapshot.fans.isEmpty
             agentControlStatus = await agentStatusReader()
             fanAccessMessage = nextSnapshot.fans.isEmpty
                 ? (daemonReachable ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
@@ -116,6 +116,8 @@ final class AppModel: ObservableObject {
             await syncState()
         } catch {
             lastError = error.localizedDescription
+            daemonReachable = await daemonPing()
+            agentControlStatus = await agentStatusReader()
             await coordinator.forceAuto()
             await syncState()
         }
