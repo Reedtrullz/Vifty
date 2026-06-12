@@ -154,6 +154,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("Do not update the Homebrew cask for this source-first release"))
         XCTAssertTrue(releaseStatus.contains("Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit."))
         XCTAssertTrue(releaseStatus.contains("make source-first-release-notes"))
+        XCTAssertTrue(releaseStatus.contains("Those generated notes should tell maintainers to use `--require-source-ref <candidate-ref-or-sha>` only before publication or with an immutable intended release commit"))
+        XCTAssertTrue(releaseStatus.contains("never as a blanket `origin/main` post-publication check"))
         XCTAssertTrue(releaseStatus.contains("make unsigned-dev-artifact"))
         XCTAssertTrue(releaseStatus.contains("make source-first-readiness"))
         XCTAssertTrue(releaseStatus.contains("scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json"))

@@ -121,7 +121,8 @@ make install
 
 - [ ] \`make verify\` passed before publishing the tag/release notes.
 - [ ] The \`v${VERSION}\` tag points at the intended source commit.
-- [ ] \`scripts/check-release-readiness.sh --mode source-first --version ${VERSION} --repo Reedtrullz/Vifty --require-source-ref origin/main --json\` passed after publication.
+- [ ] Before publication, if checking a moving branch or candidate ref, \`scripts/check-release-readiness.sh --mode source-first --version ${VERSION} --repo Reedtrullz/Vifty --require-source-ref <candidate-ref-or-sha> --json\` passed against the intended release commit.
+- [ ] After publication, \`scripts/check-release-readiness.sh --mode source-first --version ${VERSION} --repo Reedtrullz/Vifty --json\` passed against the immutable release tag and GitHub Release assets. Do not require \`origin/main\` after \`main\` has moved on.
 - [ ] Any attached unsigned-dev zip uses the \`Vifty-v${VERSION}-unsigned-dev.zip\` name and has a matching \`.sha256\` file.
 - [ ] No release notes, assets, README text, or cask metadata claim this source-first release is Developer ID signed, notarized, or Homebrew-trusted.
 

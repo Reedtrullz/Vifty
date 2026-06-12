@@ -712,6 +712,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip.sha256"))
         XCTAssertTrue(notes.contains("Do not use `Vifty-v1.2.3.zip` for the unsigned build"))
         XCTAssertTrue(notes.contains("Do not update the Homebrew cask for this source-first release."))
+        XCTAssertTrue(notes.contains("--require-source-ref <candidate-ref-or-sha>"))
+        XCTAssertTrue(notes.contains("After publication, `scripts/check-release-readiness.sh --mode source-first --version 1.2.3 --repo Reedtrullz/Vifty --json` passed"))
+        XCTAssertTrue(notes.contains("Do not require `origin/main` after `main` has moved on."))
+        XCTAssertFalse(notes.contains("source-first --version 1.2.3 --repo Reedtrullz/Vifty --require-source-ref origin/main"))
     }
 
     func testReleaseChecklistWriterRejectsMalformedVersion() throws {
