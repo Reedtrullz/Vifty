@@ -108,10 +108,12 @@
           "maximum": 100
         },
         "reason": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 512
         },
         "idempotencyKey": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 256
         }
       }
     },

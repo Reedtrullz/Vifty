@@ -42,7 +42,7 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertEqual(decision.errorCode, .thermalCritical)
     }
 
-    func testDeniesBlankReasonAndIdempotencyKeyMetadata() {
+    func testDeniesInvalidReasonAndIdempotencyKeyMetadata() {
         let policy = AgentControlPolicy(enabled: true)
         let blankReason = AgentControlRequest(
             workload: .build,
@@ -58,9 +58,25 @@ final class AgentControlPolicyTests: XCTestCase {
             reason: "Build",
             idempotencyKey: "   "
         )
+        let oversizedReason = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: String(repeating: "r", count: AgentControlRequest.maximumReasonLength + 1),
+            idempotencyKey: "key"
+        )
+        let oversizedKey = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "Build",
+            idempotencyKey: String(repeating: "k", count: AgentControlRequest.maximumIdempotencyKeyLength + 1)
+        )
 
         let reasonDecision = policy.evaluate(blankReason, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
         let keyDecision = policy.evaluate(blankKey, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
+        let oversizedReasonDecision = policy.evaluate(oversizedReason, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
+        let oversizedKeyDecision = policy.evaluate(oversizedKey, snapshot: Self.supportedSnapshot(), thermalPressure: .nominal)
 
         XCTAssertFalse(reasonDecision.allowed)
         XCTAssertEqual(reasonDecision.errorCode, .invalidArguments)
@@ -68,6 +84,12 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertFalse(keyDecision.allowed)
         XCTAssertEqual(keyDecision.errorCode, .invalidArguments)
         XCTAssertEqual(keyDecision.message, "Agent cooling idempotency key must not be blank.")
+        XCTAssertFalse(oversizedReasonDecision.allowed)
+        XCTAssertEqual(oversizedReasonDecision.errorCode, .invalidArguments)
+        XCTAssertEqual(oversizedReasonDecision.message, "Agent cooling reason must be 512 characters or fewer.")
+        XCTAssertFalse(oversizedKeyDecision.allowed)
+        XCTAssertEqual(oversizedKeyDecision.errorCode, .invalidArguments)
+        XCTAssertEqual(oversizedKeyDecision.message, "Agent cooling idempotency key must be 256 characters or fewer.")
     }
 
     func testCriticalThermalPressureTakesPrecedenceOverMissingSensorsAndMalformedFans() {

@@ -369,6 +369,7 @@ public actor AgentControlService {
 
     private static func normalizedAuditReason(_ reason: String, fallback: String) -> String {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? fallback : trimmed
+        let normalized = trimmed.isEmpty ? fallback : trimmed
+        return String(normalized.prefix(AgentControlRequest.maximumReasonLength))
     }
 }

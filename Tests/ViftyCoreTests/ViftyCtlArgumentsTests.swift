@@ -215,6 +215,16 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         ], equals: .invalidReason)
     }
 
+    func testPrepareRejectsOversizedReason() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--reason", String(repeating: "r", count: AgentControlRequest.maximumReasonLength + 1)
+        ], equals: .invalidReason)
+    }
+
     func testPrepareRejectsWhitespaceOnlyIdempotencyKey() {
         assertParseError([
             "prepare",
@@ -222,6 +232,16 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--duration", "45m",
             "--max-rpm-percent", "75",
             "--idempotency-key", "   "
+        ], equals: .invalidIdempotencyKey)
+    }
+
+    func testPrepareRejectsOversizedIdempotencyKey() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--idempotency-key", String(repeating: "k", count: AgentControlRequest.maximumIdempotencyKeyLength + 1)
         ], equals: .invalidIdempotencyKey)
     }
 
@@ -294,6 +314,14 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         assertParseError([
             "restore-auto",
             "--reason", "   ",
+            "--json"
+        ], equals: .invalidReason)
+    }
+
+    func testRestoreAutoRejectsOversizedReason() {
+        assertParseError([
+            "restore-auto",
+            "--reason", String(repeating: "r", count: AgentControlRequest.maximumReasonLength + 1),
             "--json"
         ], equals: .invalidReason)
     }

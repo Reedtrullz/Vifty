@@ -95,6 +95,41 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertTrue(audit.contains("Agent cooling reason must not be blank."))
     }
 
+    func testPrepareRejectsOversizedMetadataBeforeHardwareAccess() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: String(repeating: "r", count: AgentControlRequest.maximumReasonLength + 1),
+            idempotencyKey: "key"
+        )
+
+        let status = try await service.prepare(request)
+
+        XCTAssertNil(status.activeLease)
+        XCTAssertEqual(status.lastErrorCode, .invalidArguments)
+        XCTAssertEqual(status.lastDecision?.message, "Agent cooling reason must be 512 characters or fewer.")
+        let snapshotCallCount = await hardware.snapshotCallCount
+        XCTAssertEqual(snapshotCallCount, 0)
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [])
+        XCTAssertNil(try store.loadActiveLease())
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"action\":\"prepare-denied\""))
+        XCTAssertTrue(audit.contains("Agent cooling reason must be 512 characters or fewer."))
+    }
+
     func testRestoreAutoRestoresFansAndClearsLease() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let store = AgentControlStore(directory: temporaryDirectory())
@@ -144,6 +179,32 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertTrue(audit.contains("\"message\":\"manual restore\""))
     }
 
+    func testRestoreAutoTruncatesOversizedAuditReasonWithoutBlockingRestore() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+        let reason = String(repeating: "r", count: AgentControlRequest.maximumReasonLength + 100)
+
+        let status = try await service.restoreAuto(reason: reason)
+
+        XCTAssertNil(status.activeLease)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        let restoreEvent = try store.loadRecentAuditEvents(limit: 10).first { $0.action == "restore-auto" }
+        XCTAssertEqual(restoreEvent?.message.count, AgentControlRequest.maximumReasonLength)
+        XCTAssertEqual(restoreEvent?.message, String(reason.prefix(AgentControlRequest.maximumReasonLength)))
+    }
+
     func testClearActiveLeaseNormalizesAuditReason() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let directory = temporaryDirectory()
@@ -166,6 +227,30 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertTrue(audit.contains("\"action\":\"clear-lease\""))
         XCTAssertTrue(audit.contains("\"message\":\"user selected Auto\""))
         XCTAssertFalse(audit.contains("\"message\":\"  user selected Auto  \""))
+    }
+
+    func testClearActiveLeaseTruncatesOversizedAuditReason() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+        let reason = String(repeating: "c", count: AgentControlRequest.maximumReasonLength + 100)
+
+        let status = try await service.clearActiveLease(reason: reason)
+
+        XCTAssertNil(status.activeLease)
+        let clearEvent = try store.loadRecentAuditEvents(limit: 10).first { $0.action == "clear-lease" }
+        XCTAssertEqual(clearEvent?.message.count, AgentControlRequest.maximumReasonLength)
+        XCTAssertEqual(clearEvent?.message, String(reason.prefix(AgentControlRequest.maximumReasonLength)))
     }
 
     func testRestoreAutoClearsStalePrepareDenialState() async throws {

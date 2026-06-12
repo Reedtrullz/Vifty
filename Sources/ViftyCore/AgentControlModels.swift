@@ -37,6 +37,9 @@ public enum AgentControlErrorCode: String, Codable, Equatable, Sendable {
 }
 
 public struct AgentControlRequest: Codable, Equatable, Sendable {
+    public static let maximumReasonLength = 512
+    public static let maximumIdempotencyKeyLength = 256
+
     public var workload: AgentControlWorkload
     public var durationSeconds: Int
     public var maxRPMPercent: Int
@@ -52,11 +55,20 @@ public struct AgentControlRequest: Codable, Equatable, Sendable {
     }
 
     public var metadataValidationFailureMessage: String? {
-        if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedIdempotencyKey = idempotencyKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedReason.isEmpty {
             return "Agent cooling reason must not be blank."
         }
-        if idempotencyKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if trimmedReason.count > Self.maximumReasonLength {
+            return "Agent cooling reason must be \(Self.maximumReasonLength) characters or fewer."
+        }
+        if trimmedIdempotencyKey.isEmpty {
             return "Agent cooling idempotency key must not be blank."
+        }
+        if trimmedIdempotencyKey.count > Self.maximumIdempotencyKeyLength {
+            return "Agent cooling idempotency key must be \(Self.maximumIdempotencyKeyLength) characters or fewer."
         }
         return nil
     }

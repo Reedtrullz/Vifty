@@ -39,7 +39,12 @@ public enum ViftyCtlArguments {
         case "restore-auto":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--reason"])
             return .restoreAuto(
-                reason: try optionalTrimmedValue(for: "--reason", in: rest, error: .invalidReason) ?? "manual restore",
+                reason: try optionalTrimmedValue(
+                    for: "--reason",
+                    in: rest,
+                    error: .invalidReason,
+                    maximumLength: AgentControlRequest.maximumReasonLength
+                ) ?? "manual restore",
                 json: rest.contains("--json")
             )
         case "run":
@@ -190,8 +195,18 @@ public enum ViftyCtlArguments {
             workload: workload,
             durationSeconds: durationSeconds,
             maxRPMPercent: maxRPMPercent,
-            reason: try optionalTrimmedValue(for: "--reason", in: arguments, error: .invalidReason) ?? "Agent workload",
-            idempotencyKey: try optionalTrimmedValue(for: "--idempotency-key", in: arguments, error: .invalidIdempotencyKey) ?? UUID().uuidString
+            reason: try optionalTrimmedValue(
+                for: "--reason",
+                in: arguments,
+                error: .invalidReason,
+                maximumLength: AgentControlRequest.maximumReasonLength
+            ) ?? "Agent workload",
+            idempotencyKey: try optionalTrimmedValue(
+                for: "--idempotency-key",
+                in: arguments,
+                error: .invalidIdempotencyKey,
+                maximumLength: AgentControlRequest.maximumIdempotencyKeyLength
+            ) ?? UUID().uuidString
         )
     }
 
@@ -257,7 +272,8 @@ public enum ViftyCtlArguments {
     private static func optionalTrimmedValue(
         for flag: String,
         in arguments: [String],
-        error: ViftyCtlParseError
+        error: ViftyCtlParseError,
+        maximumLength: Int? = nil
     ) throws -> String? {
         guard let rawValue = value(for: flag, in: arguments) else {
             return nil
@@ -265,6 +281,9 @@ public enum ViftyCtlArguments {
 
         let trimmedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedValue.isEmpty else {
+            throw error
+        }
+        if let maximumLength, trimmedValue.count > maximumLength {
             throw error
         }
         return trimmedValue
