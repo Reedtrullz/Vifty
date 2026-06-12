@@ -209,12 +209,13 @@ The manual smoke test proves direct prepare/restore behavior. For developer-work
 Then collect the read-only follow-up:
 
 ```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl capabilities --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl status --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl audit --limit 20 --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
-Paste the run stdout/stderr, child exit code, restore result, and the follow-up status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
+Paste the run stdout/stderr, child exit code, restore result, and the follow-up capabilities/status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path advertises the safe `runLifecycle` contract and policy/metadata limits, validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
 
 ## Signing Validation
 
