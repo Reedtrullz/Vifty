@@ -98,7 +98,7 @@ Do not request Vifty cooling when readiness is blocked, when `safeToRequestCooli
 
 ## Shell Runners
 
-For a local script, keep Vifty optional and fail closed on Vifty problems:
+For a local script, keep Vifty optional without masking Vifty failures. The fallback below is only for projects or machines where the guarded wrapper is intentionally absent. If the guarded wrapper exists and Vifty blocks, errors, or fails to restore Auto, the script exits with that failure instead of rerunning the workload without cooling:
 
 ```sh
 #!/bin/sh
@@ -111,7 +111,7 @@ fi
 exec "$@"
 ```
 
-Use this pattern for developer machines only. Remote CI machines, unsupported Macs, and non-macOS runners should run the workload normally without Vifty fan control.
+Use this pattern for developer machines only. Remote CI machines, unsupported Macs, and non-macOS runners should run the workload normally without Vifty fan control. Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command, unless the user explicitly asked to continue without Vifty cooling after seeing the structured failure.
 
 ## Failure Handling
 

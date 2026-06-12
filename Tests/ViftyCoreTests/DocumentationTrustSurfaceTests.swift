@@ -446,6 +446,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(integrations.contains("Never call raw SMC commands"))
         XCTAssertTrue(integrations.contains("Do not give agents permission to call `ViftyHelper setFixed`"))
         XCTAssertTrue(integrations.contains("VIFTY_GUARDED_RUN_FORCE_RETRY"))
+        XCTAssertTrue(integrations.contains("keep Vifty optional without masking Vifty failures"))
+        XCTAssertTrue(integrations.contains("the script exits with that failure instead of rerunning the workload without cooling"))
+        XCTAssertTrue(integrations.contains("Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command"))
 
         let exampleReadme = try read("examples/viftyctl/README.md")
         XCTAssertTrue(exampleReadme.contains("preflight that the child command is a regular executable path or resolves to one on `PATH`"))
