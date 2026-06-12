@@ -871,6 +871,26 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--require-source-ref needs a Git checkout or explicit --source-sha"))
     }
 
+    func testUnsignedDevArtifactBuilderExplainsMissingRequiredSourceRef() throws {
+        let harness = try ReleaseMetadataHarness()
+        try harness.writeUnsignedDevAppBundleFixture()
+        let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.1.1",
+            "--skip-build",
+            "--output-dir", output.path,
+            "--source-sha", String(repeating: "b", count: 40),
+            "--require-source-ref", "v1.1.1"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("could not resolve required source ref v1.1.1"))
+        XCTAssertTrue(result.stderr.contains("run git fetch origin --tags before building a release attachment"))
+        XCTAssertTrue(result.stderr.contains("pass an explicit commit SHA to --require-source-ref"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.1.1-unsigned-dev.zip").path))
+    }
+
     private func decodeReadinessSummary(_ stdout: String) throws -> [String: Any] {
         let data = Data(stdout.utf8)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

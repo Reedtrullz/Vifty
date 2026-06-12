@@ -117,7 +117,7 @@ if [ -n "${REQUIRE_SOURCE_REF}" ]; then
   fi
 
   if ! REQUIRED_SOURCE_SHA="$(resolve_ref "${REQUIRE_SOURCE_REF}")"; then
-    echo "error: could not resolve required source ref ${REQUIRE_SOURCE_REF}" >&2
+    echo "error: could not resolve required source ref ${REQUIRE_SOURCE_REF}; run git fetch origin --tags before building a release attachment, or pass an explicit commit SHA to --require-source-ref" >&2
     exit 1
   fi
 
