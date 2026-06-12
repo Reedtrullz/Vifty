@@ -111,6 +111,17 @@ diagnose_decision = {
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil
 }
+capabilities_decision = {
+  "exitStatus" => nil,
+  "daemonStatusAvailable" => nil,
+  "policySource" => nil,
+  "supportsRunCommand" => false,
+  "supportsForceRetry" => nil,
+  "runLifecycleSafe" => false,
+  "directControlLifecycleSafe" => false,
+  "metadataLimitsPresent" => false,
+  "unavailableExitCode" => nil
+}
 
 def bundle_entry?(value)
   value.is_a?(String) &&
@@ -157,7 +168,15 @@ def integer_value(value)
   Integer(value.to_s, exception: false)
 end
 
-def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, failures, warnings)
+def boolean?(value)
+  value == true || value == false
+end
+
+def includes_all?(array, values)
+  array.is_a?(Array) && values.all? { |value| array.include?(value) }
+end
+
+def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, failures, warnings)
   return unless summary_path
 
   FileUtils.mkdir_p(File.dirname(summary_path))
@@ -171,6 +190,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "coolingCommandsRun" => cooling_commands_run,
     "commandsReviewed" => commands_reviewed,
     "diagnoseDecision" => diagnose_decision,
+    "capabilitiesDecision" => capabilities_decision,
     "failures" => failures,
     "warnings" => warnings
   }
@@ -281,6 +301,83 @@ end
 %w[viftyctl-capabilities viftyctl-status viftyctl-audit].each do |name|
   status = integer_value(commands_by_name.dig(name, "status"))
   failures << "#{name} must exit 0 for a complete agent evidence review" unless status == 0
+end
+
+capabilities_status = integer_value(commands_by_name.dig("viftyctl-capabilities", "status"))
+capabilities_decision["exitStatus"] = capabilities_status
+capabilities_path = File.join(bundle, "viftyctl-capabilities.json")
+if File.file?(capabilities_path)
+  begin
+    capabilities = JSON.parse(File.read(capabilities_path))
+    unless capabilities.is_a?(Hash)
+      failures << "viftyctl-capabilities.json must contain a JSON object"
+    else
+      capabilities_commands = capabilities["commands"]
+      workloads = capabilities["workloads"]
+      daemon_status_available = capabilities["daemonStatusAvailable"]
+      policy_source = capabilities["policySource"]
+      supports_force_retry = capabilities["supportsForceRetry"]
+      unavailable_exit_code = integer_value(capabilities.dig("exitCodes", "unavailable"))
+      run_lifecycle = capabilities["runLifecycle"]
+      direct_lifecycle = capabilities["directControlLifecycle"]
+      metadata_limits = capabilities["metadataLimits"]
+
+      capabilities_decision["daemonStatusAvailable"] = daemon_status_available if boolean?(daemon_status_available)
+      capabilities_decision["policySource"] = policy_source if %w[daemonStatus fallbackUnavailable].include?(policy_source)
+      capabilities_decision["supportsRunCommand"] = includes_all?(capabilities_commands, %w[run])
+      capabilities_decision["supportsForceRetry"] = supports_force_retry if boolean?(supports_force_retry)
+      capabilities_decision["unavailableExitCode"] = unavailable_exit_code
+
+      failures << "viftyctl-capabilities.json commands must include run" unless capabilities_decision["supportsRunCommand"]
+      failures << "viftyctl-capabilities.json commands must include core read-only and cooling commands" unless includes_all?(capabilities_commands, %w[capabilities diagnose status audit prepare restore-auto run])
+      failures << "viftyctl-capabilities.json workloads must include build, test, and custom" unless includes_all?(workloads, %w[build test custom])
+      failures << "viftyctl-capabilities.json daemonStatusAvailable must be boolean" unless boolean?(daemon_status_available)
+      failures << "viftyctl-capabilities.json policySource is missing or unsupported" unless %w[daemonStatus fallbackUnavailable].include?(policy_source)
+      failures << "viftyctl-capabilities.json supportsForceRetry must be boolean" unless boolean?(supports_force_retry)
+      failures << "viftyctl-capabilities.json exitCodes.unavailable must be an integer" unless unavailable_exit_code
+
+      if capabilities_status == 0 && daemon_status_available != true
+        failures << "successful capabilities review requires daemonStatusAvailable true"
+      end
+      if capabilities_status == 0 && policy_source != "daemonStatus"
+        failures << "successful capabilities review requires policySource daemonStatus"
+      end
+      if capabilities_status && capabilities_status != 0 && unavailable_exit_code && capabilities_status != unavailable_exit_code
+        failures << "nonzero capabilities exit must match exitCodes.unavailable"
+      end
+
+      run_safe = run_lifecycle.is_a?(Hash) &&
+        run_lifecycle["childCommandPreflightBeforeCooling"] == true &&
+        run_lifecycle["autoRestoreAfterChildExit"] == true &&
+        run_lifecycle["structuredPreChildFailures"] == true &&
+        run_lifecycle["cleanupStateReportedOnLaunchFailure"] == true &&
+        includes_all?(run_lifecycle["signalsForwardedToChild"], %w[INT TERM HUP])
+      capabilities_decision["runLifecycleSafe"] = run_safe
+      failures << "viftyctl-capabilities.json runLifecycle is missing or unsafe" unless run_safe
+
+      direct_safe = direct_lifecycle.is_a?(Hash) &&
+        direct_lifecycle["prepareUsesIdempotencyKey"] == true &&
+        direct_lifecycle["restoreAutoAcceptsIdempotencyKey"] == false &&
+        direct_lifecycle["restoreAutoScopedByIdempotencyKey"] == false &&
+        direct_lifecycle["preferRunForSingleChildWorkloads"] == true
+      capabilities_decision["directControlLifecycleSafe"] = direct_safe
+      failures << "viftyctl-capabilities.json directControlLifecycle is missing or unsafe" unless direct_safe
+
+      reason_limit = metadata_limits.is_a?(Hash) ? integer_value(metadata_limits["maximumReasonLength"]) : nil
+      idempotency_key_limit = metadata_limits.is_a?(Hash) ? integer_value(metadata_limits["maximumIdempotencyKeyLength"]) : nil
+      metadata_present = metadata_limits.is_a?(Hash) &&
+        reason_limit &&
+        reason_limit.positive? &&
+        idempotency_key_limit &&
+        idempotency_key_limit.positive?
+      capabilities_decision["metadataLimitsPresent"] = metadata_present
+      failures << "viftyctl-capabilities.json metadataLimits are missing or invalid" unless metadata_present
+    end
+  rescue JSON::ParserError => error
+    failures << "invalid viftyctl-capabilities.json: #{error.message}"
+  end
+else
+  failures << "missing viftyctl-capabilities.json"
 end
 
 diagnose_status = integer_value(commands_by_name.dig("viftyctl-diagnose", "status"))
@@ -410,7 +507,7 @@ checksum_by_file.each_key do |entry|
 end
 
 status = failures.empty? ? "passed" : "failed"
-write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, failures, warnings)
+write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, failures, warnings)
 
 warnings.each { |warning| warn "warning: #{warning}" }
 

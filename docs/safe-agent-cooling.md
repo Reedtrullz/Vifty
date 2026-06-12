@@ -142,7 +142,11 @@ were run. Its JSON summary declares
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 `safeToRequestCooling`, and `daemonControlPathReady` so maintainers can route
-blocked readiness without parsing human text.
+blocked readiness without parsing human text. The `capabilitiesDecision`
+summary records whether the bundle advertised `viftyctl run`, force-retry
+discovery, safe `runLifecycle`, safe direct prepare/restore lifecycle,
+metadata limits, daemon status, and the unavailable-exit contract before the
+report is treated as agent-safe evidence.
 If the repository scripts are not available, collect the same core evidence manually:
 
 ```sh

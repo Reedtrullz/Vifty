@@ -974,6 +974,22 @@ private final class ValidationEvidenceHarness {
             [.posixPermissions: 0o755],
             ofItemAtPath: url.path
         )
+        adHocSignIfPossible(url)
+    }
+
+    private func adHocSignIfPossible(_ url: URL) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        process.arguments = ["--force", "--sign", "-", url.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return
+        }
     }
 
     private func writeInfoPlist() throws {

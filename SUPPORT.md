@@ -64,7 +64,10 @@ It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 records a `diagnoseDecision` object with the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 `safeToRequestCooling`, and `daemonControlPathReady`. Missing or contradictory
-diagnose decision fields fail review.
+diagnose decision fields fail review. It also records `capabilitiesDecision`
+for the advertised `viftyctl run` support, force-retry discovery, safe
+run/direct-control lifecycle, metadata limits, daemon status, and unavailable
+exit-code contract; missing or unsafe capabilities contract fields fail review.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:

@@ -56,6 +56,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(try harness.read("helper-file-metadata.status").isEmpty)
 
         XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"daemonStatusAvailable\":true"))
+        XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"runLifecycle\""))
+        XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"directControlLifecycle\""))
+        XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"metadataLimits\""))
         XCTAssertTrue(try harness.read("viftyctl-diagnose.json").contains("\"state\":\"ready\""))
         XCTAssertTrue(try harness.read("viftyctl-audit.json").contains("\"coolingCommandsRun\":false"))
 
@@ -230,6 +233,16 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["recommendedRecoveryAction"] as? String, "none")
         XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
+        let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
+        XCTAssertEqual(capabilitiesDecision["exitStatus"] as? Int, 0)
+        XCTAssertEqual(capabilitiesDecision["daemonStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["policySource"] as? String, "daemonStatus")
+        XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["supportsForceRetry"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["runLifecycleSafe"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["directControlLifecycleSafe"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["unavailableExitCode"] as? Int, 69)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
     }
 
@@ -317,6 +330,40 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(diagnoseDecision["recommendedRecoveryAction"] is NSNull)
         XCTAssertTrue(diagnoseDecision["safeToRequestCooling"] is NSNull)
         XCTAssertTrue(diagnoseDecision["daemonControlPathReady"] is NSNull)
+    }
+
+    func testReviewerRejectsCapabilitiesContractDrift() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesJSON: #"{"schemaVersion":1,"daemonStatusAvailable":true,"policySource":"daemonStatus","commands":["capabilities","diagnose","status","audit"],"workloads":["build","test"],"supportsForceRetry":"yes","exitCodes":{"unavailable":69},"runLifecycle":{"childCommandPreflightBeforeCooling":false,"signalsForwardedToChild":["INT"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":true,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":0,"maximumIdempotencyKeyLength":256}}"#
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("commands must include run"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("workloads must include build, test, and custom"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("supportsForceRetry must be boolean"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("runLifecycle is missing or unsafe"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("directControlLifecycle is missing or unsafe"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("metadataLimits are missing or invalid"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
+        XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, false)
+        XCTAssertEqual(capabilitiesDecision["runLifecycleSafe"] as? Bool, false)
+        XCTAssertEqual(capabilitiesDecision["directControlLifecycleSafe"] as? Bool, false)
+        XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, false)
     }
 
     func testReviewerRejectsPrivacyFindings() throws {
@@ -432,6 +479,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "coolingCommandsRun",
             "commandsReviewed",
             "diagnoseDecision",
+            "capabilitiesDecision",
             "failures",
             "warnings"
         ] {
@@ -451,6 +499,22 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(diagnoseRequired.contains(field), "diagnoseDecision should require \(field)")
         }
+
+        let capabilitiesDecision = try XCTUnwrap(defs["capabilitiesDecision"] as? [String: Any])
+        let capabilitiesRequired = try XCTUnwrap(capabilitiesDecision["required"] as? [String])
+        for field in [
+            "exitStatus",
+            "daemonStatusAvailable",
+            "policySource",
+            "supportsRunCommand",
+            "supportsForceRetry",
+            "runLifecycleSafe",
+            "directControlLifecycleSafe",
+            "metadataLimitsPresent",
+            "unavailableExitCode"
+        ] {
+            XCTAssertTrue(capabilitiesRequired.contains(field), "capabilitiesDecision should require \(field)")
+        }
     }
 }
 
@@ -466,11 +530,15 @@ private final class AgentCoolingEvidenceHarness {
     let outputURL: URL
     let viftyctlURL: URL
     let logURL: URL
+    private let capabilitiesJSON: String
+    private let capabilitiesExitCode: Int
     private let diagnoseJSON: String
     private let diagnoseExitCode: Int
     private let includePrivacyLeak: Bool
 
     init(
+        capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
+        capabilitiesExitCode: Int = 0,
         diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
         diagnoseExitCode: Int = 0,
         includePrivacyLeak: Bool = false
@@ -481,6 +549,8 @@ private final class AgentCoolingEvidenceHarness {
         outputURL = rootURL.appendingPathComponent("evidence", isDirectory: true)
         viftyctlURL = rootURL.appendingPathComponent("fake-viftyctl")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
+        self.capabilitiesJSON = capabilitiesJSON
+        self.capabilitiesExitCode = capabilitiesExitCode
         self.diagnoseJSON = diagnoseJSON
         self.diagnoseExitCode = diagnoseExitCode
         self.includePrivacyLeak = includePrivacyLeak
@@ -501,6 +571,8 @@ private final class AgentCoolingEvidenceHarness {
         process.arguments = [script.path] + arguments
         process.environment = ProcessInfo.processInfo.environment.merging([
             "VIFTY_FAKE_LOG": logURL.path,
+            "VIFTY_FAKE_CAPABILITIES_JSON": capabilitiesJSON,
+            "VIFTY_FAKE_CAPABILITIES_EXIT": "\(capabilitiesExitCode)",
             "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
             "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)"
         ]) { _, new in new }
@@ -576,7 +648,8 @@ private final class AgentCoolingEvidenceHarness {
         case "$1" in
           capabilities)
             test "${2:-}" = "--json"
-            printf '%s\\n' '{"daemonStatusAvailable":true,"commands":["capabilities","diagnose","status","audit"],"exitCodes":{"unavailable":69}}'
+            printf '%s\\n' "${VIFTY_FAKE_CAPABILITIES_JSON}"
+            exit "${VIFTY_FAKE_CAPABILITIES_EXIT}"
             ;;
           diagnose)
             test "${2:-}" = "--json"
@@ -609,4 +682,8 @@ private final class AgentCoolingEvidenceHarness {
             ofItemAtPath: viftyctlURL.path
         )
     }
+
+    private static let defaultCapabilitiesJSON = """
+    {"schemaVersion":1,"daemonStatusAvailable":true,"policySource":"daemonStatus","agentControlStatusError":null,"commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"}}
+    """
 }

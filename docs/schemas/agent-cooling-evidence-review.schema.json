@@ -15,6 +15,7 @@
     "coolingCommandsRun",
     "commandsReviewed",
     "diagnoseDecision",
+    "capabilitiesDecision",
     "failures",
     "warnings"
   ],
@@ -50,6 +51,9 @@
     "diagnoseDecision": {
       "$ref": "#/$defs/diagnoseDecision"
     },
+    "capabilitiesDecision": {
+      "$ref": "#/$defs/capabilitiesDecision"
+    },
     "failures": {
       "$ref": "#/$defs/stringArray"
     },
@@ -58,6 +62,70 @@
     }
   },
   "$defs": {
+    "capabilitiesDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exitStatus",
+        "daemonStatusAvailable",
+        "policySource",
+        "supportsRunCommand",
+        "supportsForceRetry",
+        "runLifecycleSafe",
+        "directControlLifecycleSafe",
+        "metadataLimitsPresent",
+        "unavailableExitCode"
+      ],
+      "properties": {
+        "exitStatus": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "daemonStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policySource": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "daemonStatus",
+            "fallbackUnavailable",
+            null
+          ]
+        },
+        "supportsRunCommand": {
+          "type": "boolean"
+        },
+        "supportsForceRetry": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "runLifecycleSafe": {
+          "type": "boolean"
+        },
+        "directControlLifecycleSafe": {
+          "type": "boolean"
+        },
+        "metadataLimitsPresent": {
+          "type": "boolean"
+        },
+        "unavailableExitCode": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
     "diagnoseDecision": {
       "type": "object",
       "additionalProperties": false,
