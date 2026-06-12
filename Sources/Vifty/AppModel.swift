@@ -490,6 +490,15 @@ final class AppModel: ObservableObject {
                 ? "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked."
                 : "Install or repair the fan helper before manual fan control."
         }
+        if let lease = agentControlStatus?.activeLease {
+            if lease.isActive(at: now()) {
+                return "Agent \(lease.request.workload.displayName) cooling owns fan control; restore Auto before manual fan control."
+            }
+            return "Agent cooling restore is pending; restore Auto before manual fan control."
+        }
+        if agentControlStatusError != nil {
+            return "Agent control status is unavailable; repair helper before manual fan control."
+        }
         guard !snapshot.fans.isEmpty else {
             return "Fan data is unavailable. Manual fan control stays blocked."
         }

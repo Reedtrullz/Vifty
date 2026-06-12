@@ -254,6 +254,49 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.manualFanControlBlockedReason)
     }
 
+    func testManualFanControlBlocksWhileAgentLeaseOwnsCooling() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertFalse(model.manualFanControlAvailable)
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Agent Build cooling owns fan control; restore Auto before manual fan control.")
+    }
+
+    func testManualFanControlBlocksWhileAgentRestoreIsPending() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1700) })
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertFalse(model.manualFanControlAvailable)
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Agent cooling restore is pending; restore Auto before manual fan control.")
+    }
+
+    func testManualFanControlBlocksWhenAgentStatusIsUnavailable() {
+        let model = AppModel()
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertFalse(model.manualFanControlAvailable)
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Agent control status is unavailable; repair helper before manual fan control.")
+    }
+
     func testHelperHealthSummaryReportsUnreachableDaemon() {
         let model = AppModel()
         model.daemonReachable = false
@@ -583,6 +626,67 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.manualSessionExpiresAt)
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
         XCTAssertTrue(model.lastError?.contains("daemon writes are blocked") == true)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertTrue(appliedCommands.isEmpty)
+    }
+
+    func testManualModeSelectionFailsClosedWhenAgentLeaseIsActive() async {
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
+        XCTAssertTrue(model.lastError?.contains("Agent Build cooling owns fan control") == true)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertTrue(appliedCommands.isEmpty)
+    }
+
+    func testManualModeSelectionFailsClosedWhenAgentStatusIsUnavailable() async {
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+        model.selectedMode = .curve
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
+        XCTAssertTrue(model.lastError?.contains("Agent control status is unavailable") == true)
         let appliedCommands = await hardware.appliedCommands
         XCTAssertTrue(appliedCommands.isEmpty)
     }
