@@ -140,6 +140,14 @@
         "collectHardwareEvidence"
       ]
     },
+    "readinessAgentAction": {
+      "enum": [
+        "requestCooling",
+        "requestCoolingWithCaution",
+        "restoreAutoBeforeRequestingCooling",
+        "doNotRequestCooling"
+      ]
+    },
     "gitSHA": {
       "type": "string",
       "pattern": "^([0-9a-f]{40})?$"
@@ -179,6 +187,7 @@
         "isAppleSilicon",
         "isMacBookPro",
         "diagnoseState",
+        "recommendedAgentAction",
         "recommendedRecoveryAction",
         "safeToRequestCooling",
         "daemonControlPathReady",
@@ -246,6 +255,9 @@
         },
         "diagnoseState": {
           "type": "string"
+        },
+        "recommendedAgentAction": {
+          "$ref": "#/$defs/readinessAgentAction"
         },
         "recommendedRecoveryAction": {
           "$ref": "#/$defs/readinessRecoveryAction"

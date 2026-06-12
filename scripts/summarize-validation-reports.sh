@@ -159,6 +159,16 @@ ruby -rjson -rcsv -rfileutils -e '
     end
 
     unless %w[
+      requestCooling
+      requestCoolingWithCaution
+      restoreAutoBeforeRequestingCooling
+      doNotRequestCooling
+    ].include?(result.fetch("recommendedAgentAction", "").to_s)
+      failures << "#{path} recommendedAgentAction is not a supported value"
+      valid = false
+    end
+
+    unless %w[
       none
       repairHelper
       restoreAutoBeforeRetry
@@ -304,6 +314,7 @@ ruby -rjson -rcsv -rfileutils -e '
       "isAppleSilicon" => boolean_string(result["isAppleSilicon"]),
       "isMacBookPro" => boolean_string(result["isMacBookPro"]),
       "diagnoseState" => result["diagnoseState"].to_s,
+      "recommendedAgentAction" => result["recommendedAgentAction"].to_s,
       "recommendedRecoveryAction" => result["recommendedRecoveryAction"].to_s,
       "safeToRequestCooling" => boolean_string(result["safeToRequestCooling"]),
       "daemonControlPathReady" => boolean_string(result["daemonControlPathReady"]),
@@ -370,6 +381,7 @@ ruby -rjson -rcsv -rfileutils -e '
     isAppleSilicon
     isMacBookPro
     diagnoseState
+    recommendedAgentAction
     recommendedRecoveryAction
     safeToRequestCooling
     daemonControlPathReady

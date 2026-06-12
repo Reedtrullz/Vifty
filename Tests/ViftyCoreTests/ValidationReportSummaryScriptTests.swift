@@ -62,8 +62,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
         XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3"))
-        XCTAssertTrue(tsv.contains("MacBookPro18,3\ttrue\ttrue\tready\tnone\ttrue\ttrue"))
-        XCTAssertTrue(tsv.contains("Mac14,2\ttrue\tfalse\tblocked\tcollectHardwareEvidence\tfalse\ttrue"))
+        XCTAssertTrue(tsv.contains("MacBookPro18,3\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
+        XCTAssertTrue(tsv.contains("Mac14,2\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
@@ -85,6 +85,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(json["validatedHardwareReports"] as? Int, 1)
         let reports = try XCTUnwrap(json["reports"] as? [[String: Any]])
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
+        XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
@@ -130,7 +131,12 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let report = try XCTUnwrap(defs["report"] as? [String: Any])
         let reportRequired = try XCTUnwrap(report["required"] as? [String])
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
+        XCTAssertTrue(reportRequired.contains("recommendedAgentAction"))
         XCTAssertTrue(reportRequired.contains("recommendedRecoveryAction"))
+        let agentAction = try XCTUnwrap(defs["readinessAgentAction"] as? [String: Any])
+        let agentActionValues = try XCTUnwrap(agentAction["enum"] as? [String])
+        XCTAssertTrue(agentActionValues.contains("requestCooling"))
+        XCTAssertTrue(agentActionValues.contains("doNotRequestCooling"))
         let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
         let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
         XCTAssertTrue(installSourceValues.contains(""))
@@ -156,6 +162,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "sourceSHA",
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
+            "recommendedAgentAction",
             "recommendedRecoveryAction",
             "daemonControlPathReady",
             "manualSmokeTestResult",
@@ -302,6 +309,23 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("recommendedRecoveryAction is not a supported value"))
     }
 
+    func testSummarizerRejectsReviewResultWithoutRecommendedAgentAction() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "missing-agent-action-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            includeRecommendedAgentAction: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("recommendedAgentAction is not a supported value"))
+    }
+
     func testSummarizerRejectsReviewResultThatRanCoolingCommands() throws {
         let harness = try ValidationReportSummaryHarness()
         let reviewURL = try harness.writeReviewResult(
@@ -377,6 +401,7 @@ private final class ValidationReportSummaryHarness {
         safeToRequestCooling: Bool,
         daemonControlPathReady: Bool = true,
         includeDaemonControlPathReady: Bool = true,
+        includeRecommendedAgentAction: Bool = true,
         includeRecommendedRecoveryAction: Bool = true,
         manualSmokeTestResult: String = "not-recorded",
         manualSmokeTestSource: String = "",
@@ -411,7 +436,6 @@ private final class ValidationReportSummaryHarness {
             "sourceArtifactSHA256": "",
             "sourceArtifactBytes": sourceArtifactBytes,
             "diagnoseState": mode == "unsupported-hardware" ? "blocked" : "ready",
-            "recommendedAgentAction": mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling",
             "safeToRequestCooling": safeToRequestCooling,
             "modelIdentifier": modelIdentifier,
             "isAppleSilicon": modelIdentifier.hasPrefix("MacBookPro") || modelIdentifier.hasPrefix("Mac"),
@@ -432,6 +456,9 @@ private final class ValidationReportSummaryHarness {
         }
         if includeDaemonControlPathReady {
             json["daemonControlPathReady"] = daemonControlPathReady
+        }
+        if includeRecommendedAgentAction {
+            json["recommendedAgentAction"] = mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling"
         }
         if includeRecommendedRecoveryAction {
             json["recommendedRecoveryAction"] = mode == "unsupported-hardware" ? "collectHardwareEvidence" : "none"
