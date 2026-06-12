@@ -250,10 +250,13 @@ The [examples/viftyctl](../examples/viftyctl/README.md) directory also includes 
 ```sh
 examples/viftyctl/swift-test.sh --filter ViftyCoreTests
 examples/viftyctl/swift-release-build.sh --product Vifty
+examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
+examples/viftyctl/npm-build.sh -- --mode=production
 examples/viftyctl/npm-test.sh -- --watch=false
+examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh --locked
 examples/viftyctl/pytest.sh Tests
 examples/viftyctl/local-model.sh -- ./run-local-model.sh
@@ -272,6 +275,12 @@ Swift release build:
 
 ```sh
 examples/viftyctl/swift-release-build.sh
+```
+
+Xcode build:
+
+```sh
+examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 ```
 
 Xcode test:
@@ -296,6 +305,18 @@ npm test:
 
 ```sh
 examples/viftyctl/npm-test.sh
+```
+
+npm build:
+
+```sh
+examples/viftyctl/npm-build.sh
+```
+
+Cargo build:
+
+```sh
+examples/viftyctl/cargo-build.sh --release
 ```
 
 Cargo test:

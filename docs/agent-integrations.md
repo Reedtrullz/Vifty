@@ -32,9 +32,12 @@ For common local workloads, the shortcut scripts in `examples/viftyctl/` are equ
 ```sh
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
+examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
+examples/viftyctl/npm-build.sh
 examples/viftyctl/npm-test.sh
+examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh
 ```
@@ -53,6 +56,7 @@ For a repository-level `AGENTS.md`, add the shared rule and then use workload-sp
 ```sh
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
+examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/make-verify.sh
 ```
 
@@ -83,7 +87,9 @@ When running long local tests or builds, prefer:
 
 ```sh
 examples/viftyctl/npm-test.sh
+examples/viftyctl/npm-build.sh
 examples/viftyctl/cargo-test.sh
+examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/make-test.sh
 ```
 

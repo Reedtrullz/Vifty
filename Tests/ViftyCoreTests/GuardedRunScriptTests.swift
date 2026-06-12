@@ -302,6 +302,11 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "swift release build", "--", "swift", "build", "-c", "release", "--product", "Vifty"]
             ),
             (
+                "examples/viftyctl/xcode-build.sh",
+                ["-scheme", "MyApp", "-destination", "platform=macOS"],
+                ["run", "--json", "--workload", "build", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "xcodebuild build", "--", "xcodebuild", "build", "-scheme", "MyApp", "-destination", "platform=macOS"]
+            ),
+            (
                 "examples/viftyctl/xcode-test.sh",
                 ["-scheme", "MyApp", "-destination", "platform=macOS"],
                 ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
@@ -317,9 +322,19 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "make verify", "--", "make", "verify", "RELEASE_VERSION=1.1.0"]
             ),
             (
+                "examples/viftyctl/npm-build.sh",
+                ["--", "--mode=production"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "npm run build", "--", "npm", "run", "build", "--", "--mode=production"]
+            ),
+            (
                 "examples/viftyctl/npm-test.sh",
                 ["--", "--watch=false"],
                 ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
+            ),
+            (
+                "examples/viftyctl/cargo-build.sh",
+                ["--release"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "cargo build", "--", "cargo", "build", "--release"]
             ),
             (
                 "examples/viftyctl/cargo-test.sh",
@@ -359,7 +374,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let scripts = try FileManager.default.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "sh" }
 
-        XCTAssertGreaterThanOrEqual(scripts.count, 11)
+        XCTAssertGreaterThanOrEqual(scripts.count, 14)
 
         for script in scripts {
             XCTAssertTrue(FileManager.default.isExecutableFile(atPath: script.path), script.lastPathComponent)
