@@ -58,12 +58,13 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.isEmpty)
         let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
         XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult\tmanualSmokeTestSource\tmanualSmokeValidated\tagentRunSmokeResult"))
+        XCTAssertTrue(tsv.contains("modelIdentifier\tmodelFamily\tisAppleSilicon\tisMacBookPro"))
         XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
-        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3"))
-        XCTAssertTrue(tsv.contains("MacBookPro18,3\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
-        XCTAssertTrue(tsv.contains("Mac14,2\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
+        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3\tMacBookPro18"))
+        XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
+        XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
@@ -87,6 +88,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
         XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
+        XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "MacBookPro18,3" && ($0["modelFamily"] as? String) == "MacBookPro18" })
+        XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "Mac14,2" && ($0["modelFamily"] as? String) == "Mac14" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
         XCTAssertEqual(countsByClaim["validated-hardware-evidence"], 1)
@@ -95,6 +98,12 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsByClaim["rejected"], 1)
         let countsByInstallSource = try XCTUnwrap(json["countsByInstallSource"] as? [String: Int])
         XCTAssertEqual(countsByInstallSource["source-build-tag"], 5)
+        let countsByModelFamily = try XCTUnwrap(json["countsByModelFamily"] as? [String: Int])
+        XCTAssertEqual(countsByModelFamily["MacBookPro18"], 4)
+        XCTAssertEqual(countsByModelFamily["Mac14"], 1)
+        let validatedByModelFamily = try XCTUnwrap(json["validatedHardwareReportsByModelFamily"] as? [String: Int])
+        XCTAssertEqual(validatedByModelFamily["MacBookPro18"], 1)
+        XCTAssertNil(validatedByModelFamily["Mac14"])
         let countsByRecommendedAgentAction = try XCTUnwrap(json["countsByRecommendedAgentAction"] as? [String: Int])
         XCTAssertEqual(countsByRecommendedAgentAction["requestCooling"], 4)
         XCTAssertEqual(countsByRecommendedAgentAction["doNotRequestCooling"], 1)
@@ -127,6 +136,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "agentRunSmokePassedReports",
             "countsByInstallSource",
             "countsByClaim",
+            "countsByModelFamily",
+            "validatedHardwareReportsByModelFamily",
             "countsByRecommendedAgentAction",
             "countsByRecommendedRecoveryAction",
             "countsBySafeToRequestCooling",
@@ -145,6 +156,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(claimValues.contains("safe-block-evidence"))
         let report = try XCTUnwrap(defs["report"] as? [String: Any])
         let reportRequired = try XCTUnwrap(report["required"] as? [String])
+        XCTAssertTrue(reportRequired.contains("modelFamily"))
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
         XCTAssertTrue(reportRequired.contains("recommendedAgentAction"))
         XCTAssertTrue(reportRequired.contains("recommendedRecoveryAction"))

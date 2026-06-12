@@ -21,6 +21,8 @@
     "countsByClaim",
     "countsByInstallSource",
     "countsByModelIdentifier",
+    "countsByModelFamily",
+    "validatedHardwareReportsByModelFamily",
     "countsByRecommendedAgentAction",
     "countsByRecommendedRecoveryAction",
     "countsBySafeToRequestCooling",
@@ -81,6 +83,12 @@
       "$ref": "#/$defs/countMap"
     },
     "countsByModelIdentifier": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByModelFamily": {
+      "$ref": "#/$defs/countMap"
+    },
+    "validatedHardwareReportsByModelFamily": {
       "$ref": "#/$defs/countMap"
     },
     "countsByRecommendedAgentAction": {
@@ -200,6 +208,7 @@
         "agentRunSmokeSource",
         "agentRunSmokeValidated",
         "modelIdentifier",
+        "modelFamily",
         "isAppleSilicon",
         "isMacBookPro",
         "diagnoseState",
@@ -262,6 +271,10 @@
         },
         "modelIdentifier": {
           "type": "string"
+        },
+        "modelFamily": {
+          "type": "string",
+          "description": "Stable model identifier prefix derived from modelIdentifier, for example MacBookPro18 from MacBookPro18,3. This is a grouping key, not a chip-generation claim."
         },
         "isAppleSilicon": {
           "$ref": "#/$defs/booleanString"

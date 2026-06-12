@@ -271,6 +271,13 @@ ruby -rjson -rcsv -rfileutils -e '
     end
   end
 
+  def model_family_for(model_identifier)
+    value = model_identifier.to_s.strip
+    return "" if value.empty?
+
+    value.split(",", 2).first
+  end
+
   paths = inputs.flat_map { |input| resolve_input(input, failures) }.uniq
   if paths.empty? && failures.empty?
     failures << "no review-result.json files found"
@@ -293,6 +300,8 @@ ruby -rjson -rcsv -rfileutils -e '
       manual_smoke_result == "passed-auto-restored"
     agent_run_smoke_validated = result["status"].to_s == "passed" &&
       agent_run_smoke_result == "passed-auto-restored"
+    model_identifier = result["modelIdentifier"].to_s
+    model_family = model_family_for(model_identifier)
 
     rows << {
       "source" => path,
@@ -310,7 +319,8 @@ ruby -rjson -rcsv -rfileutils -e '
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
       "agentRunSmokeValidated" => boolean_string(agent_run_smoke_validated),
-      "modelIdentifier" => result["modelIdentifier"].to_s,
+      "modelIdentifier" => model_identifier,
+      "modelFamily" => model_family,
       "isAppleSilicon" => boolean_string(result["isAppleSilicon"]),
       "isMacBookPro" => boolean_string(result["isMacBookPro"]),
       "diagnoseState" => result["diagnoseState"].to_s,
@@ -334,6 +344,8 @@ ruby -rjson -rcsv -rfileutils -e '
   counts_by_claim = Hash.new(0)
   counts_by_install_source = Hash.new(0)
   counts_by_model = Hash.new(0)
+  counts_by_model_family = Hash.new(0)
+  validated_by_model_family = Hash.new(0)
   counts_by_agent_action = Hash.new(0)
   counts_by_recovery_action = Hash.new(0)
   counts_by_safe_to_request = Hash.new(0)
@@ -343,6 +355,10 @@ ruby -rjson -rcsv -rfileutils -e '
     counts_by_claim[row["claim"]] += 1
     counts_by_install_source[row["installSource"]] += 1 unless row["installSource"].empty?
     counts_by_model[row["modelIdentifier"]] += 1 unless row["modelIdentifier"].empty?
+    counts_by_model_family[row["modelFamily"]] += 1 unless row["modelFamily"].empty?
+    if row["claim"] == "validated-hardware-evidence" && !row["modelFamily"].empty?
+      validated_by_model_family[row["modelFamily"]] += 1
+    end
     counts_by_agent_action[row["recommendedAgentAction"]] += 1 unless row["recommendedAgentAction"].empty?
     counts_by_recovery_action[row["recommendedRecoveryAction"]] += 1 unless row["recommendedRecoveryAction"].empty?
     counts_by_safe_to_request[row["safeToRequestCooling"]] += 1 unless row["safeToRequestCooling"].empty?
@@ -366,6 +382,8 @@ ruby -rjson -rcsv -rfileutils -e '
     "countsByClaim" => counts_by_claim.sort.to_h,
     "countsByInstallSource" => counts_by_install_source.sort.to_h,
     "countsByModelIdentifier" => counts_by_model.sort.to_h,
+    "countsByModelFamily" => counts_by_model_family.sort.to_h,
+    "validatedHardwareReportsByModelFamily" => validated_by_model_family.sort.to_h,
     "countsByRecommendedAgentAction" => counts_by_agent_action.sort.to_h,
     "countsByRecommendedRecoveryAction" => counts_by_recovery_action.sort.to_h,
     "countsBySafeToRequestCooling" => counts_by_safe_to_request.sort.to_h,
@@ -390,6 +408,7 @@ ruby -rjson -rcsv -rfileutils -e '
     agentRunSmokeSource
     agentRunSmokeValidated
     modelIdentifier
+    modelFamily
     isAppleSilicon
     isMacBookPro
     diagnoseState
