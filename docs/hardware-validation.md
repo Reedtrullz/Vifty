@@ -194,7 +194,9 @@ If any step reports critical thermal pressure, missing sensors, missing controll
 
 ## Supervised Agent Run Smoke Test
 
-The manual smoke test proves direct prepare/restore behavior. For developer-workload evidence, also run one supervised `viftyctl run` smoke test on supported Apple Silicon MacBook Pro hardware after readiness is `ready` or safely `degraded`:
+The manual smoke test proves direct prepare/restore behavior. For developer-workload evidence, also run one supervised `viftyctl run` smoke test on supported Apple Silicon MacBook Pro hardware after readiness is `ready` or safely `degraded`.
+
+If this follows the manual smoke test above, wait for the advertised prepare cooldown before starting the run smoke. Use `capabilities --json` or `status --json` to read `policy.prepareCooldownSeconds`; the default policy is 30 seconds. If the first run attempt returns `PREPARE_RATE_LIMITED`, keep that JSON as evidence, wait for `retryAfterSeconds`, and retry once. Do not treat the first cooldown response as a failed agent-run smoke test, and do not busy-loop retries.
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl run \
@@ -215,7 +217,7 @@ Then collect the read-only follow-up:
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
-Paste the run stdout/stderr, child exit code, restore result, and the follow-up capabilities/status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path advertises the safe `runLifecycle` contract and policy/metadata limits, validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
+Paste the run stdout/stderr, child exit code, restore result, any `PREPARE_RATE_LIMITED` / `retryAfterSeconds` JSON from the first cooldown response, and the follow-up capabilities/status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path advertises the safe `runLifecycle` contract and policy/metadata limits, validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
 
 ## Signing Validation
 
