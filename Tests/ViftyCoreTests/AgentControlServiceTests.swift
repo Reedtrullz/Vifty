@@ -119,6 +119,55 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertNil(try store.loadActiveLease())
     }
 
+    func testRestoreAutoNormalizesBlankAuditReasonWithoutBlockingRestore() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        let status = try await service.restoreAuto(reason: "   ")
+
+        XCTAssertNil(status.activeLease)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"action\":\"restore-auto\""))
+        XCTAssertTrue(audit.contains("\"message\":\"manual restore\""))
+    }
+
+    func testClearActiveLeaseNormalizesAuditReason() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(workload: .build, durationSeconds: 600, maxRPMPercent: 75, reason: "Build", idempotencyKey: "key")
+        _ = try await service.prepare(request)
+
+        let status = try await service.clearActiveLease(reason: "  user selected Auto  ")
+
+        XCTAssertNil(status.activeLease)
+        let audit = try String(contentsOf: directory.appendingPathComponent("audit.jsonl"), encoding: .utf8)
+        XCTAssertTrue(audit.contains("\"action\":\"clear-lease\""))
+        XCTAssertTrue(audit.contains("\"message\":\"user selected Auto\""))
+        XCTAssertFalse(audit.contains("\"message\":\"  user selected Auto  \""))
+    }
+
     func testRestoreAutoClearsStalePrepareDenialState() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let service = AgentControlService(

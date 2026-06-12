@@ -203,8 +203,9 @@ public actor AgentControlService {
         restoreOperationCount += 1
         defer { restoreOperationCount -= 1 }
 
+        let normalizedReason = Self.normalizedAuditReason(reason, fallback: "manual restore")
         let snapshot = try await hardware.snapshot()
-        return try await restoreAuto(reason: reason, snapshot: snapshot)
+        return try await restoreAuto(reason: normalizedReason, snapshot: snapshot)
     }
 
     private func restoreAuto(reason: String, snapshot: HardwareSnapshot) async throws -> AgentControlStatus {
@@ -227,10 +228,11 @@ public actor AgentControlService {
 
     public func clearActiveLease(reason: String) throws -> AgentControlStatus {
         markRestoreRequested()
+        let normalizedReason = Self.normalizedAuditReason(reason, fallback: "lease cleared")
 
         cancelScheduledExpiry()
         if let lease = activeLease {
-            appendAudit(action: "clear-lease", leaseID: lease.id, message: reason)
+            appendAudit(action: "clear-lease", leaseID: lease.id, message: normalizedReason)
         }
         activeLease = nil
         try store.saveActiveLease(nil)
@@ -363,5 +365,10 @@ public actor AgentControlService {
             leaseID: leaseID,
             message: message
         ))
+    }
+
+    private static func normalizedAuditReason(_ reason: String, fallback: String) -> String {
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
     }
 }

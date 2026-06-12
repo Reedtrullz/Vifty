@@ -49,7 +49,7 @@ Supported workloads are currently:
 - `localModel`
 - `custom`
 
-Durations accept seconds, `m`, or `h`, for example `600`, `20m`, or `1h`. Explicit `--reason` and `--idempotency-key` values are trimmed and rejected if blank, so audit entries stay meaningful. The daemon applies the same non-blank metadata check to programmatic agent requests before hardware access, so clients that bypass the CLI parser still fail closed with `INVALID_ARGUMENTS`. The default daemon policy caps leases at 30 minutes unless policy is changed in code.
+Durations accept seconds, `m`, or `h`, for example `600`, `20m`, or `1h`. Explicit `--reason` and `--idempotency-key` values are trimmed and rejected if blank, so audit entries stay meaningful. The daemon applies the same non-blank metadata check to programmatic agent requests before hardware access, so clients that bypass the CLI parser still fail closed with `INVALID_ARGUMENTS`. Restore and lease-clear audit reasons are trimmed too; blank programmatic restore reasons fall back to a safe default instead of blocking Auto restore. The default daemon policy caps leases at 30 minutes unless policy is changed in code.
 
 ## JSON Decision Rules
 
