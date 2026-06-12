@@ -57,6 +57,8 @@ For help or reports, start with [SUPPORT.md](SUPPORT.md). Maintainers should tri
 
 Vifty `v1.1.0` is a source-first release because the project does not currently have Apple Developer Program credentials. The recommended path is to build from source. There is no Developer ID signed or notarized public binary for `v1.1.0`, and the canonical notarized artifact name `Vifty-v1.1.0.zip` is reserved for a future Developer ID release.
 
+The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.0` source release unless a future release is cut.
+
 An optional `Vifty-v1.1.0-unsigned-dev.zip` convenience app may be attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
 ### From source

@@ -4,19 +4,19 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-06-11, `v1.1.0` is a source-first public release because the project does not currently have Apple Developer Program credentials.
+As of 2026-06-12, `v1.1.0` is a source-first public release because the project does not currently have Apple Developer Program credentials. The immutable `v1.1.0` source tag resolves to `f7d2c636ebf582ac3809998c3fac819d5d87eb72`; later `main` commits are post-release hardening until a future release is cut.
 
 Release lanes:
 
 1. **Trusted notarized Developer ID release:** unavailable until the project has Apple Developer Program credentials. Do not claim that `v1.1.0` is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
-2. **Source release:** canonical and recommended path for `v1.1.0`. Users should build from source after checking out the `v1.1.0` tag.
+2. **Source release:** canonical and recommended path for `v1.1.0`. Users should build from source after checking out the `v1.1.0` tag at `f7d2c636ebf582ac3809998c3fac819d5d87eb72`.
 3. **Unsigned convenience app zip:** optional tester convenience only. If attached, it must be named `Vifty-v1.1.0-unsigned-dev.zip` with `Vifty-v1.1.0-unsigned-dev.zip.sha256`. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
 Current facts:
 
-- The `v1.1.0` source tag should pass the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
-- `main` may move after `v1.1.0` is published. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
-- `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json` is the published source-first release preflight. It requires source-tag CI readiness and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
+- The `v1.1.0` source tag passed the SwiftPM CI gate for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
+- `main` has moved after `v1.1.0` was published. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
+- `scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json` is the published source-first release preflight. It currently reports `ready` for source commit `f7d2c636ebf582ac3809998c3fac819d5d87eb72`, source-tag CI readiness, and honest GitHub Release notes/assets, while treating Apple Developer Program secrets and the Developer ID Release workflow as not required for this mode.
 - Before tagging a source-first candidate, maintainers may add `--require-source-ref <candidate-ref-or-sha>` to reject a stale tag. After publication, use the immutable release commit SHA if a source-ref check is still needed.
 - `scripts/check-release-readiness.sh --mode developer-id ...` remains the strict future trusted-binary preflight. It still requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
 - No unsigned build may use `Vifty-v1.1.0.zip` or `Vifty-v1.1.0.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
