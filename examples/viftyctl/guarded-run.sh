@@ -54,6 +54,51 @@ preflight_child_command() {
   fi
 }
 
+preflight_duration() {
+  duration_value="$1"
+
+  case "$duration_value" in
+    *m|*h)
+      duration_number="${duration_value%?}"
+      ;;
+    *[!0123456789]*|"")
+      echo "guarded-run: duration must be a positive integer number of seconds, minutes (m), or hours (h): $duration_value" >&2
+      exit 64
+      ;;
+    *)
+      duration_number="$duration_value"
+      ;;
+  esac
+
+  case "$duration_number" in
+    ""|*[!0123456789]*)
+      echo "guarded-run: duration must be a positive integer number of seconds, minutes (m), or hours (h): $duration_value" >&2
+      exit 64
+      ;;
+  esac
+
+  if ! printf '%s\n' "$duration_number" | /usr/bin/awk '/^[0-9]+$/ { exit !(($0 + 0) > 0) } { exit 1 }'; then
+    echo "guarded-run: duration must be greater than zero: $duration_value" >&2
+    exit 64
+  fi
+}
+
+preflight_max_rpm_percent() {
+  rpm_percent_value="$1"
+
+  case "$rpm_percent_value" in
+    ""|*[!0123456789]*)
+      echo "guarded-run: max-rpm-percent must be an integer from 1 through 100: $rpm_percent_value" >&2
+      exit 64
+      ;;
+  esac
+
+  if ! printf '%s\n' "$rpm_percent_value" | /usr/bin/awk '/^[0-9]+$/ { value = $0 + 0; exit !(value >= 1 && value <= 100) } { exit 1 }'; then
+    echo "guarded-run: max-rpm-percent must be an integer from 1 through 100: $rpm_percent_value" >&2
+    exit 64
+  fi
+}
+
 if [ "$#" -lt 6 ]; then
   usage
   exit 64
@@ -64,6 +109,14 @@ duration="$2"
 max_rpm_percent="$3"
 reason="$4"
 shift 4
+
+if [ -z "$reason" ]; then
+  echo "guarded-run: reason must not be empty." >&2
+  exit 64
+fi
+
+preflight_duration "$duration"
+preflight_max_rpm_percent "$max_rpm_percent"
 
 if [ "${1:-}" != "--" ]; then
   usage
