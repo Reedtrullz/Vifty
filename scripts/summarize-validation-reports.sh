@@ -21,6 +21,8 @@ Options:
   --input <path>       review-result.json file or directory. Repeatable.
   --output-json <path> Write machine-readable summary JSON.
   --output-tsv <path>  Write TSV rows instead of printing them to stdout.
+  --output-markdown <path>
+                       Write a conservative Markdown compatibility matrix draft.
   -h, --help           Show this help.
 USAGE
 }
@@ -28,6 +30,7 @@ USAGE
 INPUTS=()
 OUTPUT_JSON=""
 OUTPUT_TSV=""
+OUTPUT_MARKDOWN=""
 VALIDATION_REPORT_INDEX_SCHEMA_ID="https://vifty.local/schemas/validation-report-index.schema.json"
 VALIDATION_REVIEW_RESULT_SCHEMA_ID="https://vifty.local/schemas/validation-review-result.schema.json"
 
@@ -57,6 +60,14 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_TSV="$2"
       shift 2
       ;;
+    --output-markdown)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --output-markdown requires a path" >&2
+        exit 64
+      fi
+      OUTPUT_MARKDOWN="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -80,6 +91,7 @@ ruby -rjson -rcsv -rfileutils -e '
   review_result_schema_id = ARGV.shift.to_s
   output_json = ARGV.shift.to_s
   output_tsv = ARGV.shift.to_s
+  output_markdown = ARGV.shift.to_s
   inputs = ARGV
   failures = []
 
@@ -278,6 +290,82 @@ ruby -rjson -rcsv -rfileutils -e '
     value.split(",", 2).first
   end
 
+  def markdown_escape(value)
+    value.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
+  end
+
+  def join_unique(values)
+    compact = values.map { |value| value.to_s.strip }.reject(&:empty?).uniq.sort
+    compact.empty? ? "" : compact.join(", ")
+  end
+
+  def compatibility_status_for(validated_count, candidate_count, safe_block_count, rejected_count)
+    return "Validated hardware evidence" if validated_count.positive?
+    return "Needs manual smoke" if candidate_count.positive?
+    return "Expected blocked" if safe_block_count.positive?
+    return "Rejected evidence" if rejected_count.positive?
+
+    "Needs validation"
+  end
+
+  def render_markdown_matrix(rows)
+    hardware_rows = rows.reject { |row| row["mode"] == "release" }
+    groups = Hash.new { |hash, key| hash[key] = [] }
+    hardware_rows.each do |row|
+      family = row["modelFamily"].to_s.empty? ? "unknown" : row["modelFamily"].to_s
+      groups[family] << row
+    end
+
+    lines = [
+      "# Vifty Compatibility Matrix Draft",
+      "",
+      "Generated from reviewed validation report summaries. Treat source-first and unsigned-dev reports as compatibility evidence only; they are not Developer ID, notarization, Homebrew, or trusted binary evidence.",
+      "",
+      "| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |"
+    ]
+
+    if groups.empty?
+      lines << "| No reviewed hardware reports | Needs validation | 0 | 0 | 0 | 0 | 0 |  |  | Add reviewed `review-result.json` files before changing public claims. |"
+      return lines.join("\n") + "\n"
+    end
+
+    groups.sort.each do |family, group|
+      validated_count = group.count { |row| row["claim"] == "validated-hardware-evidence" }
+      candidate_count = group.count { |row| row["claim"] == "supported-hardware-evidence-needs-manual-smoke" }
+      safe_block_count = group.count { |row| row["claim"] == "safe-block-evidence" }
+      rejected_count = group.count { |row| row["claim"] == "rejected" }
+      agent_run_count = group.count { |row| row["agentRunSmokeValidated"] == "true" }
+      status = compatibility_status_for(validated_count, candidate_count, safe_block_count, rejected_count)
+      identifiers = join_unique(group.map { |row| row["modelIdentifier"] })
+      install_sources = join_unique(group.map { |row| row["installSource"] })
+
+      evidence = []
+      manual_sources = group.select { |row| row["manualSmokeValidated"] == "true" }.map { |row| row["manualSmokeTestSource"] }
+      agent_sources = group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| row["agentRunSmokeSource"] }
+      manual_joined = join_unique(manual_sources)
+      agent_joined = join_unique(agent_sources)
+      evidence << "manual: #{manual_joined}" unless manual_joined.empty?
+      evidence << "agent-run: #{agent_joined}" unless agent_joined.empty?
+      evidence << "reviewed index only" if evidence.empty?
+
+      lines << [
+        family,
+        status,
+        validated_count,
+        candidate_count,
+        agent_run_count,
+        safe_block_count,
+        rejected_count,
+        identifiers,
+        install_sources,
+        evidence.join("<br>")
+      ].map { |value| markdown_escape(value) }.join(" | ").then { |row| "| #{row} |" }
+    end
+
+    lines.join("\n") + "\n"
+  end
+
   paths = inputs.flat_map { |input| resolve_input(input, failures) }.uniq
   if paths.empty? && failures.empty?
     failures << "no review-result.json files found"
@@ -440,4 +528,10 @@ ruby -rjson -rcsv -rfileutils -e '
     FileUtils.mkdir_p(directory) unless directory == "." || Dir.exist?(directory)
     File.write(output_tsv, tsv)
   end
-' "${VALIDATION_REPORT_INDEX_SCHEMA_ID}" "${VALIDATION_REVIEW_RESULT_SCHEMA_ID}" "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${INPUTS[@]}"
+
+  unless output_markdown.empty?
+    directory = File.dirname(output_markdown)
+    FileUtils.mkdir_p(directory) unless directory == "." || Dir.exist?(directory)
+    File.write(output_markdown, render_markdown_matrix(rows))
+  end
+' "${VALIDATION_REPORT_INDEX_SCHEMA_ID}" "${VALIDATION_REVIEW_RESULT_SCHEMA_ID}" "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${OUTPUT_MARKDOWN}" "${INPUTS[@]}"
