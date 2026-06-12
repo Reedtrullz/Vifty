@@ -302,6 +302,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
+    func testControlOwnershipWarnsWhenAgentStatusIsUnavailable() {
+        let model = AppModel()
+        model.daemonResponding = true
+        model.daemonReachable = true
+        model.controlState = ControlState(mode: .auto)
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Agent control status unavailable; fan ownership uncertain")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
     func testControlOwnershipSummaryReportsViftyManualModes() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
@@ -660,6 +680,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.agentCoolingNeedsAttention)
         XCTAssertTrue(model.agentCoolingSummary?.contains("Agent Build cooling until") == true)
         XCTAssertTrue(model.agentCoolingSummary?.contains("status refresh failed; do not start another workload") == true)
+        XCTAssertTrue(model.controlOwnershipSummary.contains("Agent Build owns cooling until"))
+        XCTAssertTrue(model.controlOwnershipSummary.contains("status refresh failed"))
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
     func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {

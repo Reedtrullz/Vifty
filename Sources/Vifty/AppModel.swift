@@ -404,10 +404,15 @@ final class AppModel: ObservableObject {
 
     var controlOwnershipSummary: String {
         if let lease = agentControlStatus?.activeLease {
+            let statusWarning = agentControlStatusError == nil ? "" : " · status refresh failed"
             if lease.isActive(at: now()) {
-                return "Agent \(lease.request.workload.displayName) owns cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))"
+                return "Agent \(lease.request.workload.displayName) owns cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))\(statusWarning)"
             }
-            return "Agent \(lease.request.workload.displayName) lease expired; restore Auto to clear daemon control"
+            return "Agent \(lease.request.workload.displayName) lease expired; restore Auto to clear daemon control\(statusWarning)"
+        }
+
+        if agentControlStatusError != nil {
+            return "Agent control status unavailable; fan ownership uncertain"
         }
 
         switch controlState.mode {
@@ -424,6 +429,9 @@ final class AppModel: ObservableObject {
     }
 
     var controlOwnershipNeedsAttention: Bool {
+        if agentControlStatusError != nil {
+            return true
+        }
         if let lease = agentControlStatus?.activeLease {
             return !lease.isActive(at: now())
         }
