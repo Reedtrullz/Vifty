@@ -229,6 +229,21 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall before manual or agent cooling; fan writes stay blocked until the daemon responds.")
     }
 
+    func testManualFanControlAvailabilityRequiresDaemonBackedWritePath() {
+        let model = AppModel()
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = false
+
+        XCTAssertFalse(model.manualFanControlAvailable)
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
+
+        model.daemonResponding = true
+
+        XCTAssertTrue(model.manualFanControlAvailable)
+        XCTAssertNil(model.manualFanControlBlockedReason)
+    }
+
     func testHelperHealthSummaryReportsUnreachableDaemon() {
         let model = AppModel()
         model.daemonReachable = false
@@ -434,13 +449,14 @@ final class AppModelTests: XCTestCase {
     }
 
     func testTimedManualModeRestoresAutoAfterDeadline() async {
-        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+        let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
             modelIdentifier: "MacBookPro18,3",
             isAppleSilicon: true,
             isMacBookPro: true
-        ))
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
         let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
@@ -449,6 +465,9 @@ final class AppModelTests: XCTestCase {
             now: { clock.now },
             daemonPing: { true }
         )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
 
         model.selectedMode = .fixed
         model.fixedRPM = 5000
@@ -465,13 +484,14 @@ final class AppModelTests: XCTestCase {
     }
 
     func testExplicitRestoreAutoClearsTimedManualDeadline() async {
-        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+        let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
             modelIdentifier: "MacBookPro18,3",
             isAppleSilicon: true,
             isMacBookPro: true
-        ))
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
         let now = Date(timeIntervalSince1970: 1000)
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
@@ -480,6 +500,9 @@ final class AppModelTests: XCTestCase {
             now: { now },
             daemonPing: { true }
         )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
 
         model.selectedMode = .fixed
         model.fixedRPM = 5000
@@ -493,6 +516,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.manualSessionExpiresAt)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0], "Explicit Auto must also issue a hardware restore")
+    }
+
+    func testManualModeSelectionFailsClosedWhenDaemonDoesNotRespond() async {
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { false }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = false
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
+        XCTAssertTrue(model.lastError?.contains("daemon writes are blocked") == true)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertTrue(appliedCommands.isEmpty)
     }
 
     func testPollOnceRefreshesAgentControlStatus() async {
@@ -664,6 +713,7 @@ private final class AppModelTestClock: @unchecked Sendable {
 
 private actor AppModelFakeHardware: HardwareService {
     var snapshotValue: HardwareSnapshot
+    var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
 
     init(snapshot: HardwareSnapshot) {
@@ -674,7 +724,9 @@ private actor AppModelFakeHardware: HardwareService {
         snapshotValue
     }
 
-    func apply(_ command: FanCommand, fan: Fan) async throws {}
+    func apply(_ command: FanCommand, fan: Fan) async throws {
+        appliedCommands.append(command)
+    }
 
     func restoreAuto(fan: Fan) async throws { restoredFanIDs.append(fan.id) }
 }

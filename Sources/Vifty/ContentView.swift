@@ -219,6 +219,14 @@ struct ContentView: View {
                 }
             }
             .pickerStyle(.menu)
+            .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
+
+            if let blockedReason = model.manualFanControlBlockedReason {
+                Label(blockedReason, systemImage: "lock.shield")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
 
             if let expiresAt = model.manualSessionExpiresAt {
                 Text("Auto restore scheduled at \(expiresAt.formatted(date: .omitted, time: .shortened))")
@@ -233,6 +241,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
+            .help(model.selectedMode != .auto ? (model.manualFanControlBlockedReason ?? "Apply selected fan mode") : "Restore Auto")
         }
     }
 
@@ -248,6 +258,7 @@ struct ContentView: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
+        .disabled(!model.manualFanControlAvailable)
     }
 
     private var curveEditor: some View {
@@ -433,6 +444,7 @@ struct ContentView: View {
                 }
             }
         }
+        .disabled(!model.manualFanControlAvailable)
     }
 
     private var sensorsPane: some View {

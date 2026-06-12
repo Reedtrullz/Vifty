@@ -53,6 +53,8 @@ Vifty does not expose arbitrary SMC writes through the app, daemon, helper polic
 
 The UI can request Auto, Fixed RPM, or Temperature Curve mode. Curves are resolved inside `FanControlCoordinator` before the daemon sees a command. The daemon receives resolved fixed-RPM commands or Auto restore commands, not raw temperature curves.
 
+The app treats fallback fan telemetry as diagnostic evidence only. If fans can be read locally while the daemon is not responding, the UI reports that telemetry is available but keeps manual Fixed/Curve controls blocked until the daemon-backed write path responds again.
+
 Vifty refuses or restores control when safety inputs are not trustworthy, including:
 
 - unsupported hardware;

@@ -136,6 +136,14 @@ final class AppModel: ObservableObject {
 
     func applyCurrentModeSelection() async {
         let mode = selectedFanMode()
+        if mode != .auto, let blockedReason = manualFanControlBlockedReason {
+            selectedMode = .auto
+            manualSessionExpiresAt = nil
+            lastError = "Manual fan control blocked: \(blockedReason)"
+            await syncState()
+            return
+        }
+
         updateManualDeadline(for: mode)
         await coordinator.setMode(mode)
         let agentRestoreError: String?
@@ -391,6 +399,36 @@ final class AppModel: ObservableObject {
             return nil
         }
         return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+    }
+
+    var manualFanControlAvailable: Bool {
+        manualFanControlBlockedReason == nil
+    }
+
+    var manualFanControlBlockedReason: String? {
+        guard let snapshot else {
+            return daemonResponding
+                ? "Waiting for fan telemetry before manual fan control."
+                : "Install or repair the fan helper before manual fan control."
+        }
+        guard snapshot.isAppleSilicon, snapshot.isMacBookPro else {
+            return "Unsupported hardware. Manual fan control stays blocked."
+        }
+        guard daemonResponding else {
+            return daemonReachable
+                ? "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked."
+                : "Install or repair the fan helper before manual fan control."
+        }
+        guard !snapshot.fans.isEmpty else {
+            return "Fan data is unavailable. Manual fan control stays blocked."
+        }
+        guard snapshot.fans.contains(where: \.controllable) else {
+            return "No controllable fans are available. Manual fan control stays blocked."
+        }
+        guard !snapshot.temperatureSensors.isEmpty else {
+            return "Temperature sensors are unavailable. Manual fan control stays blocked."
+        }
+        return nil
     }
 
     private var autoControlOwnershipSummary: String {
