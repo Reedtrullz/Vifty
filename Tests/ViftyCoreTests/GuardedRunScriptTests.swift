@@ -273,6 +273,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let harness = try ScriptHarness(
             state: "degraded",
             recommendedAction: "restoreAutoBeforeRequestingCooling",
+            recommendedRecoveryAction: "restoreAutoBeforeRetry",
             safeToRequestCooling: false
         )
 
@@ -282,12 +283,14 @@ final class GuardedRunScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("restoring Auto before requesting new cooling"))
+        XCTAssertTrue(result.stderr.contains("recovery action is restoreAutoBeforeRetry"))
         XCTAssertTrue(result.stderr.contains("\"recommendedAgentAction\":\"restoreAutoBeforeRequestingCooling\""))
+        XCTAssertTrue(result.stderr.contains("\"recommendedRecoveryAction\":\"restoreAutoBeforeRetry\""))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
     func testGuardedRunBlocksBeforeRunWhenDiagnoseBlocks() throws {
-        let harness = try ScriptHarness(state: "blocked")
+        let harness = try ScriptHarness(state: "blocked", recommendedRecoveryAction: "repairHelper")
 
         let result = try harness.runGuardedRun([
             "test", "20m", "70", "swift test", "--", "swift", "test"
@@ -295,6 +298,23 @@ final class GuardedRunScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("readiness is blocked"))
+        XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
+        XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunFailsClosedWhenReadinessRecoveryActionIsMissing() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            decisionFieldsOverride: #","recommendedAgentAction":"requestCoolingWithCaution","safeToRequestCooling":true"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("missing agent decision fields"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -326,7 +346,7 @@ final class GuardedRunScriptTests: XCTestCase {
     func testGuardedRunTreatsNullAgentDecisionFieldsAsMissing() throws {
         let harness = try ScriptHarness(
             state: "degraded",
-            decisionFieldsOverride: #","recommendedAgentAction":null,"safeToRequestCooling":null"#
+            decisionFieldsOverride: #","recommendedAgentAction":null,"recommendedRecoveryAction":null,"safeToRequestCooling":null"#
         )
 
         let result = try harness.runGuardedRun([
@@ -497,6 +517,7 @@ private final class ScriptHarness {
     init(
         state: String,
         recommendedAction: String? = nil,
+        recommendedRecoveryAction: String? = nil,
         safeToRequestCooling: Bool? = nil,
         diagnoseExitCode: Int = 0,
         emitReadinessOnDiagnoseFailure: Bool = false,
@@ -524,6 +545,11 @@ private final class ScriptHarness {
             try writeFakeViftyCtl(
                 state: state,
                 recommendedAction: recommendedAction ?? Self.defaultRecommendedAction(for: state),
+                recommendedRecoveryAction: recommendedRecoveryAction
+                    ?? Self.defaultRecommendedRecoveryAction(
+                        for: state,
+                        recommendedAction: recommendedAction ?? Self.defaultRecommendedAction(for: state)
+                    ),
                 safeToRequestCooling: safeToRequestCooling ?? Self.defaultSafeToRequestCooling(for: state),
                 diagnoseExitCode: diagnoseExitCode,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
@@ -609,6 +635,7 @@ private final class ScriptHarness {
     private func writeFakeViftyCtl(
         state: String,
         recommendedAction: String,
+        recommendedRecoveryAction: String,
         safeToRequestCooling: Bool,
         diagnoseExitCode: Int,
         emitReadinessOnDiagnoseFailure: Bool,
@@ -625,7 +652,7 @@ private final class ScriptHarness {
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
         let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
-            ? #","recommendedAgentAction":"\#(recommendedAction)","safeToRequestCooling":\#(safeToRequestCooling)"#
+            ? #","recommendedAgentAction":"\#(recommendedAction)","recommendedRecoveryAction":"\#(recommendedRecoveryAction)","safeToRequestCooling":\#(safeToRequestCooling)"#
             : "")
         let commandError = commandErrorOverride ?? #"{"command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
@@ -682,6 +709,19 @@ private final class ScriptHarness {
             return "requestCoolingWithCaution"
         default:
             return "doNotRequestCooling"
+        }
+    }
+
+    private static func defaultRecommendedRecoveryAction(for state: String, recommendedAction: String) -> String {
+        if recommendedAction == "restoreAutoBeforeRequestingCooling" {
+            return "restoreAutoBeforeRetry"
+        }
+
+        switch state {
+        case "ready", "degraded":
+            return "none"
+        default:
+            return "collectHardwareEvidence"
         }
     }
 

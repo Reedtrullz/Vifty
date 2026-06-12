@@ -99,6 +99,28 @@ preflight_max_rpm_percent() {
   fi
 }
 
+print_readiness_recovery_action() {
+  case "$1" in
+    none|"")
+      ;;
+    repairHelper)
+      echo "guarded-run: Vifty recovery action is repairHelper; open Vifty and use Repair/Reinstall Helper before retrying." >&2
+      ;;
+    restoreAutoBeforeRetry)
+      echo "guarded-run: Vifty recovery action is restoreAutoBeforeRetry; restore Auto or wait before retrying." >&2
+      ;;
+    backOffWorkload)
+      echo "guarded-run: Vifty recovery action is backOffWorkload; pause or reduce the workload instead of requesting cooling." >&2
+      ;;
+    inspectPolicy)
+      echo "guarded-run: Vifty recovery action is inspectPolicy; inspect Vifty policy/status before retrying." >&2
+      ;;
+    collectHardwareEvidence)
+      echo "guarded-run: Vifty recovery action is collectHardwareEvidence; collect read-only validation evidence before retrying." >&2
+      ;;
+  esac
+}
+
 if [ "$#" -lt 6 ]; then
   usage
   exit 64
@@ -254,10 +276,12 @@ set -e
 
 state="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract state raw -o - - 2>/dev/null || printf '')"
 recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedAgentAction raw -o - - 2>/dev/null || printf '')"
+recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedRecoveryAction raw -o - - 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$recommended_action" = "null" ] && recommended_action=""
+[ "$recommended_recovery_action" = "null" ] && recommended_recovery_action=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
@@ -273,12 +297,7 @@ if [ -z "$state" ]; then
 fi
 
 case "$state" in
-  ready|degraded)
-    ;;
-  blocked)
-    echo "guarded-run: Vifty readiness is blocked; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
-    exit 75
+  ready|degraded|blocked)
     ;;
   *)
     echo "guarded-run: unknown Vifty readiness state '$state'; refusing to request cooling." >&2
@@ -287,7 +306,7 @@ case "$state" in
     ;;
 esac
 
-if [ -z "$recommended_action" ] || [ -z "$safe_to_request" ]; then
+if [ -z "$recommended_action" ] || [ -z "$recommended_recovery_action" ] || [ -z "$safe_to_request" ]; then
   echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
   printf '%s\n' "$diagnose_json" >&2
   exit 75
@@ -313,6 +332,23 @@ case "$recommended_action" in
     ;;
 esac
 
+case "$recommended_recovery_action" in
+  none|repairHelper|restoreAutoBeforeRetry|backOffWorkload|inspectPolicy|collectHardwareEvidence)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    printf '%s\n' "$diagnose_json" >&2
+    exit 75
+    ;;
+esac
+
+if [ "$state" = "blocked" ]; then
+  echo "guarded-run: Vifty readiness is blocked; refusing to request cooling." >&2
+  print_readiness_recovery_action "$recommended_recovery_action"
+  printf '%s\n' "$diagnose_json" >&2
+  exit 75
+fi
+
 if [ "$safe_to_request" != "true" ]; then
   case "$recommended_action" in
     restoreAutoBeforeRequestingCooling)
@@ -325,6 +361,7 @@ if [ "$safe_to_request" != "true" ]; then
       echo "guarded-run: Vifty reports safeToRequestCooling=$safe_to_request for action '$recommended_action'; refusing to request cooling." >&2
       ;;
   esac
+  print_readiness_recovery_action "$recommended_recovery_action"
   printf '%s\n' "$diagnose_json" >&2
   exit 75
 fi
