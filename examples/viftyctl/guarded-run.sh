@@ -210,6 +210,8 @@ structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/p
 cleanup_state_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.cleanupStateReportedOnLaunchFailure raw -o - - 2>/dev/null || printf '')"
 signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.signalsForwardedToChild json -o - - 2>/dev/null || printf '')"
 supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract supportsForceRetry raw -o - - 2>/dev/null || printf '')"
+minimum_agent_rpm_percent="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.minimumAgentRPMPercent raw -o - - 2>/dev/null || printf '')"
+maximum_allowed_rpm_percent="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.maximumAllowedRPMPercent raw -o - - 2>/dev/null || printf '')"
 maximum_reason_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumReasonLength raw -o - - 2>/dev/null || printf '')"
 maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract metadataLimits.maximumIdempotencyKeyLength raw -o - - 2>/dev/null || printf '')"
 
@@ -219,6 +221,8 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
+[ "$minimum_agent_rpm_percent" = "null" ] && minimum_agent_rpm_percent=""
+[ "$maximum_allowed_rpm_percent" = "null" ] && maximum_allowed_rpm_percent=""
 [ "$maximum_reason_length" = "null" ] && maximum_reason_length=""
 [ "$maximum_idempotency_key_length" = "null" ] && maximum_idempotency_key_length=""
 
@@ -282,6 +286,24 @@ if [ "$run_child_preflight" != "true" ] ||
     printf '%s\n' "$capabilities_json" >&2
   fi
   exit 75
+fi
+
+if ! is_positive_integer "$minimum_agent_rpm_percent" ||
+   ! is_positive_integer "$maximum_allowed_rpm_percent" ||
+   ! /usr/bin/awk -v minimum="$minimum_agent_rpm_percent" -v maximum="$maximum_allowed_rpm_percent" 'BEGIN { exit !((minimum + 0) <= (maximum + 0)) }'; then
+  echo "guarded-run: viftyctl capabilities does not advertise usable RPM policy limits; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if ! /usr/bin/awk -v value="$max_rpm_percent" -v minimum="$minimum_agent_rpm_percent" -v maximum="$maximum_allowed_rpm_percent" 'BEGIN { exit !((value + 0) >= (minimum + 0) && (value + 0) <= (maximum + 0)) }'; then
+  echo "guarded-run: max-rpm-percent $max_rpm_percent is outside advertised policy range $minimum_agent_rpm_percent...$maximum_allowed_rpm_percent." >&2
+  exit 64
 fi
 
 if ! is_positive_integer "$maximum_reason_length" ||

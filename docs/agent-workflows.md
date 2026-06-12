@@ -248,6 +248,7 @@ examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 The wrapper:
 
 - runs `capabilities --json` and requires the safe `runLifecycle` contract,
+- requires advertised policy RPM limits and rejects RPM percentages outside the daemon's advertised policy range before readiness or cooling,
 - requires `metadataLimits` and rejects reasons longer than the advertised maximum before readiness or cooling,
 - runs `diagnose --json`,
 - treats nonzero blocked diagnose reports as readiness blocks,

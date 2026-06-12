@@ -196,6 +196,36 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRequiresAdvertisedRPMPolicyLimits() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyOverride: #""policy":null"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise usable RPM policy limits"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsRPMPercentOutsideAdvertisedPolicyRange() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyOverride: #""policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":60,"maxDurationSeconds":1800,"prepareCooldownSeconds":30}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("max-rpm-percent 70 is outside advertised policy range 35...60"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsEmptyReasonBeforeViftyCtl() throws {
         let harness = try ScriptHarness(state: "ready")
 
@@ -596,6 +626,7 @@ private final class ScriptHarness {
         capabilityCommands: [String] = ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"],
         capabilityWorkloads: [String] = ["build", "test", "localModel", "custom"],
         runLifecycleOverride: String? = nil,
+        policyOverride: String? = nil,
         metadataLimitsOverride: String? = nil,
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
@@ -630,6 +661,7 @@ private final class ScriptHarness {
                 capabilityCommands: capabilityCommands,
                 capabilityWorkloads: capabilityWorkloads,
                 runLifecycleOverride: runLifecycleOverride,
+                policyOverride: policyOverride,
                 metadataLimitsOverride: metadataLimitsOverride,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
@@ -718,6 +750,7 @@ private final class ScriptHarness {
         capabilityCommands: [String],
         capabilityWorkloads: [String],
         runLifecycleOverride: String?,
+        policyOverride: String?,
         metadataLimitsOverride: String?,
         capabilitiesOutputOverride: String?
     ) throws {
@@ -733,11 +766,13 @@ private final class ScriptHarness {
         let commandsJSON = Self.jsonStringArray(capabilityCommands)
         let workloadsJSON = Self.jsonStringArray(capabilityWorkloads)
         let exitCodes = #""exitCodes":{"unavailable":69}"#
+        let policy = policyOverride
+            ?? #""policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30}"#
         let metadataLimits = metadataLimitsOverride
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(metadataLimits),\#(exitCodes)}"#
-            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(metadataLimits),\#(exitCodes)}"#)
+            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(exitCodes)}"#
+            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu
