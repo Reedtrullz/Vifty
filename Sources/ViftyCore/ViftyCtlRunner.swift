@@ -32,6 +32,14 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         self.structuredPreChildFailures = structuredPreChildFailures
         self.cleanupStateReportedOnLaunchFailure = cleanupStateReportedOnLaunchFailure
     }
+
+    public static let unsupported = ViftyCtlRunLifecycleCapabilities(
+        childCommandPreflightBeforeCooling: false,
+        signalsForwardedToChild: [],
+        autoRestoreAfterChildExit: false,
+        structuredPreChildFailures: false,
+        cleanupStateReportedOnLaunchFailure: false
+    )
 }
 
 public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
@@ -111,7 +119,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         runLifecycle = try container.decodeIfPresent(
             ViftyCtlRunLifecycleCapabilities.self,
             forKey: .runLifecycle
-        ) ?? ViftyCtlRunLifecycleCapabilities()
+        ) ?? .unsupported
         exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
     }
 

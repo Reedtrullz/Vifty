@@ -48,7 +48,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
 
         XCTAssertFalse(capabilities.supportsForceRetry)
-        XCTAssertEqual(capabilities.runLifecycle, ViftyCtlRunLifecycleCapabilities())
+        XCTAssertEqual(capabilities.runLifecycle, .unsupported)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {

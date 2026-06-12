@@ -454,6 +454,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("preflight that the child command is a regular executable path or resolves to one on `PATH`"))
         XCTAssertTrue(exampleReadme.contains("read-only `viftyctl capabilities --json`"))
         XCTAssertTrue(exampleReadme.contains("safe `runLifecycle` contract"))
+        XCTAssertTrue(exampleReadme.contains("If a capabilities payload does not advertise `runLifecycle`"))
         XCTAssertTrue(exampleReadme.contains("checks `supportsForceRetry` before passing `--force`"))
         XCTAssertTrue(exampleReadme.contains("read-only `viftyctl diagnose --json`"))
         XCTAssertTrue(exampleReadme.contains("delegate to `viftyctl run --json`"))

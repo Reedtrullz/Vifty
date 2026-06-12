@@ -10,6 +10,9 @@ common developer workloads on Vifty's safe path:
 5. delegate to `viftyctl run --json` with one bounded lease;
 6. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
+If a capabilities payload does not advertise `runLifecycle`, treat those
+guarantees as unavailable and refuse cooling.
+
 Set `VIFTYCTL` to test against a development app bundle:
 
 ```sh

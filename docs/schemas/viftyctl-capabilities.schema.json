@@ -234,7 +234,7 @@
     },
     "runLifecycle": {
       "type": "object",
-      "description": "Machine-readable viftyctl run lifecycle guarantees that agents can depend on before deciding how much wrapper logic to add around a workload.",
+      "description": "Machine-readable viftyctl run lifecycle guarantees that agents can depend on before deciding how much wrapper logic to add around a workload. Consumers reading legacy payloads without this object should treat every lifecycle guarantee as unsupported.",
       "required": [
         "childCommandPreflightBeforeCooling",
         "signalsForwardedToChild",
