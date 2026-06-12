@@ -165,6 +165,23 @@ body:
       required: false
 
   - type: textarea
+    id: agent-run-smoke
+    attributes:
+      label: Supervised viftyctl run smoke test
+      description: Optional for supported hardware. If readiness was ready or safely degraded, paste the `viftyctl run --json -- /bin/sleep 5` command from docs/hardware-validation.md, stdout/stderr, child exit code, restore result, and follow-up `status --json`, `audit --limit 20 --json`, and `diagnose --json` output. Skip this when readiness is blocked.
+      render: text
+      placeholder: |
+        command: /Applications/Vifty.app/Contents/MacOS/viftyctl run --workload test --duration 2m --max-rpm-percent 55 --reason "agent run smoke test" --json -- /bin/sleep 5
+        exit: ...
+        stdout: ...
+        stderr: ...
+        status --json: ...
+        audit --limit 20 --json: ...
+        diagnose --json: ...
+    validations:
+      required: false
+
+  - type: textarea
     id: release-trust-evidence
     attributes:
       label: Release trust evidence

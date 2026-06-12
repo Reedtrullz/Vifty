@@ -12,6 +12,7 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "support-safe-to-request", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "hardware-template-agent-run-smoke", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-template-source-first", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "codeowners-support", in: checks), "passed")
     }

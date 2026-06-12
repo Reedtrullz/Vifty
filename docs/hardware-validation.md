@@ -177,6 +177,30 @@ Only run this on supported Apple Silicon MacBook Pro hardware after saving the r
 
 If any step reports critical thermal pressure, missing sensors, missing controllable fans, invalid or duplicate fan IDs, or invalid RPM ranges, stop and keep the machine under macOS automatic fan control.
 
+## Supervised Agent Run Smoke Test
+
+The manual smoke test proves direct prepare/restore behavior. For developer-workload evidence, also run one supervised `viftyctl run` smoke test on supported Apple Silicon MacBook Pro hardware after readiness is `ready` or safely `degraded`:
+
+```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl run \
+  --workload test \
+  --duration 2m \
+  --max-rpm-percent 55 \
+  --reason "agent run smoke test" \
+  --json \
+  -- /bin/sleep 5
+```
+
+Then collect the read-only follow-up:
+
+```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl status --json
+/Applications/Vifty.app/Contents/MacOS/viftyctl audit --limit 20 --json
+/Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
+```
+
+Paste the run stdout/stderr, child exit code, restore result, and the follow-up status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
+
 ## Signing Validation
 
 For release builds, prefer the signed/notarized workflow in [release.md](release.md). To smoke-test the signing path locally, verify the daemon trust boundary:

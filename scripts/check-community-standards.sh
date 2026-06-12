@@ -100,7 +100,7 @@ check_contains "support-security" "SUPPORT.md" "[SECURITY.md](SECURITY.md)" "Sup
 check_contains "support-triage" "SUPPORT.md" "[docs/support-triage.md](docs/support-triage.md)" "Support links maintainer triage."
 check_contains "support-readiness" "SUPPORT.md" "viftyctl diagnose --json" "Support starts with read-only readiness evidence."
 check_contains "support-audit" "SUPPORT.md" "viftyctl audit --limit 20 --json" "Support includes read-only audit evidence."
-check_contains "support-source-first" "SUPPORT.md" "source-first" "Support preserves v1.1.0 source-first release language."
+check_contains "support-source-first" "SUPPORT.md" "source-first" "Support preserves current source-first release language."
 check_contains "support-unsigned" "SUPPORT.md" 'unsigned `.app` zip is tester convenience only' "Support distinguishes unsigned tester artifacts."
 check_contains "support-no-raw-smc" "SUPPORT.md" "raw SMC tools" "Support forbids raw SMC tools in unsafe states."
 check_contains "support-no-setfixed" "SUPPORT.md" "sudo ViftyHelper setFixed" "Support forbids manual helper writes in unsafe states."
@@ -121,6 +121,7 @@ check_contains "bug-no-raw-smc" ".github/ISSUE_TEMPLATE/bug-report.yml" "do not 
 check_contains "agent-template-no-retry" ".github/ISSUE_TEMPLATE/agent-cooling.yml" 'do not retry `viftyctl prepare` or `viftyctl run`' "Agent-cooling template blocks retries while readiness is unsafe."
 check_contains "agent-template-audit" ".github/ISSUE_TEMPLATE/agent-cooling.yml" "viftyctl audit --limit 20 --json" "Agent-cooling template asks for read-only audit evidence."
 check_contains "hardware-template-unsupported" ".github/ISSUE_TEMPLATE/hardware-validation.yml" "Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only." "Hardware template keeps unsupported reports read-only."
+check_contains "hardware-template-agent-run-smoke" ".github/ISSUE_TEMPLATE/hardware-validation.yml" "Supervised viftyctl run smoke test" "Hardware template collects supervised agent-run smoke evidence."
 check_contains "release-template-source-first" ".github/ISSUE_TEMPLATE/release-trust.yml" "source-first unsigned-dev app zips are tester convenience artifacts" "Release trust template distinguishes source-first tester artifacts."
 
 check_contains "codeowners-support" ".github/CODEOWNERS" "SUPPORT.md" "CODEOWNERS covers support policy."
