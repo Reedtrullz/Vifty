@@ -68,6 +68,10 @@ diagnose decision fields fail review. It also records `capabilitiesDecision`
 for the advertised `viftyctl run` support, force-retry discovery, safe
 run/direct-control lifecycle, metadata limits, daemon status, and unavailable
 exit-code contract; missing or unsafe capabilities contract fields fail review.
+If `diagnoseDecision` proves blocked readiness with `repairHelper`, the reviewer
+may list `viftyctl-status` or `viftyctl-audit` in `acceptedCommandErrors`, but
+only when their JSON is a structured `HELPER_UNREACHABLE` command error with
+`safeToProceed: false`.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:

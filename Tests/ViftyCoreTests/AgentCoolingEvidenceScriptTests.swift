@@ -243,6 +243,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["directControlLifecycleSafe"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["unavailableExitCode"] as? Int, 69)
+        XCTAssertTrue((reviewSummary["acceptedCommandErrors"] as? [String])?.isEmpty == true)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
     }
 
@@ -264,6 +265,75 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
         XCTAssertTrue(reviewResult.stdout.contains("Agent cooling evidence OK"))
+    }
+
+    func testReviewerAcceptsHelperUnreachableCommandErrorsWhenDiagnoseRequiresRepair() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesJSON: AgentCoolingEvidenceHarness.defaultUnavailableCapabilitiesJSON,
+            capabilitiesExitCode: 69,
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseExitCode: 75,
+            statusJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "status"),
+            statusExitCode: 1,
+            auditJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "audit"),
+            auditExitCode: 1
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("accepted structured HELPER_UNREACHABLE command error"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        XCTAssertEqual(reviewSummary["acceptedCommandErrors"] as? [String], [
+            "viftyctl-status",
+            "viftyctl-audit"
+        ])
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["exitStatus"] as? Int, 75)
+        XCTAssertEqual(diagnoseDecision["recommendedRecoveryAction"] as? String, "repairHelper")
+        XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, false)
+        let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
+        XCTAssertEqual(capabilitiesDecision["exitStatus"] as? Int, 69)
+        XCTAssertEqual(capabilitiesDecision["daemonStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(capabilitiesDecision["policySource"] as? String, "fallbackUnavailable")
+        XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, true)
+    }
+
+    func testReviewerRejectsNonzeroStatusWhenDiagnoseDoesNotRequireHelperRepair() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            statusJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "status"),
+            statusExitCode: 1
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-status must exit 0 unless blocked diagnose recommends repairHelper"), reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        XCTAssertTrue((reviewSummary["acceptedCommandErrors"] as? [String])?.isEmpty == true)
     }
 
     func testReviewerRejectsDiagnoseDecisionDrift() throws {
@@ -364,6 +434,26 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["runLifecycleSafe"] as? Bool, false)
         XCTAssertEqual(capabilitiesDecision["directControlLifecycleSafe"] as? Bool, false)
         XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, false)
+    }
+
+    func testReviewerRejectsNonzeroCapabilitiesWithoutFallbackUnavailablePolicy() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesExitCode: 69
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("nonzero capabilities exit requires daemonStatusAvailable false"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("nonzero capabilities exit requires policySource fallbackUnavailable"), reviewResult.stderr)
     }
 
     func testReviewerRejectsPrivacyFindings() throws {
@@ -480,6 +570,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "commandsReviewed",
             "diagnoseDecision",
             "capabilitiesDecision",
+            "acceptedCommandErrors",
             "failures",
             "warnings"
         ] {
@@ -534,6 +625,10 @@ private final class AgentCoolingEvidenceHarness {
     private let capabilitiesExitCode: Int
     private let diagnoseJSON: String
     private let diagnoseExitCode: Int
+    private let statusJSON: String
+    private let statusExitCode: Int
+    private let auditJSON: String
+    private let auditExitCode: Int
     private let includePrivacyLeak: Bool
 
     init(
@@ -541,6 +636,10 @@ private final class AgentCoolingEvidenceHarness {
         capabilitiesExitCode: Int = 0,
         diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
         diagnoseExitCode: Int = 0,
+        statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
+        statusExitCode: Int = 0,
+        auditJSON: String = #"{"readOnly":true,"coolingCommandsRun":false,"events":[]}"#,
+        auditExitCode: Int = 0,
         includePrivacyLeak: Bool = false
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -553,6 +652,10 @@ private final class AgentCoolingEvidenceHarness {
         self.capabilitiesExitCode = capabilitiesExitCode
         self.diagnoseJSON = diagnoseJSON
         self.diagnoseExitCode = diagnoseExitCode
+        self.statusJSON = statusJSON
+        self.statusExitCode = statusExitCode
+        self.auditJSON = auditJSON
+        self.auditExitCode = auditExitCode
         self.includePrivacyLeak = includePrivacyLeak
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -574,7 +677,11 @@ private final class AgentCoolingEvidenceHarness {
             "VIFTY_FAKE_CAPABILITIES_JSON": capabilitiesJSON,
             "VIFTY_FAKE_CAPABILITIES_EXIT": "\(capabilitiesExitCode)",
             "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
-            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)"
+            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
+            "VIFTY_FAKE_STATUS_JSON": statusJSON,
+            "VIFTY_FAKE_STATUS_EXIT": "\(statusExitCode)",
+            "VIFTY_FAKE_AUDIT_JSON": auditJSON,
+            "VIFTY_FAKE_AUDIT_EXIT": "\(auditExitCode)"
         ]) { _, new in new }
 
         let stdout = Pipe()
@@ -661,14 +768,15 @@ private final class AgentCoolingEvidenceHarness {
             if [ "\(includePrivacyLeak ? "1" : "0")" = "1" ]; then
               printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null,"debug":"Serial Number: C02SECRET1234 /Users/private-user/Vifty.app"}'
             else
-              printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null}'
+              printf '%s\\n' "${VIFTY_FAKE_STATUS_JSON}"
             fi
+            exit "${VIFTY_FAKE_STATUS_EXIT}"
             ;;
           audit)
             test "${2:-}" = "--limit"
             test "${4:-}" = "--json"
-            printf '{"readOnly":true,"coolingCommandsRun":false,"requestedLimit":%s,"events":[]}' "$3"
-            printf '\\n'
+            printf '%s\\n' "${VIFTY_FAKE_AUDIT_JSON}"
+            exit "${VIFTY_FAKE_AUDIT_EXIT}"
             ;;
           *)
             echo "unexpected mutating or unsupported command: $*" >&2
@@ -686,4 +794,14 @@ private final class AgentCoolingEvidenceHarness {
     private static let defaultCapabilitiesJSON = """
     {"schemaVersion":1,"daemonStatusAvailable":true,"policySource":"daemonStatus","agentControlStatusError":null,"commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"}}
     """
+
+    fileprivate static let defaultUnavailableCapabilitiesJSON = """
+    {"schemaVersion":1,"daemonStatusAvailable":false,"policySource":"fallbackUnavailable","agentControlStatusError":"daemon unavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":false,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"}}
+    """
+
+    fileprivate static func commandErrorJSON(command: String) -> String {
+        """
+        {"schemaVersion":1,"command":"\(command)","errorCode":"HELPER_UNREACHABLE","message":"daemon unavailable","safeToProceed":false,"recommendedRecoveryAction":"repairHelper","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"generatedAt":700000000}
+        """
+    }
 }

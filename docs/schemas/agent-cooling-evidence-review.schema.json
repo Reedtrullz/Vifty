@@ -16,6 +16,7 @@
     "commandsReviewed",
     "diagnoseDecision",
     "capabilitiesDecision",
+    "acceptedCommandErrors",
     "failures",
     "warnings"
   ],
@@ -53,6 +54,10 @@
     },
     "capabilitiesDecision": {
       "$ref": "#/$defs/capabilitiesDecision"
+    },
+    "acceptedCommandErrors": {
+      "description": "Bundle command names whose structured command-error JSON was accepted as read-only helper-unreachable evidence because diagnose reported blocked readiness and repairHelper.",
+      "$ref": "#/$defs/stringArray"
     },
     "failures": {
       "$ref": "#/$defs/stringArray"

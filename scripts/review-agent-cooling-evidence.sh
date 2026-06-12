@@ -122,6 +122,7 @@ capabilities_decision = {
   "metadataLimitsPresent" => false,
   "unavailableExitCode" => nil
 }
+accepted_command_errors = []
 
 def bundle_entry?(value)
   value.is_a?(String) &&
@@ -176,7 +177,63 @@ def includes_all?(array, values)
   array.is_a?(Array) && values.all? { |value| array.include?(value) }
 end
 
-def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, failures, warnings)
+def command_error_report?(bundle, command_name, failures, expected_command:, expected_error_code:, expected_recovery_action:)
+  path = File.join(bundle, "#{command_name}.json")
+  unless File.file?(path)
+    failures << "#{command_name}.json is missing for nonzero command review"
+    return false
+  end
+
+  begin
+    data = JSON.parse(File.read(path))
+  rescue JSON::ParserError => error
+    failures << "invalid #{command_name}.json command-error JSON: #{error.message}"
+    return false
+  end
+
+  unless data.is_a?(Hash)
+    failures << "#{command_name}.json command-error must contain a JSON object"
+    return false
+  end
+
+  ok = true
+  checks = {
+    "schemaVersion" => 1,
+    "command" => expected_command,
+    "errorCode" => expected_error_code,
+    "safeToProceed" => false,
+    "recommendedRecoveryAction" => expected_recovery_action,
+    "coolingLeasePrepared" => false,
+    "autoRestoreAttempted" => false
+  }
+  checks.each do |field, expected|
+    next if data[field] == expected
+
+    failures << "#{command_name}.json command-error #{field} #{data[field].inspect} did not match #{expected.inspect}"
+    ok = false
+  end
+  if data["autoRestoreSucceeded"] != nil
+    failures << "#{command_name}.json command-error autoRestoreSucceeded must be null"
+    ok = false
+  end
+  unless data["message"].is_a?(String) && !data["message"].strip.empty?
+    failures << "#{command_name}.json command-error message must be nonempty"
+    ok = false
+  end
+
+  ok
+end
+
+def helper_repair_diagnose?(diagnose_decision)
+  diagnose_decision["exitStatus"] == 75 &&
+    diagnose_decision["state"] == "blocked" &&
+    diagnose_decision["recommendedAgentAction"] == "doNotRequestCooling" &&
+    diagnose_decision["recommendedRecoveryAction"] == "repairHelper" &&
+    diagnose_decision["safeToRequestCooling"] == false &&
+    diagnose_decision["daemonControlPathReady"] == false
+end
+
+def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, accepted_command_errors, failures, warnings)
   return unless summary_path
 
   FileUtils.mkdir_p(File.dirname(summary_path))
@@ -191,6 +248,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "commandsReviewed" => commands_reviewed,
     "diagnoseDecision" => diagnose_decision,
     "capabilitiesDecision" => capabilities_decision,
+    "acceptedCommandErrors" => accepted_command_errors,
     "failures" => failures,
     "warnings" => warnings
   }
@@ -298,11 +356,6 @@ commands_by_name.each do |name, command|
   end
 end
 
-%w[viftyctl-capabilities viftyctl-status viftyctl-audit].each do |name|
-  status = integer_value(commands_by_name.dig(name, "status"))
-  failures << "#{name} must exit 0 for a complete agent evidence review" unless status == 0
-end
-
 capabilities_status = integer_value(commands_by_name.dig("viftyctl-capabilities", "status"))
 capabilities_decision["exitStatus"] = capabilities_status
 capabilities_path = File.join(bundle, "viftyctl-capabilities.json")
@@ -344,6 +397,12 @@ if File.file?(capabilities_path)
       end
       if capabilities_status && capabilities_status != 0 && unavailable_exit_code && capabilities_status != unavailable_exit_code
         failures << "nonzero capabilities exit must match exitCodes.unavailable"
+      end
+      if capabilities_status && capabilities_status != 0 && daemon_status_available != false
+        failures << "nonzero capabilities exit requires daemonStatusAvailable false"
+      end
+      if capabilities_status && capabilities_status != 0 && policy_source != "fallbackUnavailable"
+        failures << "nonzero capabilities exit requires policySource fallbackUnavailable"
       end
 
       run_safe = run_lifecycle.is_a?(Hash) &&
@@ -439,6 +498,27 @@ else
   failures << "missing viftyctl-diagnose.json"
 end
 
+%w[viftyctl-status viftyctl-audit].each do |name|
+  status = integer_value(commands_by_name.dig(name, "status"))
+  next if status == 0
+
+  command = name.delete_prefix("viftyctl-")
+  if helper_repair_diagnose?(diagnose_decision) &&
+      command_error_report?(
+        bundle,
+        name,
+        failures,
+        expected_command: command,
+        expected_error_code: "HELPER_UNREACHABLE",
+        expected_recovery_action: "repairHelper"
+      )
+    accepted_command_errors << name
+    warnings << "#{name} exited #{status}; accepted structured HELPER_UNREACHABLE command error because diagnose requires helper repair"
+  else
+    failures << "#{name} must exit 0 unless blocked diagnose recommends repairHelper and the command JSON is HELPER_UNREACHABLE"
+  end
+end
+
 %w[launchctl-print-daemon launchdaemon-plist helper-file-metadata].each do |name|
   status = integer_value(commands_by_name.dig(name, "status"))
   warnings << "#{name} exited #{status}; launchd/helper failures may still be useful evidence" if status && status != 0
@@ -453,7 +533,7 @@ privacy_rows.each do |row|
 end
 
 audit_path = File.join(bundle, "viftyctl-audit.json")
-if File.file?(audit_path)
+if File.file?(audit_path) && integer_value(commands_by_name.dig("viftyctl-audit", "status")) == 0
   begin
     audit = JSON.parse(File.read(audit_path))
     failures << "viftyctl-audit.json readOnly must be true" unless audit.is_a?(Hash) && audit["readOnly"] == true
@@ -507,7 +587,7 @@ checksum_by_file.each_key do |entry|
 end
 
 status = failures.empty? ? "passed" : "failed"
-write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, failures, warnings)
+write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, accepted_command_errors, failures, warnings)
 
 warnings.each { |warning| warn "warning: #{warning}" }
 

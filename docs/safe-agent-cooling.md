@@ -146,7 +146,11 @@ blocked readiness without parsing human text. The `capabilitiesDecision`
 summary records whether the bundle advertised `viftyctl run`, force-retry
 discovery, safe `runLifecycle`, safe direct prepare/restore lifecycle,
 metadata limits, daemon status, and the unavailable-exit contract before the
-report is treated as agent-safe evidence.
+report is treated as agent-safe evidence. In helper-unreachable reports, the
+reviewer may also list `viftyctl-status` or `viftyctl-audit` under
+`acceptedCommandErrors`, but only when blocked `diagnose` recommends
+`repairHelper` and those commands emitted structured `HELPER_UNREACHABLE`
+command errors with `safeToProceed: false`.
 If the repository scripts are not available, collect the same core evidence manually:
 
 ```sh
