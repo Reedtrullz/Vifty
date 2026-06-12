@@ -7,9 +7,10 @@ common developer workloads on Vifty's safe path:
 2. reject malformed wrapper arguments before contacting Vifty, including empty reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
 3. read-only `viftyctl capabilities --json`, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, and require the safe `runLifecycle` contract used by `viftyctl run`;
 4. read-only `viftyctl diagnose --json`;
-5. fail closed when readiness is blocked or `safeToRequestCooling` is false;
-6. delegate to `viftyctl run --json` with one bounded lease;
-7. let `viftyctl run` revalidate the child command and restore Auto afterward.
+5. require `recommendedAgentAction`, `recommendedRecoveryAction`, and `safeToRequestCooling` so wrappers do not infer safety from prose;
+6. fail closed when readiness is blocked or `safeToRequestCooling` is false, and print recovery guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up;
+7. delegate to `viftyctl run --json` with one bounded lease;
+8. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
 If a capabilities payload does not advertise `runLifecycle`, treat those
 guarantees as unavailable and refuse cooling.
