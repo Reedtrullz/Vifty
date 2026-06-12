@@ -187,6 +187,44 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(request.idempotencyKey, "key-1")
     }
 
+    func testPrepareTrimsReasonAndIdempotencyKey() throws {
+        let command = try ViftyCtlArguments.parse([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--reason", "  Release build  ",
+            "--idempotency-key", "  key-1  "
+        ])
+
+        guard case let .prepare(request, _, _) = command else {
+            return XCTFail("Expected prepare command")
+        }
+
+        XCTAssertEqual(request.reason, "Release build")
+        XCTAssertEqual(request.idempotencyKey, "key-1")
+    }
+
+    func testPrepareRejectsWhitespaceOnlyReason() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--reason", "   "
+        ], equals: .invalidReason)
+    }
+
+    func testPrepareRejectsWhitespaceOnlyIdempotencyKey() {
+        assertParseError([
+            "prepare",
+            "--workload", "build",
+            "--duration", "45m",
+            "--max-rpm-percent", "75",
+            "--idempotency-key", "   "
+        ], equals: .invalidIdempotencyKey)
+    }
+
     func testPrepareUsesDefaultReasonAndIdempotencyKey() throws {
         let command = try ViftyCtlArguments.parse([
             "prepare",
@@ -240,6 +278,24 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--reason",
             "--json"
         ], equals: .missingOptionValue("--reason"))
+    }
+
+    func testRestoreAutoTrimsReasonWhenPresent() throws {
+        let command = try ViftyCtlArguments.parse([
+            "restore-auto",
+            "--reason", "  done  ",
+            "--json"
+        ])
+
+        XCTAssertEqual(command, .restoreAuto(reason: "done", json: true))
+    }
+
+    func testRestoreAutoRejectsWhitespaceOnlyReason() {
+        assertParseError([
+            "restore-auto",
+            "--reason", "   ",
+            "--json"
+        ], equals: .invalidReason)
     }
 
     func testAuditLimitRequiresValueWhenPresent() {
@@ -340,6 +396,11 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(
             ViftyCtlArguments.humanReadableParseError(.missingOptionValue("--reason")),
             "missing value for option '--reason'"
+        )
+        XCTAssertEqual(ViftyCtlArguments.humanReadableParseError(.invalidReason), "invalid or missing --reason")
+        XCTAssertEqual(
+            ViftyCtlArguments.humanReadableParseError(.invalidIdempotencyKey),
+            "invalid or missing --idempotency-key"
         )
         XCTAssertEqual(
             ViftyCtlArguments.humanReadableParseError(.unknownCommand("frobnicate")),

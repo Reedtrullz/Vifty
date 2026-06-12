@@ -208,6 +208,18 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRejectsBlankReasonBeforeViftyCtl() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "   ", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("reason must not be blank"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsMissingChildCommandBeforeViftyRun() throws {
         let harness = try ScriptHarness(state: "ready")
         let missingCommand = "vifty-missing-child-\(UUID().uuidString)"

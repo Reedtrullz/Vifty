@@ -137,6 +137,12 @@ if [ -z "$reason" ]; then
   exit 64
 fi
 
+reason_without_spaces="$(printf '%s' "$reason" | /usr/bin/tr -d '[:space:]')"
+if [ -z "$reason_without_spaces" ]; then
+  echo "guarded-run: reason must not be blank." >&2
+  exit 64
+fi
+
 preflight_duration "$duration"
 preflight_max_rpm_percent "$max_rpm_percent"
 

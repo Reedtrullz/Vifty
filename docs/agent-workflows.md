@@ -25,7 +25,7 @@ Agents should treat `viftyctl` as a local safety contract:
 3. Treat `state: "degraded"` as proceed-with-caution; prefer shorter durations and lower RPM percent.
 4. Use `viftyctl run` for child workloads whenever possible so Vifty prepares cooling, launches the resolved child command, and restores Auto afterward.
 5. Use `prepare` and `restore-auto` directly only when a wrapper command cannot model the workload lifecycle.
-6. Always include a human-readable `--reason` and a stable `--idempotency-key` when preparing directly.
+6. Always include a non-blank human-readable `--reason` and a stable non-blank `--idempotency-key` when preparing directly.
 7. Do not pass `--idempotency-key` to `restore-auto`; restore is intentionally tied to the supervised lifecycle, not a scoped key.
 
 Vifty never exposes raw SMC writes through `viftyctl`. Agents request intent: workload type, maximum duration, maximum RPM percent, and reason. The daemon evaluates policy, writes bounded fan targets if allowed, records the lease, and owns expiry.
@@ -49,7 +49,7 @@ Supported workloads are currently:
 - `localModel`
 - `custom`
 
-Durations accept seconds, `m`, or `h`, for example `600`, `20m`, or `1h`. The default daemon policy caps leases at 30 minutes unless policy is changed in code.
+Durations accept seconds, `m`, or `h`, for example `600`, `20m`, or `1h`. Explicit `--reason` and `--idempotency-key` values are trimmed and rejected if blank, so audit entries stay meaningful. The default daemon policy caps leases at 30 minutes unless policy is changed in code.
 
 ## JSON Decision Rules
 

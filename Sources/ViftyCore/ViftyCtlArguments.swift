@@ -39,7 +39,7 @@ public enum ViftyCtlArguments {
         case "restore-auto":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--reason"])
             return .restoreAuto(
-                reason: value(for: "--reason", in: rest) ?? "manual restore",
+                reason: try optionalTrimmedValue(for: "--reason", in: rest, error: .invalidReason) ?? "manual restore",
                 json: rest.contains("--json")
             )
         case "run":
@@ -103,6 +103,10 @@ public enum ViftyCtlArguments {
             return "invalid or missing --max-rpm-percent"
         case .invalidLimit:
             return "invalid or missing --limit"
+        case .invalidReason:
+            return "invalid or missing --reason"
+        case .invalidIdempotencyKey:
+            return "invalid or missing --idempotency-key"
         case .missingChildCommand:
             return "run requires -- followed by a child command"
         case .unknownOption(let option):
@@ -186,8 +190,8 @@ public enum ViftyCtlArguments {
             workload: workload,
             durationSeconds: durationSeconds,
             maxRPMPercent: maxRPMPercent,
-            reason: value(for: "--reason", in: arguments) ?? "Agent workload",
-            idempotencyKey: value(for: "--idempotency-key", in: arguments) ?? UUID().uuidString
+            reason: try optionalTrimmedValue(for: "--reason", in: arguments, error: .invalidReason) ?? "Agent workload",
+            idempotencyKey: try optionalTrimmedValue(for: "--idempotency-key", in: arguments, error: .invalidIdempotencyKey) ?? UUID().uuidString
         )
     }
 
@@ -249,6 +253,22 @@ public enum ViftyCtlArguments {
 
         return value
     }
+
+    private static func optionalTrimmedValue(
+        for flag: String,
+        in arguments: [String],
+        error: ViftyCtlParseError
+    ) throws -> String? {
+        guard let rawValue = value(for: flag, in: arguments) else {
+            return nil
+        }
+
+        let trimmedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else {
+            throw error
+        }
+        return trimmedValue
+    }
 }
 
 public enum ViftyCtlParseError: Error, Equatable, Sendable {
@@ -258,6 +278,8 @@ public enum ViftyCtlParseError: Error, Equatable, Sendable {
     case invalidDuration
     case invalidRPMPercent
     case invalidLimit
+    case invalidReason
+    case invalidIdempotencyKey
     case missingChildCommand
     case unknownOption(String)
     case duplicateOption(String)

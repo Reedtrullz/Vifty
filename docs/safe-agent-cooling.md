@@ -19,11 +19,12 @@ Agents and scripts must not:
 - request cooling when `safeToRequestCooling` is `false`;
 - request cooling when `daemonControlPathReady` is `false`;
 - prepare cooling before the child command has been resolved and validated;
-- ignore `restoreAutoBeforeRequestingCooling`, `doNotRequestCooling`, `THERMAL_CRITICAL`, `HELPER_UNREACHABLE`, `CHILD_COMMAND_FAILED`, `PREPARE_RATE_LIMITED`, or `UNSUPPORTED_HARDWARE`.
+- ignore `restoreAutoBeforeRequestingCooling`, `doNotRequestCooling`, `THERMAL_CRITICAL`, `HELPER_UNREACHABLE`, `CHILD_COMMAND_FAILED`, `PREPARE_RATE_LIMITED`, or `UNSUPPORTED_HARDWARE`;
+- use empty or blank cooling reasons; audit entries should explain the supervised workload.
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, the advertised unavailable exit code, and the `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, the advertised unavailable exit code, and the `runLifecycle` contract, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test

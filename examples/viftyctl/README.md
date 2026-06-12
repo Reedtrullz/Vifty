@@ -4,7 +4,7 @@ These scripts are small convenience wrappers around `guarded-run.sh`. They keep
 common developer workloads on Vifty's safe path:
 
 1. preflight that the child command is a regular executable path or resolves to one on `PATH`;
-2. reject malformed wrapper arguments before contacting Vifty, including empty reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
+2. reject malformed wrapper arguments before contacting Vifty, including empty or blank reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
 3. read-only `viftyctl capabilities --json`, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, and require the safe `runLifecycle` contract used by `viftyctl run`;
 4. read-only `viftyctl diagnose --json`;
 5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady` so wrappers do not infer safety from prose or fallback telemetry;
