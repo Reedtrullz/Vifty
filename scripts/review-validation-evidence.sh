@@ -27,6 +27,13 @@ Options:
   --manual-smoke-source <text>
                          Issue URL, note, or other source for the manual smoke
                          result.
+  --agent-run-smoke-result <result>
+                         Supervised viftyctl run smoke-test answer. One of:
+                         not-recorded, passed-auto-restored, skipped-blocked,
+                         skipped-unsupported, failed. Defaults to not-recorded.
+  --agent-run-smoke-source <text>
+                         Issue URL, note, or other source for the supervised
+                         viftyctl run smoke result.
   -h, --help             Show this help.
 USAGE
 }
@@ -36,6 +43,8 @@ MODE="supported-hardware"
 SUMMARY_PATH=""
 MANUAL_SMOKE_RESULT="not-recorded"
 MANUAL_SMOKE_SOURCE=""
+AGENT_RUN_SMOKE_RESULT="not-recorded"
+AGENT_RUN_SMOKE_SOURCE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,6 +88,22 @@ while [[ $# -gt 0 ]]; do
       MANUAL_SMOKE_SOURCE="$2"
       shift 2
       ;;
+    --agent-run-smoke-result)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --agent-run-smoke-result requires a value" >&2
+        exit 64
+      fi
+      AGENT_RUN_SMOKE_RESULT="$2"
+      shift 2
+      ;;
+    --agent-run-smoke-source)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --agent-run-smoke-source requires text" >&2
+        exit 64
+      fi
+      AGENT_RUN_SMOKE_SOURCE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -117,6 +142,16 @@ case "${MANUAL_SMOKE_RESULT}" in
     ;;
 esac
 
+case "${AGENT_RUN_SMOKE_RESULT}" in
+  not-recorded|passed-auto-restored|skipped-blocked|skipped-unsupported|failed)
+    ;;
+  *)
+    echo "error: unsupported agent run smoke result: ${AGENT_RUN_SMOKE_RESULT}" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
+
 if [[ ! -d "${BUNDLE_DIR}" ]]; then
   echo "error: evidence bundle not found: ${BUNDLE_DIR}" >&2
   exit 66
@@ -128,6 +163,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   summary_path = ARGV.fetch(2, "")
   manual_smoke_result = ARGV.fetch(3, "not-recorded")
   manual_smoke_source = ARGV.fetch(4, "")
+  agent_run_smoke_result = ARGV.fetch(5, "not-recorded")
+  agent_run_smoke_source = ARGV.fetch(6, "")
   failures = []
   warnings = []
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
@@ -544,7 +581,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
-  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
+  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source)
     return if path.to_s.empty?
 
     payload = {
@@ -577,6 +614,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "thermalPressure" => diagnose["thermalPressure"],
       "manualSmokeTestResult" => manual_smoke_result,
       "manualSmokeTestSource" => manual_smoke_source,
+      "agentRunSmokeResult" => agent_run_smoke_result,
+      "agentRunSmokeSource" => agent_run_smoke_source,
       "failures" => failures,
       "warnings" => warnings
     }
@@ -756,6 +795,14 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     else
       failures << "supported hardware validation requires manual smoke result passed-auto-restored"
     end
+    case agent_run_smoke_result
+    when "passed-auto-restored"
+      if agent_run_smoke_source.to_s.empty?
+        warnings << "supervised viftyctl run smoke test passed, but no issue URL or source note was recorded"
+      end
+    when "failed"
+      failures << "supported hardware validation cannot pass with a failed supervised viftyctl run smoke test"
+    end
 
   when "unsupported-hardware"
     require_status(checks, "viftyctl-diagnose", ["75"], failures)
@@ -787,6 +834,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
     if %w[passed-auto-restored failed].include?(manual_smoke_result)
       failures << "unsupported hardware reports must not include a manual fan-write smoke test result"
+    end
+    if %w[passed-auto-restored failed].include?(agent_run_smoke_result)
+      failures << "unsupported hardware reports must not include a supervised viftyctl run smoke test result"
     end
 
   when "release"
@@ -912,16 +962,16 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
 
   if failures.empty?
-    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
+    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source)
     puts "Validation evidence review OK: mode #{mode}"
     puts "Bundle: #{bundle}"
     warnings.each { |warning| warn "warning: #{warning}" }
     exit 0
   end
 
-  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source)
+  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source)
   warn "Validation evidence review failed: mode #{mode}"
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }
   exit 65
-' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}"
+' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}"

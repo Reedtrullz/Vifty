@@ -35,6 +35,8 @@
     "thermalPressure",
     "manualSmokeTestResult",
     "manualSmokeTestSource",
+    "agentRunSmokeResult",
+    "agentRunSmokeSource",
     "failures",
     "warnings"
   ],
@@ -128,6 +130,12 @@
       "$ref": "#/$defs/manualSmokeTestResult"
     },
     "manualSmokeTestSource": {
+      "type": "string"
+    },
+    "agentRunSmokeResult": {
+      "$ref": "#/$defs/manualSmokeTestResult"
+    },
+    "agentRunSmokeSource": {
       "type": "string"
     },
     "failures": {

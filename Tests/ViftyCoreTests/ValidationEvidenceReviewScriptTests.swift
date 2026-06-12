@@ -357,6 +357,8 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["thermalPressure"] as? String, "nominal")
         XCTAssertEqual(summary["manualSmokeTestResult"] as? String, "not-recorded")
         XCTAssertEqual(summary["manualSmokeTestSource"] as? String, "")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "not-recorded")
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, "")
         XCTAssertTrue((summary["failures"] as? [String])?.isEmpty == true)
         XCTAssertTrue((summary["warnings"] as? [String])?.contains {
             $0.contains("manual fan-write smoke-test result")
@@ -383,6 +385,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewWritesValidatedAgentRunSmokeSummary() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/agent-run-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeResult: "passed-auto-restored",
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke"
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, "https://github.com/reidar/vifty/issues/42#agent-run-smoke")
+        XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -398,6 +421,25 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let summary = try harness.readJSON(summaryURL)
         XCTAssertEqual(summary["status"] as? String, "failed")
         XCTAssertEqual(summary["manualSmokeTestResult"] as? String, "failed")
+    }
+
+    func testReviewRejectsFailedAgentRunSmokeForSupportedHardware() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let summaryURL = harness.rootURL.appendingPathComponent("failed-agent-run-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeResult: "failed"
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("supported hardware validation cannot pass with a failed supervised viftyctl run smoke test"))
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "failed")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "failed")
     }
 
     func testReviewWritesFailedMachineReadableSummary() throws {
@@ -623,7 +665,9 @@ private final class ValidationEvidenceReviewHarness {
         mode: String,
         summaryURL: URL? = nil,
         manualSmokeResult: String? = nil,
-        manualSmokeSource: String? = nil
+        manualSmokeSource: String? = nil,
+        agentRunSmokeResult: String? = nil,
+        agentRunSmokeSource: String? = nil
     ) throws -> ValidationEvidenceReviewProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/review-validation-evidence.sh")
@@ -643,6 +687,12 @@ private final class ValidationEvidenceReviewHarness {
         }
         if let manualSmokeSource {
             arguments += ["--manual-smoke-source", manualSmokeSource]
+        }
+        if let agentRunSmokeResult {
+            arguments += ["--agent-run-smoke-result", agentRunSmokeResult]
+        }
+        if let agentRunSmokeSource {
+            arguments += ["--agent-run-smoke-source", agentRunSmokeSource]
         }
         process.arguments = arguments
 

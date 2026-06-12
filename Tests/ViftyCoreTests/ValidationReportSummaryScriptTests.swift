@@ -19,7 +19,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             modelIdentifier: "MacBookPro18,3",
             safeToRequestCooling: true,
             manualSmokeTestResult: "passed-auto-restored",
-            manualSmokeTestSource: "https://github.com/reidar/vifty/issues/42"
+            manualSmokeTestSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeResult: "passed-auto-restored",
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke"
         )
         try harness.writeReviewResult(
             at: "unsupported/review-result.json",
@@ -55,11 +57,11 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.isEmpty)
         let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
-        XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult"))
+        XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult\tmanualSmokeTestSource\tmanualSmokeValidated\tagentRunSmokeResult"))
         XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
-        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tMacBookPro18,3"))
+        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("release-trust-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
@@ -77,6 +79,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(json["failedReports"] as? Int, 1)
         XCTAssertEqual(json["manualSmokeRequiredReports"] as? Int, 1)
         XCTAssertEqual(json["manualSmokePassedReports"] as? Int, 1)
+        XCTAssertEqual(json["agentRunSmokePassedReports"] as? Int, 1)
         XCTAssertEqual(json["validatedHardwareReports"] as? Int, 1)
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
@@ -104,6 +107,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "coolingCommandsRun",
             "totalReports",
             "validatedHardwareReports",
+            "agentRunSmokePassedReports",
             "countsByInstallSource",
             "countsByClaim",
             "reports"
@@ -144,6 +148,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
             "manualSmokeTestResult",
+            "agentRunSmokeResult",
             "failures",
             "warnings"
         ] {
@@ -327,6 +332,8 @@ private final class ValidationReportSummaryHarness {
         safeToRequestCooling: Bool,
         manualSmokeTestResult: String = "not-recorded",
         manualSmokeTestSource: String = "",
+        agentRunSmokeResult: String = "not-recorded",
+        agentRunSmokeSource: String = "",
         failures: [String] = [],
         warnings: [String] = [],
         readOnly: Bool = true,
@@ -367,6 +374,8 @@ private final class ValidationReportSummaryHarness {
             "thermalPressure": "nominal",
             "manualSmokeTestResult": manualSmokeTestResult,
             "manualSmokeTestSource": manualSmokeTestSource,
+            "agentRunSmokeResult": agentRunSmokeResult,
+            "agentRunSmokeSource": agentRunSmokeSource,
             "failures": failures,
             "warnings": warnings
         ]

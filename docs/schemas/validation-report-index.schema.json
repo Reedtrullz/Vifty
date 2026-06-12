@@ -15,6 +15,7 @@
     "failedReports",
     "manualSmokeRequiredReports",
     "manualSmokePassedReports",
+    "agentRunSmokePassedReports",
     "validatedHardwareReports",
     "countsByMode",
     "countsByClaim",
@@ -55,6 +56,10 @@
       "minimum": 0
     },
     "manualSmokePassedReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "agentRunSmokePassedReports": {
       "type": "integer",
       "minimum": 0
     },
@@ -157,6 +162,9 @@
         "manualSmokeTestResult",
         "manualSmokeTestSource",
         "manualSmokeValidated",
+        "agentRunSmokeResult",
+        "agentRunSmokeSource",
+        "agentRunSmokeValidated",
         "modelIdentifier",
         "isAppleSilicon",
         "isMacBookPro",
@@ -204,6 +212,15 @@
           "type": "string"
         },
         "manualSmokeValidated": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "agentRunSmokeResult": {
+          "$ref": "#/$defs/manualSmokeTestResult"
+        },
+        "agentRunSmokeSource": {
+          "type": "string"
+        },
+        "agentRunSmokeValidated": {
           "$ref": "#/$defs/booleanString"
         },
         "modelIdentifier": {

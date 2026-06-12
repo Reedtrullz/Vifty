@@ -11,6 +11,8 @@ directory input resolves to its review-result.json file, or to nested
 review-result.json files when the direct file is absent. Supported-hardware
 reports are only classified as validated when the review result records
 manualSmokeTestResult=passed-auto-restored.
+Supervised viftyctl run smoke evidence is preserved as developer-workload
+proof, but it does not replace the manual smoke gate for validated hardware.
 
 This script is read-only. It does not run viftyctl, ViftyHelper, launchctl,
 codesign, stapler, spctl, or fan-control commands.
@@ -151,6 +153,10 @@ ruby -rjson -rcsv -rfileutils -e '
       failures << "#{path} manualSmokeTestResult is not a supported value"
       valid = false
     end
+    unless %w[not-recorded passed-auto-restored skipped-blocked skipped-unsupported failed].include?(result.fetch("agentRunSmokeResult", "").to_s)
+      failures << "#{path} agentRunSmokeResult is not a supported value"
+      valid = false
+    end
 
     install_source = result.fetch("installSource", "").to_s
     unless install_source.empty? || %w[
@@ -254,9 +260,12 @@ ruby -rjson -rcsv -rfileutils -e '
     claim = claim_for(result)
     manual_smoke_required = claim == "supported-hardware-evidence-needs-manual-smoke"
     manual_smoke_result = result.fetch("manualSmokeTestResult", "not-recorded").to_s
+    agent_run_smoke_result = result.fetch("agentRunSmokeResult", "not-recorded").to_s
     manual_smoke_validated = result["status"].to_s == "passed" &&
       result["mode"].to_s == "supported-hardware" &&
       manual_smoke_result == "passed-auto-restored"
+    agent_run_smoke_validated = result["status"].to_s == "passed" &&
+      agent_run_smoke_result == "passed-auto-restored"
 
     rows << {
       "source" => path,
@@ -271,6 +280,9 @@ ruby -rjson -rcsv -rfileutils -e '
       "manualSmokeTestResult" => manual_smoke_result,
       "manualSmokeTestSource" => result["manualSmokeTestSource"].to_s,
       "manualSmokeValidated" => boolean_string(manual_smoke_validated),
+      "agentRunSmokeResult" => agent_run_smoke_result,
+      "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
+      "agentRunSmokeValidated" => boolean_string(agent_run_smoke_validated),
       "modelIdentifier" => result["modelIdentifier"].to_s,
       "isAppleSilicon" => boolean_string(result["isAppleSilicon"]),
       "isMacBookPro" => boolean_string(result["isMacBookPro"]),
@@ -310,6 +322,7 @@ ruby -rjson -rcsv -rfileutils -e '
     "failedReports" => rows.count - passed_rows.count,
     "manualSmokeRequiredReports" => rows.count { |row| row["manualSmokeRequired"] == "true" },
     "manualSmokePassedReports" => rows.count { |row| row["manualSmokeValidated"] == "true" },
+    "agentRunSmokePassedReports" => rows.count { |row| row["agentRunSmokeValidated"] == "true" },
     "validatedHardwareReports" => rows.count { |row| row["claim"] == "validated-hardware-evidence" },
     "countsByMode" => counts_by_mode.sort.to_h,
     "countsByClaim" => counts_by_claim.sort.to_h,
@@ -331,6 +344,9 @@ ruby -rjson -rcsv -rfileutils -e '
     manualSmokeTestResult
     manualSmokeTestSource
     manualSmokeValidated
+    agentRunSmokeResult
+    agentRunSmokeSource
+    agentRunSmokeValidated
     modelIdentifier
     isAppleSilicon
     isMacBookPro

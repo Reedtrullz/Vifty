@@ -64,7 +64,7 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
   --summary .build/vifty-validation-<timestamp>/review-result.json
 ```
 
-Use `--mode release` for installed public-release trust evidence and `--mode unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `--summary` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, explicit manual smoke-test evidence, and any failures or warnings.
+Use `--mode release` for installed public-release trust evidence and `--mode unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `--summary` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, explicit manual smoke-test evidence, optional supervised agent-run smoke evidence, and any failures or warnings.
 
 For a supported-hardware report, leave the default `--manual-smoke-result not-recorded` until the GitHub issue template says **Passed and Auto restore confirmed**. After that, rerun the review with the issue URL or note:
 
@@ -78,6 +78,20 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
 
 The supported-hardware smoke-test result values are `not-recorded`, `passed-auto-restored`, `skipped-blocked`, `skipped-unsupported`, and `failed`. Only `passed-auto-restored` can make a supported Apple Silicon MacBook Pro report count as validated hardware evidence; `failed`, `skipped-blocked`, or `skipped-unsupported` fail the supported-hardware review instead of being silently indexed as support.
 
+If the issue template also records the supervised **viftyctl run smoke test** as passed, include it in the machine-readable review:
+
+```sh
+scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
+  --mode supported-hardware \
+  --manual-smoke-result passed-auto-restored \
+  --manual-smoke-source <hardware-validation-issue-url> \
+  --agent-run-smoke-result passed-auto-restored \
+  --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke \
+  --summary .build/vifty-validation-<timestamp>/review-result.json
+```
+
+The agent-run smoke result uses the same values as the manual smoke test and is preserved as `agentRunSmokeResult` / `agentRunSmokeSource`. It is developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
+
 After several reports are reviewed, build a local index for maintainers:
 
 ```sh
@@ -86,7 +100,7 @@ scripts/summarize-validation-reports.sh --input .build/validation-reports \
   --output-tsv .build/validation-reports/compatibility-index.tsv
 ```
 
-The index reads `review-result.json` files only and writes schema-backed JSON with `schemaID: https://vifty.local/schemas/validation-report-index.schema.json`. It requires each input review result to declare `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, then rejects malformed review results, non-read-only review results, review results that declare cooling commands ran, unsupported modes/statuses, unsupported install-source values, invalid source SHA/checksum fields, and contradictory passed results with failures. Valid index rows can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`, while preserving `installSource`, `sourceRef`, `sourceSHA`, `sourceArtifactName`, and `sourceArtifactSHA256` for compatibility-table filtering.
+The index reads `review-result.json` files only and writes schema-backed JSON with `schemaID: https://vifty.local/schemas/validation-report-index.schema.json`. It requires each input review result to declare `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, then rejects malformed review results, non-read-only review results, review results that declare cooling commands ran, unsupported modes/statuses, unsupported install-source values, invalid source SHA/checksum fields, and contradictory passed results with failures. Valid index rows can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`, while preserving `installSource`, `sourceRef`, `sourceSHA`, `sourceArtifactName`, `sourceArtifactSHA256`, `agentRunSmokeResult`, and `agentRunSmokeSource` for compatibility-table filtering.
 
 ## Readiness Report
 
