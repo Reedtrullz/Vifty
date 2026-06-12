@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/validation-report-index.schema.json",
+  "title": "Vifty validation report index",
+  "description": "Machine-readable compatibility and release-evidence index emitted by scripts/summarize-validation-reports.sh from reviewed validation evidence bundles. This index is read-only and must not be used as evidence that any cooling command ran during indexing.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "generatedAtUTC",
+    "readOnly",
+    "coolingCommandsRun",
+    "totalReports",
+    "passedReports",
+    "failedReports",
+    "manualSmokeRequiredReports",
+    "manualSmokePassedReports",
+    "validatedHardwareReports",
+    "countsByMode",
+    "countsByClaim",
+    "countsByModelIdentifier",
+    "reports"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/validation-report-index.schema.json"
+    },
+    "generatedAtUTC": {
+      "type": "string"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "coolingCommandsRun": {
+      "const": false
+    },
+    "totalReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "passedReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failedReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "manualSmokeRequiredReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "manualSmokePassedReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "validatedHardwareReports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "countsByMode": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByClaim": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByModelIdentifier": {
+      "$ref": "#/$defs/countMap"
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/report"
+      }
+    }
+  },
+  "$defs": {
+    "countMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "booleanString": {
+      "enum": [
+        "true",
+        "false",
+        ""
+      ]
+    },
+    "mode": {
+      "enum": [
+        "release",
+        "supported-hardware",
+        "unsupported-hardware"
+      ]
+    },
+    "manualSmokeTestResult": {
+      "enum": [
+        "not-recorded",
+        "passed-auto-restored",
+        "skipped-blocked",
+        "skipped-unsupported",
+        "failed"
+      ]
+    },
+    "claim": {
+      "enum": [
+        "release-trust-evidence",
+        "safe-block-evidence",
+        "supported-hardware-evidence-needs-manual-smoke",
+        "validated-hardware-evidence",
+        "rejected"
+      ]
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "source",
+        "status",
+        "mode",
+        "claim",
+        "manualSmokeTestResult",
+        "manualSmokeTestSource",
+        "manualSmokeValidated",
+        "modelIdentifier",
+        "isAppleSilicon",
+        "isMacBookPro",
+        "diagnoseState",
+        "safeToRequestCooling",
+        "manualSmokeRequired",
+        "warningCount",
+        "failureCount"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/mode"
+        },
+        "claim": {
+          "$ref": "#/$defs/claim"
+        },
+        "manualSmokeTestResult": {
+          "$ref": "#/$defs/manualSmokeTestResult"
+        },
+        "manualSmokeTestSource": {
+          "type": "string"
+        },
+        "manualSmokeValidated": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "modelIdentifier": {
+          "type": "string"
+        },
+        "isAppleSilicon": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "isMacBookPro": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "diagnoseState": {
+          "type": "string"
+        },
+        "safeToRequestCooling": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "manualSmokeRequired": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "warningCount": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "failureCount": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      }
+    }
+  }
+}

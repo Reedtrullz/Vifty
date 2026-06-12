@@ -65,6 +65,10 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
 
         let json = try harness.readJSON(jsonURL)
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            json["schemaID"] as? String,
+            "https://vifty.local/schemas/validation-report-index.schema.json"
+        )
         XCTAssertEqual(json["readOnly"] as? Bool, true)
         XCTAssertEqual(json["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(json["totalReports"] as? Int, 5)
@@ -79,6 +83,37 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsByClaim["safe-block-evidence"], 1)
         XCTAssertEqual(countsByClaim["release-trust-evidence"], 1)
         XCTAssertEqual(countsByClaim["rejected"], 1)
+    }
+
+    func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/validation-report-index.schema.json")
+        let schema = try ValidationReportSummaryHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(schema["$id"] as? String, "https://vifty.local/schemas/validation-report-index.schema.json")
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "readOnly",
+            "coolingCommandsRun",
+            "totalReports",
+            "validatedHardwareReports",
+            "countsByClaim",
+            "reports"
+        ] {
+            XCTAssertTrue(required.contains(field), "schema should require \(field)")
+        }
+
+        let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let claim = try XCTUnwrap(defs["claim"] as? [String: Any])
+        let claimValues = try XCTUnwrap(claim["enum"] as? [String])
+        XCTAssertTrue(claimValues.contains("validated-hardware-evidence"))
+        XCTAssertTrue(claimValues.contains("supported-hardware-evidence-needs-manual-smoke"))
+        XCTAssertTrue(claimValues.contains("release-trust-evidence"))
+        XCTAssertTrue(claimValues.contains("safe-block-evidence"))
     }
 
     func testSummarizerPrintsTSVToStdoutWhenNoOutputTSVIsProvided() throws {
@@ -264,6 +299,10 @@ private final class ValidationReportSummaryHarness {
     }
 
     func readJSON(_ url: URL) throws -> [String: Any] {
+        try Self.readJSON(url)
+    }
+
+    static func readJSON(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }

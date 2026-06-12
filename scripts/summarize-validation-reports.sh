@@ -26,6 +26,7 @@ USAGE
 INPUTS=()
 OUTPUT_JSON=""
 OUTPUT_TSV=""
+VALIDATION_REPORT_INDEX_SCHEMA_ID="https://vifty.local/schemas/validation-report-index.schema.json"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,6 +73,7 @@ if [[ "${#INPUTS[@]}" -eq 0 ]]; then
 fi
 
 ruby -rjson -rcsv -rfileutils -e '
+  schema_id = ARGV.shift.to_s
   output_json = ARGV.shift.to_s
   output_tsv = ARGV.shift.to_s
   inputs = ARGV
@@ -252,6 +254,7 @@ ruby -rjson -rcsv -rfileutils -e '
 
   summary = {
     "schemaVersion" => 1,
+    "schemaID" => schema_id,
     "generatedAtUTC" => Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
     "readOnly" => true,
     "coolingCommandsRun" => false,
@@ -304,4 +307,4 @@ ruby -rjson -rcsv -rfileutils -e '
     FileUtils.mkdir_p(directory) unless directory == "." || Dir.exist?(directory)
     File.write(output_tsv, tsv)
   end
-' "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${INPUTS[@]}"
+' "${VALIDATION_REPORT_INDEX_SCHEMA_ID}" "${OUTPUT_JSON}" "${OUTPUT_TSV}" "${INPUTS[@]}"

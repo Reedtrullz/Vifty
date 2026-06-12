@@ -246,7 +246,18 @@ capture_schema_resources() {
   printf 'schema\tsha256\tbytes\tbundlePath\n' > "${stdout_path}"
   : > "${stderr_path}"
 
-  for schema in "${EXPECTED_SCHEMA_FILES[@]}"; do
+  local schema_list
+  schema_list="$(
+    {
+      printf '%s\n' "${EXPECTED_SCHEMA_FILES[@]}"
+      if [[ -d "${SCHEMA_DIR}" ]]; then
+        find "${SCHEMA_DIR}" -maxdepth 1 -type f -name '*.schema.json' -exec basename {} \;
+      fi
+    } | sort -u
+  )"
+
+  while IFS= read -r schema; do
+    [[ -n "${schema}" ]] || continue
     local schema_path="${SCHEMA_DIR}/${schema}"
     local bundle_path="Contents/Resources/schemas/${schema}"
     if [[ ! -s "${schema_path}" ]]; then
@@ -268,7 +279,7 @@ capture_schema_resources() {
       continue
     fi
     printf '%s\t%s\t%s\t%s\n' "${schema}" "${digest}" "${bytes}" "${bundle_path}" >> "${stdout_path}"
-  done
+  done <<< "${schema_list}"
 
   printf '%s\n' "${status}" > "${status_path}"
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"

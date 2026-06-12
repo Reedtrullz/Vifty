@@ -68,7 +68,7 @@ scripts/summarize-validation-reports.sh --input .build/validation-reports \
   --output-tsv .build/validation-reports/compatibility-index.tsv
 ```
 
-The index reads `review-result.json` files only. It rejects malformed review results, non-read-only review results, review results that declare cooling commands ran, unsupported modes/statuses, and contradictory passed results with failures. Valid index rows can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
+The index reads `review-result.json` files only and writes schema-backed JSON with `schemaID: https://vifty.local/schemas/validation-report-index.schema.json`. It rejects malformed review results, non-read-only review results, review results that declare cooling commands ran, unsupported modes/statuses, and contradictory passed results with failures. Valid index rows can show release-trust evidence, unsupported-hardware safe-block evidence, supported-hardware candidate evidence, and `validated-hardware-evidence` rows when the review result includes `manualSmokeTestResult: "passed-auto-restored"`.
 
 ## Readiness Report
 
