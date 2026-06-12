@@ -45,6 +45,8 @@ Expected source-first release notes must include:
 >
 > A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
 
+They should also include a source provenance section naming the immutable release tag commit and warning that later `main` commits are post-release hardening, not part of the already-published source release.
+
 The optional unsigned-dev assets are valid only when both files are present:
 
 - `Vifty-v1.1.0-unsigned-dev.zip`

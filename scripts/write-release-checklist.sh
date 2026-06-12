@@ -106,6 +106,10 @@ make verify
 make install
 \`\`\`
 
+## Source Provenance
+
+The \`v${VERSION}\` tag is the source release boundary. Record the immutable tag commit SHA before publishing, and do not replace it with a moving branch such as \`origin/main\` after publication. Later \`main\` commits are post-release hardening until a future release is cut.
+
 ## Optional Unsigned Tester Artifact
 
 - Optional artifact name: \`Vifty-v${VERSION}-unsigned-dev.zip\`

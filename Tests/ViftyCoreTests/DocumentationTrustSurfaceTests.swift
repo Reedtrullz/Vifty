@@ -135,6 +135,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")
         let release = try read("docs/release.md")
+        let sourceFirstNotes = try read("docs/release-notes/v1.1.0.md")
 
         XCTAssertTrue(readme.contains("Vifty `v1.1.0` is a source-first release because the project does not currently have Apple Developer Program credentials."))
         XCTAssertTrue(readme.contains("The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`."))
@@ -145,6 +146,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("Source-First Release Mode"))
         XCTAssertTrue(release.contains("This is a source-first release. Vifty v1.1.0 does not yet include a Developer ID signed or notarized public binary"))
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-release-notes"))
+        XCTAssertTrue(release.contains("The generated notes must include a **Source Provenance** section."))
+        XCTAssertTrue(release.contains("record the immutable `v<version>` tag commit SHA"))
+        XCTAssertTrue(release.contains("including the immutable source tag commit"))
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-readiness"))
         XCTAssertTrue(release.contains("scripts/check-release-readiness.sh \\"))
         XCTAssertTrue(release.contains("--mode source-first"))
@@ -159,6 +163,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("`main` has moved after `v1.1.0` was published."))
         XCTAssertTrue(releaseStatus.contains("Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit."))
         XCTAssertTrue(releaseStatus.contains("currently reports `ready` for source commit `f7d2c636ebf582ac3809998c3fac819d5d87eb72`"))
+        XCTAssertTrue(releaseStatus.contains("They should also include a source provenance section naming the immutable release tag commit"))
         XCTAssertTrue(releaseStatus.contains("make source-first-release-notes"))
         XCTAssertTrue(releaseStatus.contains("Those generated notes should tell maintainers to use `--require-source-ref <candidate-ref-or-sha>` only before publication or with an immutable intended release commit"))
         XCTAssertTrue(releaseStatus.contains("never as a blanket `origin/main` post-publication check"))
@@ -166,6 +171,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("make source-first-readiness"))
         XCTAssertTrue(releaseStatus.contains("scripts/check-release-readiness.sh --mode source-first --version 1.1.0 --repo Reedtrullz/Vifty --json"))
         XCTAssertTrue(releaseStatus.contains("scripts/check-release-readiness.sh --mode developer-id --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json"))
+        XCTAssertTrue(sourceFirstNotes.contains("## Source Provenance"))
+        XCTAssertTrue(sourceFirstNotes.contains("The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`."))
+        XCTAssertTrue(sourceFirstNotes.contains("Later `main` commits may contain post-release hardening"))
     }
 
     func testHardwareValidationPreservesSourceFirstInstallProvenance() throws {
@@ -499,6 +507,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("current local trust gate verifies 445 XCTest cases"))
         XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("Source-first release operations now have Makefile targets"))
+        XCTAssertTrue(workplan.contains("source-provenance section"))
+        XCTAssertTrue(workplan.contains("immutable tag commit"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip"))
         XCTAssertTrue(workplan.contains("Vifty-v1.1.0-unsigned-dev.zip.sha256"))
         XCTAssertTrue(workplan.contains("capabilities run-lifecycle/direct-control coverage"))
