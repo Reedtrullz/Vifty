@@ -4,7 +4,7 @@ These scripts are small convenience wrappers around `guarded-run.sh`. They keep
 common developer workloads on Vifty's safe path:
 
 1. preflight that the child command is a regular executable path or resolves to one on `PATH`;
-2. read-only `viftyctl capabilities --json` and require the safe `runLifecycle` contract;
+2. read-only `viftyctl capabilities --json` and require the safe `runLifecycle` contract used by `viftyctl run`;
 3. read-only `viftyctl diagnose --json`;
 4. fail closed when readiness is blocked or `safeToRequestCooling` is false;
 5. delegate to `viftyctl run --json` with one bounded lease;
@@ -12,6 +12,12 @@ common developer workloads on Vifty's safe path:
 
 If a capabilities payload does not advertise `runLifecycle`, treat those
 guarantees as unavailable and refuse cooling.
+
+For exceptional supervised multi-step workflows that use direct `prepare` and
+`restore-auto` instead of these wrappers, inspect `directControlLifecycle` first.
+It should advertise that prepare uses idempotency keys, `restore-auto` rejects
+`--idempotency-key`, restore is not key-scoped, and `viftyctl run` remains the
+preferred path for single child workloads.
 
 Set `VIFTYCTL` to test against a development app bundle:
 

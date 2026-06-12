@@ -389,6 +389,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidationTemplate.contains("privacy-review.tsv"))
         XCTAssertTrue(hardwareValidationTemplate.contains("capabilities-contract.tsv"))
         XCTAssertTrue(hardwareValidationTemplate.contains("The privacy-review row should be 0 before public sharing"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("direct prepare/restore lifecycle"))
+        XCTAssertTrue(hardwareValidationTemplate.contains("supervised force-retry support"))
         XCTAssertTrue(hardwareValidationTemplate.contains("Review captured files for likely hostnames, /Users/... paths, serial-number labels, or hardware UUID labels before public sharing."))
     }
 
@@ -455,6 +457,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("read-only `viftyctl capabilities --json`"))
         XCTAssertTrue(exampleReadme.contains("safe `runLifecycle` contract"))
         XCTAssertTrue(exampleReadme.contains("If a capabilities payload does not advertise `runLifecycle`"))
+        XCTAssertTrue(exampleReadme.contains("directControlLifecycle"))
+        XCTAssertTrue(exampleReadme.contains("`restore-auto` rejects"))
+        XCTAssertTrue(exampleReadme.contains("restore is not key-scoped"))
         XCTAssertTrue(exampleReadme.contains("checks `supportsForceRetry` before passing `--force`"))
         XCTAssertTrue(exampleReadme.contains("read-only `viftyctl diagnose --json`"))
         XCTAssertTrue(exampleReadme.contains("delegate to `viftyctl run --json`"))
