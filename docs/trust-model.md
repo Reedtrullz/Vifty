@@ -128,6 +128,8 @@ Vifty `v1.1.1` is the current source-first hotfix because the project does not c
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 
+Auto-update installs executable code and therefore belongs only to the future trusted binary lane. See [auto-update.md](auto-update.md) for the Sparkle appcast, EdDSA signing, Developer ID, notarization, and source-first exclusion rules.
+
 ## What To Report Privately
 
 Please use GitHub Security Advisories for any path that would allow:

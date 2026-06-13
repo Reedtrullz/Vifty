@@ -73,6 +73,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `docs/agent-workflows.md` — stable `viftyctl` agent contract, JSON decision rules, and common workload examples.
 - `docs/agent-integrations.md` — copy/paste guarded-run instructions for Codex, Claude Code, Cursor, and shell runners.
 - `docs/safe-agent-cooling.md` — short operational runbook for local agents/scripts: readiness gate, guarded-run preference, conservative workload limits, and blocked/restore-failure handling.
+- `docs/auto-update.md` — future Sparkle updater policy, explicitly unavailable for source-first/unsigned-dev builds until Developer ID, notarization, and signed appcast evidence exist.
 - `docs/competitive-analysis.md` — current competitive positioning, scope guardrails, and roadmap priorities for Vifty's developer-workload thermal-control wedge.
 - `docs/trust-model.md` — plain-language trust model for privileged helper, SMC write, agent-control, local-data, and release-signing boundaries.
 - `docs/release-status.md` — point-in-time public release trust status, including source-first, unsigned-dev tester artifact, future Developer ID, Homebrew trust, and operator checks.
@@ -112,7 +113,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (586 tests).
+- `swift test` runs `ViftyCoreTests` (589 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.

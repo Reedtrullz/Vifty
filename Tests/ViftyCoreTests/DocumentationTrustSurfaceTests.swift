@@ -40,7 +40,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (586 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (589 tests)."))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
     }
@@ -429,9 +429,55 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(analysis.contains("helper repair clarity"))
         XCTAssertTrue(analysis.contains("menu-bar display modes"))
         XCTAssertTrue(analysis.contains("optional local notifications"))
+        XCTAssertTrue(analysis.contains("Sparkle auto-update only in the future trusted binary lane"))
         XCTAssertTrue(analysis.contains("defer MCP and Shortcuts"))
         XCTAssertTrue(analysis.contains("No breaking changes to existing `viftyctl` JSON fields."))
         XCTAssertTrue(analysis.contains("Homebrew stays parked until a Developer ID signed, notarized release exists."))
+    }
+
+    func testAutoUpdateDocsKeepSourceFirstBuildsOutOfSelfUpdatingLane() throws {
+        let autoUpdate = try read("docs/auto-update.md")
+        let readme = try read("README.md")
+        let releaseStatus = try read("docs/release-status.md")
+
+        XCTAssertTrue(readme.contains("[docs/auto-update.md](docs/auto-update.md)"))
+        XCTAssertTrue(releaseStatus.contains("[auto-update.md](auto-update.md)"))
+        XCTAssertTrue(autoUpdate.contains("Auto-update is not enabled for `v1.1.1` source-first or unsigned-dev builds."))
+        XCTAssertTrue(autoUpdate.contains("Do not attach an updater to `Vifty-v<version>-unsigned-dev.zip`"))
+        XCTAssertTrue(autoUpdate.contains("Sparkle 2"))
+        XCTAssertTrue(autoUpdate.contains("Developer ID signed, notarized, stapled"))
+        XCTAssertTrue(autoUpdate.contains("EdDSA-signed appcast"))
+        XCTAssertTrue(autoUpdate.contains("HTTPS `SUFeedURL`"))
+        XCTAssertTrue(autoUpdate.contains("`SUPublicEDKey`"))
+        XCTAssertTrue(autoUpdate.contains("`SURequireSignedFeed`"))
+        XCTAssertTrue(autoUpdate.contains("`SUVerifyUpdateBeforeExtraction`"))
+        XCTAssertTrue(autoUpdate.contains("canonical `Vifty-v<version>.zip`"))
+        XCTAssertTrue(autoUpdate.contains("Homebrew checksum handoff"))
+        XCTAssertTrue(autoUpdate.contains("No updater network checks should run in source-first mode."))
+    }
+
+    func testReleaseDocsIncludeFutureAutoUpdateReadinessChecks() throws {
+        let release = try read("docs/release.md")
+        let trustModel = try read("docs/trust-model.md")
+
+        XCTAssertTrue(release.contains("[auto-update.md](auto-update.md)"))
+        XCTAssertTrue(release.contains("Sparkle auto-update is future Developer ID release work"))
+        XCTAssertTrue(release.contains("Do not enable Sparkle for source-first or unsigned-dev artifacts."))
+        XCTAssertTrue(release.contains("SUFeedURL"))
+        XCTAssertTrue(release.contains("SUPublicEDKey"))
+        XCTAssertTrue(release.contains("generate_appcast"))
+        XCTAssertTrue(release.contains("signed appcast"))
+        XCTAssertTrue(release.contains("canonical `Vifty-v<version>.zip`"))
+        XCTAssertTrue(trustModel.contains("[auto-update.md](auto-update.md)"))
+        XCTAssertTrue(trustModel.contains("Auto-update installs executable code and therefore belongs only to the future trusted binary lane."))
+    }
+
+    func testSourceFirstInfoPlistDoesNotAdvertiseSparkleFeed() throws {
+        let plist = try read("Resources/Info.plist")
+
+        XCTAssertFalse(plist.contains("SUFeedURL"))
+        XCTAssertFalse(plist.contains("SUPublicEDKey"))
+        XCTAssertFalse(plist.contains("SURequireSignedFeed"))
     }
 
     func testReadmeExplainsInstallTrustLevelsAndPrivilegedHelperReason() throws {

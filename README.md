@@ -69,6 +69,8 @@ An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the G
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
+Auto-update is future trusted-binary work, not enabled for source-first or unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the Sparkle/Developer ID plan.
+
 ### Install trust levels
 
 1. **Source build:** recommended while Apple Developer Program credentials are unavailable. Build from the immutable source tag and run the local verification suite before installing.

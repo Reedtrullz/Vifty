@@ -40,7 +40,8 @@ Priority order: trusted release story, hardware validation evidence, helper repa
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, menu-bar display modes, compact power/history/temperature surfaces, and a better screenshot/demo.
 5. **Local observability:** add optional local notifications for helper failure, sustained high thermal pressure, Auto restore failure, and plugged-in battery drain; defaults should remain conservative and local-only.
-6. **Developer and agent workflow:** make Swift, Xcode, npm, cargo, pytest, local-model, and custom guarded-run examples easy to find; defer MCP and Shortcuts until real users prove the CLI contract.
+6. **Trusted updater:** add Sparkle auto-update only in the future trusted binary lane, after Developer ID signing, notarization, EdDSA appcast signing, and canonical artifact verification exist.
+7. **Developer and agent workflow:** make Swift, Xcode, npm, cargo, pytest, local-model, and custom guarded-run examples easy to find; defer MCP and Shortcuts until real users prove the CLI contract.
 
 ## Interface Boundaries
 
