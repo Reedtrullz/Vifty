@@ -37,6 +37,14 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertFalse(readme.contains("launchd points at the daemon inside the installed app bundle"))
     }
 
+    func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
+        let agents = try read("AGENTS.md")
+
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (579 tests)."))
+        XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
+        XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
+    }
+
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
         let agentCoolingTemplate = try read(".github/ISSUE_TEMPLATE/agent-cooling.yml")
         let releaseTrustTemplate = try read(".github/ISSUE_TEMPLATE/release-trust.yml")
