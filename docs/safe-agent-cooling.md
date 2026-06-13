@@ -149,7 +149,10 @@ records whether the bundle advertised `viftyctl run`, force-retry discovery,
 safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
 daemon status, and the unavailable-exit contract before the report is treated
 as agent-safe evidence; absent legacy `metadataLimits` is a warning, not proof
-that automation should skip local argument limits. In helper-unreachable reports, the
+that automation should skip local argument limits. The `appInfo` summary records
+the captured app plist command exit status, bundle identifier, short version,
+and bundle version, so helper-unreachable reports can be tied to the installed
+app version. In helper-unreachable reports, the
 reviewer may also list `viftyctl-status` or `viftyctl-audit` under
 `acceptedCommandErrors`, but only when blocked `diagnose` recommends
 `repairHelper` and those commands emitted structured `HELPER_UNREACHABLE`

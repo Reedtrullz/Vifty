@@ -71,7 +71,10 @@ boolean from structured readiness and recovery fields. It also records
 discovery, safe run/direct-control lifecycle, metadata limits, daemon status,
 and unavailable exit-code contract; missing or unsafe capabilities contract
 fields fail review, except absent legacy `metadataLimits` is a warning rather
-than a blocker for read-only triage evidence.
+than a blocker for read-only triage evidence. The summary also records
+`appInfo` from the captured app plist: app plist command exit status, bundle
+identifier, short version, and bundle version, so helper-unreachable reports can
+be routed against the installed app version instead of a manually typed value.
 If `diagnoseDecision` proves blocked readiness with `repairHelper`, the reviewer
 may list `viftyctl-status` or `viftyctl-audit` in `acceptedCommandErrors`, but
 only when their JSON is a structured `HELPER_UNREACHABLE` command error with

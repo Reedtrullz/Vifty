@@ -16,6 +16,7 @@
     "commandsReviewed",
     "diagnoseDecision",
     "capabilitiesDecision",
+    "appInfo",
     "acceptedCommandErrors",
     "failures",
     "warnings"
@@ -55,6 +56,9 @@
     "capabilitiesDecision": {
       "$ref": "#/$defs/capabilitiesDecision"
     },
+    "appInfo": {
+      "$ref": "#/$defs/appInfo"
+    },
     "acceptedCommandErrors": {
       "description": "Bundle command names whose structured command-error JSON was accepted as read-only helper-unreachable evidence because diagnose reported blocked readiness and repairHelper.",
       "$ref": "#/$defs/stringArray"
@@ -67,6 +71,42 @@
     }
   },
   "$defs": {
+    "appInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exitStatus",
+        "bundleIdentifier",
+        "shortVersion",
+        "bundleVersion"
+      ],
+      "properties": {
+        "exitStatus": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "bundleIdentifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shortVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundleVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "capabilitiesDecision": {
       "type": "object",
       "additionalProperties": false,

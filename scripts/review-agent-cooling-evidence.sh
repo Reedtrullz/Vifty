@@ -123,6 +123,12 @@ capabilities_decision = {
   "metadataLimitsPresent" => false,
   "unavailableExitCode" => nil
 }
+app_info = {
+  "exitStatus" => nil,
+  "bundleIdentifier" => nil,
+  "shortVersion" => nil,
+  "bundleVersion" => nil
+}
 accepted_command_errors = []
 
 def bundle_entry?(value)
@@ -252,7 +258,12 @@ def infer_daemon_control_path_ready(state, agent_action, recovery_action, safe_t
   nil
 end
 
-def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, accepted_command_errors, failures, warnings)
+def plutil_string_value(text, key)
+  match = text.match(/^\s*"#{Regexp.escape(key)}"\s*=>\s*"([^"]*)"\s*$/)
+  match && match[1]
+end
+
+def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, app_info, accepted_command_errors, failures, warnings)
   return unless summary_path
 
   FileUtils.mkdir_p(File.dirname(summary_path))
@@ -267,6 +278,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "commandsReviewed" => commands_reviewed,
     "diagnoseDecision" => diagnose_decision,
     "capabilitiesDecision" => capabilities_decision,
+    "appInfo" => app_info,
     "acceptedCommandErrors" => accepted_command_errors,
     "failures" => failures,
     "warnings" => warnings
@@ -567,11 +579,17 @@ end
 end
 
 app_info_status = integer_value(commands_by_name.dig("app-info-plist", "status"))
+app_info["exitStatus"] = app_info_status
 app_info_path = File.join(bundle, "app-info-plist.txt")
 if app_info_status == 0 && File.file?(app_info_path)
-  app_info = File.read(app_info_path)
-  failures << "app-info-plist.txt must include CFBundleIdentifier tech.reidar.vifty" unless app_info.include?("CFBundleIdentifier") && app_info.include?("tech.reidar.vifty")
-  failures << "app-info-plist.txt must include CFBundleShortVersionString" unless app_info.include?("CFBundleShortVersionString")
+  app_info_text = File.read(app_info_path)
+  app_info["bundleIdentifier"] = plutil_string_value(app_info_text, "CFBundleIdentifier")
+  app_info["shortVersion"] = plutil_string_value(app_info_text, "CFBundleShortVersionString")
+  app_info["bundleVersion"] = plutil_string_value(app_info_text, "CFBundleVersion")
+
+  failures << "app-info-plist.txt must include CFBundleIdentifier tech.reidar.vifty" unless app_info["bundleIdentifier"] == "tech.reidar.vifty"
+  failures << "app-info-plist.txt must include CFBundleShortVersionString" if app_info["shortVersion"].to_s.empty?
+  failures << "app-info-plist.txt must include CFBundleVersion" if app_info["bundleVersion"].to_s.empty?
 end
 
 privacy_status = integer_value(commands_by_name.dig("privacy-review", "status"))
@@ -637,7 +655,7 @@ checksum_by_file.each_key do |entry|
 end
 
 status = failures.empty? ? "passed" : "failed"
-write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, accepted_command_errors, failures, warnings)
+write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, app_info, accepted_command_errors, failures, warnings)
 
 warnings.each { |warning| warn "warning: #{warning}" }
 

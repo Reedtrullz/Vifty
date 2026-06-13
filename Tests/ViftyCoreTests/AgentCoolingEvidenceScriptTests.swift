@@ -259,6 +259,11 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["directControlLifecycleSafe"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["unavailableExitCode"] as? Int, 69)
+        let appInfo = try XCTUnwrap(reviewSummary["appInfo"] as? [String: Any])
+        XCTAssertEqual(appInfo["exitStatus"] as? Int, 0)
+        XCTAssertEqual(appInfo["bundleIdentifier"] as? String, "tech.reidar.vifty")
+        XCTAssertEqual(appInfo["shortVersion"] as? String, "1.1.1")
+        XCTAssertEqual(appInfo["bundleVersion"] as? String, "1")
         XCTAssertTrue((reviewSummary["acceptedCommandErrors"] as? [String])?.isEmpty == true)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
     }
@@ -665,6 +670,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "commandsReviewed",
             "diagnoseDecision",
             "capabilitiesDecision",
+            "appInfo",
             "acceptedCommandErrors",
             "failures",
             "warnings"
@@ -700,6 +706,17 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "unavailableExitCode"
         ] {
             XCTAssertTrue(capabilitiesRequired.contains(field), "capabilitiesDecision should require \(field)")
+        }
+
+        let appInfo = try XCTUnwrap(defs["appInfo"] as? [String: Any])
+        let appInfoRequired = try XCTUnwrap(appInfo["required"] as? [String])
+        for field in [
+            "exitStatus",
+            "bundleIdentifier",
+            "shortVersion",
+            "bundleVersion"
+        ] {
+            XCTAssertTrue(appInfoRequired.contains(field), "appInfo should require \(field)")
         }
     }
 }

@@ -43,7 +43,10 @@ force-retry discovery, safe `runLifecycle`, safe direct prepare/restore
 lifecycle, metadata limits, daemon status, and unavailable-exit metadata;
 missing or unsafe capabilities contract fields fail review, except absent
 legacy `metadataLimits` is recorded as a warning for read-only triage evidence.
-In helper-unreachable cases,
+It also writes `appInfo` from the captured app plist: app plist command exit
+status, bundle identifier, short version, and bundle version, so maintainers can
+separate published `v1.1.0` helper-unreachable reports from `v1.1.1` or
+current-source reports without trusting a manually typed version. In helper-unreachable cases,
 the reviewer may also write `acceptedCommandErrors` for nonzero `status` or
 `audit` only when blocked `diagnose` recommends `repairHelper` and the command
 JSON is a structured `HELPER_UNREACHABLE` error with `safeToProceed: false`. If a reporter cannot run the
@@ -75,7 +78,7 @@ For `v1.1.1`, source-first release issues should focus on source tag/CI readines
 
 If a `v1.1.0` user reports "Fan helper unreachable" after updating, first collect the read-only agent evidence bundle, `diagnose --json`, `status --json`, and launchd/collector evidence. If the report matches the published helper issue, do not replace `v1.1.0` assets from `main`; direct the user to the `v1.1.1` source-first hotfix release.
 
-The lightweight agent evidence bundle includes schema-backed `agent-cooling-evidence-summary.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`; treat that summary as the machine-readable index for helper-unreachable and agent-cooling support bundles. The lightweight reviewer can write `agent-cooling-evidence-review.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`, `diagnoseDecision`, `capabilitiesDecision`, and `acceptedCommandErrors` summaries; use `scripts/review-agent-cooling-evidence.sh` before a report becomes evidence.
+The lightweight agent evidence bundle includes schema-backed `agent-cooling-evidence-summary.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`; treat that summary as the machine-readable index for helper-unreachable and agent-cooling support bundles. The lightweight reviewer can write `agent-cooling-evidence-review.json` with `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`, `diagnoseDecision`, `capabilitiesDecision`, `appInfo`, and `acceptedCommandErrors` summaries; use `scripts/review-agent-cooling-evidence.sh` before a report becomes evidence.
 
 Use `--require-source-ref <candidate-ref-or-sha>` only when checking an unpublished release candidate or when you have an immutable release commit SHA. Do not require `origin/main` for an already-published source-first tag after `main` has moved on.
 
