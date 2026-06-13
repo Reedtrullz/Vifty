@@ -24,6 +24,31 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("helperNeedsAttention ? daemonInstaller.actionDescription : nil"))
     }
 
+    func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("private var mainContent: some View"))
+        XCTAssertTrue(contentView.contains("ScrollView {\n                fanControlPane"))
+        XCTAssertTrue(contentView.contains("ScrollView {\n                sensorsPane"))
+        XCTAssertTrue(contentView.contains(".frame(minWidth: 360, maxWidth: 420, maxHeight: .infinity)"))
+        XCTAssertTrue(contentView.contains(".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)"))
+        XCTAssertFalse(contentView.contains("if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {\n                ScrollView {"))
+    }
+
+    func testAppBundleIsDockVisibleAndHasAppIcon() throws {
+        let plist = try read("Resources/Info.plist")
+        let makefile = try read("Makefile")
+        let iconURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Resources/ViftyIcon.icns")
+
+        XCTAssertTrue(plist.contains("<key>CFBundleIconFile</key>"))
+        XCTAssertTrue(plist.contains("<string>ViftyIcon</string>"))
+        XCTAssertFalse(plist.contains("<key>LSUIElement</key>"))
+        XCTAssertTrue(makefile.contains("APP_ICON := Resources/ViftyIcon.icns"))
+        XCTAssertTrue(makefile.contains("cp \"$(APP_ICON)\" \"$(CONTENTS)/Resources/ViftyIcon.icns\""))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: iconURL.path))
+    }
+
     func testMenuBarAgentCoolingSurfaceShowsTitleRecoveryAndContextualAuto() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
 

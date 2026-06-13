@@ -13,17 +13,31 @@ struct ContentView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            HStack(alignment: .top, spacing: 0) {
-                fanControlPane
-                    .frame(minWidth: 360, maxWidth: 420, maxHeight: .infinity)
-                Divider()
-                sensorsPane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            mainContent
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             model.start()
         }
+    }
+
+    private var mainContent: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView {
+                fanControlPane
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(minWidth: 360, maxWidth: 420, maxHeight: .infinity)
+
+            Divider()
+
+            ScrollView {
+                sensorsPane
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var helperNeedsAttention: Bool {
@@ -215,8 +229,6 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 240)
             }
-
-            Spacer()
         }
         .padding(16)
         .onAppear {
@@ -506,11 +518,9 @@ struct ContentView: View {
             }
 
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(sensors) { sensor in
-                            SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id)
-                        }
+                LazyVStack(spacing: 8) {
+                    ForEach(sensors) { sensor in
+                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id)
                     }
                 }
             } else {
@@ -519,6 +529,7 @@ struct ContentView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 

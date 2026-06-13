@@ -16,6 +16,7 @@ APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
 MACOS := $(CONTENTS)/MacOS
 SCHEMAS := $(CONTENTS)/Resources/schemas
+APP_ICON := Resources/ViftyIcon.icns
 DAEMON_PLIST := $(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
 
 install: CONFIGURATION = release
@@ -32,6 +33,7 @@ app: ## Build the release app bundle
 	cp ".build/$(CONFIGURATION)/ViftyCtl" "$(MACOS)/viftyctl"
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
+	cp "$(APP_ICON)" "$(CONTENTS)/Resources/ViftyIcon.icns"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
 	if [ -n "$(VIFTY_XPC_ALLOWED_TEAM_ID)" ]; then /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:VIFTY_XPC_ALLOWED_TEAM_ID $(VIFTY_XPC_ALLOWED_TEAM_ID)" "$(DAEMON_PLIST)"; fi
