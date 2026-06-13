@@ -22,7 +22,7 @@ struct MenuBarView: View {
                     .lineLimit(3)
             }
 
-            if let sensor = model.snapshot?.highestTemperature {
+            if let sensor = model.selectedSensor {
                 Label("\(sensor.name): \(sensor.celsius, specifier: "%.1f") C", systemImage: "thermometer.medium")
             }
 

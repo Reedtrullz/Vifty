@@ -91,6 +91,8 @@ final class AppSourceRegressionTests: XCTestCase {
 
         XCTAssertTrue(menuBarView.contains("Text(model.menuPanelTitle)"))
         XCTAssertFalse(menuBarView.contains("Text(model.menuTitle)"))
+        XCTAssertTrue(menuBarView.contains("if let sensor = model.selectedSensor {"))
+        XCTAssertFalse(menuBarView.contains("if let sensor = model.snapshot?.highestTemperature {"))
         XCTAssertTrue(menuBarView.contains("PowerDisplayFormatter.adapterDetail(for: adapter)"))
         XCTAssertFalse(menuBarView.contains("private func adapterDetail(_ adapter: PowerAdapter)"))
         XCTAssertTrue(menuBarView.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
