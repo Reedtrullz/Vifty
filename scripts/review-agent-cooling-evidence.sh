@@ -98,6 +98,7 @@ REQUIRED_COMMANDS = %w[
   launchctl-print-daemon
   launchdaemon-plist
   helper-file-metadata
+  app-info-plist
   privacy-review
 ].freeze
 
@@ -560,9 +561,17 @@ end
   end
 end
 
-%w[launchctl-print-daemon launchdaemon-plist helper-file-metadata].each do |name|
+%w[launchctl-print-daemon launchdaemon-plist helper-file-metadata app-info-plist].each do |name|
   status = integer_value(commands_by_name.dig(name, "status"))
-  warnings << "#{name} exited #{status}; launchd/helper failures may still be useful evidence" if status && status != 0
+  warnings << "#{name} exited #{status}; captured failures may still be useful evidence" if status && status != 0
+end
+
+app_info_status = integer_value(commands_by_name.dig("app-info-plist", "status"))
+app_info_path = File.join(bundle, "app-info-plist.txt")
+if app_info_status == 0 && File.file?(app_info_path)
+  app_info = File.read(app_info_path)
+  failures << "app-info-plist.txt must include CFBundleIdentifier tech.reidar.vifty" unless app_info.include?("CFBundleIdentifier") && app_info.include?("tech.reidar.vifty")
+  failures << "app-info-plist.txt must include CFBundleShortVersionString" unless app_info.include?("CFBundleShortVersionString")
 end
 
 privacy_status = integer_value(commands_by_name.dig("privacy-review", "status"))

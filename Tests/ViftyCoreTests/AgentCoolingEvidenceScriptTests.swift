@@ -29,6 +29,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("use sudo, or write SMC keys"))
         XCTAssertTrue(try harness.read("README.txt").contains("safeToRequestCooling=false"))
         XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
+        XCTAssertTrue(try harness.read("README.txt").contains("app-info-plist.txt"))
         XCTAssertTrue(try harness.read("README.txt").contains("launchctl-print-daemon.txt"))
         XCTAssertTrue(try harness.read("README.txt").contains("Nonzero status rows for these files are evidence"))
         XCTAssertTrue(try harness.read("README.txt").contains("If this report comes from the published v1.1.0 release"))
@@ -50,13 +51,18 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(manifest.contains("\tlaunchdaemon-plist.txt\tlaunchdaemon-plist.stderr"))
         XCTAssertTrue(manifest.contains("helper-file-metadata\t"))
         XCTAssertTrue(manifest.contains("\thelper-file-metadata.txt\thelper-file-metadata.stderr"))
+        XCTAssertTrue(manifest.contains("app-info-plist\t0\tapp-info-plist.txt\tapp-info-plist.stderr"))
         XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv\tprivacy-review.stderr"))
         XCTAssertEqual(try harness.read("viftyctl-diagnose.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertEqual(try harness.read("app-info-plist.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
         XCTAssertEqual(try harness.read("privacy-review.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
         XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
         XCTAssertFalse(try harness.read("launchctl-print-daemon.status").isEmpty)
         XCTAssertFalse(try harness.read("launchdaemon-plist.status").isEmpty)
         XCTAssertFalse(try harness.read("helper-file-metadata.status").isEmpty)
+        XCTAssertTrue(try harness.read("app-info-plist.txt").contains("CFBundleShortVersionString"))
+        XCTAssertTrue(try harness.read("app-info-plist.txt").contains("1.1.1"))
+        XCTAssertTrue(try harness.read("app-info-plist.txt").contains("tech.reidar.vifty"))
 
         XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"daemonStatusAvailable\":true"))
         XCTAssertTrue(try harness.read("viftyctl-capabilities.json").contains("\"runLifecycle\""))
@@ -75,7 +81,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(summary["auditLimit"] as? Int, 20)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
-        XCTAssertEqual(commands.count, 8)
+        XCTAssertEqual(commands.count, 9)
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "viftyctl-audit"
                 && command["status"] as? Int == 0
@@ -92,6 +98,11 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "helper-file-metadata"
                 && command["stdout"] as? String == "helper-file-metadata.txt"
+        })
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "app-info-plist"
+                && command["status"] as? Int == 0
+                && command["stdout"] as? String == "app-info-plist.txt"
         })
         XCTAssertTrue(commands.contains { command in
             command["name"] as? String == "privacy-review"
@@ -113,6 +124,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tlaunchctl-print-daemon.status"))
         XCTAssertTrue(checksums.contains("\tlaunchdaemon-plist.txt"))
         XCTAssertTrue(checksums.contains("\thelper-file-metadata.txt"))
+        XCTAssertTrue(checksums.contains("\tapp-info-plist.txt"))
+        XCTAssertTrue(checksums.contains("\tapp-info-plist.status"))
         XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
         XCTAssertTrue(checksums.contains("\tprivacy-review.status"))
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))
@@ -228,7 +241,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewSummary["status"] as? String, "passed")
         XCTAssertEqual(reviewSummary["readOnly"] as? Bool, true)
         XCTAssertEqual(reviewSummary["coolingCommandsRun"] as? Bool, false)
-        XCTAssertEqual(reviewSummary["commandsReviewed"] as? Int, 8)
+        XCTAssertEqual(reviewSummary["commandsReviewed"] as? Int, 9)
         let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
         XCTAssertEqual(diagnoseDecision["exitStatus"] as? Int, 0)
         XCTAssertEqual(diagnoseDecision["state"] as? String, "ready")
@@ -702,6 +715,7 @@ private final class AgentCoolingEvidenceHarness {
     let rootURL: URL
     let outputURL: URL
     let viftyctlURL: URL
+    let appInfoPlistURL: URL
     let logURL: URL
     private let capabilitiesJSON: String
     private let capabilitiesExitCode: Int
@@ -728,7 +742,9 @@ private final class AgentCoolingEvidenceHarness {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-agent-evidence-\(UUID().uuidString)", isDirectory: true)
         outputURL = rootURL.appendingPathComponent("evidence", isDirectory: true)
-        viftyctlURL = rootURL.appendingPathComponent("fake-viftyctl")
+        let appBundleURL = rootURL.appendingPathComponent("Vifty.app", isDirectory: true)
+        viftyctlURL = appBundleURL.appendingPathComponent("Contents/MacOS/viftyctl")
+        appInfoPlistURL = appBundleURL.appendingPathComponent("Contents/Info.plist")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
         self.capabilitiesJSON = capabilitiesJSON
         self.capabilitiesExitCode = capabilitiesExitCode
@@ -741,6 +757,7 @@ private final class AgentCoolingEvidenceHarness {
         self.includePrivacyLeak = includePrivacyLeak
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try writeFakeAppInfoPlist()
         try writeFakeViftyCtl()
     }
 
@@ -837,6 +854,10 @@ private final class AgentCoolingEvidenceHarness {
     }
 
     private func writeFakeViftyCtl() throws {
+        try FileManager.default.createDirectory(
+            at: viftyctlURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         let script = """
         #!/bin/sh
         set -eu
@@ -880,6 +901,30 @@ private final class AgentCoolingEvidenceHarness {
             [.posixPermissions: 0o755],
             ofItemAtPath: viftyctlURL.path
         )
+    }
+
+    private func writeFakeAppInfoPlist() throws {
+        try FileManager.default.createDirectory(
+            at: appInfoPlistURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let plist = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>tech.reidar.vifty</string>
+            <key>CFBundleName</key>
+            <string>Vifty</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.1.1</string>
+            <key>CFBundleVersion</key>
+            <string>1</string>
+        </dict>
+        </plist>
+        """
+        try plist.write(to: appInfoPlistURL, atomically: true, encoding: .utf8)
     }
 
     fileprivate static let defaultCapabilitiesJSON = """

@@ -109,6 +109,25 @@ SUMMARY_JSON_PATH="${OUTPUT_DIR}/agent-cooling-evidence-summary.json"
 GENERATED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 AGENT_COOLING_EVIDENCE_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
 
+resolve_app_info_plist() {
+  local viftyctl_dir=""
+  local viftyctl_real=""
+
+  viftyctl_dir="$(cd "$(dirname "${VIFTYCTL}")" && pwd -P)"
+  viftyctl_real="${viftyctl_dir}/$(basename "${VIFTYCTL}")"
+
+  case "${viftyctl_real}" in
+    */Contents/MacOS/viftyctl)
+      printf '%s\n' "${viftyctl_real%/Contents/MacOS/viftyctl}/Contents/Info.plist"
+      ;;
+    *)
+      printf '%s\n' "/Applications/Vifty.app/Contents/Info.plist"
+      ;;
+  esac
+}
+
+APP_INFO_PLIST="$(resolve_app_info_plist)"
+
 printf 'name\tstatus\tstdout\tstderr\n' > "${MANIFEST_PATH}"
 
 run_capture() {
@@ -147,6 +166,8 @@ run_capture "helper-file-metadata" "helper-file-metadata.txt" \
   /bin/ls -ldO@ \
     /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist \
     /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
+run_capture "app-info-plist" "app-info-plist.txt" \
+  /usr/bin/plutil -p "${APP_INFO_PLIST}"
 
 cat > "${OUTPUT_DIR}/README.txt" <<EOF
 Vifty agent/helper support evidence
@@ -167,6 +188,7 @@ Attach or paste:
 - launchctl-print-daemon.txt
 - launchdaemon-plist.txt
 - helper-file-metadata.txt
+- app-info-plist.txt
 - manifest.tsv
 - agent-cooling-evidence-summary.json
 - privacy-review.tsv
@@ -180,6 +202,12 @@ and helper-file-metadata.txt show whether launchd can see the privileged daemon,
 which plist is installed, and whether helper/plist files exist with expected
 ownership and permissions. Nonzero status rows for these files are evidence; do
 not rerun with sudo just to make them pass.
+
+app-info-plist.txt records the app metadata found beside Vifty.app's viftyctl,
+or /Applications/Vifty.app/Contents/Info.plist for source/dev viftyctl paths. It
+helps maintainers distinguish v1.1.0 helper-unreachable reports from v1.1.1 or
+current-source reports. A nonzero app-info-plist status means no app plist was
+found at that read-only path.
 
 If this report comes from the published v1.1.0 release and shows "Fan helper
 unreachable" after updating, move to the v1.1.1 source-first hotfix or build the
