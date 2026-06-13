@@ -40,7 +40,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (580 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (586 tests)."))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
     }
@@ -408,6 +408,60 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(compatibility.contains("ViftyHelper probeLocal"))
         XCTAssertTrue(compatibility.contains("Do not run the manual smoke test when readiness is `blocked`"))
         XCTAssertTrue(compatibility.contains("Do not add a README compatibility badge or broad marketing claim until the status table has real report links."))
+    }
+
+    func testCompetitiveAnalysisCodifiesDifferentiatedRoadmap() throws {
+        let analysis = try read("docs/competitive-analysis.md")
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("[docs/competitive-analysis.md](docs/competitive-analysis.md)"))
+        XCTAssertTrue(analysis.contains("open-source, auditable thermal-control layer for Apple Silicon MacBook Pro developer workloads"))
+        XCTAssertTrue(analysis.contains("Do not compete as a general-purpose system monitor yet."))
+        XCTAssertTrue(analysis.contains("Macs Fan Control"))
+        XCTAssertTrue(analysis.contains("TG Pro"))
+        XCTAssertTrue(analysis.contains("iStat Menus"))
+        XCTAssertTrue(analysis.contains("Stats"))
+        XCTAssertTrue(analysis.contains("Hot and MacThrottle"))
+        XCTAssertTrue(analysis.contains("Sensei"))
+        XCTAssertTrue(analysis.contains("AlDente and coconutBattery"))
+        XCTAssertTrue(analysis.contains("trusted release story"))
+        XCTAssertTrue(analysis.contains("hardware validation evidence"))
+        XCTAssertTrue(analysis.contains("helper repair clarity"))
+        XCTAssertTrue(analysis.contains("menu-bar display modes"))
+        XCTAssertTrue(analysis.contains("optional local notifications"))
+        XCTAssertTrue(analysis.contains("defer MCP and Shortcuts"))
+        XCTAssertTrue(analysis.contains("No breaking changes to existing `viftyctl` JSON fields."))
+        XCTAssertTrue(analysis.contains("Homebrew stays parked until a Developer ID signed, notarized release exists."))
+    }
+
+    func testReadmeExplainsInstallTrustLevelsAndPrivilegedHelperReason() throws {
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("### Install trust levels"))
+        XCTAssertTrue(readme.contains("1. **Source build:** recommended while Apple Developer Program credentials are unavailable."))
+        XCTAssertTrue(readme.contains("2. **Unsigned tester app:** optional `Vifty-v1.1.1-unsigned-dev.zip` convenience build"))
+        XCTAssertTrue(readme.contains("3. **Future trusted binary:** Developer ID signed, notarized, stapled, checksum-verified, and then eligible for Homebrew."))
+        XCTAssertTrue(readme.contains("### Why a privileged helper?"))
+        XCTAssertTrue(readme.contains("The normal SwiftUI app and `viftyctl` stay unprivileged."))
+        XCTAssertTrue(readme.contains("the LaunchDaemon owns the narrow root path for SMC fan writes"))
+        XCTAssertTrue(readme.contains("allowlisted fan mode keys `F{n}Md` / `F{n}md`, fan target keys `F{n}Tg`, and guarded `Ftst` unlock cleanup"))
+        XCTAssertTrue(readme.contains("read-only through local IOKit or daemon snapshots"))
+        XCTAssertTrue(readme.contains("[docs/trust-model.md](docs/trust-model.md)"))
+    }
+
+    func testCompatibilityPageNamesGeneratedMatrixAndPriorityReports() throws {
+        let compatibility = try read("docs/compatibility.md")
+
+        XCTAssertTrue(compatibility.contains("## Generated Compatibility Matrix"))
+        XCTAssertTrue(compatibility.contains("Do not hand-edit the generated compatibility matrix."))
+        XCTAssertTrue(compatibility.contains("Needs report"))
+        XCTAssertTrue(compatibility.contains("helper health"))
+        XCTAssertTrue(compatibility.contains("fan count"))
+        XCTAssertTrue(compatibility.contains("min/max RPM"))
+        XCTAssertTrue(compatibility.contains("Auto restore"))
+        XCTAssertTrue(compatibility.contains("Fixed/Curve smoke"))
+        XCTAssertTrue(compatibility.contains("`viftyctl diagnose --json`"))
+        XCTAssertTrue(compatibility.contains("First-report priority is M1 Pro/Max, M2 Pro/Max, M3 Pro/Max, and M4 Pro/Max MacBook Pro hardware."))
     }
 
     func testAgentWorkflowDocsKeepDirectPrepareTrapBounded() throws {

@@ -470,6 +470,57 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarFanRPMModeUsesFirstFanRPM() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .fanRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "1528 RPM")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarAdapterModeUsesPowerSummary() {
+        let model = AppModel()
+        model.powerSnapshot = PowerSnapshot(
+            percent: 76,
+            isPluggedIn: true,
+            adapter: PowerAdapter(ratedWatts: 140)
+        )
+
+        model.menuBarDisplayMode = .adapterWattage
+
+        XCTAssertEqual(model.menuBarLabelText, "140 W adapter")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarCompactSummaryIncludesThermalFanAndPower() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.powerSnapshot = PowerSnapshot(
+            percent: 76,
+            isPluggedIn: true,
+            adapter: PowerAdapter(ratedWatts: 140)
+        )
+
+        model.menuBarDisplayMode = .compactSummary
+
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 1528 RPM | 140 W adapter")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
     func testMenuBarFanIconModeKeepsSummaryAsAccessibilityText() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(

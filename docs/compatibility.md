@@ -25,6 +25,12 @@ Until enough public reports exist, treat each model family as **needs validation
 | Intel MacBook Pro | Expected blocked | `viftyctl diagnose --json` showing the Apple Silicon gate |
 | Other Macs | Unsupported | Do not run manual fan writes |
 
+## Generated Compatibility Matrix
+
+Do not hand-edit the generated compatibility matrix. Use `scripts/summarize-validation-reports.sh --output-markdown <reports-dir>/compatibility-matrix.md` after review results are accepted, then copy or link the generated table with its report sources intact.
+
+Rows without reviewed evidence stay **Needs report**. A supported row must include helper health, fan count, min/max RPM, Auto restore, Fixed/Curve smoke, and `viftyctl diagnose --json` evidence before it can move beyond candidate status. First-report priority is M1 Pro/Max, M2 Pro/Max, M3 Pro/Max, and M4 Pro/Max MacBook Pro hardware.
+
 ## Evidence Rules
 
 - Always capture `viftyctl diagnose --json` before any manual smoke test. It is read-only and should say whether the machine is `ready`, `degraded`, or `blocked`.

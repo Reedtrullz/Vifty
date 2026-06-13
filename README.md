@@ -45,6 +45,8 @@ Vifty is not trying to be a general-purpose system monitor yet; its wedge is aud
 - **Developer workload context** — fan control, charger-power telemetry, and thermal pressure are shown together so builds, tests, and local agents have the thermal context they need without turning Vifty into a broad monitoring suite.
 - **Privileged helper architecture** — the root daemon owns SMC writes so the app never needs repeated permission prompts, and unprivileged direct AppleSMC writes are refused (fail-closed).
 
+The current competitive positioning and roadmap live in [docs/competitive-analysis.md](docs/competitive-analysis.md). The short version: Vifty should beat mature Mac utilities by being safer, more inspectable, and better suited to developer workloads, not by cloning every general-monitoring panel first.
+
 If you use Apple Silicon for builds, tests, or AI workloads, Vifty keeps your machine cool and your fan control auditable.
 
 ## Supported scope
@@ -66,6 +68,18 @@ The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
+
+### Install trust levels
+
+1. **Source build:** recommended while Apple Developer Program credentials are unavailable. Build from the immutable source tag and run the local verification suite before installing.
+2. **Unsigned tester app:** optional `Vifty-v1.1.1-unsigned-dev.zip` convenience build for testers who understand Gatekeeper warnings. It is not Developer ID signed, not notarized, not Homebrew-trusted, and not the official trusted binary.
+3. **Future trusted binary:** Developer ID signed, notarized, stapled, checksum-verified, and then eligible for Homebrew. This lane stays unavailable until Apple credentials exist and the release verifier passes.
+
+### Why a privileged helper?
+
+The normal SwiftUI app and `viftyctl` stay unprivileged. Fan writes need a root-owned path because macOS protects AppleSMC write calls, so the LaunchDaemon owns the narrow root path for SMC fan writes while the UI and CLI request bounded intent over XPC.
+
+That helper may write only Vifty's allowlisted fan mode keys `F{n}Md` / `F{n}md`, fan target keys `F{n}Tg`, and guarded `Ftst` unlock cleanup. Temperature, power, thermal pressure, fan mode telemetry, and diagnostics stay read-only through local IOKit or daemon snapshots. See [docs/trust-model.md](docs/trust-model.md) for the detailed trust boundary.
 
 ### From source
 
@@ -281,6 +295,14 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift
 `audit --json` is a read-only local audit export for recent agent lease events. It returns `readOnly: true`, `coolingCommandsRun: false`, the requested `limit`, `eventCount`, and timestamped events with action, optional lease ID, and message. Use it after blocked readiness or restore failures to show what Vifty actually did without requesting cooling.
 
 For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local model workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
+
+Agent readiness checklist:
+
+- Run `viftyctl capabilities --json` and require the advertised `run` lifecycle before using guarded workloads.
+- Run `viftyctl diagnose --json` before cooling; require `safeToRequestCooling: true` and `daemonControlPathReady: true`.
+- Prefer `viftyctl run --json -- <command>` so Vifty validates the child command before preparing cooling and restores Auto afterward.
+- If readiness is `blocked`, follow `recommendedRecoveryAction` and collect read-only evidence instead of retrying cooling.
+- Use `viftyctl audit --limit 20 --json` after blocked readiness or restore failures to inspect what happened locally.
 
 For commands with `--json`, daemon/transport failures return a structured error object with `command`, `errorCode`, `message`, `safeToProceed: false`, and `recommendedRecoveryAction` instead of plain stderr text. Unknown, duplicate, missing-value, or unexpected wrapper arguments fail with `INVALID_ARGUMENTS` instead of being ignored, silently choosing one value, or generating a default value. `PREPARE_RATE_LIMITED` command errors include `retryAfterSeconds` when Vifty can report a retry wait. For `viftyctl run --json`, wrapper failures before the child starts, such as child-command resolution, prepare denial, or launch failure after a prepared lease, use the same structured error shape. Child command resolution/launch failures use `CHILD_COMMAND_FAILED` so agents do not confuse workload command problems with Vifty helper failures. If launch fails after cooling was prepared, the JSON also reports `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` so agents can tell whether cleanup ran. Agents should use `recommendedRecoveryAction` for the next safe step instead of parsing human `message` text. Child output and post-child restore errors keep the normal wrapper exit/stderr behavior. Human-readable invocations keep the normal stderr failure path.
 

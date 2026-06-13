@@ -56,18 +56,27 @@ enum HelperHealthState: Equatable {
 enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     case fanIcon
     case temperature
+    case fanRPM
+    case adapterWattage
     case temperatureAndRPM
+    case compactSummary
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .fanIcon:
-            return "Fan icon"
+            return "Icon only"
         case .temperature:
             return "Temperature"
+        case .fanRPM:
+            return "Fan RPM"
+        case .adapterWattage:
+            return "Adapter wattage"
         case .temperatureAndRPM:
             return "Temperature + RPM"
+        case .compactSummary:
+            return "Compact summary"
         }
     }
 }
@@ -415,8 +424,14 @@ final class AppModel: ObservableObject {
             return menuTitle
         case .temperature:
             return menuBarTemperatureText
+        case .fanRPM:
+            return menuBarFanText
+        case .adapterWattage:
+            return menuBarPowerText
         case .temperatureAndRPM:
             return "\(menuBarTemperatureText) | \(menuBarFanText)"
+        case .compactSummary:
+            return menuTitle
         }
     }
 
@@ -430,6 +445,10 @@ final class AppModel: ObservableObject {
 
     private var menuBarFanText: String {
         snapshot?.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
+    }
+
+    private var menuBarPowerText: String {
+        powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Power --"
     }
 
     private static func loadMenuBarDisplayMode(from preferences: UserDefaults) -> MenuBarDisplayMode {
