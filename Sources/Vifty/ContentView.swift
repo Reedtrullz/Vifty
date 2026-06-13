@@ -22,26 +22,31 @@ struct ContentView: View {
     }
 
     private var mainContent: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ScrollView {
-                fanControlPane
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(minWidth: 360, maxWidth: 420, maxHeight: .infinity)
+        GeometryReader { proxy in
+            let compactTelemetry = proxy.size.height < 640 || proxy.size.width < 920
 
-            Divider()
+            HStack(alignment: .top, spacing: 0) {
+                ScrollView(.vertical) {
+                    fanControlPane
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                }
+                .scrollIndicators(.visible)
+                .frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)
 
-            ScrollView {
-                sensorsPane
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                Divider()
+                    .frame(height: proxy.size.height)
+
+                ScrollView(.vertical) {
+                    sensorsPane(compact: compactTelemetry)
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                }
+                .scrollIndicators(.visible)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                .background(Color.secondary.opacity(0.035))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private var helperNeedsAttention: Bool {
-        model.helperHealthNeedsAttention
     }
 
     private var helperHealthSystemImage: String {
@@ -52,6 +57,8 @@ struct ContentView: View {
             "checkmark.shield"
         case .unreachable:
             "xmark.shield"
+        case .unsupported:
+            "slash.circle"
         case .error, .telemetryOnly, .noFanData:
             "exclamationmark.shield"
         }
@@ -63,7 +70,7 @@ struct ContentView: View {
             return .secondary
         case .healthy:
             return .green
-        case .error, .telemetryOnly, .unreachable, .noFanData:
+        case .error, .telemetryOnly, .unreachable, .noFanData, .unsupported:
             return .orange
         }
     }
@@ -149,7 +156,7 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(4)
                     }
-                    if let actionDescription = helperNeedsAttention ? daemonInstaller.actionDescription : nil {
+                    if let actionDescription = model.helperRepairActionAvailable ? daemonInstaller.actionDescription : nil {
                         Text(actionDescription)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -157,12 +164,14 @@ struct ContentView: View {
                     }
                 }
                 Spacer()
-                Button(daemonInstaller.actionTitle) {
-                    performHelperAction()
+                if model.helperRepairActionAvailable {
+                    Button(daemonInstaller.actionTitle) {
+                        performHelperAction()
+                    }
+                    .controlSize(.small)
+                    .disabled(!daemonInstaller.canInstall)
+                    .help(daemonInstaller.actionHelp)
                 }
-                .controlSize(.small)
-                .disabled(!helperNeedsAttention || !daemonInstaller.canInstall)
-                .help(helperNeedsAttention ? daemonInstaller.actionHelp : "Fan helper is healthy")
             }
             .padding(10)
             .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
@@ -498,13 +507,13 @@ struct ContentView: View {
         .disabled(!model.manualFanControlAvailable)
     }
 
-    private var sensorsPane: some View {
+    private func sensorsPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if let power = model.powerSnapshot {
-                PowerPanel(snapshot: power)
+                PowerPanel(snapshot: power, compact: compact)
             }
 
-            HistoryPanel(history: model.telemetryHistory)
+            HistoryPanel(history: model.telemetryHistory, compact: compact)
 
             HStack {
                 Text("Temperatures")
@@ -518,9 +527,9 @@ struct ContentView: View {
             }
 
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: compact ? 6 : 8) {
                     ForEach(sensors) { sensor in
-                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id)
+                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: compact)
                     }
                 }
             } else {
@@ -535,11 +544,12 @@ struct ContentView: View {
 
 private struct PowerPanel: View {
     let snapshot: PowerSnapshot
+    let compact: Bool
 
     private var insights: PowerInsights { PowerInsights(snapshot: snapshot) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             HStack {
                 Label("Power", systemImage: snapshot.isPluggedIn ? "bolt.fill" : "battery.50")
                     .font(.headline)
@@ -550,7 +560,7 @@ private struct PowerPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 128), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
                 PowerMetric(label: "Battery", value: batteryPercentText, systemImage: "battery.75")
                 if let flow = PowerDisplayFormatter.batteryFlow(for: snapshot) {
                     PowerMetric(label: "Battery flow", value: flow.replacingOccurrences(of: "Battery ", with: ""), systemImage: snapshot.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
@@ -566,27 +576,32 @@ private struct PowerPanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let batteryLine {
                     Text(batteryLine)
+                        .lineLimit(compact ? 1 : 2)
                 }
                 if let adapterLine {
                     Text(adapterLine)
+                        .lineLimit(compact ? 1 : 2)
+                        .truncationMode(.middle)
                 }
-                if let profilesLine {
+                if !compact, let profilesLine {
                     Text(profilesLine)
                 }
                 if let eta = insights.estimatedBatteryText {
                     Text("Estimate: \(eta)")
+                        .lineLimit(1)
                 }
                 if let warning = insights.chargerWarning {
                     Text(warning)
                         .foregroundStyle(.orange)
+                        .lineLimit(compact ? 2 : 3)
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }
-        .padding(12)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .padding(compact ? 10 : 12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var batteryPercentText: String {
@@ -640,6 +655,7 @@ private struct PowerPanel: View {
 
 private struct HistoryPanel: View {
     let history: TelemetryHistory
+    let compact: Bool
 
     private var sampleCountText: String {
         history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
@@ -650,7 +666,7 @@ private struct HistoryPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             HStack {
                 Label("History", systemImage: "chart.xyaxis.line")
                     .font(.headline)
@@ -661,7 +677,7 @@ private struct HistoryPanel: View {
             }
 
             if let latest = history.samples.last {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 120), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
                     if let temp = latest.highestTemperatureCelsius {
                         PowerMetric(label: "Latest temp", value: String(format: "%.1f C", temp), systemImage: "thermometer.medium")
                     }
@@ -679,8 +695,8 @@ private struct HistoryPanel: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(12)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .padding(compact ? 10 : 12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -746,6 +762,7 @@ private struct FanRow: View {
 private struct SensorRow: View {
     let sensor: TemperatureSensor
     let selected: Bool
+    let compact: Bool
 
     var body: some View {
         HStack {
@@ -760,9 +777,9 @@ private struct SensorRow: View {
             Spacer()
             Text("\(sensor.celsius, specifier: "%.1f") C")
                 .monospacedDigit()
-                .font(.headline)
+                .font(compact ? .subheadline.weight(.semibold) : .headline)
         }
-        .padding(10)
+        .padding(compact ? 8 : 10)
         .background(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }

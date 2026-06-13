@@ -9,6 +9,7 @@ enum HelperHealthState: Equatable {
     case telemetryOnly
     case unreachable
     case noFanData
+    case unsupported
 
     var needsAttention: Bool {
         if case .healthy = self {
@@ -18,6 +19,19 @@ enum HelperHealthState: Equatable {
             return false
         }
         return true
+    }
+
+    var repairActionAvailable: Bool {
+        switch self {
+        case .error, .telemetryOnly, .unreachable:
+            return true
+        case .checking, .healthy, .noFanData, .unsupported:
+            return false
+        }
+    }
+
+    var notifiesAsHelperFailure: Bool {
+        repairActionAvailable
     }
 
     var summary: String {
@@ -34,6 +48,8 @@ enum HelperHealthState: Equatable {
             return "Fan helper unreachable"
         case .noFanData:
             return "Fan helper reachable · no fan data"
+        case .unsupported:
+            return "Unsupported hardware · fan writes blocked"
         }
     }
 
@@ -49,6 +65,8 @@ enum HelperHealthState: Equatable {
             return "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds."
         case .noFanData:
             return "Fan data is unavailable. Fan writes stay blocked until controllable fans appear."
+        case .unsupported:
+            return "Vifty supports fan control on Apple Silicon MacBook Pro hardware. Keep this machine on read-only diagnostics; do not retry fan writes."
         }
     }
 }
@@ -604,6 +622,9 @@ final class AppModel: ObservableObject {
     }
 
     var helperHealthState: HelperHealthState {
+        if let snapshot, !snapshot.isAppleSilicon || !snapshot.isMacBookPro {
+            return .unsupported
+        }
         if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
             return .error
         }
@@ -629,6 +650,10 @@ final class AppModel: ObservableObject {
 
     var helperHealthNeedsAttention: Bool {
         helperHealthState.needsAttention
+    }
+
+    var helperRepairActionAvailable: Bool {
+        helperHealthState.repairActionAvailable
     }
 
     var helperRecoverySuggestion: String? {
@@ -856,7 +881,7 @@ final class AppModel: ObservableObject {
     }
 
     private func evaluateLocalNotifications(power: PowerSnapshot, thermalPressure: ThermalPressure) async {
-        let helperNeedsAttention = helperHealthNeedsAttention
+        let helperNeedsAttention = helperHealthState.notifiesAsHelperFailure
         if helperNeedsAttention, !previousHelperNeedsAttention {
             await postNotification(
                 kind: .helperFailure,

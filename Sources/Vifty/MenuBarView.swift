@@ -96,7 +96,7 @@ struct MenuBarView: View {
                     .lineLimit(4)
             }
 
-            if model.helperHealthNeedsAttention {
+            if model.helperRepairActionAvailable {
                 Label(daemonInstaller.actionDescription, systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -104,7 +104,7 @@ struct MenuBarView: View {
                 Button(daemonInstaller.actionTitle) {
                     performHelperAction()
                 }
-                .disabled(!model.helperHealthNeedsAttention || !daemonInstaller.canInstall)
+                .disabled(!daemonInstaller.canInstall)
                 .help(daemonInstaller.actionHelp)
             }
 
@@ -180,6 +180,8 @@ struct MenuBarView: View {
             "checkmark.shield"
         case .unreachable:
             "xmark.shield"
+        case .unsupported:
+            "slash.circle"
         case .error, .telemetryOnly, .noFanData:
             "exclamationmark.shield"
         }
@@ -191,7 +193,7 @@ struct MenuBarView: View {
             return Color.secondary
         case .checking:
             return Color.secondary
-        case .error, .telemetryOnly, .unreachable, .noFanData:
+        case .error, .telemetryOnly, .unreachable, .noFanData, .unsupported:
             return Color.orange
         }
     }

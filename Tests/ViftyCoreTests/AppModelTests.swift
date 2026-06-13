@@ -152,6 +152,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Checking fan helper")
         XCTAssertEqual(model.helperHealthState, .checking)
         XCTAssertFalse(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
         XCTAssertNil(model.helperRecoverySuggestion)
     }
 
@@ -170,6 +171,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 1 fan")
         XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 1))
         XCTAssertFalse(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
         XCTAssertNil(model.helperRecoverySuggestion)
     }
 
@@ -189,6 +191,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertTrue(model.helperRepairActionAvailable)
         XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
     }
 
@@ -207,6 +210,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
         XCTAssertEqual(model.helperHealthState, .noFanData)
         XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
         XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Fan writes stay blocked until controllable fans appear.")
     }
 
@@ -228,6 +232,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper healthy · 2 fans")
         XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 2))
         XCTAssertFalse(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
     }
 
     func testHelperHealthSummaryWarnsWhenTelemetryFallbackWorksButDaemonDoesNotRespond() {
@@ -245,6 +250,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertTrue(model.helperRepairActionAvailable)
         XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
     }
 
@@ -315,7 +321,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
         XCTAssertEqual(model.helperHealthState, .unreachable)
         XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertTrue(model.helperRepairActionAvailable)
         XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds.")
+    }
+
+    func testHelperHealthSummaryReportsUnsupportedHardwareWithoutRepairAction() {
+        let model = AppModel()
+        model.hasCompletedHardwarePoll = true
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "Macmini9,1",
+            isAppleSilicon: true,
+            isMacBookPro: false
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Unsupported hardware · fan writes blocked")
+        XCTAssertEqual(model.helperHealthState, .unsupported)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperRecoverySuggestion, "Vifty supports fan control on Apple Silicon MacBook Pro hardware. Keep this machine on read-only diagnostics; do not retry fan writes.")
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Unsupported hardware. Manual fan control stays blocked.")
     }
 
     func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {

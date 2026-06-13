@@ -8,7 +8,8 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("@StateObject private var daemonInstaller = DaemonInstaller()"))
         XCTAssertTrue(menuBarView.contains("@State private var helperRefreshTask: Task<Void, Never>?"))
         XCTAssertTrue(menuBarView.contains("Button(daemonInstaller.actionTitle)"))
-        XCTAssertTrue(menuBarView.contains(".disabled(!model.helperHealthNeedsAttention || !daemonInstaller.canInstall)"))
+        XCTAssertTrue(menuBarView.contains("if model.helperRepairActionAvailable {"))
+        XCTAssertTrue(menuBarView.contains(".disabled(!daemonInstaller.canInstall)"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.installOrOpenApproval()"))
         XCTAssertTrue(menuBarView.contains("try? await Task.sleep(for: .milliseconds(750))"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.refresh()"))
@@ -22,7 +23,8 @@ final class AppSourceRegressionTests: XCTestCase {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
         XCTAssertTrue(contentView.contains("daemonInstaller.actionDescription"))
-        XCTAssertTrue(contentView.contains("helperNeedsAttention ? daemonInstaller.actionDescription : nil"))
+        XCTAssertTrue(contentView.contains("model.helperRepairActionAvailable ? daemonInstaller.actionDescription : nil"))
+        XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable {\n                    Button(daemonInstaller.actionTitle)"))
         XCTAssertTrue(contentView.contains("if let suggestion = model.helperRecoverySuggestion {\n                        Text(suggestion)\n                            .font(.caption)\n                            .foregroundStyle(.secondary)\n                            .lineLimit(4)"))
     }
 
@@ -30,9 +32,17 @@ final class AppSourceRegressionTests: XCTestCase {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
         XCTAssertTrue(contentView.contains("private var mainContent: some View"))
-        XCTAssertTrue(contentView.contains("ScrollView {\n                fanControlPane"))
-        XCTAssertTrue(contentView.contains("ScrollView {\n                sensorsPane"))
-        XCTAssertTrue(contentView.contains(".frame(minWidth: 360, maxWidth: 420, maxHeight: .infinity)"))
+        XCTAssertTrue(contentView.contains("GeometryReader { proxy in"))
+        XCTAssertTrue(contentView.contains("let compactTelemetry = proxy.size.height < 640 || proxy.size.width < 920"))
+        XCTAssertTrue(contentView.contains("ScrollView(.vertical) {\n                    fanControlPane"))
+        XCTAssertTrue(contentView.contains("ScrollView(.vertical) {\n                    sensorsPane(compact: compactTelemetry)"))
+        XCTAssertTrue(contentView.contains(".scrollIndicators(.visible)"))
+        XCTAssertTrue(contentView.contains(".frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)"))
+        XCTAssertTrue(contentView.contains("Divider()\n                    .frame(height: proxy.size.height)"))
+        XCTAssertTrue(contentView.contains(".background(Color.secondary.opacity(0.035))"))
+        XCTAssertTrue(contentView.contains("PowerPanel(snapshot: power, compact: compact)"))
+        XCTAssertTrue(contentView.contains("HistoryPanel(history: model.telemetryHistory, compact: compact)"))
+        XCTAssertTrue(contentView.contains("SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: compact)"))
         XCTAssertTrue(contentView.contains(".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)"))
         XCTAssertFalse(contentView.contains("if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {\n                ScrollView {"))
     }
