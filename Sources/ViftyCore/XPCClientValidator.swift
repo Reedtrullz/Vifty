@@ -57,6 +57,7 @@ public struct XPCClientValidator: Sendable {
 public enum XPCTrustConfiguration {
     public static let appSigningIdentifier = "tech.reidar.vifty"
     public static let ctlSigningIdentifier = "tech.reidar.vifty.ctl"
+    public static let helperSigningIdentifier = "tech.reidar.vifty.helper"
     public static let teamEnvironmentKey = "VIFTY_XPC_ALLOWED_TEAM_ID"
 
     public static func releaseTeamIdentifier(from environment: [String: String]) -> String? {
@@ -70,7 +71,8 @@ public enum XPCTrustConfiguration {
     public static func allowedClients(releaseTeamIdentifier: String?) -> [XPCAllowedClient] {
         [
             XPCAllowedClient(signingIdentifier: appSigningIdentifier, teamIdentifier: releaseTeamIdentifier),
-            XPCAllowedClient(signingIdentifier: ctlSigningIdentifier, teamIdentifier: releaseTeamIdentifier)
+            XPCAllowedClient(signingIdentifier: ctlSigningIdentifier, teamIdentifier: releaseTeamIdentifier),
+            XPCAllowedClient(signingIdentifier: helperSigningIdentifier, teamIdentifier: releaseTeamIdentifier)
         ]
     }
 }

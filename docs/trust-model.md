@@ -29,6 +29,7 @@ The daemon accepts XPC clients by signing identity:
 
 - `tech.reidar.vifty` for the app.
 - `tech.reidar.vifty.ctl` for `viftyctl`.
+- `tech.reidar.vifty.helper` for `ViftyHelper` read-only daemon probes.
 
 Local ad-hoc builds leave `VIFTY_XPC_ALLOWED_TEAM_ID` empty so contributors can build the project. Public release builds should set `VIFTY_XPC_ALLOWED_TEAM_ID` so the daemon also requires the configured Apple Developer TeamID.
 

@@ -116,6 +116,7 @@ jobs:
           plutil -lint .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
           codesign --verify --deep --strict .build/Vifty.app
           codesign -dvvv .build/Vifty.app 2>&1 | grep "TeamIdentifier=${VIFTY_XPC_ALLOWED_TEAM_ID}"
+          codesign -dvvv .build/Vifty.app/Contents/MacOS/ViftyHelper 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
           codesign -dvvv .build/Vifty.app/Contents/MacOS/viftyctl 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
           /usr/bin/plutil -extract EnvironmentVariables.VIFTY_XPC_ALLOWED_TEAM_ID raw -o - .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist | grep "^${VIFTY_XPC_ALLOWED_TEAM_ID}$"
 

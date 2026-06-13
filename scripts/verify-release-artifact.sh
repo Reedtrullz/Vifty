@@ -403,6 +403,9 @@ if [[ "${SKIP_SIGNATURE_CHECKS}" != "1" ]]; then
   if ! codesign -dvvv "${MACOS_DIR}/viftyctl" 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl' >/dev/null; then
     fail_check "codesign-teamid" "viftyctl signing identifier is not tech.reidar.vifty.ctl"
   fi
+  if ! codesign -dvvv "${MACOS_DIR}/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper' >/dev/null; then
+    fail_check "codesign-teamid" "ViftyHelper signing identifier is not tech.reidar.vifty.helper"
+  fi
 
   APP_TEAM_ID="$(team_identifier_for "${APP_PATH}")"
   if [[ -z "${APP_TEAM_ID}" || "${APP_TEAM_ID}" == "not set" ]]; then

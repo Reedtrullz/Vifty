@@ -35,7 +35,7 @@ app: ## Build the release app bundle
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
 	if [ -n "$(VIFTY_XPC_ALLOWED_TEAM_ID)" ]; then /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:VIFTY_XPC_ALLOWED_TEAM_ID $(VIFTY_XPC_ALLOWED_TEAM_ID)" "$(DAEMON_PLIST)"; fi
-	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime "$(MACOS)/ViftyHelper"
+	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.helper "$(MACOS)/ViftyHelper"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.daemon "$(MACOS)/ViftyDaemon"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --entitlements Resources/Vifty.entitlements "$(APP_DIR)"
@@ -76,6 +76,7 @@ verify: ## Run local trust gates without installing
 	plutil -lint "$(CONTENTS)/Info.plist"
 	plutil -lint "$(DAEMON_PLIST)"
 	codesign --verify --deep --strict "$(APP_DIR)"
+	codesign -dvvv "$(MACOS)/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
 	codesign -dvvv "$(MACOS)/ViftyDaemon" 2>&1 | grep 'Identifier=tech.reidar.vifty.daemon'
 	codesign -dvvv "$(MACOS)/viftyctl" 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
 

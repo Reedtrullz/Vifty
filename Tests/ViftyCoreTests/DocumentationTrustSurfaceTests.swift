@@ -197,6 +197,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(trustModel.contains("The SwiftUI app and `viftyctl` run unprivileged."))
         XCTAssertTrue(trustModel.contains("The LaunchDaemon runs as root and owns normal SMC fan writes."))
+        XCTAssertTrue(trustModel.contains("`tech.reidar.vifty.helper` for `ViftyHelper` read-only daemon probes."))
         XCTAssertTrue(trustModel.contains("F{n}Md"))
         XCTAssertTrue(trustModel.contains("F{n}md"))
         XCTAssertTrue(trustModel.contains("F{n}Tg"))

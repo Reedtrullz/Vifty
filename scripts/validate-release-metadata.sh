@@ -178,6 +178,11 @@ if ! grep -Fq '/usr/bin/plutil -extract EnvironmentVariables.VIFTY_XPC_ALLOWED_T
   exit 1
 fi
 
+if ! grep -Fq "codesign -dvvv .build/Vifty.app/Contents/MacOS/ViftyHelper 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'" "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must verify ViftyHelper signing identifier" >&2
+  exit 1
+fi
+
 if ! grep -Fq 'xcrun notarytool submit' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must submit the app for notarization" >&2
   exit 1

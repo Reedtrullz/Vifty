@@ -220,6 +220,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must verify the bundled LaunchDaemon TeamID allowlist"))
     }
 
+    func testValidatorRejectsWorkflowWithoutHelperIdentifierVerification() throws {
+        let harness = try ReleaseMetadataHarness(includeReleaseHelperIdentifierVerification: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("must verify ViftyHelper signing identifier"))
+    }
+
     func testValidatorRejectsWorkflowWithoutPublishedZipArtifact() throws {
         let harness = try ReleaseMetadataHarness(includePublishedZip: false)
 
@@ -950,6 +959,7 @@ private final class ReleaseMetadataHarness {
         includeReleaseTeamIDEnvironment: Bool = true,
         includeReleaseTeamIDBuildArgument: Bool = true,
         includeLaunchDaemonTeamIDVerification: Bool = true,
+        includeReleaseHelperIdentifierVerification: Bool = true,
         includePublishedZip: Bool = true,
         includePublishedChecksum: Bool = true,
         includeReleaseChecklist: Bool = true,
@@ -999,6 +1009,7 @@ private final class ReleaseMetadataHarness {
             includeReleaseTeamIDEnvironment: includeReleaseTeamIDEnvironment,
             includeReleaseTeamIDBuildArgument: includeReleaseTeamIDBuildArgument,
             includeLaunchDaemonTeamIDVerification: includeLaunchDaemonTeamIDVerification,
+            includeReleaseHelperIdentifierVerification: includeReleaseHelperIdentifierVerification,
             includePublishedZip: includePublishedZip,
             includePublishedChecksum: includePublishedChecksum,
             includeReleaseChecklist: includeReleaseChecklist,
@@ -1362,6 +1373,7 @@ private final class ReleaseMetadataHarness {
         includeReleaseTeamIDEnvironment: Bool,
         includeReleaseTeamIDBuildArgument: Bool,
         includeLaunchDaemonTeamIDVerification: Bool,
+        includeReleaseHelperIdentifierVerification: Bool,
         includePublishedZip: Bool,
         includePublishedChecksum: Bool,
         includeReleaseChecklist: Bool,
@@ -1456,6 +1468,9 @@ private final class ReleaseMetadataHarness {
         let launchDaemonTeamIDVerificationLine = includeLaunchDaemonTeamIDVerification
             ? "/usr/bin/plutil -extract EnvironmentVariables.VIFTY_XPC_ALLOWED_TEAM_ID raw -o - .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist | grep \"^${VIFTY_XPC_ALLOWED_TEAM_ID}$\""
             : ""
+        let releaseHelperIdentifierVerificationLine = includeReleaseHelperIdentifierVerification
+            ? "codesign -dvvv .build/Vifty.app/Contents/MacOS/ViftyHelper 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'"
+            : ""
         let verifyTagLine = includeVerifyTag
             ? "                    --verify-tag"
             : ""
@@ -1477,6 +1492,7 @@ private final class ReleaseMetadataHarness {
                   SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_IDENTITY }}
         \(releaseTeamIDEnvLine)                run: |
                   \(buildCommand)
+                  \(releaseHelperIdentifierVerificationLine)
                   \(launchDaemonTeamIDVerificationLine)
               - name: Create release artifacts
                 run: |
