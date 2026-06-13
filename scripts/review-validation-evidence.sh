@@ -666,6 +666,18 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless run["exitStatus"] == 0
         failures << "passed agent-run-smoke summary run.exitStatus must be 0"
       end
+      unless run["coolingLeasePrepared"] == true
+        failures << "passed agent-run-smoke summary must report coolingLeasePrepared=true"
+      end
+      unless run["autoRestoreAttempted"] == true
+        failures << "passed agent-run-smoke summary must report autoRestoreAttempted=true"
+      end
+      unless run["autoRestoreSucceeded"] == true
+        failures << "passed agent-run-smoke summary must report autoRestoreSucceeded=true"
+      end
+      unless run["childExitCode"] == 0
+        failures << "passed agent-run-smoke summary must report childExitCode=0"
+      end
       "passed-auto-restored"
     when "failed"
       unless summary["readOnly"] == false

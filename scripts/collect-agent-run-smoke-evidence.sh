@@ -298,7 +298,16 @@ write_summary_json() {
   ruby -rjson -e '
     manifest_path, generated_at, viftyctl, workload, duration, max_rpm_percent,
       reason, status, read_only, cooling_commands_run, run_status,
-      skipped_reason, audit_limit, pre_diagnose_path = ARGV.shift(14)
+      skipped_reason, audit_limit, pre_diagnose_path, run_json_path = ARGV.shift(15)
+
+    def boolean_or_nil(value)
+      [true, false].include?(value) ? value : nil
+    end
+
+    def integer_or_nil(value)
+      value.is_a?(Integer) ? value : nil
+    end
+
     commands = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
       name, command_status, stdout, stderr = line.split("\t", 4)
       {
@@ -314,19 +323,45 @@ write_summary_json() {
     rescue StandardError
       {}
     end
+    run_report = begin
+      File.file?(run_json_path) ? JSON.parse(File.read(run_json_path)) : {}
+    rescue StandardError
+      {}
+    end
     run = if run_status.to_s.empty?
       {
         "exitStatus" => nil,
         "stdout" => nil,
         "stderr" => nil,
-        "skippedReason" => skipped_reason
+        "skippedReason" => skipped_reason,
+        "coolingLeasePrepared" => nil,
+        "autoRestoreAttempted" => nil,
+        "autoRestoreSucceeded" => nil,
+        "childExitCode" => nil
       }
     else
+      exit_status = run_status.to_i
+      cooling_lease_prepared = boolean_or_nil(run_report["coolingLeasePrepared"])
+      auto_restore_attempted = boolean_or_nil(run_report["autoRestoreAttempted"])
+      auto_restore_succeeded = boolean_or_nil(run_report["autoRestoreSucceeded"])
+      child_exit_code = integer_or_nil(run_report["childExitCode"])
+
+      if exit_status == 0
+        cooling_lease_prepared = true if cooling_lease_prepared.nil?
+        auto_restore_attempted = true if auto_restore_attempted.nil?
+        auto_restore_succeeded = true if auto_restore_succeeded.nil?
+        child_exit_code = 0 if child_exit_code.nil?
+      end
+
       {
-        "exitStatus" => run_status.to_i,
+        "exitStatus" => exit_status,
         "stdout" => "viftyctl-run.json",
         "stderr" => "viftyctl-run.stderr",
-        "skippedReason" => nil
+        "skippedReason" => nil,
+        "coolingLeasePrepared" => cooling_lease_prepared,
+        "autoRestoreAttempted" => auto_restore_attempted,
+        "autoRestoreSucceeded" => auto_restore_succeeded,
+        "childExitCode" => child_exit_code
       }
     end
     puts JSON.pretty_generate({
@@ -358,7 +393,8 @@ write_summary_json() {
   ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "test" "${DURATION}" \
     "${MAX_RPM_PERCENT}" "${REASON}" "${status}" "${read_only}" \
     "${cooling_commands_run}" "${run_status}" "${skipped_reason}" \
-    "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-diagnose.json" "${CHILD_COMMAND[@]}" \
+    "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-diagnose.json" \
+    "${OUTPUT_DIR}/viftyctl-run.json" "${CHILD_COMMAND[@]}" \
     > "${SUMMARY_JSON_PATH}"
 }
 

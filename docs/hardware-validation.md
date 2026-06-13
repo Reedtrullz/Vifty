@@ -89,7 +89,7 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
   --summary .build/vifty-validation-<timestamp>/review-result.json
 ```
 
-The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file. If only issue-template text is available, keep using `--agent-run-smoke-result passed-auto-restored --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke`.
+The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file. A passed captured summary must also report `coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, and `childExitCode=0` in its `run` object, so developer-workload proof includes the bounded lease and Auto-restore outcome rather than only the wrapper exit status. If only issue-template text is available, keep using `--agent-run-smoke-result passed-auto-restored --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke`.
 
 The agent-run smoke result uses the same values as the manual smoke test and is preserved as developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
 
@@ -212,10 +212,14 @@ This writes an agent-run smoke bundle with `manifest.tsv`,
 when the run is attempted, and follow-up capabilities/status/audit/diagnose
 files. It is not read-only when readiness is safe because it requests one
 bounded `viftyctl run --json` cooling lease for `/bin/sleep 5` by default. It
-stops before `viftyctl run` when `pre-capabilities.json` does not advertise the
-`run` command, `test` workload, and safe `runLifecycle` contract, or when
-readiness is blocked. In those cases it writes a blocked summary, captures
-read-only status/audit follow-up, and exits `75`.
+records the run proof fields `coolingLeasePrepared`, `autoRestoreAttempted`,
+`autoRestoreSucceeded`, and `childExitCode` in the summary; on successful child
+runs these are derived from `viftyctl run` exit semantics and the advertised
+safe `runLifecycle` contract when child stdout is not JSON. It stops before
+`viftyctl run` when `pre-capabilities.json` does not advertise the `run`
+command, `test` workload, and safe `runLifecycle` contract, or when readiness is
+blocked. In those cases it writes a blocked summary, captures read-only
+status/audit follow-up, and exits `75`.
 
 To run the same smoke manually:
 

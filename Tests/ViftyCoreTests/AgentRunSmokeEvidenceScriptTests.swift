@@ -70,6 +70,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
         XCTAssertEqual(run["stdout"] as? String, "viftyctl-run.json")
+        XCTAssertEqual(run["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(run["childExitCode"] as? Int, 0)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
         XCTAssertEqual(commands.count, 7)
 
@@ -125,6 +129,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
+        XCTAssertTrue(run["coolingLeasePrepared"] is NSNull)
+        XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
+        XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
+        XCTAssertTrue(run["childExitCode"] is NSNull)
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesDoNotAdvertiseSafeRunLifecycle() throws {
@@ -163,6 +171,29 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+        XCTAssertTrue(run["coolingLeasePrepared"] is NSNull)
+        XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
+        XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
+        XCTAssertTrue(run["childExitCode"] is NSNull)
+    }
+
+    func testSmokeCollectorDerivesPassedRunLifecycleProofWhenRunStdoutIsChildOutput() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(runJSON: "child stdout that is not JSON")
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["exitStatus"] as? Int, 0)
+        XCTAssertEqual(run["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(run["childExitCode"] as? Int, 0)
     }
 
     func testSmokeCollectorRunsWhenReadinessAllowsCoolingWithCaution() throws {
@@ -229,6 +260,18 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "commands"
         ] {
             XCTAssertTrue(required.contains(field), "missing required field \(field)")
+        }
+
+        let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let run = try XCTUnwrap(defs["run"] as? [String: Any])
+        let runRequired = try XCTUnwrap(run["required"] as? [String])
+        for field in [
+            "coolingLeasePrepared",
+            "autoRestoreAttempted",
+            "autoRestoreSucceeded",
+            "childExitCode"
+        ] {
+            XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
         }
     }
 }

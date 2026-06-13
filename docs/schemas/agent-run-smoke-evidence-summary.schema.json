@@ -145,7 +145,11 @@
         "exitStatus",
         "stdout",
         "stderr",
-        "skippedReason"
+        "skippedReason",
+        "coolingLeasePrepared",
+        "autoRestoreAttempted",
+        "autoRestoreSucceeded",
+        "childExitCode"
       ],
       "properties": {
         "exitStatus": {
@@ -169,6 +173,30 @@
         "skippedReason": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "coolingLeasePrepared": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "autoRestoreAttempted": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "autoRestoreSucceeded": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "childExitCode": {
+          "type": [
+            "integer",
             "null"
           ]
         }

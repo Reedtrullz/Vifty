@@ -499,6 +499,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithoutSuccessfulAutoRestoreEvidence() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            autoRestoreSucceeded: false
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must report autoRestoreSucceeded=true"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -835,7 +856,11 @@ private final class ValidationEvidenceReviewHarness {
     func writeAgentRunSmokeSummary(
         status: String,
         schemaID: String = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
-        runExitStatus: Int = 0
+        runExitStatus: Int = 0,
+        coolingLeasePrepared: Bool = true,
+        autoRestoreAttempted: Bool = true,
+        autoRestoreSucceeded: Bool = true,
+        childExitCode: Int = 0
     ) throws -> URL {
         let url = rootURL.appendingPathComponent("agent-run-smoke-evidence-summary-\(UUID().uuidString).json")
         let run: [String: Any]
@@ -844,14 +869,22 @@ private final class ValidationEvidenceReviewHarness {
                 "exitStatus": NSNull(),
                 "stdout": NSNull(),
                 "stderr": NSNull(),
-                "skippedReason": "readiness blocked before smoke run"
+                "skippedReason": "readiness blocked before smoke run",
+                "coolingLeasePrepared": NSNull(),
+                "autoRestoreAttempted": NSNull(),
+                "autoRestoreSucceeded": NSNull(),
+                "childExitCode": NSNull()
             ]
         } else {
             run = [
                 "exitStatus": runExitStatus,
                 "stdout": "viftyctl-run.json",
                 "stderr": "viftyctl-run.stderr",
-                "skippedReason": NSNull()
+                "skippedReason": NSNull(),
+                "coolingLeasePrepared": coolingLeasePrepared,
+                "autoRestoreAttempted": autoRestoreAttempted,
+                "autoRestoreSucceeded": autoRestoreSucceeded,
+                "childExitCode": childExitCode
             ]
         }
         let json: [String: Any] = [
