@@ -689,6 +689,10 @@ private struct HistoryPanel: View {
                     }
                     PowerMetric(label: "Thermal", value: latest.thermalPressure.displayName, systemImage: "speedometer")
                 }
+
+                if history.samples.count > 1 {
+                    TelemetryHistoryChart(samples: history.samples, compact: compact)
+                }
             } else {
                 Text("History appears after the first successful poll.")
                     .font(.caption)
@@ -697,6 +701,200 @@ private struct HistoryPanel: View {
         }
         .padding(compact ? 10 : 12)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TelemetryHistoryChart: View {
+    let samples: [TelemetrySample]
+    let compact: Bool
+
+    private var recentSamples: [TelemetrySample] {
+        Array(samples.suffix(compact ? 90 : 180))
+    }
+
+    private var temperatureValues: [Double] {
+        recentSamples.compactMap(\.highestTemperatureCelsius)
+    }
+
+    private var fanValues: [Double] {
+        recentSamples.compactMap { sample in
+            sample.firstFanRPM.map(Double.init)
+        }
+    }
+
+    private var powerValues: [Double] {
+        recentSamples.compactMap(\.batteryPowerWatts)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+            if temperatureValues.count > 1 {
+                HistorySparkline(
+                    title: "Temp",
+                    values: temperatureValues,
+                    color: .orange,
+                    rangeText: unsignedRangeText(temperatureValues, unit: "C", decimals: 1),
+                    compact: compact
+                )
+            }
+            if fanValues.count > 1 {
+                HistorySparkline(
+                    title: "Fan",
+                    values: fanValues,
+                    color: .blue,
+                    rangeText: unsignedRangeText(fanValues, unit: "RPM", decimals: 0),
+                    compact: compact
+                )
+            }
+            if powerValues.count > 1 {
+                HistorySparkline(
+                    title: "Power",
+                    values: powerValues,
+                    color: .green,
+                    rangeText: signedWattRangeText(powerValues),
+                    compact: compact
+                )
+            }
+            ThermalPressureTrail(samples: recentSamples, compact: compact)
+        }
+        .padding(.top, compact ? 2 : 4)
+    }
+
+    private func unsignedRangeText(_ values: [Double], unit: String, decimals: Int) -> String {
+        guard let min = values.min(), let max = values.max() else { return "--" }
+        let lower = formatUnsigned(min, unit: unit, decimals: decimals)
+        let upper = formatUnsigned(max, unit: unit, decimals: decimals)
+        return lower == upper ? lower : "\(lower)-\(upper)"
+    }
+
+    private func formatUnsigned(_ value: Double, unit: String, decimals: Int) -> String {
+        if decimals == 0 {
+            return "\(Int(value.rounded())) \(unit)"
+        }
+        return String(format: "%.1f %@", value, unit)
+    }
+
+    private func signedWattRangeText(_ values: [Double]) -> String {
+        guard let min = values.min(), let max = values.max() else { return "--" }
+        let lower = signedWatts(min)
+        let upper = signedWatts(max)
+        return lower == upper ? lower : "\(lower)-\(upper)"
+    }
+
+    private func signedWatts(_ value: Double) -> String {
+        let formatted = PowerDisplayFormatter.watts(abs(value))
+        if value < 0 { return "-\(formatted)" }
+        if value > 0 { return "+\(formatted)" }
+        return formatted
+    }
+}
+
+private struct HistorySparkline: View {
+    let title: String
+    let values: [Double]
+    let color: Color
+    let rangeText: String
+    let compact: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: compact ? 34 : 42, alignment: .leading)
+            SparklinePath(values: values, color: color)
+                .frame(height: compact ? 16 : 20)
+            Text(rangeText)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(width: compact ? 86 : 104, alignment: .trailing)
+        }
+        .accessibilityLabel("\(title) history \(rangeText)")
+    }
+}
+
+private struct SparklinePath: View {
+    let values: [Double]
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                guard values.count > 1,
+                      let minValue = values.min(),
+                      let maxValue = values.max() else { return }
+                let isFlat = abs(maxValue - minValue) < 0.0001
+                let valueRange = max(maxValue - minValue, 0.0001)
+                let width = max(geometry.size.width, 1)
+                let height = max(geometry.size.height, 1)
+                let xStep = width / CGFloat(values.count - 1)
+
+                for (index, value) in values.enumerated() {
+                    let normalized = isFlat ? 0.5 : (value - minValue) / valueRange
+                    let point = CGPoint(
+                        x: CGFloat(index) * xStep,
+                        y: height - (CGFloat(normalized) * height)
+                    )
+                    if index == 0 {
+                        path.move(to: point)
+                    } else {
+                        path.addLine(to: point)
+                    }
+                }
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct ThermalPressureTrail: View {
+    let samples: [TelemetrySample]
+    let compact: Bool
+
+    private var recentSamples: [TelemetrySample] {
+        Array(samples.suffix(compact ? 24 : 36))
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Thermal")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: compact ? 34 : 42, alignment: .leading)
+            HStack(spacing: 2) {
+                ForEach(Array(recentSamples.enumerated()), id: \.offset) { pair in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color(for: pair.element.thermalPressure))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: compact ? 6 : 8)
+            Text(recentSamples.last?.thermalPressure.displayName ?? "--")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(width: compact ? 86 : 104, alignment: .trailing)
+        }
+        .accessibilityLabel("Thermal pressure history \(recentSamples.last?.thermalPressure.displayName ?? "unknown")")
+    }
+
+    private func color(for pressure: ThermalPressure) -> Color {
+        switch pressure {
+        case .nominal:
+            return .green.opacity(0.7)
+        case .fair:
+            return .yellow.opacity(0.8)
+        case .serious:
+            return .orange.opacity(0.9)
+        case .critical:
+            return .red
+        case .unknown:
+            return .secondary.opacity(0.4)
+        }
     }
 }
 

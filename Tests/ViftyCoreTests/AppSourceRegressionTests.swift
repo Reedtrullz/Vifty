@@ -47,6 +47,19 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(contentView.contains("if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {\n                ScrollView {"))
     }
 
+    func testHistoryPanelShowsLocalSparklineVisualization() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("TelemetryHistoryChart(samples: history.samples, compact: compact)"))
+        XCTAssertTrue(contentView.contains("private struct TelemetryHistoryChart: View"))
+        XCTAssertTrue(contentView.contains("title: \"Temp\""))
+        XCTAssertTrue(contentView.contains("title: \"Fan\""))
+        XCTAssertTrue(contentView.contains("title: \"Power\""))
+        XCTAssertTrue(contentView.contains("ThermalPressureTrail(samples: recentSamples, compact: compact)"))
+        XCTAssertTrue(contentView.contains("private struct SparklinePath: View"))
+        XCTAssertFalse(contentView.contains("UserDefaults.standard.set(history"))
+    }
+
     func testAppBundleIsDockVisibleAndHasAppIcon() throws {
         let plist = try read("Resources/Info.plist")
         let makefile = try read("Makefile")
