@@ -12,6 +12,12 @@ Vifty controls fans through private macOS SMC interfaces, so trust has to be exp
 - Power, thermal, profile, telemetry, and agent state stay local to the Mac.
 - Public releases should be Developer ID signed, notarized, stapled, and TeamID-gated over XPC.
 
+## Private Interface Risk
+
+Apple does not document or guarantee the SMC/HID interfaces Vifty uses. A macOS update or new MacBook Pro revision can change service names, sensor keys, fan mode keys, mode values, or write behavior.
+
+When private telemetry is absent, contradictory, or outside known fan ranges, Vifty must fail closed instead of guessing. That means staying in macOS Auto, blocking manual or agent-requested cooling, and collecting read-only diagnostics before any supported-hardware claim expands.
+
 ## Privileged Components
 
 | Component | Privilege | Purpose |

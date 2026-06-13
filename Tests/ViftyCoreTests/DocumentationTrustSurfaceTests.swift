@@ -207,6 +207,21 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(trustModel.contains("[release-status.md](release-status.md)"))
     }
 
+    func testDocsMakePrivateInterfaceRiskExplicit() throws {
+        let readme = try read("README.md")
+        let trustModel = try read("docs/trust-model.md")
+        let compatibility = try read("docs/compatibility.md")
+
+        XCTAssertTrue(readme.contains("Apple can change private SMC/HID behavior in macOS or new hardware revisions without notice."))
+        XCTAssertTrue(readme.contains("Vifty treats unknown fan topology, missing sensors, invalid ranges, or drifting SMC mode/target telemetry as a reason to stay in macOS Auto and collect read-only evidence first."))
+        XCTAssertTrue(readme.contains("Do not use raw SMC tools or manual fan writes to \"try a new model into support.\""))
+        XCTAssertTrue(trustModel.contains("## Private Interface Risk"))
+        XCTAssertTrue(trustModel.contains("Apple does not document or guarantee the SMC/HID interfaces Vifty uses."))
+        XCTAssertTrue(trustModel.contains("A macOS update or new MacBook Pro revision can change service names, sensor keys, fan mode keys, mode values, or write behavior."))
+        XCTAssertTrue(trustModel.contains("When private telemetry is absent, contradictory, or outside known fan ranges, Vifty must fail closed instead of guessing."))
+        XCTAssertTrue(compatibility.contains("Private SMC/HID drift is compatibility evidence, not a prompt to experiment with writes."))
+    }
+
     func testReleaseStatusKeepsHomebrewInstallClaimsHonest() throws {
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")

@@ -10,6 +10,8 @@ Open-source, local-first thermal control for Apple Silicon MacBook Pro developer
 
 Vifty is built for local signed distribution, not the App Store. It uses private macOS SMC/HID interfaces for fan and sensor access, keeps data on-device, and refuses manual control on unsupported hardware.
 
+Apple can change private SMC/HID behavior in macOS or new hardware revisions without notice. Vifty treats unknown fan topology, missing sensors, invalid ranges, or drifting SMC mode/target telemetry as a reason to stay in macOS Auto and collect read-only evidence first. Do not use raw SMC tools or manual fan writes to "try a new model into support."
+
 ![Vifty screenshot showing menu bar, fan controls, power telemetry, temperature sensors, and thermal history](docs/images/vifty-screenshot.png)
 
 ## Highlights
