@@ -309,6 +309,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(sourceFirstNotes.contains("Later `main` commits may contain post-release hardening"))
         XCTAssertTrue(hotfixNotes.contains("# Vifty 1.1.1 Source-First Hotfix Notes"))
         XCTAssertTrue(hotfixNotes.contains("This is a source-first release. Vifty v1.1.1 does not yet include a Developer ID signed or notarized public binary"))
+        XCTAssertTrue(hotfixNotes.contains("A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source."))
         XCTAssertTrue(hotfixNotes.contains("supersedes the flawed `v1.1.0` unsigned-dev tester build"))
         XCTAssertTrue(hotfixNotes.contains("The bundled daemon is ad-hoc signed with the `tech.reidar.vifty.daemon` identifier"))
         XCTAssertTrue(hotfixNotes.contains("The `v1.1.1` tag is the source release boundary at commit `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
