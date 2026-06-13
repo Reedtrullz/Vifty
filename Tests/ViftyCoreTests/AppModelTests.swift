@@ -417,6 +417,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "65 C | 2400 RPM | 96 W adapter")
     }
 
+    func testMenuPanelTitleOmitsPowerSummaryButKeepsWarnings() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 65, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.powerSnapshot = PowerSnapshot(
+            percent: 76,
+            isPluggedIn: true,
+            adapter: PowerAdapter(ratedWatts: 96)
+        )
+        model.thermalPressure = .serious
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(model.menuTitle, "65 C | 2400 RPM | 96 W adapter | Thermal: Serious | Agent status unavailable")
+        XCTAssertEqual(model.menuPanelTitle, "65 C | 2400 RPM | Thermal: Serious | Agent status unavailable")
+    }
+
     func testMenuBarTemperatureModeUsesRoundedHighestTemperatureAsLabelText() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(

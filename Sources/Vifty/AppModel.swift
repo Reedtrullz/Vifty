@@ -379,14 +379,26 @@ final class AppModel: ObservableObject {
     }
 
     var menuTitle: String {
+        menuSummary(includePower: true)
+    }
+
+    var menuPanelTitle: String {
+        menuSummary(includePower: false)
+    }
+
+    private func menuSummary(includePower: Bool) -> String {
         var parts: [String]
         if snapshot != nil {
             parts = [menuBarTemperatureText, menuBarFanText]
-            if let powerSnapshot {
+            if includePower, let powerSnapshot {
                 parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
             }
         } else {
-            parts = [powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty"]
+            parts = if includePower {
+                [powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty"]
+            } else {
+                ["Vifty"]
+            }
         }
         if let thermal = thermalPressure.menuSummary {
             parts.append(thermal)

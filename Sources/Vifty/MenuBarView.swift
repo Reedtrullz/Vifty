@@ -11,7 +11,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "fan")
-                Text(model.menuTitle)
+                Text(model.menuPanelTitle)
                     .font(.headline)
             }
 

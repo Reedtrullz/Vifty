@@ -64,6 +64,8 @@ final class AppSourceRegressionTests: XCTestCase {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let viftyApp = try read("Sources/Vifty/ViftyApp.swift")
 
+        XCTAssertTrue(menuBarView.contains("Text(model.menuPanelTitle)"))
+        XCTAssertFalse(menuBarView.contains("Text(model.menuTitle)"))
         XCTAssertTrue(menuBarView.contains("PowerDisplayFormatter.adapterDetail(for: adapter)"))
         XCTAssertFalse(menuBarView.contains("private func adapterDetail(_ adapter: PowerAdapter)"))
         XCTAssertTrue(menuBarView.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
