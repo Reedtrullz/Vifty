@@ -91,12 +91,13 @@ For v1.1.1 tester convenience after the source tag is published:
 ```sh
 git fetch origin main --tags
 git checkout v1.1.1
+make verify
 make source-first-release-notes
 make unsigned-dev-artifact
 make source-first-readiness
 ```
 
-This writes `.build/Vifty-v1.1.1-source-first-release-notes.md`, creates `.build/Vifty-v1.1.1-unsigned-dev.zip` plus `.build/Vifty-v1.1.1-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.1` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.1.zip`; that name is reserved for a future signed and notarized release.
+This verifies the immutable tag before generating release notes or the unsigned tester artifact. It writes `.build/Vifty-v1.1.1-source-first-release-notes.md`, creates `.build/Vifty-v1.1.1-unsigned-dev.zip` plus `.build/Vifty-v1.1.1-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.1` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.1.zip`; that name is reserved for a future signed and notarized release.
 
 To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RELEASE_VERSION=1.1.0`. Do not use the `v1.1.0` artifact target to refresh public tester assets from post-release `main`; use the `v1.1.1` hotfix release instead.
 

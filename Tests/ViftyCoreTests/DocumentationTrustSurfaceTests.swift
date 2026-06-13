@@ -218,6 +218,15 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
         XCTAssertTrue(readme.contains("Later `main` commits may contain post-release hardening"))
         XCTAssertTrue(readme.contains("Vifty-v1.1.1-unsigned-dev.zip"))
+        XCTAssertTrue(readme.contains("""
+        git fetch origin main --tags
+        git checkout v1.1.1
+        make verify
+        make source-first-release-notes
+        make unsigned-dev-artifact
+        make source-first-readiness
+        """))
+        XCTAssertTrue(readme.contains("This verifies the immutable tag before generating release notes or the unsigned tester artifact."))
         XCTAssertTrue(readme.contains("Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening"))
         XCTAssertTrue(readme.contains("use the `v1.1.1` source-first hotfix release instead"))
         XCTAssertTrue(readme.contains("Do not use Homebrew as the recommended or trusted source-first install path."))
