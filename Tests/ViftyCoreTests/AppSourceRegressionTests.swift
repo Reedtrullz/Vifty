@@ -13,6 +13,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("try? await Task.sleep(for: .milliseconds(750))"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.refresh()"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.actionDescription"))
+        XCTAssertTrue(menuBarView.contains("if let helperRecoverySuggestion = model.helperRecoverySuggestion {\n                Label(helperRecoverySuggestion, systemImage: \"wrench.and.screwdriver\")\n                    .font(.caption)\n                    .foregroundStyle(.secondary)\n                    .lineLimit(4)"))
         XCTAssertEqual(menuBarView.components(separatedBy: "await model.pollOnce()").count - 1, 2)
         XCTAssertTrue(menuBarView.contains("helperRefreshTask?.cancel()"))
     }
@@ -22,6 +23,7 @@ final class AppSourceRegressionTests: XCTestCase {
 
         XCTAssertTrue(contentView.contains("daemonInstaller.actionDescription"))
         XCTAssertTrue(contentView.contains("helperNeedsAttention ? daemonInstaller.actionDescription : nil"))
+        XCTAssertTrue(contentView.contains("if let suggestion = model.helperRecoverySuggestion {\n                        Text(suggestion)\n                            .font(.caption)\n                            .foregroundStyle(.secondary)\n                            .lineLimit(4)"))
     }
 
     func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {

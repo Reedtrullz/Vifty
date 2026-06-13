@@ -93,7 +93,7 @@ struct MenuBarView: View {
                 Label(helperRecoverySuggestion, systemImage: "wrench.and.screwdriver")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(4)
             }
 
             if model.helperHealthNeedsAttention {

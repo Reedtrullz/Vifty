@@ -189,7 +189,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
     }
 
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
@@ -207,7 +207,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
         XCTAssertEqual(model.helperHealthState, .noFanData)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Do not start manual or agent cooling until fans appear.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Fan writes stay blocked until controllable fans appear.")
     }
 
     func testHelperHealthSummaryPluralizesFanCount() {
@@ -245,7 +245,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
     }
 
     func testManualFanControlAvailabilityRequiresDaemonBackedWritePath() {
@@ -315,7 +315,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
         XCTAssertEqual(model.helperHealthState, .unreachable)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds.")
     }
 
     func testControlOwnershipSummaryReportsMacOSAutoWhenHardwareIsAutomatic() {
@@ -549,7 +549,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
     }
 
     func testPollOnceClearsStaleHelperUnreachableAfterDaemonRepair() async {
@@ -596,7 +596,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
         XCTAssertTrue(model.lastError?.contains("Snapshot failed") == true)
     }
 

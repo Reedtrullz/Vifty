@@ -42,13 +42,13 @@ enum HelperHealthState: Equatable {
         case .checking, .healthy:
             return nil
         case .error:
-            return "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Restore Auto first if fans appear stuck."
+            return "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
         case .telemetryOnly:
-            return "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling after the daemon responds."
+            return "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only."
         case .unreachable:
-            return "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval."
+            return "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds."
         case .noFanData:
-            return "Fan data is unavailable. Do not start manual or agent cooling until fans appear."
+            return "Fan data is unavailable. Fan writes stay blocked until controllable fans appear."
         }
     }
 }

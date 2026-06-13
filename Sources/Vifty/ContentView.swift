@@ -147,7 +147,7 @@ struct ContentView: View {
                         Text(suggestion)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(3)
+                            .lineLimit(4)
                     }
                     if let actionDescription = helperNeedsAttention ? daemonInstaller.actionDescription : nil {
                         Text(actionDescription)
