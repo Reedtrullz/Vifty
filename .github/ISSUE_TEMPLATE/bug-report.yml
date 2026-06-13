@@ -10,6 +10,16 @@ body:
 
         For fan, sensor, helper, or agent-cooling bugs, start with read-only diagnostics where possible.
 
+        For helper-unreachable, restore-failure, or agent/build/test cooling reports, prefer:
+
+        ```sh
+        scripts/collect-agent-cooling-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+        ```
+
+        This captures viftyctl JSON plus read-only launchd/helper install evidence and `privacy-review.tsv` without requesting cooling, restoring Auto, calling `ViftyHelper`, using `sudo`, or writing SMC keys.
+
+        If the report comes from published `v1.1.0` and the app shows "Fan helper unreachable" after updating, use the `v1.1.1 source-first hotfix` or build current source before retrying helper repair. Do not retag v1.1.0 or replace its unsigned-dev assets with a later build.
+
         Maintainers triage reports using docs/support-triage.md so helper, hardware, SMC telemetry, release-trust, and agent-cooling issues get the right evidence.
 
         If `viftyctl diagnose --json` reports unsupported hardware, `safeToRequestCooling: false`, or `daemonControlPathReady: false`, do not run manual fan-write commands or raw SMC tools. Use the diagnose JSON as the first evidence, and leave helper probe output blank unless a maintainer asks for it.

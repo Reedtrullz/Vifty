@@ -16,6 +16,9 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "support-agent-launchd-evidence", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "support-agent-no-sudo", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "support-agent-privacy-review", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "bug-template-evidence-collector", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "bug-template-helper-hotfix", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "bug-template-no-retag", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "agent-template-evidence-collector", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "agent-template-launchd-evidence", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "agent-template-privacy-review", in: checks), "passed")
@@ -71,6 +74,23 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "blocked")
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "support-daemon-control-path", in: checks), "blocked")
+    }
+
+    func testCheckerRejectsGenericBugTemplateWithoutHelperEvidenceCollector() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let templateURL = harness.rootURL.appendingPathComponent(".github/ISSUE_TEMPLATE/bug-report.yml")
+        let template = try String(contentsOf: templateURL, encoding: .utf8)
+            .replacingOccurrences(of: "scripts/collect-agent-cooling-evidence.sh", with: "manual diagnostics")
+        try template.write(to: templateURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try result.json()
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "bug-template-evidence-collector", in: checks), "blocked")
     }
 
     private func checkStatus(named name: String, in checks: [[String: Any]]) -> String? {
