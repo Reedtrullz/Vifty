@@ -195,30 +195,37 @@ final class DaemonInstaller: ObservableObject {
     ) -> String {
         let addProgramArgumentCommand = shellQuote("Add :ProgramArguments:0 string \(helperTarget)")
         let setProgramArgumentCommand = shellQuote("Set :ProgramArguments:0 \(helperTarget)")
+        let helperTempTemplate = "\(helperTarget).XXXXXX"
+        let plistTempTemplate = "\(plistTarget).XXXXXX"
         return """
         set -e
         mkdir -p /Library/PrivilegedHelperTools
-        cp \(shellQuote(daemonSource)) \(shellQuote(helperTarget))
-        chmod 755 \(shellQuote(helperTarget))
-        chown root:wheel \(shellQuote(helperTarget))
-        cp \(shellQuote(plistSource)) \(shellQuote(plistTarget))
-        chmod 644 \(shellQuote(plistTarget))
-        chown root:wheel \(shellQuote(plistTarget))
-        xattr -cr \(shellQuote(helperTarget)) \(shellQuote(plistTarget)) 2>/dev/null || true
-        /usr/libexec/PlistBuddy -c 'Delete :BundleProgram' \(shellQuote(plistTarget)) 2>/dev/null || true
-        if ! /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' \(shellQuote(plistTarget)) 2>/dev/null; then
-          /usr/libexec/PlistBuddy -c 'Delete :ProgramArguments' \(shellQuote(plistTarget)) 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' \(shellQuote(plistTarget))
+        launchctl bootout system \(shellQuote(plistTarget)) 2>/dev/null || true
+        helper_tmp="$(mktemp \(shellQuote(helperTempTemplate)))"
+        plist_tmp="$(mktemp \(shellQuote(plistTempTemplate)))"
+        trap 'rm -f "$helper_tmp" "$plist_tmp"' EXIT
+        cp \(shellQuote(daemonSource)) "$helper_tmp"
+        chmod 755 "$helper_tmp"
+        chown root:wheel "$helper_tmp"
+        cp \(shellQuote(plistSource)) "$plist_tmp"
+        chmod 644 "$plist_tmp"
+        chown root:wheel "$plist_tmp"
+        xattr -cr "$helper_tmp" "$plist_tmp" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c 'Delete :BundleProgram' "$plist_tmp" 2>/dev/null || true
+        if ! /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' "$plist_tmp" 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c 'Delete :ProgramArguments' "$plist_tmp" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c 'Add :ProgramArguments array' "$plist_tmp"
         fi
-        if ! /usr/libexec/PlistBuddy -c \(addProgramArgumentCommand) \(shellQuote(plistTarget)) 2>/dev/null; then
-          /usr/libexec/PlistBuddy -c \(setProgramArgumentCommand) \(shellQuote(plistTarget))
+        if ! /usr/libexec/PlistBuddy -c \(addProgramArgumentCommand) "$plist_tmp" 2>/dev/null; then
+          /usr/libexec/PlistBuddy -c \(setProgramArgumentCommand) "$plist_tmp"
         fi
+        mv -f "$helper_tmp" \(shellQuote(helperTarget))
+        mv -f "$plist_tmp" \(shellQuote(plistTarget))
         for log_path in \(shellQuote(stdoutLogTarget)) \(shellQuote(stderrLogTarget)); do
           touch "$log_path"
           chmod 600 "$log_path"
           chown root:wheel "$log_path"
         done
-        launchctl bootout system \(shellQuote(plistTarget)) 2>/dev/null || true
         launchctl bootstrap system \(shellQuote(plistTarget))
         """
     }

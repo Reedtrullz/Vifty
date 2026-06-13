@@ -51,26 +51,34 @@ final class DaemonInstallerTests: XCTestCase {
             stderrLogTarget: stderrLogTarget
         )
 
-        XCTAssertTrue(script.contains("chmod 755 '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("chown root:wheel '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("chmod 644 '\(plistTarget)'"))
-        XCTAssertTrue(script.contains("chown root:wheel '\(plistTarget)'"))
-        XCTAssertTrue(script.contains("xattr -cr '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' '\(plistTarget)' 2>/dev/null || true"))
+        XCTAssertTrue(script.contains("chmod 755 \"$helper_tmp\""))
+        XCTAssertTrue(script.contains("chown root:wheel \"$helper_tmp\""))
+        XCTAssertTrue(script.contains("chmod 644 \"$plist_tmp\""))
+        XCTAssertTrue(script.contains("chown root:wheel \"$plist_tmp\""))
+        XCTAssertTrue(script.contains("xattr -cr \"$helper_tmp\" \"$plist_tmp\" 2>/dev/null || true"))
         XCTAssertTrue(script.contains("for log_path in '\(stdoutLogTarget)' '\(stderrLogTarget)'; do"))
         XCTAssertTrue(script.contains("touch \"$log_path\""))
         XCTAssertTrue(script.contains("chmod 600 \"$log_path\""))
         XCTAssertTrue(script.contains("chown root:wheel \"$log_path\""))
         XCTAssertTrue(
-            script.contains("chmod 644 '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            script.contains("chmod 644 \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
             "LaunchDaemon plist permissions must be fixed before launchd loads it."
         )
         XCTAssertTrue(
-            script.contains("chown root:wheel '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            script.contains("chown root:wheel \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
             "LaunchDaemon plist ownership must be fixed before launchd loads it."
         )
         XCTAssertTrue(
-            script.contains("xattr -cr '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            script.contains("xattr -cr \"$helper_tmp\" \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
             "Copied ad-hoc source-first helper files must not keep quarantine before launchd loads them."
+        )
+        XCTAssertTrue(
+            script.contains("mv -f \"$helper_tmp\" '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            "The staged daemon must be moved into place before launchd starts it."
+        )
+        XCTAssertTrue(
+            script.contains("mv -f \"$plist_tmp\" '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
+            "The staged LaunchDaemon plist must be moved into place before launchd loads it."
         )
         XCTAssertTrue(
             script.contains("chmod 600 \"$log_path\"", before: "launchctl bootstrap system '\(plistTarget)'"),
@@ -82,6 +90,46 @@ final class DaemonInstallerTests: XCTestCase {
         )
     }
 
+    func testAdministratorInstallScriptBootsOutBeforeReplacingPrivilegedFiles() {
+        let installer = DaemonInstaller()
+        let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+        let script = installer.administratorInstallShellScript(
+            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
+            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+            plistTarget: plistTarget
+        )
+
+        XCTAssertTrue(
+            script.contains("launchctl bootout system '\(plistTarget)' 2>/dev/null || true", before: "cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' \"$helper_tmp\""),
+            "Repair should stop the existing launchd service before replacing the daemon executable."
+        )
+        XCTAssertTrue(
+            script.contains("launchctl bootout system '\(plistTarget)' 2>/dev/null || true", before: "mv -f \"$plist_tmp\" '\(plistTarget)'"),
+            "Repair should stop the existing launchd service before replacing the LaunchDaemon plist."
+        )
+    }
+
+    func testAdministratorInstallScriptStagesPrivilegedFilesBeforeMovingIntoPlace() {
+        let installer = DaemonInstaller()
+        let script = installer.administratorInstallShellScript(
+            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
+            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+            plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+        )
+
+        XCTAssertTrue(script.contains("helper_tmp=\"$(mktemp '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon.XXXXXX')\""))
+        XCTAssertTrue(script.contains("plist_tmp=\"$(mktemp '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist.XXXXXX')\""))
+        XCTAssertTrue(script.contains("trap 'rm -f \"$helper_tmp\" \"$plist_tmp\"' EXIT"))
+        XCTAssertTrue(script.contains("cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' \"$helper_tmp\""))
+        XCTAssertTrue(script.contains("cp '/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
+        XCTAssertTrue(script.contains("mv -f \"$helper_tmp\" '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
+        XCTAssertTrue(script.contains("mv -f \"$plist_tmp\" '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
+        XCTAssertFalse(script.contains("cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
+        XCTAssertFalse(script.contains("cp '/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist' '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
+    }
+
     func testAdministratorInstallScriptQuotesPaths() {
         let installer = DaemonInstaller()
         let script = installer.administratorInstallShellScript(
@@ -91,8 +139,8 @@ final class DaemonInstallerTests: XCTestCase {
             plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
         )
 
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/ViftyDaemon' '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/tech.reidar.vifty.daemon.plist' '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
+        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/ViftyDaemon' \"$helper_tmp\""))
+        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
     }
 
     func testAdministratorInstallScriptQuotesApostrophesInPathsAndProgramArguments() {
@@ -104,10 +152,10 @@ final class DaemonInstallerTests: XCTestCase {
             plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
         )
 
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/ViftyDaemon' '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/tech.reidar.vifty.daemon.plist' '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
-        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Add :ProgramArguments:0 string /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Set :ProgramArguments:0 /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
+        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/ViftyDaemon' \"$helper_tmp\""))
+        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
+        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Add :ProgramArguments:0 string /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' \"$plist_tmp\""))
+        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Set :ProgramArguments:0 /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' \"$plist_tmp\""))
     }
 }
 
