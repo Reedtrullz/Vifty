@@ -639,12 +639,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.notificationSettings.elevatedThermalPressure)
         XCTAssertFalse(model.notificationSettings.autoRestoreFailure)
         XCTAssertFalse(model.notificationSettings.pluggedInBatteryDrain)
+        XCTAssertFalse(model.notificationSettings.agentCoolingAttention)
 
         model.notificationSettings.autoRestoreFailure = true
         model.notificationSettings.pluggedInBatteryDrain = true
+        model.notificationSettings.agentCoolingAttention = true
 
         XCTAssertTrue(preferences.bool(forKey: AppModel.notificationAutoRestoreDefaultsKey))
         XCTAssertTrue(preferences.bool(forKey: AppModel.notificationPluggedInDrainDefaultsKey))
+        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationAgentCoolingAttentionDefaultsKey))
     }
 
     func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
@@ -755,6 +758,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(recorder.delivered.map(\.kind), [.autoRestoreFailure])
         let notification = try XCTUnwrap(recorder.delivered.first)
         XCTAssertTrue(notification.body.contains("Daemon connection invalidated"))
+    }
+
+    func testAgentCoolingAttentionNotificationFiresWhenLeaseNeedsRestore() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let lease = agentLease()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1700) },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+            }
+        )
+        model.notificationSettings.agentCoolingAttention = true
+
+        await model.pollOnce()
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.agentCoolingAttention])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertEqual(notification.title, "Vifty agent cooling needs attention")
+        XCTAssertTrue(notification.body.contains("Use Auto to restore daemon control"))
     }
 
     func testPollOnceRefreshesPowerSnapshotFromInjectedReader() async {

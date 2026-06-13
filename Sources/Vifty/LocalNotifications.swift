@@ -7,6 +7,7 @@ enum LocalNotificationKind: String, CaseIterable, Identifiable {
     case elevatedThermalPressure
     case autoRestoreFailure
     case pluggedInBatteryDrain
+    case agentCoolingAttention
 
     var id: String { rawValue }
 
@@ -20,6 +21,8 @@ enum LocalNotificationKind: String, CaseIterable, Identifiable {
             "Auto restore failure"
         case .pluggedInBatteryDrain:
             "Plugged-in battery drain"
+        case .agentCoolingAttention:
+            "Agent cooling attention"
         }
     }
 }
@@ -29,6 +32,7 @@ struct LocalNotificationSettings: Equatable {
     var elevatedThermalPressure = false
     var autoRestoreFailure = false
     var pluggedInBatteryDrain = false
+    var agentCoolingAttention = false
 
     static let disabled = LocalNotificationSettings()
 
@@ -42,6 +46,8 @@ struct LocalNotificationSettings: Equatable {
             autoRestoreFailure
         case .pluggedInBatteryDrain:
             pluggedInBatteryDrain
+        case .agentCoolingAttention:
+            agentCoolingAttention
         }
     }
 }

@@ -150,6 +150,7 @@ final class AppModel: ObservableObject {
     static let notificationThermalPressureDefaultsKey = "notification.elevatedThermalPressure"
     static let notificationAutoRestoreDefaultsKey = "notification.autoRestoreFailure"
     static let notificationPluggedInDrainDefaultsKey = "notification.pluggedInBatteryDrain"
+    static let notificationAgentCoolingAttentionDefaultsKey = "notification.agentCoolingAttention"
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
@@ -165,6 +166,7 @@ final class AppModel: ObservableObject {
     private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
     private var previousHelperNeedsAttention = false
     private var previousPluggedInDrain = false
+    private var previousAgentCoolingNeedsAttention = false
     private var elevatedThermalPressureStartedAt: Date?
     private let notificationMinimumInterval: TimeInterval = 10 * 60
     private let sustainedThermalPressureInterval: TimeInterval = 60
@@ -512,7 +514,8 @@ final class AppModel: ObservableObject {
             helperFailure: preferences.bool(forKey: notificationHelperFailureDefaultsKey),
             elevatedThermalPressure: preferences.bool(forKey: notificationThermalPressureDefaultsKey),
             autoRestoreFailure: preferences.bool(forKey: notificationAutoRestoreDefaultsKey),
-            pluggedInBatteryDrain: preferences.bool(forKey: notificationPluggedInDrainDefaultsKey)
+            pluggedInBatteryDrain: preferences.bool(forKey: notificationPluggedInDrainDefaultsKey),
+            agentCoolingAttention: preferences.bool(forKey: notificationAgentCoolingAttentionDefaultsKey)
         )
     }
 
@@ -521,6 +524,7 @@ final class AppModel: ObservableObject {
         preferences.set(settings.elevatedThermalPressure, forKey: notificationThermalPressureDefaultsKey)
         preferences.set(settings.autoRestoreFailure, forKey: notificationAutoRestoreDefaultsKey)
         preferences.set(settings.pluggedInBatteryDrain, forKey: notificationPluggedInDrainDefaultsKey)
+        preferences.set(settings.agentCoolingAttention, forKey: notificationAgentCoolingAttentionDefaultsKey)
     }
 
     var agentCoolingMenuSummary: String? {
@@ -898,6 +902,18 @@ final class AppModel: ObservableObject {
             )
         }
         previousHelperNeedsAttention = helperNeedsAttention
+
+        let agentNeedsAttention = agentCoolingNeedsAttention
+        if agentNeedsAttention, !previousAgentCoolingNeedsAttention {
+            await postNotification(
+                kind: .agentCoolingAttention,
+                title: "Vifty agent cooling needs attention",
+                body: agentCoolingRecoverySuggestion
+                    ?? agentCoolingSummary
+                    ?? "Check Vifty before starting another developer workload."
+            )
+        }
+        previousAgentCoolingNeedsAttention = agentNeedsAttention
 
         await evaluateThermalPressureNotification(thermalPressure)
         await evaluatePluggedInDrainNotification(power)

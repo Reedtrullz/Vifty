@@ -27,7 +27,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Timed manual modes** — Fixed RPM and Temperature Curve modes can automatically restore Auto after a selected duration.
 - **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
 - **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
-- **Optional local notifications** — alerts for helper failure, sustained high thermal pressure, Auto restore failure, and plugged-in battery drain; all are off by default.
+- **Optional local notifications** — alerts for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; all are off by default.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry.
