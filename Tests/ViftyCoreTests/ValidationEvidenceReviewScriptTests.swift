@@ -460,6 +460,29 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryWhenBundleChecksumDrifts() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(status: "passed")
+        try harness.overwriteAgentRunSmokeBundleFile(
+            summaryURL: smokeSummaryURL,
+            filename: "viftyctl-run.json",
+            contents: #"{"coolingLeasePrepared":false}"#
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke checksums.tsv viftyctl-run.json sha256"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeSummarySchemaDrift() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -862,8 +885,31 @@ private final class ValidationEvidenceReviewHarness {
         autoRestoreSucceeded: Bool = true,
         childExitCode: Int = 0
     ) throws -> URL {
-        let url = rootURL.appendingPathComponent("agent-run-smoke-evidence-summary-\(UUID().uuidString).json")
+        try writeAgentRunSmokeBundleSummary(
+            status: status,
+            schemaID: schemaID,
+            runExitStatus: runExitStatus,
+            coolingLeasePrepared: coolingLeasePrepared,
+            autoRestoreAttempted: autoRestoreAttempted,
+            autoRestoreSucceeded: autoRestoreSucceeded,
+            childExitCode: childExitCode
+        )
+    }
+
+    func writeAgentRunSmokeBundleSummary(
+        status: String,
+        schemaID: String = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
+        runExitStatus: Int = 0,
+        coolingLeasePrepared: Bool = true,
+        autoRestoreAttempted: Bool = true,
+        autoRestoreSucceeded: Bool = true,
+        childExitCode: Int = 0
+    ) throws -> URL {
+        let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
+        let summaryURL = smokeBundleURL.appendingPathComponent("agent-run-smoke-evidence-summary.json")
         let run: [String: Any]
+        let commands: [[String: Any]]
         if status == "blocked" {
             run = [
                 "exitStatus": NSNull(),
@@ -875,6 +921,17 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreSucceeded": NSNull(),
                 "childExitCode": NSNull()
             ]
+            commands = [
+                ["name": "pre-diagnose", "status": 75, "stdout": "pre-diagnose.json", "stderr": "pre-diagnose.stderr", "statusFile": "pre-diagnose.status"]
+            ]
+            try writeAgentRunSmokeCommandFiles(
+                in: smokeBundleURL,
+                name: "pre-diagnose",
+                status: 75,
+                stdout: "pre-diagnose.json",
+                stderr: "pre-diagnose.stderr",
+                stdoutContents: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false}"#
+            )
         } else {
             run = [
                 "exitStatus": runExitStatus,
@@ -886,6 +943,26 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreSucceeded": autoRestoreSucceeded,
                 "childExitCode": childExitCode
             ]
+            commands = [
+                ["name": "pre-diagnose", "status": 0, "stdout": "pre-diagnose.json", "stderr": "pre-diagnose.stderr", "statusFile": "pre-diagnose.status"],
+                ["name": "viftyctl-run", "status": runExitStatus, "stdout": "viftyctl-run.json", "stderr": "viftyctl-run.stderr", "statusFile": "viftyctl-run.status"]
+            ]
+            try writeAgentRunSmokeCommandFiles(
+                in: smokeBundleURL,
+                name: "pre-diagnose",
+                status: 0,
+                stdout: "pre-diagnose.json",
+                stderr: "pre-diagnose.stderr",
+                stdoutContents: #"{"state":"ready","safeToRequestCooling":true,"daemonControlPathReady":true}"#
+            )
+            try writeAgentRunSmokeCommandFiles(
+                in: smokeBundleURL,
+                name: "viftyctl-run",
+                status: runExitStatus,
+                stdout: "viftyctl-run.json",
+                stderr: "viftyctl-run.stderr",
+                stdoutContents: #"{"coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
+            )
         }
         let json: [String: Any] = [
             "schemaVersion": 1,
@@ -911,19 +988,26 @@ private final class ValidationEvidenceReviewHarness {
                 "daemonControlPathReady": status != "blocked"
             ],
             "run": run,
-            "commands": [
-                [
-                    "name": "pre-diagnose",
-                    "status": status == "blocked" ? 75 : 0,
-                    "stdout": "pre-diagnose.json",
-                    "stderr": "pre-diagnose.stderr",
-                    "statusFile": "pre-diagnose.status"
-                ]
-            ]
+            "commands": commands
         ]
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url)
-        return url
+        try data.write(to: summaryURL)
+        let manifestLines = ([
+            "name\tstatus\tstdout\tstderr"
+        ] + commands.map { command in
+            "\(command["name"] ?? "")\t\(command["status"] ?? "")\t\(command["stdout"] ?? "")\t\(command["stderr"] ?? "")"
+        }).joined(separator: "\n") + "\n"
+        try manifestLines.write(to: smokeBundleURL.appendingPathComponent("manifest.tsv"), atomically: true, encoding: .utf8)
+        try writeAgentRunSmokeChecksums(in: smokeBundleURL)
+        return summaryURL
+    }
+
+    func overwriteAgentRunSmokeBundleFile(summaryURL: URL, filename: String, contents: String) throws {
+        try contents.write(
+            to: summaryURL.deletingLastPathComponent().appendingPathComponent(filename),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     func removeChecksumEntry(for filename: String) throws {
@@ -1014,6 +1098,42 @@ private final class ValidationEvidenceReviewHarness {
             return
         }
         try writeText(filename, contents: contents)
+    }
+
+    private func writeAgentRunSmokeCommandFiles(
+        in directory: URL,
+        name: String,
+        status: Int,
+        stdout: String,
+        stderr: String,
+        stdoutContents: String
+    ) throws {
+        try stdoutContents.write(to: directory.appendingPathComponent(stdout), atomically: true, encoding: .utf8)
+        try "".write(to: directory.appendingPathComponent(stderr), atomically: true, encoding: .utf8)
+        try "\(status)\n".write(to: directory.appendingPathComponent("\(name).status"), atomically: true, encoding: .utf8)
+    }
+
+    private func writeAgentRunSmokeChecksums(in directory: URL) throws {
+        let files = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        var lines = ["sha256\tbytes\tfile"]
+        for fileURL in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard fileURL.lastPathComponent != "checksums.tsv" else {
+                continue
+            }
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else {
+                continue
+            }
+            let data = try Data(contentsOf: fileURL)
+            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            lines.append("\(digest)\t\(data.count)\t\(fileURL.lastPathComponent)")
+        }
+        try lines.joined(separator: "\n").appending("\n")
+            .write(to: directory.appendingPathComponent("checksums.tsv"), atomically: true, encoding: .utf8)
     }
 
     private func isBundleLocalManifestFilename(_ filename: String) -> Bool {

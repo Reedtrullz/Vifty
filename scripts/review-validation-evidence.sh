@@ -626,9 +626,206 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     nil
   end
 
+  def parse_external_tsv(path, failures, label)
+    unless File.file?(path)
+      failures << "#{label} not found: #{path}"
+      return []
+    end
+    CSV.parse(File.read(path), col_sep: "\t", headers: true).map(&:to_h)
+  rescue StandardError => error
+    failures << "could not parse #{label}: #{error.message}"
+    []
+  end
+
+  def agent_run_smoke_local_filename(value, field, failures)
+    relative_path = value.to_s
+    if relative_path.empty?
+      failures << "agent-run-smoke #{field} is empty"
+      return nil
+    end
+    if relative_path.include?("/") || relative_path.start_with?(".")
+      failures << "agent-run-smoke #{field} #{relative_path.inspect} must be a bundle-local filename"
+      return nil
+    end
+    relative_path
+  end
+
+  def validate_agent_run_smoke_bundle(summary_path, summary, failures)
+    smoke_bundle = File.dirname(summary_path)
+    manifest_path = File.join(smoke_bundle, "manifest.tsv")
+    checksum_path = File.join(smoke_bundle, "checksums.tsv")
+    manifest_rows = parse_external_tsv(manifest_path, failures, "agent-run-smoke manifest.tsv")
+    checksum_rows = parse_external_tsv(checksum_path, failures, "agent-run-smoke checksums.tsv")
+    commands = summary["commands"].is_a?(Array) ? summary["commands"] : []
+
+    required_files = {
+      File.basename(summary_path) => true,
+      "manifest.tsv" => true
+    }
+
+    unless manifest_rows.empty?
+      missing_headers = %w[name status stdout stderr].reject { |header| manifest_rows.first.key?(header) }
+      unless missing_headers.empty?
+        failures << "agent-run-smoke manifest.tsv is missing required header(s): #{missing_headers.join(", ")}"
+      end
+    end
+
+    manifest_by_name = {}
+    manifest_rows.each do |row|
+      name = row["name"].to_s
+      if name.empty?
+        failures << "agent-run-smoke manifest.tsv has a row with an empty name"
+        next
+      end
+      unless name.match?(/\A[A-Za-z0-9_.-]+\z/) && !name.start_with?(".")
+        failures << "agent-run-smoke manifest.tsv name #{name.inspect} must be a command name"
+        next
+      end
+      if manifest_by_name.key?(name)
+        failures << "agent-run-smoke manifest.tsv has duplicate command #{name}"
+        next
+      end
+      manifest_by_name[name] = row
+    end
+
+    commands_by_name = {}
+    commands.each do |command|
+      unless command.is_a?(Hash)
+        failures << "agent-run-smoke summary commands entries must be objects"
+        next
+      end
+      name = command["name"].to_s
+      if name.empty?
+        failures << "agent-run-smoke summary command has an empty name"
+        next
+      end
+      unless name.match?(/\A[A-Za-z0-9_.-]+\z/) && !name.start_with?(".")
+        failures << "agent-run-smoke summary command name #{name.inspect} must be a command name"
+        next
+      end
+      if commands_by_name.key?(name)
+        failures << "agent-run-smoke summary has duplicate command #{name}"
+        next
+      end
+      commands_by_name[name] = command
+
+      manifest_row = manifest_by_name[name]
+      if manifest_row.nil?
+        failures << "agent-run-smoke manifest.tsv is missing command #{name}"
+      else
+        expected_status = command["status"].to_s
+        if manifest_row["status"].to_s != expected_status
+          failures << "agent-run-smoke manifest.tsv #{name} status #{manifest_row["status"].to_s.inspect} did not match summary #{expected_status.inspect}"
+        end
+        %w[stdout stderr].each do |field|
+          summary_file = command[field].to_s
+          manifest_file = manifest_row[field].to_s
+          if manifest_file != summary_file
+            failures << "agent-run-smoke manifest.tsv #{name} #{field} #{manifest_file.inspect} did not match summary #{summary_file.inspect}"
+          end
+        end
+      end
+
+      %w[stdout stderr statusFile].each do |field|
+        relative_path = agent_run_smoke_local_filename(command[field], "#{name} #{field}", failures)
+        next if relative_path.nil?
+
+        required_files[relative_path] = true
+        unless File.file?(File.join(smoke_bundle, relative_path))
+          failures << "agent-run-smoke summary #{name} #{field} references missing file #{relative_path}"
+        end
+      end
+
+      status_file = command["statusFile"].to_s
+      unless status_file.empty? || status_file.include?("/") || status_file.start_with?(".")
+        status_path = File.join(smoke_bundle, status_file)
+        if File.file?(status_path)
+          status_file_value = File.read(status_path).strip
+          expected_status = command["status"].to_s
+          unless status_file_value == expected_status
+            failures << "agent-run-smoke summary #{name} status #{expected_status.inspect} did not match #{status_file} #{status_file_value.inspect}"
+          end
+        end
+      end
+    end
+
+    manifest_by_name.each_key do |name|
+      failures << "agent-run-smoke summary commands is missing manifest command #{name}" unless commands_by_name.key?(name)
+    end
+
+    run = summary["run"].is_a?(Hash) ? summary["run"] : {}
+    %w[stdout stderr].each do |field|
+      next if run[field].nil?
+      relative_path = agent_run_smoke_local_filename(run[field], "run #{field}", failures)
+      next if relative_path.nil?
+
+      required_files[relative_path] = true
+      unless File.file?(File.join(smoke_bundle, relative_path))
+        failures << "agent-run-smoke run #{field} references missing file #{relative_path}"
+      end
+    end
+
+    if checksum_rows.empty?
+      failures << "agent-run-smoke checksums.tsv must include evidence rows"
+      return
+    end
+
+    missing_checksum_headers = %w[sha256 bytes file].reject { |header| checksum_rows.first.key?(header) }
+    unless missing_checksum_headers.empty?
+      failures << "agent-run-smoke checksums.tsv is missing required header(s): #{missing_checksum_headers.join(", ")}"
+      return
+    end
+
+    checksum_by_file = {}
+    checksum_rows.each do |row|
+      relative_path = row["file"].to_s
+      if relative_path.empty?
+        failures << "agent-run-smoke checksums.tsv has a row with an empty file"
+        next
+      end
+      if relative_path == "checksums.tsv"
+        failures << "agent-run-smoke checksums.tsv must not include itself"
+        next
+      end
+      if relative_path.include?("/") || relative_path.start_with?(".")
+        failures << "agent-run-smoke checksums.tsv file #{relative_path.inspect} must be a bundle-local filename"
+        next
+      end
+      if checksum_by_file.key?(relative_path)
+        failures << "agent-run-smoke checksums.tsv has duplicate file #{relative_path}"
+        next
+      end
+      checksum_by_file[relative_path] = row
+      require_sha256(row["sha256"], "agent-run-smoke checksums.tsv #{relative_path} sha256", failures)
+      declared_bytes = row["bytes"].to_s
+      require_nonnegative_integer(declared_bytes, "agent-run-smoke checksums.tsv #{relative_path} bytes", failures)
+      path = File.join(smoke_bundle, relative_path)
+      unless File.file?(path)
+        failures << "agent-run-smoke checksums.tsv references missing file #{relative_path}"
+        next
+      end
+      actual_sha256 = Digest::SHA256.file(path).hexdigest
+      actual_bytes = File.size(path).to_s
+      unless row["sha256"].to_s == actual_sha256
+        failures << "agent-run-smoke checksums.tsv #{relative_path} sha256 #{row["sha256"].to_s.inspect} did not match actual #{actual_sha256.inspect}"
+      end
+      unless declared_bytes == actual_bytes
+        failures << "agent-run-smoke checksums.tsv #{relative_path} bytes #{declared_bytes.inspect} did not match actual #{actual_bytes.inspect}"
+      end
+    end
+
+    required_files.keys.sort.each do |relative_path|
+      failures << "agent-run-smoke checksums.tsv is missing file #{relative_path}" unless checksum_by_file.key?(relative_path)
+    end
+  rescue StandardError => error
+    failures << "could not validate agent-run-smoke bundle: #{error.message}"
+  end
+
   def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
+
+    validate_agent_run_smoke_bundle(path, summary, failures)
 
     unless summary["schemaVersion"] == 1
       failures << "agent-run-smoke summary schemaVersion must be 1"
