@@ -9,6 +9,7 @@ enum HelperHealthState: Equatable {
     case telemetryOnly
     case unreachable
     case noFanData
+    case noControllableFans(fanCount: Int)
     case unsupported
 
     var needsAttention: Bool {
@@ -25,7 +26,7 @@ enum HelperHealthState: Equatable {
         switch self {
         case .error, .telemetryOnly, .unreachable:
             return true
-        case .checking, .healthy, .noFanData, .unsupported:
+        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
             return false
         }
     }
@@ -48,6 +49,8 @@ enum HelperHealthState: Equatable {
             return "Fan helper unreachable"
         case .noFanData:
             return "Fan helper reachable · no fan data"
+        case .noControllableFans:
+            return "Fan telemetry available · no controllable fans"
         case .unsupported:
             return "Unsupported hardware · fan writes blocked"
         }
@@ -65,6 +68,8 @@ enum HelperHealthState: Equatable {
             return "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds."
         case .noFanData:
             return "Fan data is unavailable. Fan writes stay blocked until controllable fans appear."
+        case .noControllableFans(let fanCount):
+            return "The helper can read \(fanCount) fan\(fanCount == 1 ? "" : "s"), but none are marked controllable. Keep fan writes blocked and collect read-only hardware validation evidence before changing support claims."
         case .unsupported:
             return "Vifty supports fan control on Apple Silicon MacBook Pro hardware. Keep this machine on read-only diagnostics; do not retry fan writes."
         }
@@ -638,6 +643,9 @@ final class AppModel: ObservableObject {
         if fanCount > 0 {
             guard daemonResponding else {
                 return .telemetryOnly
+            }
+            guard snapshot?.fans.contains(where: \.controllable) == true else {
+                return .noControllableFans(fanCount: fanCount)
             }
             return .healthy(fanCount: fanCount)
         }

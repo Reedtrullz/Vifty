@@ -254,6 +254,31 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
     }
 
+    func testHelperHealthSummaryReportsNoControllableFansWithoutRepairAction() {
+        let model = AppModel()
+        model.daemonResponding = true
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: false),
+                Fan(id: 1, name: "Right", currentRPM: 2450, minimumRPM: 1400, maximumRPM: 6000, controllable: false)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 63, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · no controllable fans")
+        XCTAssertEqual(model.helperHealthState, .noControllableFans(fanCount: 2))
+        XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertFalse(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperRecoverySuggestion, "The helper can read 2 fans, but none are marked controllable. Keep fan writes blocked and collect read-only hardware validation evidence before changing support claims.")
+        XCTAssertEqual(model.manualFanControlBlockedReason, "No controllable fans are available. Manual fan control stays blocked.")
+    }
+
     func testManualFanControlAvailabilityRequiresDaemonBackedWritePath() {
         let model = AppModel()
         model.snapshot = agentHardwareSnapshot()

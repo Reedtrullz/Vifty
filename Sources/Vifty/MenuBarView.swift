@@ -182,7 +182,7 @@ struct MenuBarView: View {
             "xmark.shield"
         case .unsupported:
             "slash.circle"
-        case .error, .telemetryOnly, .noFanData:
+        case .error, .telemetryOnly, .noFanData, .noControllableFans:
             "exclamationmark.shield"
         }
     }
@@ -193,7 +193,7 @@ struct MenuBarView: View {
             return Color.secondary
         case .checking:
             return Color.secondary
-        case .error, .telemetryOnly, .unreachable, .noFanData, .unsupported:
+        case .error, .telemetryOnly, .unreachable, .noFanData, .noControllableFans, .unsupported:
             return Color.orange
         }
     }
