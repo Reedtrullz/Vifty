@@ -28,6 +28,15 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("scripts/review-agent-cooling-evidence.sh"))
     }
 
+    func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("copies `ViftyDaemon` to `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`"))
+        XCTAssertTrue(readme.contains("removes stale `BundleProgram`"))
+        XCTAssertTrue(readme.contains("patches the staged LaunchDaemon plist with `ProgramArguments`"))
+        XCTAssertFalse(readme.contains("launchd points at the daemon inside the installed app bundle"))
+    }
+
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
         let agentCoolingTemplate = try read(".github/ISSUE_TEMPLATE/agent-cooling.yml")
         let releaseTrustTemplate = try read(".github/ISSUE_TEMPLATE/release-trust.yml")
