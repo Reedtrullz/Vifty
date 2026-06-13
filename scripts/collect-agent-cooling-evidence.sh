@@ -181,6 +181,11 @@ which plist is installed, and whether helper/plist files exist with expected
 ownership and permissions. Nonzero status rows for these files are evidence; do
 not rerun with sudo just to make them pass.
 
+If this report comes from the published v1.1.0 release and shows "Fan helper
+unreachable" after updating, move to the v1.1.1 source-first hotfix or build the
+current source before retrying helper repair.
+Do not retag v1.1.0 or replace its unsigned-dev assets with a later build.
+
 Before sharing publicly, check privacy-review.tsv. A nonzero privacy review
 means the named files may contain private local paths, hostnames, serial-number
 labels, hardware-identifier labels, or other identifiers.
