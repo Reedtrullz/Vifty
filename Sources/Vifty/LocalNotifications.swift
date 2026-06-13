@@ -1,5 +1,5 @@
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 import ViftyCore
 
 enum LocalNotificationKind: String, CaseIterable, Identifiable {
