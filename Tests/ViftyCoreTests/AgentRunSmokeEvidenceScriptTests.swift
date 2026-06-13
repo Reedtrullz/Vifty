@@ -30,6 +30,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
         XCTAssertTrue(try harness.read("README.txt").contains("requests one bounded `viftyctl run --json` cooling lease"))
         XCTAssertTrue(try harness.read("README.txt").contains("supported Apple Silicon MacBook Pro hardware"))
+        XCTAssertTrue(try harness.read("README.txt").contains("`recommendedAgentAction` is either `requestCooling` or `requestCoolingWithCaution`"))
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=false"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=true"))
@@ -123,6 +124,31 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
+    }
+
+    func testSmokeCollectorRunsWhenReadinessAllowsCoolingWithCaution() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCoolingWithCaution","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke evidence written"), result.stdout)
+        XCTAssertTrue(try harness.loggedArguments().contains {
+            $0 == "run --workload test --duration 2m --max-rpm-percent 55 --reason agent run smoke test --json -- /bin/sleep 5"
+        })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["state"] as? String, "degraded")
+        XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(preflight["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCoolingWithCaution")
     }
 
     func testSmokeCollectorRejectsEmptyCustomChildBeforeCallingViftyCtl() throws {
