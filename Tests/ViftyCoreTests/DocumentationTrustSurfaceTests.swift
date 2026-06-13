@@ -40,7 +40,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (589 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (590 tests)."))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
     }
@@ -433,6 +433,32 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(analysis.contains("defer MCP and Shortcuts"))
         XCTAssertTrue(analysis.contains("No breaking changes to existing `viftyctl` JSON fields."))
         XCTAssertTrue(analysis.contains("Homebrew stays parked until a Developer ID signed, notarized release exists."))
+    }
+
+    func testNextWorkplanPrioritizesAvailableHardwareAndTrustBoundaries() throws {
+        let plan = try read("docs/plans/2026-06-13-next-workplan.md")
+        let analysis = try read("docs/competitive-analysis.md")
+        let agents = try read("AGENTS.md")
+
+        XCTAssertTrue(analysis.contains("[plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md)"))
+        XCTAssertTrue(agents.contains("`docs/plans/2026-06-13-next-workplan.md`"))
+        XCTAssertTrue(plan.contains("available real hardware for immediate validation is the user's M1 Pro MacBook Pro"))
+        XCTAssertTrue(plan.contains("Other M1 Max, M2, M3, M4, and newer MacBook Pro rows must remain \"needs report\" until contributor evidence exists."))
+        XCTAssertTrue(plan.contains("source-build-tag"))
+        XCTAssertTrue(plan.contains("source-first-unsigned-dev-zip"))
+        XCTAssertTrue(plan.contains("local-ad-hoc-build"))
+        XCTAssertTrue(plan.contains("scripts/collect-validation-evidence.sh --app /Applications/Vifty.app"))
+        XCTAssertTrue(plan.contains("scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp>"))
+        XCTAssertTrue(plan.contains("--manual-smoke-result passed-auto-restored"))
+        XCTAssertTrue(plan.contains("scripts/collect-agent-run-smoke-evidence.sh"))
+        XCTAssertTrue(plan.contains("the bounded `viftyctl run` lifecycle"))
+        XCTAssertTrue(plan.contains("Ensure both left and right panes scroll predictably at minimum supported window sizes."))
+        XCTAssertTrue(plan.contains("Keep the right-side operational panel full-height"))
+        XCTAssertTrue(plan.contains("Avoid duplicate power information such as separate \"140 W adapter\" rows"))
+        XCTAssertTrue(plan.contains("selected sensor temperature"))
+        XCTAssertTrue(plan.contains("helper install, approval, unreachable, repair, unsupported, and healthy states"))
+        XCTAssertTrue(plan.contains("Sparkle auto-update unavailable for source-first and unsigned-dev builds"))
+        XCTAssertTrue(plan.contains("Homebrew cask updates before a verified Developer ID/notarized artifact exists"))
     }
 
     func testAutoUpdateDocsKeepSourceFirstBuildsOutOfSelfUpdatingLane() throws {

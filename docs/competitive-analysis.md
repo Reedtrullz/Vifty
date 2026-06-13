@@ -35,6 +35,8 @@ Plain-name comparison set: Macs Fan Control, TG Pro, iStat Menus, Stats, Hot and
 
 Priority order: trusted release story, hardware validation evidence, helper repair clarity, human UI polish, local observability, and developer/agent workflow proof.
 
+The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
+
 1. **Trusted release story:** keep `v1.1.1` source-first, unsigned-dev tester wording explicit, and prepare the future Developer ID lane without weakening its checks.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
