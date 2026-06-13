@@ -163,6 +163,21 @@ public enum PowerDisplayFormatter {
         return "Power unknown"
     }
 
+    public static func adapterDetail(for adapter: PowerAdapter) -> String? {
+        guard adapter.powerWatts >= 0.5 else { return nil }
+
+        var parts: [String] = []
+        if let ratedWatts = adapter.ratedWatts, ratedWatts > 0 {
+            parts.append("\(ratedWatts) W")
+        } else {
+            parts.append(adapterWatts(adapter.powerWatts))
+        }
+        if let voltage = adapter.negotiatedVoltageVolts, let current = adapter.negotiatedCurrentAmps {
+            parts.append("\(volts(voltage)) · \(amps(current))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     public static func batteryFlow(for snapshot: PowerSnapshot) -> String? {
         guard let batteryPower = snapshot.batteryPowerWatts, abs(batteryPower) >= 0.1 else { return nil }
         if batteryPower > 0 {

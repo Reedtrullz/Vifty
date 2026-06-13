@@ -35,7 +35,11 @@ struct MenuBarView: View {
                 .lineLimit(2)
 
             if let power = model.powerSnapshot {
-                Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
+                if let adapter = power.adapter, let adapterDetail = PowerDisplayFormatter.adapterDetail(for: adapter) {
+                    Label(adapterDetail, systemImage: "bolt.fill")
+                } else {
+                    Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
+                }
                 if let flow = PowerDisplayFormatter.batteryFlow(for: power) {
                     Label(flow, systemImage: power.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
                         .font(.caption)
@@ -45,11 +49,6 @@ struct MenuBarView: View {
                     Label(warning, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
-                }
-                if let adapter = power.adapter, adapter.powerWatts >= 0.5 {
-                    Label(adapterDetail(adapter), systemImage: "powerplug")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -108,6 +107,14 @@ struct MenuBarView: View {
                 .disabled(!model.helperHealthNeedsAttention || !daemonInstaller.canInstall)
                 .help(daemonInstaller.actionHelp)
             }
+
+            Picker("Menu bar", selection: $model.menuBarDisplayMode) {
+                ForEach(MenuBarDisplayMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.small)
 
             Divider()
 
@@ -178,16 +185,4 @@ struct MenuBarView: View {
         }
     }
 
-    private func adapterDetail(_ adapter: PowerAdapter) -> String {
-        var parts: [String] = []
-        if let ratedWatts = adapter.ratedWatts {
-            parts.append("\(ratedWatts) W")
-        } else if adapter.powerWatts >= 0.5 {
-            parts.append(PowerDisplayFormatter.watts(adapter.powerWatts))
-        }
-        if let voltage = adapter.negotiatedVoltageVolts, let current = adapter.negotiatedCurrentAmps {
-            parts.append("\(PowerDisplayFormatter.volts(voltage)) · \(PowerDisplayFormatter.amps(current))")
-        }
-        return parts.isEmpty ? "Adapter connected" : parts.joined(separator: " · ")
-    }
 }

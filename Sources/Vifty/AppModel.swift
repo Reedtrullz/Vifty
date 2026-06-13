@@ -53,6 +53,25 @@ enum HelperHealthState: Equatable {
     }
 }
 
+enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
+    case fanIcon
+    case temperature
+    case temperatureAndRPM
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .fanIcon:
+            return "Fan icon"
+        case .temperature:
+            return "Temperature"
+        case .temperatureAndRPM:
+            return "Temperature + RPM"
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var snapshot: HardwareSnapshot?
@@ -75,6 +94,11 @@ final class AppModel: ObservableObject {
     @Published var isRunning = false
     @Published var powerSnapshot: PowerSnapshot?
     @Published var thermalPressure: ThermalPressure = .nominal
+    @Published var menuBarDisplayMode: MenuBarDisplayMode {
+        didSet {
+            preferences.set(menuBarDisplayMode.rawValue, forKey: Self.menuBarDisplayModeDefaultsKey)
+        }
+    }
     @Published var telemetryHistory = TelemetryHistory()
     @Published var manualRunLimit: ManualRunLimit = .indefinitely
     @Published var manualSessionExpiresAt: Date?
@@ -84,6 +108,8 @@ final class AppModel: ObservableObject {
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
+    static let menuBarDisplayModeDefaultsKey = "menuBarDisplayMode"
+
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
     private let thermalReader: @Sendable () -> ThermalPressure
@@ -92,6 +118,7 @@ final class AppModel: ObservableObject {
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
+    private let preferences: UserDefaults
     private var pollingTask: Task<Void, Never>?
 
     init(
@@ -106,7 +133,8 @@ final class AppModel: ObservableObject {
         agentRestore: @escaping @Sendable (String) async throws -> AgentControlStatus? = { reason in
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
         },
-        profileStore: CurveProfileStore = CurveProfileStore()
+        profileStore: CurveProfileStore = CurveProfileStore(),
+        preferences: UserDefaults = .standard
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
@@ -116,6 +144,8 @@ final class AppModel: ObservableObject {
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
         self.profileStore = profileStore
+        self.preferences = preferences
+        menuBarDisplayMode = Self.loadMenuBarDisplayMode(from: preferences)
         savedProfiles = profileStore.load()
     }
 
@@ -350,10 +380,8 @@ final class AppModel: ObservableObject {
 
     var menuTitle: String {
         var parts: [String]
-        if let snapshot {
-            let temp = snapshot.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
-            let fan = snapshot.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
-            parts = [temp, fan]
+        if snapshot != nil {
+            parts = [menuBarTemperatureText, menuBarFanText]
             if let powerSnapshot {
                 parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
             }
@@ -367,6 +395,38 @@ final class AppModel: ObservableObject {
             parts.append(agentCoolingMenuSummary)
         }
         return parts.joined(separator: " | ")
+    }
+
+    var menuBarLabelText: String {
+        switch menuBarDisplayMode {
+        case .fanIcon:
+            return menuTitle
+        case .temperature:
+            return menuBarTemperatureText
+        case .temperatureAndRPM:
+            return "\(menuBarTemperatureText) | \(menuBarFanText)"
+        }
+    }
+
+    var menuBarLabelUsesFanIcon: Bool {
+        menuBarDisplayMode == .fanIcon
+    }
+
+    private var menuBarTemperatureText: String {
+        snapshot?.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
+    }
+
+    private var menuBarFanText: String {
+        snapshot?.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
+    }
+
+    private static func loadMenuBarDisplayMode(from preferences: UserDefaults) -> MenuBarDisplayMode {
+        guard let rawValue = preferences.string(forKey: menuBarDisplayModeDefaultsKey),
+              let displayMode = MenuBarDisplayMode(rawValue: rawValue)
+        else {
+            return .fanIcon
+        }
+        return displayMode
     }
 
     var agentCoolingMenuSummary: String? {

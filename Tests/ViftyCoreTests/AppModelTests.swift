@@ -417,6 +417,67 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "65 C | 2400 RPM | 96 W adapter")
     }
 
+    func testMenuBarTemperatureModeUsesRoundedHighestTemperatureAsLabelText() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .temperature
+
+        XCTAssertEqual(model.menuBarLabelText, "69 C")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarTemperatureAndFanModeUsesTemperatureAndFirstFanRPM() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .temperatureAndRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 1528 RPM")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarFanIconModeKeepsSummaryAsAccessibilityText() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 65, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .fanIcon
+
+        XCTAssertEqual(model.menuBarLabelText, "65 C | 2400 RPM")
+        XCTAssertTrue(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarDisplayModeLoadsAndPersistsPreference() {
+        let suiteName = "tech.reidar.vifty.tests.\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suiteName)!
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        preferences.set(MenuBarDisplayMode.temperature.rawValue, forKey: AppModel.menuBarDisplayModeDefaultsKey)
+
+        let model = AppModel(preferences: preferences)
+
+        XCTAssertEqual(model.menuBarDisplayMode, .temperature)
+        model.menuBarDisplayMode = .temperatureAndRPM
+        XCTAssertEqual(preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey), MenuBarDisplayMode.temperatureAndRPM.rawValue)
+    }
+
     func testPollOnceRefreshesPowerSnapshotFromInjectedReader() async {
         let expectedPower = PowerSnapshot(
             percent: 54,

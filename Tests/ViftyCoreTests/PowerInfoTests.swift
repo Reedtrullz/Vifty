@@ -64,6 +64,16 @@ final class PowerInfoTests: XCTestCase {
         XCTAssertEqual(PowerDisplayFormatter.batteryFlow(for: snapshot), "Charging battery at 28.6 W")
     }
 
+    func testAdapterDetailCombinesRatedWattsVoltageAndCurrent() {
+        let adapter = PowerAdapter(
+            ratedWatts: 140,
+            negotiatedVoltageVolts: 28.0,
+            negotiatedCurrentAmps: 4.99
+        )
+
+        XCTAssertEqual(PowerDisplayFormatter.adapterDetail(for: adapter), "140 W · 28.00 V · 4.99 A")
+    }
+
     func testExternalAdapterFallbackUsesNegotiatedVoltageAndCurrentWhenRatedWattsMissing() {
         let snapshot = PowerInfoReader.makeSnapshot(
             powerSourceDescriptions: [[

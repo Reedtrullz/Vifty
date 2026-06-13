@@ -35,6 +35,17 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("Restore Auto before starting another agent workload"))
     }
 
+    func testMenuBarPowerRowsAndStatusItemDisplayModeAreWired() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let viftyApp = try read("Sources/Vifty/ViftyApp.swift")
+
+        XCTAssertTrue(menuBarView.contains("PowerDisplayFormatter.adapterDetail(for: adapter)"))
+        XCTAssertFalse(menuBarView.contains("private func adapterDetail(_ adapter: PowerAdapter)"))
+        XCTAssertTrue(menuBarView.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
+        XCTAssertTrue(viftyApp.contains("MenuBarExtra {"))
+        XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)
