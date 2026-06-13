@@ -157,6 +157,8 @@ reviewer may also list `viftyctl-status` or `viftyctl-audit` under
 `acceptedCommandErrors`, but only when blocked `diagnose` recommends
 `repairHelper` and those commands emitted structured `HELPER_UNREACHABLE`
 command errors with `safeToProceed: false`.
+If the captured `appInfo.shortVersion` is `1.1.0`, that evidence also produces
+this stable warning text: known v1.1.0 helper-unreachable issue; use the v1.1.1 source-first hotfix.
 If the repository scripts are not available, collect the same core evidence manually:
 
 ```sh

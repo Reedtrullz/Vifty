@@ -591,6 +591,11 @@ if app_info_status == 0 && File.file?(app_info_path)
   failures << "app-info-plist.txt must include CFBundleShortVersionString" if app_info["shortVersion"].to_s.empty?
   failures << "app-info-plist.txt must include CFBundleVersion" if app_info["bundleVersion"].to_s.empty?
 end
+if helper_repair_diagnose?(diagnose_decision) &&
+    app_info["shortVersion"] == "1.1.0" &&
+    accepted_command_errors.any?
+  warnings << "known v1.1.0 helper-unreachable issue: use the v1.1.1 source-first hotfix or current source; do not retag v1.1.0 or replace its unsigned-dev assets"
+end
 
 privacy_status = integer_value(commands_by_name.dig("privacy-review", "status"))
 failures << "privacy-review must exit 0 before sharing the bundle" unless privacy_status == 0

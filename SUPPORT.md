@@ -79,6 +79,8 @@ If `diagnoseDecision` proves blocked readiness with `repairHelper`, the reviewer
 may list `viftyctl-status` or `viftyctl-audit` in `acceptedCommandErrors`, but
 only when their JSON is a structured `HELPER_UNREACHABLE` command error with
 `safeToProceed: false`.
+When `appInfo.shortVersion` is `1.1.0` and that same repair-helper evidence is
+present, the reviewer emits this stable warning text: known v1.1.0 helper-unreachable issue; use the v1.1.1 source-first hotfix and do not retag v1.1.0 or replace its unsigned-dev assets.
 
 If you prefer to paste commands manually, start with these read-only commands
 when Vifty is installed:

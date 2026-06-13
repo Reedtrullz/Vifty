@@ -411,6 +411,45 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, true)
     }
 
+    func testReviewerWarnsWhenKnownV110HelperIssueEvidenceIsCaptured() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesJSON: AgentCoolingEvidenceHarness.defaultUnavailableCapabilitiesJSON,
+            capabilitiesExitCode: 69,
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseExitCode: 75,
+            statusJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "status"),
+            statusExitCode: 1,
+            auditJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "audit"),
+            auditExitCode: 1,
+            appShortVersion: "1.1.0"
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("known v1.1.0 helper-unreachable issue"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("v1.1.1 source-first hotfix"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        let appInfo = try XCTUnwrap(reviewSummary["appInfo"] as? [String: Any])
+        XCTAssertEqual(appInfo["shortVersion"] as? String, "1.1.0")
+        let warnings = try XCTUnwrap(reviewSummary["warnings"] as? [String])
+        XCTAssertTrue(warnings.contains { warning in
+            warning.contains("known v1.1.0 helper-unreachable issue")
+                && warning.contains("v1.1.1 source-first hotfix")
+        })
+    }
+
     func testReviewerRejectsNonzeroStatusWhenDiagnoseDoesNotRequireHelperRepair() throws {
         let harness = try AgentCoolingEvidenceHarness(
             statusJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "status"),
@@ -743,6 +782,7 @@ private final class AgentCoolingEvidenceHarness {
     private let auditJSON: String
     private let auditExitCode: Int
     private let includePrivacyLeak: Bool
+    private let appShortVersion: String
 
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
@@ -753,7 +793,8 @@ private final class AgentCoolingEvidenceHarness {
         statusExitCode: Int = 0,
         auditJSON: String = #"{"readOnly":true,"coolingCommandsRun":false,"events":[]}"#,
         auditExitCode: Int = 0,
-        includePrivacyLeak: Bool = false
+        includePrivacyLeak: Bool = false,
+        appShortVersion: String = "1.1.1"
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
@@ -772,6 +813,7 @@ private final class AgentCoolingEvidenceHarness {
         self.auditJSON = auditJSON
         self.auditExitCode = auditExitCode
         self.includePrivacyLeak = includePrivacyLeak
+        self.appShortVersion = appShortVersion
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         try writeFakeAppInfoPlist()
@@ -935,7 +977,7 @@ private final class AgentCoolingEvidenceHarness {
             <key>CFBundleName</key>
             <string>Vifty</string>
             <key>CFBundleShortVersionString</key>
-            <string>1.1.1</string>
+            <string>\(appShortVersion)</string>
             <key>CFBundleVersion</key>
             <string>1</string>
         </dict>
