@@ -33,8 +33,8 @@ Use these checks to reproduce the published hotfix boundary:
 
 ```sh
 git fetch origin main --tags
-make verify
 git checkout v1.1.1
+make verify
 make source-first-release-notes
 make unsigned-dev-artifact
 RELEASE_VERSION=1.1.1 make source-first-readiness
@@ -53,8 +53,8 @@ Use these checks only to reproduce the already-published `v1.1.0` boundary. Do n
 
 ```sh
 git fetch origin main --tags
-make verify
 git checkout v1.1.0
+make verify
 make source-first-release-notes
 make unsigned-dev-artifact
 make source-first-readiness

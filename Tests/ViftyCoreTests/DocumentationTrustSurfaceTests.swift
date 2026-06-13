@@ -244,6 +244,13 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("The honest remediation is the `v1.1.1` source-first hotfix release"))
         XCTAssertTrue(releaseStatus.contains("`Resources/Info.plist` now carries `1.1.1`; `Casks/vifty.rb` remains on `1.1.0`"))
         XCTAssertTrue(releaseStatus.contains("## Source-First v1.1.1 Operator Checks"))
+        XCTAssertOrder(
+            in: releaseStatus,
+            after: "## Source-First v1.1.1 Operator Checks",
+            "git checkout v1.1.1",
+            before: "make verify",
+            message: "Published release boundary checks must verify the immutable v1.1.1 tag, not whatever main currently points at."
+        )
         XCTAssertTrue(releaseStatus.contains("RELEASE_VERSION=1.1.1 make source-first-readiness"))
         XCTAssertTrue(releaseStatus.contains("reports `ready` with the attached `Vifty-v1.1.1-unsigned-dev.zip` and checksum assets"))
         XCTAssertTrue(releaseStatus.contains("names `a82f2237ff39c24a6b366dca8f95a17ee54fd972` as the immutable source tag commit"))
@@ -256,6 +263,13 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertFalse(releaseStatus.contains("## Source-First v1.1.0 Operator Checks"))
         XCTAssertTrue(releaseStatus.contains("Use these checks only to reproduce the already-published `v1.1.0` boundary."))
         XCTAssertFalse(releaseStatus.contains("Use these checks before publishing or updating the `v1.1.0` GitHub Release"))
+        XCTAssertOrder(
+            in: releaseStatus,
+            after: "## Superseded v1.1.0 Boundary Audit",
+            "git checkout v1.1.0",
+            before: "make verify",
+            message: "Superseded release audits must verify the immutable v1.1.0 tag, not later main hardening."
+        )
         XCTAssertTrue(releaseStatus.contains("They should also include a source provenance section naming the immutable release tag commit"))
         XCTAssertTrue(releaseStatus.contains("make source-first-release-notes"))
         XCTAssertTrue(releaseStatus.contains("Those generated notes should tell maintainers to use `--require-source-ref <candidate-ref-or-sha>` only before publication or with an immutable intended release commit"))
@@ -785,5 +799,30 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func XCTAssertOrder(
+        in text: String,
+        after anchor: String,
+        _ first: String,
+        before second: String,
+        message: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let anchorRange = text.range(of: anchor) else {
+            XCTFail("Missing anchor marker: \(anchor). \(message)", file: file, line: line)
+            return
+        }
+        let scopedText = String(text[anchorRange.lowerBound...])
+        guard let firstRange = scopedText.range(of: first) else {
+            XCTFail("Missing first marker: \(first). \(message)", file: file, line: line)
+            return
+        }
+        guard let secondRange = scopedText.range(of: second) else {
+            XCTFail("Missing second marker: \(second). \(message)", file: file, line: line)
+            return
+        }
+        XCTAssertLessThan(firstRange.lowerBound, secondRange.lowerBound, message, file: file, line: line)
     }
 }
