@@ -47,6 +47,80 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(6000))])
     }
 
+    func testTemperatureCurveReappliesWhenHardwareReturnsToAuto() async throws {
+        let curve = FanCurve(points: [
+            CurvePoint(temperatureCelsius: 50, rpm: 3000),
+            CurvePoint(temperatureCelsius: 70, rpm: 5000)
+        ])
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan(currentRPM: 4000, hardwareMode: .forced, targetRPM: 4000)],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.temperatureCurve(curve))
+
+        _ = try await coordinator.tick()
+        await hardware.clearAppliedCommands()
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [Self.fan(currentRPM: 1800, hardwareMode: .automatic, targetRPM: nil)],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(
+            applied,
+            [FanCommand(fanID: 0, mode: .fixedRPM(4000))],
+            "Until-changed curve mode must reassert the target if macOS reclaims Auto without a temperature change."
+        )
+    }
+
+    func testTemperatureCurveReappliesWhenHardwareTargetDrifts() async throws {
+        let curve = FanCurve(points: [
+            CurvePoint(temperatureCelsius: 50, rpm: 3000),
+            CurvePoint(temperatureCelsius: 70, rpm: 5000)
+        ])
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan(currentRPM: 4000, hardwareMode: .forced, targetRPM: 4000)],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.temperatureCurve(curve))
+
+        _ = try await coordinator.tick()
+        await hardware.clearAppliedCommands()
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [Self.fan(currentRPM: 2200, hardwareMode: .forced, targetRPM: 2200)],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(
+            applied,
+            [FanCommand(fanID: 0, mode: .fixedRPM(4000))],
+            "Until-changed curve mode must reassert the target if the live hardware target no longer matches Vifty."
+        )
+    }
+
     func testMissingSensorsRestoresAutoForManualMode() async throws {
         let hardware = FakeHardware(
             snapshot: HardwareSnapshot(
@@ -169,6 +243,39 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3000))])
     }
 
+    func testFixedRPMReappliesWhenHardwareReturnsToAuto() async throws {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan(currentRPM: 3200, hardwareMode: .forced, targetRPM: 3200)],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.fixedRPM(3200))
+
+        _ = try await coordinator.tick()
+        await hardware.clearAppliedCommands()
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [Self.fan(currentRPM: 1800, hardwareMode: .automatic, targetRPM: nil)],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(
+            applied,
+            [FanCommand(fanID: 0, mode: .fixedRPM(3200))],
+            "Until-changed fixed mode must reassert the target if macOS reclaims Auto without a user change."
+        )
+    }
+
     func testCurveWithPerFanOverrideAppliesDifferentRPMs() async throws {
         let hardware = FakeHardware(
             snapshot: HardwareSnapshot(
@@ -252,8 +359,23 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(commands, [FanCommand(fanID: 1, mode: .fixedRPM(4000))])
     }
 
-    private static func fan(minimumRPM: Int = 1400, maximumRPM: Int = 6000) -> Fan {
-        Fan(id: 0, name: "Left Fan", currentRPM: minimumRPM, minimumRPM: minimumRPM, maximumRPM: maximumRPM, controllable: true)
+    private static func fan(
+        currentRPM: Int? = nil,
+        minimumRPM: Int = 1400,
+        maximumRPM: Int = 6000,
+        hardwareMode: FanHardwareMode? = nil,
+        targetRPM: Int? = nil
+    ) -> Fan {
+        Fan(
+            id: 0,
+            name: "Left Fan",
+            currentRPM: currentRPM ?? minimumRPM,
+            minimumRPM: minimumRPM,
+            maximumRPM: maximumRPM,
+            controllable: true,
+            hardwareMode: hardwareMode,
+            targetRPM: targetRPM
+        )
     }
 
     private static func sensor(_ celsius: Double) -> TemperatureSensor {
@@ -280,6 +402,14 @@ private actor FakeHardware: HardwareService {
 
     func snapshot() async throws -> HardwareSnapshot {
         snapshotValue
+    }
+
+    func setSnapshot(_ snapshot: HardwareSnapshot) {
+        snapshotValue = snapshot
+    }
+
+    func clearAppliedCommands() {
+        appliedCommands.removeAll()
     }
 
     func apply(_ command: FanCommand, fan: Fan) async throws {

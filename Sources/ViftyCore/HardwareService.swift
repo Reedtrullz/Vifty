@@ -127,7 +127,7 @@ public actor FanControlCoordinator {
     private func applyFixedRPM(_ rpm: Int, snapshot: HardwareSnapshot) async throws {
         for fan in snapshot.fans where fan.controllable {
             let target = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
-            guard shouldApply(target, to: fan.id) else { continue }
+            guard shouldApply(target, to: fan) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
         }
@@ -147,7 +147,7 @@ public actor FanControlCoordinator {
                 minimumRPM: fan.minimumRPM,
                 maximumRPM: fan.maximumRPM
             )
-            guard shouldApply(target, to: fan.id) else { continue }
+            guard shouldApply(target, to: fan) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
         }
@@ -168,9 +168,22 @@ public actor FanControlCoordinator {
         } ?? snapshot.highestTemperature
     }
 
-    private func shouldApply(_ rpm: Int, to fanID: Int) -> Bool {
-        guard let previous = state.lastAppliedRPM[fanID] else { return true }
+    private func shouldApply(_ rpm: Int, to fan: Fan) -> Bool {
+        if hardwareNeedsManualReassertion(rpm, fan: fan) {
+            return true
+        }
+        guard let previous = state.lastAppliedRPM[fan.id] else { return true }
         return abs(previous - rpm) >= significantRPMDelta
+    }
+
+    private func hardwareNeedsManualReassertion(_ rpm: Int, fan: Fan) -> Bool {
+        if let hardwareMode = fan.hardwareMode, hardwareMode != .forced {
+            return true
+        }
+        if let targetRPM = fan.targetRPM {
+            return abs(targetRPM - rpm) >= significantRPMDelta
+        }
+        return false
     }
 
     private func restoreAuto(for fans: [Fan]) async throws {
@@ -204,7 +217,7 @@ public actor FanControlCoordinator {
                     maximumRPM: fan.maximumRPM
                 )
             }
-            guard shouldApply(target, to: fan.id) else { continue }
+            guard shouldApply(target, to: fan) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
         }
