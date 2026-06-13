@@ -199,6 +199,23 @@ The manual smoke test proves direct prepare/restore behavior. For developer-work
 
 If this follows the manual smoke test above, wait for the advertised prepare cooldown before starting the run smoke. Use `capabilities --json` or `status --json` to read `policy.prepareCooldownSeconds`; the default policy is 30 seconds. If the first run attempt returns `PREPARE_RATE_LIMITED`, keep that JSON as evidence, wait for `retryAfterSeconds`, and retry once. Do not treat the first cooldown response as a failed agent-run smoke test, and do not busy-loop retries.
 
+The preferred captured path is:
+
+```sh
+scripts/collect-agent-run-smoke-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+This writes an agent-run smoke bundle with `manifest.tsv`,
+`agent-run-smoke-evidence-summary.json`, the `viftyctl run` stdout/stderr/status
+when the run is attempted, and follow-up capabilities/status/audit/diagnose
+files. It is not read-only when readiness is safe because it requests one
+bounded `viftyctl run --json` cooling lease for `/bin/sleep 5` by default. It
+stops before `viftyctl run` when readiness is blocked, writes a blocked summary,
+captures read-only status/audit follow-up, and exits `75`.
+
+To run the same smoke manually:
+
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl run \
   --workload test \
