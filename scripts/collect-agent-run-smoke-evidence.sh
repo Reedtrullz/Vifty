@@ -306,6 +306,7 @@ write_summary_json() {
     end
     puts JSON.pretty_generate({
       "schemaVersion" => 1,
+      "schemaID" => "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
       "kind" => "vifty-agent-run-smoke",
       "generatedAtUTC" => generated_at,
       "status" => status,

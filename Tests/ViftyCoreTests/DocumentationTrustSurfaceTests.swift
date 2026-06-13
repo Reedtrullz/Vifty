@@ -707,6 +707,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("preserves install provenance, source checksums, `modelFamily`, agent decisions, recovery guidance, agent-run smoke evidence, and daemon control-path readiness in compatibility indexes"))
         XCTAssertTrue(workplan.contains("scripts/collect-agent-run-smoke-evidence.sh"))
         XCTAssertTrue(workplan.contains("agent-run-smoke-evidence-summary.json"))
+        XCTAssertTrue(workplan.contains("https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"))
+        XCTAssertTrue(workplan.contains("--agent-run-smoke-summary <path>"))
         XCTAssertTrue(workplan.contains("stops before `viftyctl run` when readiness is blocked"))
         XCTAssertTrue(workplan.contains("validated hardware reports by model family"))
         XCTAssertTrue(workplan.contains("the Markdown draft ignores release-trust rows for hardware status"))

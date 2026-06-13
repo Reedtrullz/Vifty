@@ -78,19 +78,20 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
 
 The supported-hardware smoke-test result values are `not-recorded`, `passed-auto-restored`, `skipped-blocked`, `skipped-unsupported`, and `failed`. Only `passed-auto-restored` can make a supported Apple Silicon MacBook Pro report count as validated hardware evidence; `failed`, `skipped-blocked`, or `skipped-unsupported` fail the supported-hardware review instead of being silently indexed as support.
 
-If the issue template also records the supervised **viftyctl run smoke test** as passed, include it in the machine-readable review:
+If the supervised **viftyctl run smoke test** bundle is available, prefer the captured summary in the machine-readable review:
 
 ```sh
 scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
   --mode supported-hardware \
   --manual-smoke-result passed-auto-restored \
   --manual-smoke-source <hardware-validation-issue-url> \
-  --agent-run-smoke-result passed-auto-restored \
-  --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke \
+  --agent-run-smoke-summary .build/vifty-agent-run-smoke-<timestamp>/agent-run-smoke-evidence-summary.json \
   --summary .build/vifty-validation-<timestamp>/review-result.json
 ```
 
-The agent-run smoke result uses the same values as the manual smoke test and is preserved as `agentRunSmokeResult` / `agentRunSmokeSource`. It is developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
+The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file. If only issue-template text is available, keep using `--agent-run-smoke-result passed-auto-restored --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke`.
+
+The agent-run smoke result uses the same values as the manual smoke test and is preserved as developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
 
 After several reports are reviewed, build a local index for maintainers:
 

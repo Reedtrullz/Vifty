@@ -34,6 +34,11 @@ Options:
   --agent-run-smoke-source <text>
                          Issue URL, note, or other source for the supervised
                          viftyctl run smoke result.
+  --agent-run-smoke-summary <path>
+                         Captured agent-run-smoke-evidence-summary.json from
+                         scripts/collect-agent-run-smoke-evidence.sh. When
+                         supplied, the reviewer validates schema identity and
+                         derives agent-run smoke result/source from the file.
   -h, --help             Show this help.
 USAGE
 }
@@ -45,6 +50,7 @@ MANUAL_SMOKE_RESULT="not-recorded"
 MANUAL_SMOKE_SOURCE=""
 AGENT_RUN_SMOKE_RESULT="not-recorded"
 AGENT_RUN_SMOKE_SOURCE=""
+AGENT_RUN_SMOKE_SUMMARY_PATH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,6 +108,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       AGENT_RUN_SMOKE_SOURCE="$2"
+      shift 2
+      ;;
+    --agent-run-smoke-summary)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --agent-run-smoke-summary requires a path" >&2
+        exit 64
+      fi
+      AGENT_RUN_SMOKE_SUMMARY_PATH="$2"
       shift 2
       ;;
     -h|--help)
@@ -165,9 +179,11 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   manual_smoke_source = ARGV.fetch(4, "")
   agent_run_smoke_result = ARGV.fetch(5, "not-recorded")
   agent_run_smoke_source = ARGV.fetch(6, "")
+  agent_run_smoke_summary_path = ARGV.fetch(7, "")
   failures = []
   warnings = []
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
+  AGENT_RUN_SMOKE_SUMMARY_SCHEMA_ID = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
 
   EXPECTED_EXECUTABLES = {
     "Vifty" => "Contents/MacOS/Vifty",
@@ -179,6 +195,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   EXPECTED_SCHEMA_RESOURCES = {
     "agent-cooling-evidence-summary.schema.json" => "Contents/Resources/schemas/agent-cooling-evidence-summary.schema.json",
     "agent-cooling-evidence-review.schema.json" => "Contents/Resources/schemas/agent-cooling-evidence-review.schema.json",
+    "agent-run-smoke-evidence-summary.schema.json" => "Contents/Resources/schemas/agent-run-smoke-evidence-summary.schema.json",
     "release-artifact-summary.schema.json" => "Contents/Resources/schemas/release-artifact-summary.schema.json",
     "release-readiness.schema.json" => "Contents/Resources/schemas/release-readiness.schema.json",
     "validation-report-index.schema.json" => "Contents/Resources/schemas/validation-report-index.schema.json",
@@ -598,6 +615,86 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def parse_external_json(path, failures, label)
+    unless File.file?(path)
+      failures << "#{label} not found: #{path}"
+      return nil
+    end
+    JSON.parse(File.read(path))
+  rescue StandardError => error
+    failures << "could not parse #{label}: #{error.message}"
+    nil
+  end
+
+  def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
+    summary = parse_external_json(path, failures, "agent-run-smoke summary")
+    return nil if summary.nil?
+
+    unless summary["schemaVersion"] == 1
+      failures << "agent-run-smoke summary schemaVersion must be 1"
+    end
+    unless summary["schemaID"] == expected_schema_id
+      failures << "agent-run-smoke summary schemaID must be #{expected_schema_id}"
+    end
+    unless summary["kind"] == "vifty-agent-run-smoke"
+      failures << "agent-run-smoke summary kind must be vifty-agent-run-smoke"
+    end
+
+    preflight = summary["preflight"].is_a?(Hash) ? summary["preflight"] : {}
+    run = summary["run"].is_a?(Hash) ? summary["run"] : {}
+    unless summary["commands"].is_a?(Array) && !summary["commands"].empty?
+      failures << "agent-run-smoke summary commands must be a non-empty array"
+    end
+
+    case summary["status"].to_s
+    when "passed"
+      unless summary["readOnly"] == false
+        failures << "passed agent-run-smoke summary must declare readOnly=false"
+      end
+      unless summary["coolingCommandsRun"] == true
+        failures << "passed agent-run-smoke summary must declare coolingCommandsRun=true"
+      end
+      unless preflight["safeToRequestCooling"] == true
+        failures << "passed agent-run-smoke summary must have safeToRequestCooling=true"
+      end
+      unless preflight["daemonControlPathReady"] == true
+        failures << "passed agent-run-smoke summary must have daemonControlPathReady=true"
+      end
+      unless %w[requestCooling requestCoolingWithCaution].include?(preflight["recommendedAgentAction"].to_s)
+        failures << "passed agent-run-smoke summary must recommend requestCooling or requestCoolingWithCaution"
+      end
+      unless run["exitStatus"] == 0
+        failures << "passed agent-run-smoke summary run.exitStatus must be 0"
+      end
+      "passed-auto-restored"
+    when "failed"
+      unless summary["readOnly"] == false
+        failures << "failed agent-run-smoke summary must declare readOnly=false"
+      end
+      unless summary["coolingCommandsRun"] == true
+        failures << "failed agent-run-smoke summary must declare coolingCommandsRun=true"
+      end
+      unless run["exitStatus"].is_a?(Integer) && run["exitStatus"] != 0
+        failures << "failed agent-run-smoke summary run.exitStatus must be a nonzero integer"
+      end
+      "failed"
+    when "blocked"
+      unless summary["readOnly"] == true
+        failures << "blocked agent-run-smoke summary must declare readOnly=true"
+      end
+      unless summary["coolingCommandsRun"] == false
+        failures << "blocked agent-run-smoke summary must declare coolingCommandsRun=false"
+      end
+      unless run["exitStatus"].nil?
+        failures << "blocked agent-run-smoke summary run.exitStatus must be null"
+      end
+      "skipped-blocked"
+    else
+      failures << "agent-run-smoke summary status must be passed, failed, or blocked"
+      nil
+    end
+  end
+
   def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source)
     return if path.to_s.empty?
 
@@ -772,6 +869,22 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "viftyctl-diagnose.json recommendedRecoveryAction",
     failures
   )
+
+  unless agent_run_smoke_summary_path.to_s.empty?
+    derived_agent_run_smoke_result = validate_agent_run_smoke_summary(
+      File.expand_path(agent_run_smoke_summary_path),
+      AGENT_RUN_SMOKE_SUMMARY_SCHEMA_ID,
+      failures
+    )
+    unless derived_agent_run_smoke_result.nil?
+      if agent_run_smoke_result == "not-recorded"
+        agent_run_smoke_result = derived_agent_run_smoke_result
+      elsif agent_run_smoke_result != derived_agent_run_smoke_result
+        failures << "agent-run-smoke summary result #{derived_agent_run_smoke_result.inspect} conflicts with --agent-run-smoke-result #{agent_run_smoke_result.inspect}"
+      end
+      agent_run_smoke_source = File.expand_path(agent_run_smoke_summary_path) if agent_run_smoke_source.to_s.empty?
+    end
+  end
 
   case mode
   when "supported-hardware"
@@ -1004,4 +1117,4 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }
   exit 65
-' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}"
+' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_SUMMARY_PATH}"

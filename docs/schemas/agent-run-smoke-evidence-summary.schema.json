@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
+  "title": "Vifty agent run smoke evidence summary",
+  "description": "Machine-readable summary written by scripts/collect-agent-run-smoke-evidence.sh for supervised viftyctl run smoke bundles.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "kind",
+    "generatedAtUTC",
+    "status",
+    "readOnly",
+    "coolingCommandsRun",
+    "viftyctl",
+    "workload",
+    "duration",
+    "maxRPMPercent",
+    "reason",
+    "auditLimit",
+    "childCommand",
+    "preflight",
+    "run",
+    "commands"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
+    },
+    "kind": {
+      "const": "vifty-agent-run-smoke"
+    },
+    "generatedAtUTC": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked"
+      ]
+    },
+    "readOnly": {
+      "type": "boolean"
+    },
+    "coolingCommandsRun": {
+      "type": "boolean"
+    },
+    "viftyctl": {
+      "type": "string"
+    },
+    "workload": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "string"
+    },
+    "maxRPMPercent": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "reason": {
+      "type": "string"
+    },
+    "auditLimit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "childCommand": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "preflight": {
+      "$ref": "#/$defs/preflight"
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    }
+  },
+  "$defs": {
+    "preflight": {
+      "type": "object",
+      "required": [
+        "exitStatus",
+        "state",
+        "recommendedAgentAction",
+        "recommendedRecoveryAction",
+        "safeToRequestCooling",
+        "daemonControlPathReady"
+      ],
+      "properties": {
+        "exitStatus": {
+          "type": "integer"
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommendedAgentAction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommendedRecoveryAction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "safeToRequestCooling": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "daemonControlPathReady": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "exitStatus",
+        "stdout",
+        "stderr",
+        "skippedReason"
+      ],
+      "properties": {
+        "exitStatus": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stdout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stderr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skippedReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": [
+        "name",
+        "status",
+        "stdout",
+        "stderr",
+        "statusFile"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "statusFile": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

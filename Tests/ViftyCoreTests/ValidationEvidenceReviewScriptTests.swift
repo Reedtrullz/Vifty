@@ -439,6 +439,66 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewDerivesValidatedAgentRunSmokeFromCapturedSummary() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "passed")
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/captured-agent-run-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+        XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewRejectsAgentRunSmokeSummarySchemaDrift() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            schemaID: "https://example.invalid/agent-run-smoke.schema.json"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("agent-run-smoke summary schemaID must be https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"))
+    }
+
+    func testReviewRejectsFailedCapturedAgentRunSmokeForSupportedHardware() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "failed", runExitStatus: 70)
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/failed-captured-agent-run-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("supported hardware validation cannot pass with a failed supervised viftyctl run smoke test"))
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "failed")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "failed")
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -719,7 +779,8 @@ private final class ValidationEvidenceReviewHarness {
         manualSmokeResult: String? = nil,
         manualSmokeSource: String? = nil,
         agentRunSmokeResult: String? = nil,
-        agentRunSmokeSource: String? = nil
+        agentRunSmokeSource: String? = nil,
+        agentRunSmokeSummaryURL: URL? = nil
     ) throws -> ValidationEvidenceReviewProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/review-validation-evidence.sh")
@@ -746,6 +807,9 @@ private final class ValidationEvidenceReviewHarness {
         if let agentRunSmokeSource {
             arguments += ["--agent-run-smoke-source", agentRunSmokeSource]
         }
+        if let agentRunSmokeSummaryURL {
+            arguments += ["--agent-run-smoke-summary", agentRunSmokeSummaryURL.path]
+        }
         process.arguments = arguments
 
         let stdout = Pipe()
@@ -766,6 +830,67 @@ private final class ValidationEvidenceReviewHarness {
     func readJSON(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    func writeAgentRunSmokeSummary(
+        status: String,
+        schemaID: String = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
+        runExitStatus: Int = 0
+    ) throws -> URL {
+        let url = rootURL.appendingPathComponent("agent-run-smoke-evidence-summary-\(UUID().uuidString).json")
+        let run: [String: Any]
+        if status == "blocked" {
+            run = [
+                "exitStatus": NSNull(),
+                "stdout": NSNull(),
+                "stderr": NSNull(),
+                "skippedReason": "readiness blocked before smoke run"
+            ]
+        } else {
+            run = [
+                "exitStatus": runExitStatus,
+                "stdout": "viftyctl-run.json",
+                "stderr": "viftyctl-run.stderr",
+                "skippedReason": NSNull()
+            ]
+        }
+        let json: [String: Any] = [
+            "schemaVersion": 1,
+            "schemaID": schemaID,
+            "kind": "vifty-agent-run-smoke",
+            "generatedAtUTC": "2026-06-13T00:00:00Z",
+            "status": status,
+            "readOnly": status == "blocked",
+            "coolingCommandsRun": status != "blocked",
+            "viftyctl": "/Applications/Vifty.app/Contents/MacOS/viftyctl",
+            "workload": "test",
+            "duration": "2m",
+            "maxRPMPercent": 55,
+            "reason": "agent run smoke test",
+            "auditLimit": 20,
+            "childCommand": ["/bin/sleep", "5"],
+            "preflight": [
+                "exitStatus": status == "blocked" ? 75 : 0,
+                "state": status == "blocked" ? "blocked" : "ready",
+                "recommendedAgentAction": status == "blocked" ? "doNotRequestCooling" : "requestCooling",
+                "recommendedRecoveryAction": status == "blocked" ? "repairHelper" : "none",
+                "safeToRequestCooling": status != "blocked",
+                "daemonControlPathReady": status != "blocked"
+            ],
+            "run": run,
+            "commands": [
+                [
+                    "name": "pre-diagnose",
+                    "status": status == "blocked" ? 75 : 0,
+                    "stdout": "pre-diagnose.json",
+                    "stderr": "pre-diagnose.stderr",
+                    "statusFile": "pre-diagnose.status"
+                ]
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: url)
+        return url
     }
 
     func removeChecksumEntry(for filename: String) throws {
@@ -1140,6 +1265,7 @@ private final class ValidationEvidenceReviewHarness {
     schema\tsha256\tbytes\tbundlePath
     agent-cooling-evidence-summary.schema.json\t\(String(repeating: "1", count: 64))\t2100\tContents/Resources/schemas/agent-cooling-evidence-summary.schema.json
     agent-cooling-evidence-review.schema.json\t\(String(repeating: "2", count: 64))\t1700\tContents/Resources/schemas/agent-cooling-evidence-review.schema.json
+    agent-run-smoke-evidence-summary.schema.json\t\(String(repeating: "3", count: 64))\t2600\tContents/Resources/schemas/agent-run-smoke-evidence-summary.schema.json
     release-artifact-summary.schema.json\t\(String(repeating: "f", count: 64))\t3300\tContents/Resources/schemas/release-artifact-summary.schema.json
     release-readiness.schema.json\t\(String(repeating: "0", count: 64))\t2600\tContents/Resources/schemas/release-readiness.schema.json
     validation-report-index.schema.json\t\(String(repeating: "9", count: 64))\t3100\tContents/Resources/schemas/validation-report-index.schema.json

@@ -47,6 +47,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
         let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
         XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            summary["schemaID"] as? String,
+            "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
+        )
         XCTAssertEqual(summary["kind"] as? String, "vifty-agent-run-smoke")
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["readOnly"] as? Bool, false)
@@ -105,6 +109,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.outputURL.appendingPathComponent("viftyctl-run.status").path))
 
         let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(
+            summary["schemaID"] as? String,
+            "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
+        )
         XCTAssertEqual(summary["status"] as? String, "blocked")
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
@@ -130,6 +138,33 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("custom child command after -- cannot be empty"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.outputURL.path))
+    }
+
+    func testEvidenceSummarySchemaDocumentsCollectorContract() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/agent-run-smoke-evidence-summary.schema.json")
+        let schema = try AgentRunSmokeEvidenceHarness.readJSON(schemaURL)
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(
+            schema["$id"] as? String,
+            "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
+        )
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        for field in [
+            "schemaVersion",
+            "schemaID",
+            "kind",
+            "status",
+            "readOnly",
+            "coolingCommandsRun",
+            "preflight",
+            "run",
+            "commands"
+        ] {
+            XCTAssertTrue(required.contains(field), "missing required field \(field)")
+        }
     }
 }
 
@@ -220,7 +255,11 @@ private final class AgentRunSmokeEvidenceHarness {
     }
 
     func readJSON(_ relativePath: String) throws -> [String: Any] {
-        let data = try Data(contentsOf: outputURL.appendingPathComponent(relativePath))
+        try Self.readJSON(outputURL.appendingPathComponent(relativePath))
+    }
+
+    static func readJSON(_ url: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
