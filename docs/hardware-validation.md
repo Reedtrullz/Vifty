@@ -212,8 +212,10 @@ This writes an agent-run smoke bundle with `manifest.tsv`,
 when the run is attempted, and follow-up capabilities/status/audit/diagnose
 files. It is not read-only when readiness is safe because it requests one
 bounded `viftyctl run --json` cooling lease for `/bin/sleep 5` by default. It
-stops before `viftyctl run` when readiness is blocked, writes a blocked summary,
-captures read-only status/audit follow-up, and exits `75`.
+stops before `viftyctl run` when `pre-capabilities.json` does not advertise the
+`run` command, `test` workload, and safe `runLifecycle` contract, or when
+readiness is blocked. In those cases it writes a blocked summary, captures
+read-only status/audit follow-up, and exits `75`.
 
 To run the same smoke manually:
 
