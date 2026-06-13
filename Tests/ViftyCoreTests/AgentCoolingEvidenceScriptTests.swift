@@ -239,6 +239,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
         )
         XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        let summaryBundlePath = try XCTUnwrap(reviewSummary["bundlePath"] as? String)
+        XCTAssertEqual(summaryBundlePath, harness.outputURL.lastPathComponent)
+        XCTAssertFalse(summaryBundlePath.contains(harness.rootURL.path))
+        XCTAssertFalse(summaryBundlePath.hasPrefix("/"))
         XCTAssertEqual(reviewSummary["readOnly"] as? Bool, true)
         XCTAssertEqual(reviewSummary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(reviewSummary["commandsReviewed"] as? Int, 9)

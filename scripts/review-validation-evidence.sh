@@ -904,6 +904,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def share_safe_bundle_path(bundle)
+    File.basename(File.expand_path(bundle.to_s))
+  end
+
   def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source)
     return if path.to_s.empty?
 
@@ -913,7 +917,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "generatedAtUTC" => Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
       "status" => status,
       "mode" => mode,
-      "bundlePath" => bundle,
+      "bundlePath" => share_safe_bundle_path(bundle),
       "readOnly" => true,
       "coolingCommandsRun" => false,
       "appPath" => review_summary["appPath"],

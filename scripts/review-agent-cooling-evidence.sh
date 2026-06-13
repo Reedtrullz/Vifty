@@ -263,6 +263,10 @@ def plutil_string_value(text, key)
   match && match[1]
 end
 
+def share_safe_bundle_path(bundle)
+  File.basename(File.expand_path(bundle.to_s))
+end
+
 def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, app_info, accepted_command_errors, failures, warnings)
   return unless summary_path
 
@@ -271,7 +275,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "schemaVersion" => 1,
     "schemaID" => REVIEW_SCHEMA_ID,
     "generatedAtUTC" => Time.now.utc.iso8601,
-    "bundlePath" => bundle,
+    "bundlePath" => share_safe_bundle_path(bundle),
     "status" => status,
     "readOnly" => read_only,
     "coolingCommandsRun" => cooling_commands_run,

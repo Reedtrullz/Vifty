@@ -32,7 +32,8 @@
       "type": "string"
     },
     "bundlePath": {
-      "type": "string"
+      "type": "string",
+      "description": "Share-safe evidence bundle directory name, not an absolute local filesystem path."
     },
     "status": {
       "enum": [
