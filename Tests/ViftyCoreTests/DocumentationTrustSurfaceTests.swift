@@ -40,9 +40,18 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (579 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (580 tests)."))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
+    }
+
+    func testAgentInstructionsTrackCurrentSourceFirstReleaseBoundary() throws {
+        let agents = try read("AGENTS.md")
+
+        XCTAssertTrue(agents.contains("`v1.1.1` is the current source-first hotfix while Apple Developer Program credentials are unavailable"))
+        XCTAssertTrue(agents.contains("`v1.1.0` is superseded and must not be retagged or refreshed from later source"))
+        XCTAssertTrue(agents.contains("Future trusted binary releases should use `.github/workflows/release.yml`"))
+        XCTAssertFalse(agents.contains("`v1.1.0` is source-first because Apple Developer Program credentials are unavailable"))
     }
 
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
