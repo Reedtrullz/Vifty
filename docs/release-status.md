@@ -42,9 +42,14 @@ RELEASE_VERSION=1.1.1 make source-first-readiness
 
 The published GitHub Release body repeats the source-first warning, names `a82f2237ff39c24a6b366dca8f95a17ee54fd972` as the immutable source tag commit, explains that the attached app is unsigned/not notarized/not trusted, and calls out the helper-install/app-polling fixes that supersede `v1.1.0`.
 
-## Source-First v1.1.0 Operator Checks
+`make source-first-release-notes` writes `.build/Vifty-v1.1.1-source-first-release-notes.md`. Those generated notes tell maintainers to use `--require-source-ref <candidate-ref-or-sha>` only before publication or with an immutable intended release commit, never as a blanket `origin/main` post-publication check. `make unsigned-dev-artifact` requires the current source to match `UNSIGNED_DEV_SOURCE_REF`, which defaults to `v1.1.1`, so post-release `main` cannot silently produce a tester zip named as the `v1.1.1` release attachment. The optional current hotfix tester assets are valid only when both files are present:
 
-Use these checks before publishing or updating the `v1.1.0` GitHub Release:
+- `Vifty-v1.1.1-unsigned-dev.zip`
+- `Vifty-v1.1.1-unsigned-dev.zip.sha256`
+
+## Superseded v1.1.0 Boundary Audit
+
+Use these checks only to reproduce the already-published `v1.1.0` boundary. Do not publish, update, or refresh public `v1.1.0` assets from later source; the supported remediation is the `v1.1.1` source-first hotfix or a future new release.
 
 ```sh
 git fetch origin main --tags
