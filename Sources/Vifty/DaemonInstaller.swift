@@ -47,13 +47,13 @@ final class DaemonInstaller: ObservableObject {
 
         switch actionTitle {
         case "Approve Helper":
-            return "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty and wait for healthy fan status."
+            return "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty. Fan writes stay blocked until the daemon responds."
         case "Install Helper":
-            return "Installs the root LaunchDaemon used for fan reads and writes. macOS may ask for administrator approval."
+            return "Installs the root LaunchDaemon used for fan reads and writes. Fan writes stay blocked until the daemon responds."
         case "Reinstall Helper":
-            return "Recopies the bundled daemon, removes quarantine attributes, fixes LaunchDaemon ownership, and restarts launchd."
+            return "Recopies the daemon, strips quarantine, fixes ownership, and restarts launchd. Fan writes stay blocked until the daemon responds."
         default:
-            return "Repairs the privileged helper install, fixes LaunchDaemon ownership, strips quarantine, and restarts launchd."
+            return "Repairs the helper install, fixes ownership, strips quarantine, and restarts launchd. Fan writes stay blocked until the daemon responds."
         }
     }
 

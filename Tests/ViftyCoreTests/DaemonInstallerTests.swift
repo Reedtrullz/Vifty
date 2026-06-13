@@ -5,10 +5,10 @@ import XCTest
 final class DaemonInstallerTests: XCTestCase {
     func testHelperActionCopyMatchesInstallerStatus() {
         let installer = DaemonInstaller()
-        let installDetail = "Installs the root LaunchDaemon used for fan reads and writes. macOS may ask for administrator approval."
-        let approveDetail = "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty and wait for healthy fan status."
-        let reinstallDetail = "Recopies the bundled daemon, removes quarantine attributes, fixes LaunchDaemon ownership, and restarts launchd."
-        let repairDetail = "Repairs the privileged helper install, fixes LaunchDaemon ownership, strips quarantine, and restarts launchd."
+        let installDetail = "Installs the root LaunchDaemon used for fan reads and writes. Fan writes stay blocked until the daemon responds."
+        let approveDetail = "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty. Fan writes stay blocked until the daemon responds."
+        let reinstallDetail = "Recopies the daemon, strips quarantine, fixes ownership, and restarts launchd. Fan writes stay blocked until the daemon responds."
+        let repairDetail = "Repairs the helper install, fixes ownership, strips quarantine, and restarts launchd. Fan writes stay blocked until the daemon responds."
         let cases: [(status: String, canInstall: Bool, title: String, help: String, detail: String)] = [
             ("Checking helper", true, "Install Helper", "Install the privileged fan helper", installDetail),
             ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper", installDetail),
