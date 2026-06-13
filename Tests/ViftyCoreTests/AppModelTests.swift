@@ -507,6 +507,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarTemperatureUsesSelectedCurveSensorBeforeHighestTemperature() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 61.2, source: .smc),
+                TemperatureSensor(id: "TB0T", name: "Battery", celsius: 72.9, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.selectedSensorID = "Tp09"
+
+        model.menuBarDisplayMode = .temperature
+        XCTAssertEqual(model.menuBarLabelText, "61 C")
+
+        model.menuBarDisplayMode = .temperatureAndRPM
+        XCTAssertEqual(model.menuBarLabelText, "61 C | 1528 RPM")
+
+        XCTAssertEqual(model.menuTitle, "61 C | 1528 RPM")
+    }
+
     func testMenuBarTemperatureAndFanModeUsesTemperatureAndFirstFanRPM() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(

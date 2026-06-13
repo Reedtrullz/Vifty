@@ -487,7 +487,7 @@ final class AppModel: ObservableObject {
     }
 
     private var menuBarTemperatureText: String {
-        snapshot?.highestTemperature.map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
+        (selectedSensor ?? snapshot?.highestTemperature).map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
     }
 
     private var menuBarFanText: String {
