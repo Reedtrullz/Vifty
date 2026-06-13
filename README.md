@@ -1,6 +1,6 @@
 # Vifty
 
-Native macOS menu-bar fan control and charger-power monitoring for Apple Silicon MacBook Pros. Vifty combines live thermals, fan RPM control, reusable temperature curves, and USB-C/MagSafe power telemetry in one local-first SwiftUI utility.
+Open-source, local-first thermal control for Apple Silicon MacBook Pro developers. Vifty focuses on safe local thermal control for Apple Silicon MacBook Pro developer workloads: builds, tests, and local AI coding agents. It combines live thermals, fan RPM control, reusable temperature curves, bounded `viftyctl` cooling leases, and USB-C/MagSafe power telemetry in one SwiftUI utility.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
 ![Swift](https://img.shields.io/badge/swift-6.0-orange)
@@ -36,9 +36,11 @@ Vifty is built for local signed distribution, not the App Store. It uses private
 
 Mac fan control has been dominated by proprietary closed-source tools for years. Vifty is different:
 
+Vifty is not trying to be a general-purpose system monitor yet; its wedge is auditable fan control, bounded agent cooling, helper recovery, and evidence-backed compatibility for Apple Silicon MacBook Pro developers.
+
 - **Open-source and auditable** — every SMC write path, RPM clamp, and safety check is visible. You can verify that fan control does exactly what it claims.
 - **Agent-safe by design** — the `viftyctl` agent CLI is a purpose-built open-source thermal management interface for AI coding agents. Leases carry bounded durations, reasons, idempotency keys, policy metadata, and retry-after signals; the daemon enforces expiry independently.
-- **Combined fan + power + telemetry** — instead of running separate tools for fan control, battery monitoring, and thermal pressure, Vifty gives you a single local-first utility with zero cloud dependencies.
+- **Developer workload context** — fan control, charger-power telemetry, and thermal pressure are shown together so builds, tests, and local agents have the thermal context they need without turning Vifty into a broad monitoring suite.
 - **Privileged helper architecture** — the root daemon owns SMC writes so the app never needs repeated permission prompts, and unprivileged direct AppleSMC writes are refused (fail-closed).
 
 If you use Apple Silicon for builds, tests, or AI workloads, Vifty keeps your machine cool and your fan control auditable.

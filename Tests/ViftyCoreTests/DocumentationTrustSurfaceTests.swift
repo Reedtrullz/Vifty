@@ -2,6 +2,15 @@ import Foundation
 import XCTest
 
 final class DocumentationTrustSurfaceTests: XCTestCase {
+    func testReadmePositionsViftyAroundDeveloperWorkloadCooling() throws {
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("safe local thermal control for Apple Silicon MacBook Pro developer workloads"))
+        XCTAssertTrue(readme.contains("builds, tests, and local AI coding agents"))
+        XCTAssertTrue(readme.contains("Vifty is not trying to be a general-purpose system monitor yet"))
+        XCTAssertTrue(readme.contains("its wedge is auditable fan control, bounded agent cooling, helper recovery, and evidence-backed compatibility"))
+    }
+
     func testReadmeLinksCompatibilityAndHardwareValidation() throws {
         let readme = try read("README.md")
 
