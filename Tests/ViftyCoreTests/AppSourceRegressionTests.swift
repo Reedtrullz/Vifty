@@ -75,6 +75,24 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
     }
 
+    func testMenuBarNotificationSettingsAreWired() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+        let notifications = try read("Sources/Vifty/LocalNotifications.swift")
+
+        XCTAssertTrue(menuBarView.contains("Label(\"Notifications\", systemImage: \"bell\")"))
+        XCTAssertTrue(menuBarView.contains("Toggle(\"Helper failure\", isOn: $model.notificationSettings.helperFailure)"))
+        XCTAssertTrue(menuBarView.contains("Toggle(\"High thermal pressure\", isOn: $model.notificationSettings.elevatedThermalPressure)"))
+        XCTAssertTrue(menuBarView.contains("Toggle(\"Auto restore failure\", isOn: $model.notificationSettings.autoRestoreFailure)"))
+        XCTAssertTrue(menuBarView.contains("Toggle(\"Plugged-in battery drain\", isOn: $model.notificationSettings.pluggedInBatteryDrain)"))
+        XCTAssertTrue(appModel.contains("notificationMinimumInterval: TimeInterval = 10 * 60"))
+        XCTAssertTrue(appModel.contains("sustainedThermalPressureInterval: TimeInterval = 60"))
+        XCTAssertTrue(notifications.contains("UNUserNotificationCenter"))
+        XCTAssertTrue(notifications.contains("XCTestConfigurationFilePath"))
+        XCTAssertTrue(notifications.contains("processName == \"xctest\""))
+        XCTAssertTrue(notifications.contains("static let disabled = LocalNotificationSettings()"))
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)

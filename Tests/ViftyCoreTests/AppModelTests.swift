@@ -550,6 +550,137 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey), MenuBarDisplayMode.temperatureAndRPM.rawValue)
     }
 
+    func testNotificationSettingsLoadAndPersistAsIndividualPreferences() {
+        let suiteName = "tech.reidar.vifty.tests.\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suiteName)!
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        preferences.set(true, forKey: AppModel.notificationHelperFailureDefaultsKey)
+        preferences.set(true, forKey: AppModel.notificationThermalPressureDefaultsKey)
+
+        let model = AppModel(preferences: preferences)
+
+        XCTAssertTrue(model.notificationSettings.helperFailure)
+        XCTAssertTrue(model.notificationSettings.elevatedThermalPressure)
+        XCTAssertFalse(model.notificationSettings.autoRestoreFailure)
+        XCTAssertFalse(model.notificationSettings.pluggedInBatteryDrain)
+
+        model.notificationSettings.autoRestoreFailure = true
+        model.notificationSettings.pluggedInBatteryDrain = true
+
+        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationAutoRestoreDefaultsKey))
+        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationPluggedInDrainDefaultsKey))
+    }
+
+    func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFailingHardware(error: ViftyError.helperRejected("Snapshot failed")),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1000) },
+            notificationDeliverer: recorder,
+            daemonPing: { false },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.helperFailure = true
+
+        await model.pollOnce()
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertEqual(notification.title, "Vifty fan helper needs attention")
+    }
+
+    func testSustainedThermalPressureNotificationWaitsBeforeFiring() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .serious },
+            now: { clock.now },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.elevatedThermalPressure = true
+
+        await model.pollOnce()
+        XCTAssertTrue(recorder.delivered.isEmpty)
+
+        clock.now = Date(timeIntervalSince1970: 1061)
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertTrue(notification.body.contains("sustained serious thermal pressure"))
+    }
+
+    func testPluggedInBatteryDrainNotificationFiresOnDrainTransition() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: {
+                PowerSnapshot(
+                    percent: 50,
+                    isPluggedIn: true,
+                    batteryPowerWatts: -11.25
+                )
+            },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1000) },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.pluggedInBatteryDrain = true
+
+        await model.pollOnce()
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.pluggedInBatteryDrain])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertTrue(notification.body.contains("11.2 W"))
+    }
+
+    func testAutoRestoreFailureNotificationFiresWhenAgentLeaseClearFails() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let lease = agentLease()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1000) },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+            },
+            agentRestore: { _ in
+                throw ViftyError.helperRejected("Daemon connection invalidated.")
+            }
+        )
+        model.notificationSettings.autoRestoreFailure = true
+        model.agentControlStatus = AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+
+        await model.restoreAutoNow()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.autoRestoreFailure])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertTrue(notification.body.contains("Daemon connection invalidated"))
+    }
+
     func testPollOnceRefreshesPowerSnapshotFromInjectedReader() async {
         let expectedPower = PowerSnapshot(
             percent: 54,
@@ -1250,5 +1381,14 @@ private actor AgentStatusSequence {
     func next() throws -> AgentControlStatus? {
         guard !results.isEmpty else { return nil }
         return try results.removeFirst().get()
+    }
+}
+
+@MainActor
+private final class AppModelNotificationRecorder: LocalNotificationDelivering {
+    private(set) var delivered: [LocalNotification] = []
+
+    func deliver(_ notification: LocalNotification) async {
+        delivered.append(notification)
     }
 }

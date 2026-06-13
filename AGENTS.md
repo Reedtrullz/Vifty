@@ -51,6 +51,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCtl/main.swift` — thin `viftyctl` command entrypoint.
 - `Sources/Vifty/ViftyApp.swift` — `@main` SwiftUI app entry (menu bar extra + window scene).
 - `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
+- `Sources/Vifty/LocalNotifications.swift` — opt-in local UserNotifications wrapper and notification settings model for helper, thermal-pressure, restore-failure, and plugged-in-drain alerts.
 - `.github/workflows/ci.yml` — GitHub Actions CI: Swift tests, release app build, plist/code-sign checks, temp install verification, and app artifact upload.
 - `.github/workflows/release.yml` — tagged release workflow for Developer ID signing, notarization, stapling, checksums, and GitHub Release publishing.
 - `.github/repo-metadata.json` — expected GitHub topics and issue labels for contributor discovery, release trust, hardware validation, and agent-cooling triage.
@@ -114,7 +115,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (590 tests).
+- `swift test` runs `ViftyCoreTests` (596 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.

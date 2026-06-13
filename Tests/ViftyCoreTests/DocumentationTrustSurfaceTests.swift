@@ -9,6 +9,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("builds, tests, and local AI coding agents"))
         XCTAssertTrue(readme.contains("Vifty is not trying to be a general-purpose system monitor yet"))
         XCTAssertTrue(readme.contains("its wedge is auditable fan control, bounded agent cooling, helper recovery, and evidence-backed compatibility"))
+        XCTAssertTrue(readme.contains("Optional local notifications"))
+        XCTAssertTrue(readme.contains("off by default"))
+        XCTAssertTrue(readme.contains("macOS UserNotifications only"))
     }
 
     func testReadmeLinksCompatibilityAndHardwareValidation() throws {
@@ -40,7 +43,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (590 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (596 tests)."))
+        XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
     }

@@ -108,6 +108,11 @@ final class AppModel: ObservableObject {
             preferences.set(menuBarDisplayMode.rawValue, forKey: Self.menuBarDisplayModeDefaultsKey)
         }
     }
+    @Published var notificationSettings: LocalNotificationSettings {
+        didSet {
+            Self.saveNotificationSettings(notificationSettings, to: preferences)
+        }
+    }
     @Published var telemetryHistory = TelemetryHistory()
     @Published var manualRunLimit: ManualRunLimit = .indefinitely
     @Published var manualSessionExpiresAt: Date?
@@ -118,23 +123,35 @@ final class AppModel: ObservableObject {
     @Published var savedProfiles: [CurveProfile] = []
 
     static let menuBarDisplayModeDefaultsKey = "menuBarDisplayMode"
+    static let notificationHelperFailureDefaultsKey = "notification.helperFailure"
+    static let notificationThermalPressureDefaultsKey = "notification.elevatedThermalPressure"
+    static let notificationAutoRestoreDefaultsKey = "notification.autoRestoreFailure"
+    static let notificationPluggedInDrainDefaultsKey = "notification.pluggedInBatteryDrain"
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
+    private let notificationDeliverer: LocalNotificationDelivering
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
     private let preferences: UserDefaults
     private var pollingTask: Task<Void, Never>?
+    private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
+    private var previousHelperNeedsAttention = false
+    private var previousPluggedInDrain = false
+    private var elevatedThermalPressureStartedAt: Date?
+    private let notificationMinimumInterval: TimeInterval = 10 * 60
+    private let sustainedThermalPressureInterval: TimeInterval = 60
 
     init(
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
         powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
+        notificationDeliverer: LocalNotificationDelivering = UserNotificationDeliverer(),
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
         agentStatusReader: @escaping @Sendable () async throws -> AgentControlStatus? = {
             try await ViftyDaemonClient().agentControlStatus()
@@ -149,12 +166,14 @@ final class AppModel: ObservableObject {
         self.powerReader = powerReader
         self.thermalReader = thermalReader
         self.now = now
+        self.notificationDeliverer = notificationDeliverer
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
         self.profileStore = profileStore
         self.preferences = preferences
         menuBarDisplayMode = Self.loadMenuBarDisplayMode(from: preferences)
+        notificationSettings = Self.loadNotificationSettings(from: preferences)
         savedProfiles = profileStore.load()
     }
 
@@ -188,6 +207,7 @@ final class AppModel: ObservableObject {
         await syncState()
         if let agentRestoreError {
             lastError = agentRestoreError
+            await notifyAutoRestoreFailure(agentRestoreError)
         }
     }
 
@@ -217,6 +237,7 @@ final class AppModel: ObservableObject {
                 : nil
             syncCurveDefaultsIfNeeded(from: nextSnapshot)
             await syncState()
+            await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         } catch {
             lastError = error.localizedDescription
             daemonResponding = await daemonPing()
@@ -224,6 +245,7 @@ final class AppModel: ObservableObject {
             await refreshAgentControlStatus()
             await coordinator.forceAuto()
             await syncState()
+            await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
     }
 
@@ -256,6 +278,7 @@ final class AppModel: ObservableObject {
         await pollOnce()
         if let agentRestoreError {
             lastError = agentRestoreError
+            await notifyAutoRestoreFailure(agentRestoreError)
         }
     }
 
@@ -267,6 +290,7 @@ final class AppModel: ObservableObject {
         await pollOnce()
         if let agentRestoreError {
             lastError = agentRestoreError
+            await notifyAutoRestoreFailure(agentRestoreError)
         }
     }
 
@@ -458,6 +482,22 @@ final class AppModel: ObservableObject {
             return .fanIcon
         }
         return displayMode
+    }
+
+    private static func loadNotificationSettings(from preferences: UserDefaults) -> LocalNotificationSettings {
+        LocalNotificationSettings(
+            helperFailure: preferences.bool(forKey: notificationHelperFailureDefaultsKey),
+            elevatedThermalPressure: preferences.bool(forKey: notificationThermalPressureDefaultsKey),
+            autoRestoreFailure: preferences.bool(forKey: notificationAutoRestoreDefaultsKey),
+            pluggedInBatteryDrain: preferences.bool(forKey: notificationPluggedInDrainDefaultsKey)
+        )
+    }
+
+    private static func saveNotificationSettings(_ settings: LocalNotificationSettings, to preferences: UserDefaults) {
+        preferences.set(settings.helperFailure, forKey: notificationHelperFailureDefaultsKey)
+        preferences.set(settings.elevatedThermalPressure, forKey: notificationThermalPressureDefaultsKey)
+        preferences.set(settings.autoRestoreFailure, forKey: notificationAutoRestoreDefaultsKey)
+        preferences.set(settings.pluggedInBatteryDrain, forKey: notificationPluggedInDrainDefaultsKey)
     }
 
     var agentCoolingMenuSummary: String? {
@@ -813,6 +853,80 @@ final class AppModel: ObservableObject {
 
     private func syncState() async {
         controlState = await coordinator.state
+    }
+
+    private func evaluateLocalNotifications(power: PowerSnapshot, thermalPressure: ThermalPressure) async {
+        let helperNeedsAttention = helperHealthNeedsAttention
+        if helperNeedsAttention, !previousHelperNeedsAttention {
+            await postNotification(
+                kind: .helperFailure,
+                title: "Vifty fan helper needs attention",
+                body: helperRecoverySuggestion ?? "Repair or approve the fan helper before requesting fan control."
+            )
+        }
+        previousHelperNeedsAttention = helperNeedsAttention
+
+        await evaluateThermalPressureNotification(thermalPressure)
+        await evaluatePluggedInDrainNotification(power)
+    }
+
+    private func evaluateThermalPressureNotification(_ thermalPressure: ThermalPressure) async {
+        let isElevated = thermalPressure == .serious || thermalPressure == .critical
+        guard isElevated else {
+            elevatedThermalPressureStartedAt = nil
+            return
+        }
+
+        let currentDate = now()
+        if elevatedThermalPressureStartedAt == nil {
+            elevatedThermalPressureStartedAt = currentDate
+        }
+
+        guard let startedAt = elevatedThermalPressureStartedAt,
+              currentDate.timeIntervalSince(startedAt) >= sustainedThermalPressureInterval
+        else {
+            return
+        }
+
+        await postNotification(
+            kind: .elevatedThermalPressure,
+            title: "Vifty thermal pressure is \(thermalPressure.displayName)",
+            body: "macOS reports sustained \(thermalPressure.displayName.lowercased()) thermal pressure. Consider reducing workload or restoring Auto."
+        )
+    }
+
+    private func evaluatePluggedInDrainNotification(_ power: PowerSnapshot) async {
+        let isPluggedInDrain = power.isPluggedIn && power.batteryIsActivelyDraining
+        if isPluggedInDrain, !previousPluggedInDrain {
+            let watts = power.batteryPowerWatts.map { PowerDisplayFormatter.watts(abs($0)) } ?? "battery power"
+            await postNotification(
+                kind: .pluggedInBatteryDrain,
+                title: "Vifty sees battery drain while plugged in",
+                body: "Battery is draining at \(watts) even though external power is connected."
+            )
+        }
+        previousPluggedInDrain = isPluggedInDrain
+    }
+
+    private func notifyAutoRestoreFailure(_ message: String) async {
+        await postNotification(
+            kind: .autoRestoreFailure,
+            title: "Vifty could not confirm Auto restore",
+            body: message
+        )
+    }
+
+    private func postNotification(kind: LocalNotificationKind, title: String, body: String) async {
+        guard notificationSettings.isEnabled(kind) else { return }
+
+        let currentDate = now()
+        if let previous = lastNotificationAt[kind],
+           currentDate.timeIntervalSince(previous) < notificationMinimumInterval {
+            return
+        }
+
+        lastNotificationAt[kind] = currentDate
+        await notificationDeliverer.deliver(LocalNotification(kind: kind, title: title, body: body))
     }
 }
 

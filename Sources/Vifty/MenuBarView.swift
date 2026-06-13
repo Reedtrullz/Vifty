@@ -116,6 +116,17 @@ struct MenuBarView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
 
+            DisclosureGroup {
+                Toggle("Helper failure", isOn: $model.notificationSettings.helperFailure)
+                Toggle("High thermal pressure", isOn: $model.notificationSettings.elevatedThermalPressure)
+                Toggle("Auto restore failure", isOn: $model.notificationSettings.autoRestoreFailure)
+                Toggle("Plugged-in battery drain", isOn: $model.notificationSettings.pluggedInBatteryDrain)
+            } label: {
+                Label("Notifications", systemImage: "bell")
+                    .font(.caption.weight(.semibold))
+            }
+            .font(.caption)
+
             Divider()
 
             HStack {
