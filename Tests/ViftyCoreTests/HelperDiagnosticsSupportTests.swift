@@ -11,7 +11,7 @@ final class HelperDiagnosticsSupportTests: XCTestCase {
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
 
-        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL)
+        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL, executableURL: nil)
 
         XCTAssertEqual(command, "'\(viftyCtlURL.path)' diagnose --json")
     }
@@ -25,7 +25,7 @@ final class HelperDiagnosticsSupportTests: XCTestCase {
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
 
-        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL)
+        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL, executableURL: nil)
 
         XCTAssertEqual(command, "'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' diagnose --json")
     }
@@ -35,9 +35,45 @@ final class HelperDiagnosticsSupportTests: XCTestCase {
         let appURL = root.appendingPathComponent("Vifty.app", isDirectory: true)
         try FileManager.default.createDirectory(at: appURL, withIntermediateDirectories: true)
 
-        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL)
+        let command = HelperDiagnosticsSupport.diagnoseCommand(bundleURL: appURL, executableURL: nil)
 
         XCTAssertEqual(command, "/Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json")
+    }
+
+    func testDiagnoseCommandUsesAdjacentSwiftPMViftyCtlForSourceRuns() throws {
+        let root = try temporaryDirectory()
+        let buildURL = root.appendingPathComponent("debug", isDirectory: true)
+        try FileManager.default.createDirectory(at: buildURL, withIntermediateDirectories: true)
+        let executableURL = buildURL.appendingPathComponent("Vifty", isDirectory: false)
+        let viftyCtlURL = buildURL.appendingPathComponent("ViftyCtl", isDirectory: false)
+        try Data("#!/bin/sh\n".utf8).write(to: executableURL)
+        try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
+
+        let command = HelperDiagnosticsSupport.diagnoseCommand(
+            bundleURL: executableURL,
+            executableURL: executableURL
+        )
+
+        XCTAssertEqual(command, "'\(viftyCtlURL.path)' diagnose --json")
+    }
+
+    func testDiagnoseCommandUsesAdjacentLowercaseViftyCtlForDevelopmentAppLayouts() throws {
+        let root = try temporaryDirectory()
+        let buildURL = root.appendingPathComponent("debug", isDirectory: true)
+        try FileManager.default.createDirectory(at: buildURL, withIntermediateDirectories: true)
+        let executableURL = buildURL.appendingPathComponent("Vifty", isDirectory: false)
+        let viftyCtlURL = buildURL.appendingPathComponent("viftyctl", isDirectory: false)
+        try Data("#!/bin/sh\n".utf8).write(to: executableURL)
+        try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
+
+        let command = HelperDiagnosticsSupport.diagnoseCommand(
+            bundleURL: executableURL,
+            executableURL: executableURL
+        )
+
+        XCTAssertEqual(command, "'\(viftyCtlURL.path)' diagnose --json")
     }
 
     private func temporaryDirectory() throws -> URL {
