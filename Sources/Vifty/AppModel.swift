@@ -56,6 +56,27 @@ enum HelperHealthState: Equatable {
         }
     }
 
+    var menuSummary: String {
+        switch self {
+        case .checking:
+            return "Checking helper"
+        case .healthy(let fanCount):
+            return "Helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
+        case .error:
+            return "Helper needs repair"
+        case .telemetryOnly:
+            return "Fan writes blocked"
+        case .unreachable:
+            return "Helper not responding"
+        case .noFanData:
+            return "Waiting for fan data"
+        case .noControllableFans:
+            return "No controllable fans"
+        case .unsupported:
+            return "Unsupported hardware"
+        }
+    }
+
     var recoverySuggestion: String? {
         switch self {
         case .checking, .healthy:
@@ -72,6 +93,21 @@ enum HelperHealthState: Equatable {
             return "The helper can read \(fanCount) fan\(fanCount == 1 ? "" : "s"), but none are marked controllable. Keep fan writes blocked and collect read-only hardware validation evidence before changing support claims."
         case .unsupported:
             return "Vifty supports fan control on Apple Silicon MacBook Pro hardware. Keep this machine on read-only diagnostics; do not retry fan writes."
+        }
+    }
+
+    var menuRecoverySuggestion: String? {
+        switch self {
+        case .checking, .healthy:
+            return nil
+        case .error, .telemetryOnly, .unreachable:
+            return "Repair/Reinstall Helper; approve Login Items if prompted."
+        case .noFanData:
+            return "Keep Auto selected and copy diagnose for read-only evidence."
+        case .noControllableFans:
+            return "Keep Auto selected and collect hardware validation evidence."
+        case .unsupported:
+            return "Read-only diagnostics only on this Mac."
         }
     }
 }
@@ -739,6 +775,10 @@ final class AppModel: ObservableObject {
         helperHealthState.summary
     }
 
+    var helperHealthMenuSummary: String {
+        helperHealthState.menuSummary
+    }
+
     var helperHealthNeedsAttention: Bool {
         helperHealthState.needsAttention
     }
@@ -749,6 +789,13 @@ final class AppModel: ObservableObject {
 
     var helperRecoverySuggestion: String? {
         helperHealthState.recoverySuggestion
+    }
+
+    var helperMenuRecoverySuggestion: String? {
+        if fanWriteBlockedWhileHotSummary != nil {
+            return nil
+        }
+        return helperHealthState.menuRecoverySuggestion
     }
 
     var manualFanControlAvailable: Bool {

@@ -102,11 +102,11 @@ struct MenuBarView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
+                Label(model.helperHealthMenuSummary, systemImage: helperHealthSystemImage)
                     .font(.caption.weight(model.helperHealthNeedsAttention ? .semibold : .regular))
                     .foregroundStyle(helperHealthMenuColor)
 
-                if let helperRecoverySuggestion = model.helperRecoverySuggestion {
+                if let helperRecoverySuggestion = model.helperMenuRecoverySuggestion {
                     Text(helperRecoverySuggestion)
                         .font(.caption)
                         .foregroundStyle(.secondary)

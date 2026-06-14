@@ -254,6 +254,46 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds.")
     }
 
+    func testHelperMenuCopyUsesCompactRepairHintWhenTelemetryIsReadOnly() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 72, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthSummary, "Read-only fan telemetry · repair daemon for writes")
+        XCTAssertEqual(model.helperHealthMenuSummary, "Fan writes blocked")
+        XCTAssertEqual(model.helperMenuRecoverySuggestion, "Repair/Reinstall Helper; approve Login Items if prompted.")
+    }
+
+    func testHotBlockedFanWritesSuppressRedundantHelperMenuRecovery() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.thermalPressure = .nominal
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperHealthMenuSummary, "Fan writes blocked")
+        XCTAssertNil(model.helperMenuRecoverySuggestion)
+    }
+
     func testHelperHealthSummaryReportsNoControllableFansWithoutRepairAction() {
         let model = AppModel()
         model.daemonResponding = true

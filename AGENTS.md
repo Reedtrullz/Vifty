@@ -115,7 +115,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (625 tests).
+- `swift test` runs `ViftyCoreTests` (627 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.
