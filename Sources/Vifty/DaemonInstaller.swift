@@ -7,6 +7,8 @@ final class DaemonInstaller: ObservableObject {
     @Published var statusText = "Checking helper"
     @Published var canInstall = true
 
+    private static let missingBundledPlistMessage = "Vifty is missing its bundled LaunchDaemon plist. Rebuild or reinstall Vifty from source before installing the helper."
+
     var service: SMAppService {
         SMAppService.daemon(plistName: ViftyDaemonConstants.plistName)
     }
@@ -28,7 +30,7 @@ final class DaemonInstaller: ObservableObject {
     }
 
     var actionHelp: String {
-        guard canInstall else { return statusText }
+        guard canInstall else { return unavailableActionMessage }
 
         switch actionTitle {
         case "Approve Helper":
@@ -43,7 +45,7 @@ final class DaemonInstaller: ObservableObject {
     }
 
     var actionDescription: String {
-        guard canInstall else { return statusText }
+        guard canInstall else { return unavailableActionMessage }
 
         switch actionTitle {
         case "Approve Helper":
@@ -57,6 +59,14 @@ final class DaemonInstaller: ObservableObject {
         }
     }
 
+    private var unavailableActionMessage: String {
+        let status = statusText.lowercased()
+        if status.contains("plist not found") || status.contains("missing its bundled launchdaemon plist") {
+            return Self.missingBundledPlistMessage
+        }
+        return statusText
+    }
+
     func refresh() {
         if #available(macOS 13.0, *) {
             switch service.status {
@@ -68,7 +78,7 @@ final class DaemonInstaller: ObservableObject {
                 canInstall = true
             case .notFound:
                 statusText = "Fan helper plist not found in app bundle"
-                canInstall = true
+                canInstall = false
             case .requiresApproval:
                 statusText = "Approve fan helper in Login Items"
                 canInstall = true
