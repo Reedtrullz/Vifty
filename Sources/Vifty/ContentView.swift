@@ -125,6 +125,7 @@ struct ContentView: View {
     private var fanControlPane: some View {
         VStack(alignment: .leading, spacing: 18) {
             modePicker
+            menuBarDisplaySettings
 
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
                 HStack(spacing: 8) {
@@ -343,6 +344,25 @@ struct ContentView: View {
             .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
             .help(model.selectedMode != .auto ? (model.manualFanControlBlockedReason ?? "Apply selected fan mode") : "Restore Auto")
         }
+    }
+
+    private var menuBarDisplaySettings: some View {
+        HStack(spacing: 8) {
+            Label("Menu bar", systemImage: "menubar.rectangle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Menu bar", selection: $model.menuBarDisplayMode) {
+                ForEach(MenuBarDisplayMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            Spacer()
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var fixedEditor: some View {

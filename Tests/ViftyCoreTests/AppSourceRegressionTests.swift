@@ -98,6 +98,7 @@ final class AppSourceRegressionTests: XCTestCase {
 
     func testMenuBarPowerRowsAndStatusItemDisplayModeAreWired() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let contentView = try read("Sources/Vifty/ContentView.swift")
         let viftyApp = try read("Sources/Vifty/ViftyApp.swift")
 
         XCTAssertTrue(menuBarView.contains("Text(model.menuPanelTitle)"))
@@ -107,6 +108,11 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("PowerDisplayFormatter.adapterDetail(for: adapter)"))
         XCTAssertFalse(menuBarView.contains("private func adapterDetail(_ adapter: PowerAdapter)"))
         XCTAssertTrue(menuBarView.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
+        XCTAssertTrue(contentView.contains("private var menuBarDisplaySettings: some View"))
+        XCTAssertTrue(contentView.contains("Label(\"Menu bar\", systemImage: \"menubar.rectangle\")"))
+        XCTAssertTrue(contentView.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
+        XCTAssertTrue(contentView.contains("ForEach(MenuBarDisplayMode.allCases)"))
+        XCTAssertTrue(contentView.contains(".labelsHidden()"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtra {"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
     }
