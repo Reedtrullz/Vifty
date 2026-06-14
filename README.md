@@ -300,13 +300,16 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift
 
 For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local model workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
 
-Agent readiness checklist:
+### Agent readiness checklist
 
-- Run `viftyctl capabilities --json` and require the advertised `run` lifecycle before using guarded workloads.
+- Run `viftyctl capabilities --json` and require the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, policy limits, and unavailable exit code before using guarded workloads.
 - Run `viftyctl diagnose --json` before cooling; require `safeToRequestCooling: true` and `daemonControlPathReady: true`.
-- Prefer `viftyctl run --json -- <command>` so Vifty validates the child command before preparing cooling and restores Auto afterward.
-- If readiness is `blocked`, follow `recommendedRecoveryAction` and collect read-only evidence instead of retrying cooling.
+- Follow `recommendedAgentAction` and `recommendedRecoveryAction` instead of parsing UI text or human warning strings.
+- Prefer `examples/viftyctl/guarded-run.sh ... -- <command>` or the workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local-model runs. They keep child validation, cooling, signal handling, and Auto restore in one lifecycle.
+- Use direct `viftyctl run --json -- <command>` only when the caller already performs the same readiness and child-command preflight.
+- If readiness is `blocked`, repair the helper, restore Auto, back off the workload, or collect read-only evidence according to the JSON recovery fields instead of retrying cooling.
 - Use `viftyctl audit --limit 20 --json` after blocked readiness or restore failures to inspect what happened locally.
+- Use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly accepts running without Vifty cooling after seeing the structured readiness result. Do not fall back to `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or direct helper writes.
 
 For commands with `--json`, daemon/transport failures return a structured error object with `command`, `errorCode`, `message`, `safeToProceed: false`, and `recommendedRecoveryAction` instead of plain stderr text. Unknown, duplicate, missing-value, or unexpected wrapper arguments fail with `INVALID_ARGUMENTS` instead of being ignored, silently choosing one value, or generating a default value. `PREPARE_RATE_LIMITED` command errors include `retryAfterSeconds` when Vifty can report a retry wait. For `viftyctl run --json`, wrapper failures before the child starts, such as child-command resolution, prepare denial, or launch failure after a prepared lease, use the same structured error shape. Child command resolution/launch failures use `CHILD_COMMAND_FAILED` so agents do not confuse workload command problems with Vifty helper failures. If launch fails after cooling was prepared, the JSON also reports `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` so agents can tell whether cleanup ran. Agents should use `recommendedRecoveryAction` for the next safe step instead of parsing human `message` text. Child output and post-child restore errors keep the normal wrapper exit/stderr behavior. Human-readable invocations keep the normal stderr failure path.
 

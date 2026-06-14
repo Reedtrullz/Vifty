@@ -12,6 +12,16 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("Optional local notifications"))
         XCTAssertTrue(readme.contains("off by default"))
         XCTAssertTrue(readme.contains("macOS UserNotifications only"))
+        XCTAssertTrue(readme.contains("### Agent readiness checklist"))
+        XCTAssertTrue(readme.contains("`viftyctl capabilities --json`"))
+        XCTAssertTrue(readme.contains("`viftyctl diagnose --json`"))
+        XCTAssertTrue(readme.contains("`safeToRequestCooling: true`"))
+        XCTAssertTrue(readme.contains("`daemonControlPathReady: true`"))
+        XCTAssertTrue(readme.contains("`recommendedAgentAction`"))
+        XCTAssertTrue(readme.contains("`recommendedRecoveryAction`"))
+        XCTAssertTrue(readme.contains("`examples/viftyctl/guarded-run.sh ... -- <command>`"))
+        XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`"))
+        XCTAssertTrue(readme.contains("Do not fall back to `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or direct helper writes."))
     }
 
     func testReadmeLinksCompatibilityAndHardwareValidation() throws {
