@@ -344,7 +344,7 @@ The app bundles a LaunchDaemon plist. On first launch:
 1. `SMAppService.register()` attempts Login Items approval on macOS 13+.
 2. Fallback: administrator-prompted install via `osascript` to `/Library/PrivilegedHelperTools/` plus `launchctl bootstrap`.
 
-The **Reinstall Helper** button retries this flow. The fallback installer stops any existing launchd service, copies `ViftyDaemon` to `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`, removes stale `BundleProgram`, patches the staged LaunchDaemon plist with `ProgramArguments` pointing at that privileged-helper path, and then bootstraps launchd. It sets the helper and LaunchDaemon plist to `root:wheel` ownership, with the executable at `0755` and plist at `0644`, strips quarantine from the staged files, and pre-creates the daemon log files as `0600 root:wheel` before bootstrapping launchd.
+The **Reinstall Helper** button retries this flow. The fallback installer stops any existing launchd service, copies `ViftyDaemon` to `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`, removes stale `BundleProgram`, patches the staged LaunchDaemon plist with `ProgramArguments` pointing at that privileged-helper path, and then bootstraps and kickstarts launchd so the daemon can respond immediately after repair. It sets the helper and LaunchDaemon plist to `root:wheel` ownership, with the executable at `0755` and plist at `0644`, strips quarantine from the staged files, and pre-creates the daemon log files as `0600 root:wheel` before bootstrapping launchd.
 
 ## Project structure
 

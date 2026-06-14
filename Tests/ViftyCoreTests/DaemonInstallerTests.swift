@@ -111,6 +111,23 @@ final class DaemonInstallerTests: XCTestCase {
         )
     }
 
+    func testAdministratorInstallScriptKickstartsDaemonAfterBootstrap() {
+        let installer = DaemonInstaller()
+        let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+        let script = installer.administratorInstallShellScript(
+            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
+            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+            plistTarget: plistTarget
+        )
+
+        XCTAssertTrue(script.contains("launchctl kickstart -k 'system/tech.reidar.vifty.daemon'"))
+        XCTAssertTrue(
+            script.contains("launchctl bootstrap system '\(plistTarget)'", before: "launchctl kickstart -k 'system/tech.reidar.vifty.daemon'"),
+            "Repair should load the LaunchDaemon before kickstarting it so the daemon responds immediately after install."
+        )
+    }
+
     func testAdministratorInstallScriptStagesPrivilegedFilesBeforeMovingIntoPlace() {
         let installer = DaemonInstaller()
         let script = installer.administratorInstallShellScript(

@@ -207,6 +207,7 @@ final class DaemonInstaller: ObservableObject {
         let setProgramArgumentCommand = shellQuote("Set :ProgramArguments:0 \(helperTarget)")
         let helperTempTemplate = "\(helperTarget).XXXXXX"
         let plistTempTemplate = "\(plistTarget).XXXXXX"
+        let serviceTarget = "system/\(ViftyDaemonConstants.machServiceName)"
         return """
         set -e
         mkdir -p /Library/PrivilegedHelperTools
@@ -237,6 +238,7 @@ final class DaemonInstaller: ObservableObject {
           chown root:wheel "$log_path"
         done
         launchctl bootstrap system \(shellQuote(plistTarget))
+        launchctl kickstart -k \(shellQuote(serviceTarget))
         """
     }
 
