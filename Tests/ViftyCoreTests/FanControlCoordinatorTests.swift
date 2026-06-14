@@ -121,6 +121,63 @@ final class FanControlCoordinatorTests: XCTestCase {
         )
     }
 
+    func testTemperatureCurvePeriodicallyReassertsUnchangedTarget() async throws {
+        let curve = FanCurve(points: [
+            CurvePoint(temperatureCelsius: 50, rpm: 3000),
+            CurvePoint(temperatureCelsius: 70, rpm: 5000)
+        ])
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan(currentRPM: 4000)],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true,
+                capturedAt: startedAt
+            )
+        )
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: Self.marker(),
+            manualReassertionInterval: 30
+        )
+        await coordinator.setMode(.temperatureCurve(curve))
+
+        _ = try await coordinator.tick()
+        await hardware.clearAppliedCommands()
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [Self.fan(currentRPM: 4000)],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: startedAt.addingTimeInterval(20)
+        ))
+
+        _ = try await coordinator.tick()
+        let beforeInterval = await hardware.appliedCommands
+        XCTAssertTrue(beforeInterval.isEmpty)
+
+        await hardware.setSnapshot(HardwareSnapshot(
+            fans: [Self.fan(currentRPM: 4000)],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: startedAt.addingTimeInterval(31)
+        ))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(
+            applied,
+            [FanCommand(fanID: 0, mode: .fixedRPM(4000))],
+            "Until-changed curve mode must periodically refresh unchanged fan targets so macOS cannot silently reclaim control."
+        )
+    }
+
     func testMissingSensorsRestoresAutoForManualMode() async throws {
         let hardware = FakeHardware(
             snapshot: HardwareSnapshot(

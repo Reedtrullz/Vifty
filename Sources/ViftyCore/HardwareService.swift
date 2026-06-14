@@ -10,8 +10,10 @@ public actor FanControlCoordinator {
     private let hardware: HardwareService
     private let uncleanMarker: ManualControlMarker
     private let significantRPMDelta: Int
+    private let manualReassertionInterval: TimeInterval
     private var autoRestoreRequested = false
     private var fanOverrides: [FanCurveOverride] = []
+    private var lastManualWriteAtByFanID: [Int: Date] = [:]
 
     public private(set) var state: ControlState
 
@@ -19,11 +21,13 @@ public actor FanControlCoordinator {
         hardware: HardwareService,
         uncleanMarker: ManualControlMarker = ManualControlMarker(),
         significantRPMDelta: Int = 75,
+        manualReassertionInterval: TimeInterval = 30,
         initialState: ControlState = ControlState()
     ) {
         self.hardware = hardware
         self.uncleanMarker = uncleanMarker
         self.significantRPMDelta = significantRPMDelta
+        self.manualReassertionInterval = manualReassertionInterval
         self.state = initialState
     }
 
@@ -45,9 +49,11 @@ public actor FanControlCoordinator {
         switch mode {
         case .auto:
             autoRestoreRequested = true
+            lastManualWriteAtByFanID = [:]
             uncleanMarker.markActive()
         case .fixedRPM, .temperatureCurve:
             autoRestoreRequested = false
+            lastManualWriteAtByFanID = [:]
             state.manualControlActive = true
             uncleanMarker.markActive()
         }
@@ -64,6 +70,7 @@ public actor FanControlCoordinator {
             autoRestoreRequested = false
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
+            lastManualWriteAtByFanID = [:]
             state.statusMessage = "Sensor unavailable, restored Auto"
             uncleanMarker.clear()
             throw ViftyError.noTemperatureSensors
@@ -78,6 +85,7 @@ public actor FanControlCoordinator {
             autoRestoreRequested = false
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
+            lastManualWriteAtByFanID = [:]
             state.statusMessage = "Auto"
             uncleanMarker.clear()
         case .fixedRPM(let rpm):
@@ -105,6 +113,7 @@ public actor FanControlCoordinator {
             state.mode = .auto
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
+            lastManualWriteAtByFanID = [:]
             state.statusMessage = "Auto"
             uncleanMarker.clear()
         } catch {
@@ -127,9 +136,10 @@ public actor FanControlCoordinator {
     private func applyFixedRPM(_ rpm: Int, snapshot: HardwareSnapshot) async throws {
         for fan in snapshot.fans where fan.controllable {
             let target = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
-            guard shouldApply(target, to: fan) else { continue }
+            guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
+            lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
         }
         state.statusMessage = "Fixed \(rpm) RPM"
     }
@@ -147,9 +157,10 @@ public actor FanControlCoordinator {
                 minimumRPM: fan.minimumRPM,
                 maximumRPM: fan.maximumRPM
             )
-            guard shouldApply(target, to: fan) else { continue }
+            guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
+            lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
         }
 
         state.selectedSensorID = sensor.id
@@ -168,12 +179,15 @@ public actor FanControlCoordinator {
         } ?? snapshot.highestTemperature
     }
 
-    private func shouldApply(_ rpm: Int, to fan: Fan) -> Bool {
+    private func shouldApply(_ rpm: Int, to fan: Fan, capturedAt: Date) -> Bool {
         if hardwareNeedsManualReassertion(rpm, fan: fan) {
             return true
         }
         guard let previous = state.lastAppliedRPM[fan.id] else { return true }
-        return abs(previous - rpm) >= significantRPMDelta
+        if abs(previous - rpm) >= significantRPMDelta {
+            return true
+        }
+        return manualReassertionDue(for: fan, capturedAt: capturedAt)
     }
 
     private func hardwareNeedsManualReassertion(_ rpm: Int, fan: Fan) -> Bool {
@@ -184,6 +198,12 @@ public actor FanControlCoordinator {
             return abs(targetRPM - rpm) >= significantRPMDelta
         }
         return false
+    }
+
+    private func manualReassertionDue(for fan: Fan, capturedAt: Date) -> Bool {
+        guard manualReassertionInterval > 0 else { return false }
+        guard let lastWriteAt = lastManualWriteAtByFanID[fan.id] else { return true }
+        return capturedAt.timeIntervalSince(lastWriteAt) >= manualReassertionInterval
     }
 
     private func restoreAuto(for fans: [Fan]) async throws {
@@ -217,9 +237,10 @@ public actor FanControlCoordinator {
                     maximumRPM: fan.maximumRPM
                 )
             }
-            guard shouldApply(target, to: fan) else { continue }
+            guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
+            lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
         }
 
         state.selectedSensorID = sensor.id
