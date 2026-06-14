@@ -562,6 +562,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarAverageFanRPMModeUsesAllFans() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1623, minimumRPM: 1400, maximumRPM: 6000, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .averageFanRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "1576 RPM avg")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarAverageFanRPMModeFallsBackWhenFansAreMissing() {
+        let model = AppModel()
+        model.menuBarDisplayMode = .averageFanRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "No fan")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
     func testMenuBarAdapterModeUsesPowerSummary() {
         let model = AppModel()
         model.powerSnapshot = PowerSnapshot(
@@ -622,8 +649,8 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(preferences: preferences)
 
         XCTAssertEqual(model.menuBarDisplayMode, .temperature)
-        model.menuBarDisplayMode = .temperatureAndRPM
-        XCTAssertEqual(preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey), MenuBarDisplayMode.temperatureAndRPM.rawValue)
+        model.menuBarDisplayMode = .averageFanRPM
+        XCTAssertEqual(preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey), MenuBarDisplayMode.averageFanRPM.rawValue)
     }
 
     func testNotificationSettingsLoadAndPersistAsIndividualPreferences() {

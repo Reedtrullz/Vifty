@@ -16,7 +16,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 
 ## Highlights
 
-- **Menu bar cockpit** — temperature, fan RPM, and power state at a glance.
+- **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, and power state at a glance.
 - **Three fan modes** — Auto, Fixed RPM, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
 - **Developer presets** — conservative curve presets for tests, builds, and local model runs.

@@ -80,6 +80,7 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     case fanIcon
     case temperature
     case fanRPM
+    case averageFanRPM
     case adapterWattage
     case temperatureAndRPM
     case compactSummary
@@ -94,6 +95,8 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
             return "Temperature"
         case .fanRPM:
             return "Fan RPM"
+        case .averageFanRPM:
+            return "Average fan RPM"
         case .adapterWattage:
             return "Adapter wattage"
         case .temperatureAndRPM:
@@ -475,6 +478,8 @@ final class AppModel: ObservableObject {
             return menuBarTemperatureText
         case .fanRPM:
             return menuBarFanText
+        case .averageFanRPM:
+            return menuBarAverageFanText
         case .adapterWattage:
             return menuBarPowerText
         case .temperatureAndRPM:
@@ -494,6 +499,15 @@ final class AppModel: ObservableObject {
 
     private var menuBarFanText: String {
         snapshot?.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
+    }
+
+    private var menuBarAverageFanText: String {
+        guard let fans = snapshot?.fans, !fans.isEmpty else { return "No fan" }
+        let totalRPM = fans.reduce(0) { total, fan in
+            total + fan.currentRPM
+        }
+        let averageRPM = Double(totalRPM) / Double(fans.count)
+        return "\(Int(averageRPM.rounded())) RPM avg"
     }
 
     private var menuBarPowerText: String {
