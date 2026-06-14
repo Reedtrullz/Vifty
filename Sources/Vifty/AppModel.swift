@@ -509,7 +509,10 @@ final class AppModel: ObservableObject {
     private func menuSummary(includePower: Bool) -> String {
         var parts: [String]
         if snapshot != nil {
-            parts = [menuBarTemperatureText, menuBarFanText]
+            parts = [menuBarTemperatureText, menuBarFanText].compactMap(\.self)
+            if parts.isEmpty {
+                parts = ["Vifty"]
+            }
             if includePower, let powerSnapshot {
                 parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
             }
@@ -539,34 +542,38 @@ final class AppModel: ObservableObject {
         case .fanIcon:
             return menuTitle
         case .temperature:
-            return menuBarTemperatureText
+            return menuBarTemperatureText ?? menuTitle
         case .fanRPM:
-            return menuBarFanText
+            return menuBarFanText ?? menuTitle
         case .averageFanRPM:
-            return menuBarAverageFanText
+            return menuBarAverageFanText ?? menuTitle
         case .adapterWattage:
-            return menuBarPowerText
+            return menuBarPowerText ?? menuTitle
         case .temperatureAndRPM:
-            return "\(menuBarTemperatureText) | \(menuBarFanText)"
+            if let temperature = menuBarTemperatureText,
+               let fan = menuBarFanText {
+                return "\(temperature) | \(fan)"
+            }
+            return menuTitle
         case .compactSummary:
             return menuTitle
         }
     }
 
     var menuBarLabelUsesFanIcon: Bool {
-        menuBarDisplayMode == .fanIcon
+        menuBarDisplayMode == .fanIcon || menuBarLabelText == "Vifty"
     }
 
-    private var menuBarTemperatureText: String {
-        (selectedSensor ?? snapshot?.highestTemperature).map { "\(Int($0.celsius.rounded())) C" } ?? "-- C"
+    private var menuBarTemperatureText: String? {
+        (selectedSensor ?? snapshot?.highestTemperature).map { "\(Int($0.celsius.rounded())) C" }
     }
 
-    private var menuBarFanText: String {
-        snapshot?.fans.first.map { "\($0.currentRPM) RPM" } ?? "No fan"
+    private var menuBarFanText: String? {
+        snapshot?.fans.first.map { "\($0.currentRPM) RPM" }
     }
 
-    private var menuBarAverageFanText: String {
-        guard let fans = snapshot?.fans, !fans.isEmpty else { return "No fan" }
+    private var menuBarAverageFanText: String? {
+        guard let fans = snapshot?.fans, !fans.isEmpty else { return nil }
         let totalRPM = fans.reduce(0) { total, fan in
             total + fan.currentRPM
         }
@@ -574,8 +581,8 @@ final class AppModel: ObservableObject {
         return "\(Int(averageRPM.rounded())) RPM avg"
     }
 
-    private var menuBarPowerText: String {
-        powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Power --"
+    private var menuBarPowerText: String? {
+        powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) }
     }
 
     private func persistAppPreferences() {

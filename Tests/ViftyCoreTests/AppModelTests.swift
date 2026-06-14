@@ -784,7 +784,33 @@ final class AppModelTests: XCTestCase {
         let model = AppModel()
         model.menuBarDisplayMode = .averageFanRPM
 
-        XCTAssertEqual(model.menuBarLabelText, "No fan")
+        XCTAssertEqual(model.menuBarLabelText, "Vifty")
+        XCTAssertTrue(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testMenuBarDisplayModesUseSafeFallbackWhenTelemetryIsMissing() {
+        let model = AppModel()
+
+        for mode in [MenuBarDisplayMode.temperature, .fanRPM, .adapterWattage, .temperatureAndRPM] {
+            model.menuBarDisplayMode = mode
+            XCTAssertEqual(model.menuBarLabelText, "Vifty", mode.label)
+            XCTAssertTrue(model.menuBarLabelUsesFanIcon, mode.label)
+        }
+    }
+
+    func testMenuBarCombinedModeFallsBackToCompactSummaryWhenOnlyTemperatureIsAvailable() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        model.menuBarDisplayMode = .temperatureAndRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "69 C")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
