@@ -149,6 +149,7 @@ final class AppModel: ObservableObject {
     @Published var savedProfiles: [CurveProfile] = []
 
     static let menuBarDisplayModeDefaultsKey = "menuBarDisplayMode"
+    static let highTemperatureAttentionThreshold = 90.0
     static let notificationHelperFailureDefaultsKey = "notification.helperFailure"
     static let notificationThermalPressureDefaultsKey = "notification.elevatedThermalPressure"
     static let notificationAutoRestoreDefaultsKey = "notification.autoRestoreFailure"
@@ -439,6 +440,12 @@ final class AppModel: ObservableObject {
         } ?? snapshot?.highestTemperature
     }
 
+    var temperatureAttentionSummary: String? {
+        guard thermalPressure.menuSummary == nil else { return nil }
+        guard let sensor = selectedSensor ?? snapshot?.highestTemperature else { return nil }
+        return sensor.celsius >= Self.highTemperatureAttentionThreshold ? "High temp" : nil
+    }
+
     var menuTitle: String {
         menuSummary(includePower: true)
     }
@@ -463,6 +470,8 @@ final class AppModel: ObservableObject {
         }
         if let thermal = thermalPressure.menuSummary {
             parts.append(thermal)
+        } else if let temperatureAttentionSummary {
+            parts.append(temperatureAttentionSummary)
         }
         if let agentCoolingMenuSummary {
             parts.append(agentCoolingMenuSummary)

@@ -23,7 +23,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Hardware fan state** — shows actual SMC Auto/Forced/System mode and target RPM when available.
 - **Live temperature panel** — all SMC and HID sensors with source labels and highest-temperature tracking.
 - **Live power tracking** — battery percentage, charge/drain watts, signed battery current, adapter wattage, negotiated USB-C voltage/current, health, cycle count, battery temperature, and USB-C PD profiles from local IOKit data.
-- **Thermal pressure** — surfaces macOS thermal-pressure state alongside raw temperatures.
+- **Thermal pressure** — surfaces macOS thermal-pressure state alongside raw temperatures, and flags high selected-sensor temperatures when macOS has not raised thermal pressure.
 - **Timed manual modes** — Fixed RPM and Temperature Curve modes can automatically restore Auto after a selected duration.
 - **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
 - **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.

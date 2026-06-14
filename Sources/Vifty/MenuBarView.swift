@@ -29,6 +29,11 @@ struct MenuBarView: View {
             Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
 
+            if let temperatureAttentionSummary = model.temperatureAttentionSummary {
+                Label(temperatureAttentionSummary, systemImage: "thermometer.high")
+                    .foregroundStyle(.orange)
+            }
+
             Label(model.controlOwnershipSummary, systemImage: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
                 .font(.caption)
                 .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .secondary)

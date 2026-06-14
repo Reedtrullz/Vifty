@@ -102,6 +102,18 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
     }
 
+    func testMenuBarHighTemperatureAttentionIsWired() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+
+        XCTAssertTrue(appModel.contains("static let highTemperatureAttentionThreshold = 90.0"))
+        XCTAssertTrue(appModel.contains("var temperatureAttentionSummary: String?"))
+        XCTAssertTrue(appModel.contains("return sensor.celsius >= Self.highTemperatureAttentionThreshold ? \"High temp\" : nil"))
+        XCTAssertTrue(menuBarView.contains("if let temperatureAttentionSummary = model.temperatureAttentionSummary"))
+        XCTAssertTrue(menuBarView.contains("Label(temperatureAttentionSummary, systemImage: \"thermometer.high\")"))
+        XCTAssertTrue(menuBarView.contains(".foregroundStyle(.orange)"))
+    }
+
     func testMenuBarNotificationSettingsAreWired() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let appModel = try read("Sources/Vifty/AppModel.swift")

@@ -530,6 +530,37 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuPanelTitle, "65 C | 2400 RPM | Thermal: Serious | Agent status unavailable")
     }
 
+    func testMenuTitleFlagsHighSelectedTemperatureWhenThermalPressureIsNominal() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.thermalPressure = .nominal
+
+        XCTAssertEqual(model.temperatureAttentionSummary, "High temp")
+        XCTAssertEqual(model.menuTitle, "91 C | 1780 RPM | High temp")
+        XCTAssertEqual(model.menuPanelTitle, "91 C | 1780 RPM | High temp")
+    }
+
+    func testMenuTitleDoesNotDuplicateHighTemperatureWhenThermalPressureIsElevated() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 92.0, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.thermalPressure = .serious
+
+        XCTAssertNil(model.temperatureAttentionSummary)
+        XCTAssertEqual(model.menuTitle, "92 C | 2400 RPM | Thermal: Serious")
+    }
+
     func testMenuBarTemperatureModeUsesRoundedHighestTemperatureAsLabelText() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
