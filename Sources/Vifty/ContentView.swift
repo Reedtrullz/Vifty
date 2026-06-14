@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showSaveDialog = false
     @State private var selectedProfileID: UUID?
     @State private var helperRefreshTask: Task<Void, Never>?
+    @State private var helperDiagnosticsCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -161,36 +162,49 @@ struct ContentView: View {
             .padding(10)
             .background((model.controlOwnershipNeedsAttention ? Color.orange : Color.green).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
 
-            HStack(spacing: 8) {
-                Image(systemName: helperHealthSystemImage)
-                    .foregroundStyle(helperHealthColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Fan Helper")
-                        .font(.caption.weight(.semibold))
-                    Text(model.helperHealthSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let suggestion = model.helperRecoverySuggestion {
-                        Text(suggestion)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: helperHealthSystemImage)
+                        .foregroundStyle(helperHealthColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Fan Helper")
+                            .font(.caption.weight(.semibold))
+                        Text(model.helperHealthSummary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(4)
+                        if let suggestion = model.helperRecoverySuggestion {
+                            Text(suggestion)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    if let actionDescription = model.helperRepairActionAvailable ? daemonInstaller.actionDescription : nil {
-                        Text(actionDescription)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
+                    Spacer()
                 }
-                Spacer()
-                if model.helperRepairActionAvailable {
-                    Button(daemonInstaller.actionTitle) {
-                        performHelperAction()
+                if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {
+                    HStack(spacing: 8) {
+                        if model.helperRepairActionAvailable {
+                            Button(daemonInstaller.actionTitle) {
+                                performHelperAction()
+                            }
+                            .controlSize(.small)
+                            .disabled(!daemonInstaller.canInstall)
+                            .help(daemonInstaller.actionDescription)
+                        }
+                        Button {
+                            copyHelperDiagnosticsCommand()
+                        } label: {
+                            Label("Copy Diagnose", systemImage: "doc.on.doc")
+                        }
+                        .controlSize(.small)
+                        .help(HelperDiagnosticsSupport.copyHelp)
+                        if helperDiagnosticsCopied {
+                            Text(HelperDiagnosticsSupport.copiedMessage)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .controlSize(.small)
-                    .disabled(!daemonInstaller.canInstall)
-                    .help(daemonInstaller.actionHelp)
                 }
             }
             .padding(10)
@@ -279,6 +293,11 @@ struct ContentView: View {
             daemonInstaller.refresh()
             await model.pollOnce()
         }
+    }
+
+    private func copyHelperDiagnosticsCommand() {
+        HelperDiagnosticsSupport.copyDiagnoseCommand()
+        helperDiagnosticsCopied = true
     }
 
     private var modePicker: some View {

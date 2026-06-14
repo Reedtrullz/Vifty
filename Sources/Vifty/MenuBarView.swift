@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var helperRefreshTask: Task<Void, Never>?
+    @State private var helperDiagnosticsCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -100,27 +101,42 @@ struct MenuBarView: View {
                 }
             }
 
-            Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
-                .font(.caption)
-                .foregroundStyle(helperHealthMenuColor)
+            VStack(alignment: .leading, spacing: 6) {
+                Label(model.helperHealthSummary, systemImage: helperHealthSystemImage)
+                    .font(.caption.weight(model.helperHealthNeedsAttention ? .semibold : .regular))
+                    .foregroundStyle(helperHealthMenuColor)
 
-            if let helperRecoverySuggestion = model.helperRecoverySuggestion {
-                Label(helperRecoverySuggestion, systemImage: "wrench.and.screwdriver")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(4)
-            }
-
-            if model.helperRepairActionAvailable {
-                Label(daemonInstaller.actionDescription, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                Button(daemonInstaller.actionTitle) {
-                    performHelperAction()
+                if let helperRecoverySuggestion = model.helperRecoverySuggestion {
+                    Text(helperRecoverySuggestion)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .disabled(!daemonInstaller.canInstall)
-                .help(daemonInstaller.actionHelp)
+
+                if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {
+                    HStack(spacing: 8) {
+                        if model.helperRepairActionAvailable {
+                            Button(daemonInstaller.actionTitle) {
+                                performHelperAction()
+                            }
+                            .disabled(!daemonInstaller.canInstall)
+                            .help(daemonInstaller.actionDescription)
+                        }
+                        Button {
+                            copyHelperDiagnosticsCommand()
+                        } label: {
+                            Label("Copy Diagnose", systemImage: "doc.on.doc")
+                        }
+                        .help(HelperDiagnosticsSupport.copyHelp)
+                    }
+                }
+
+                if helperDiagnosticsCopied {
+                    Text(HelperDiagnosticsSupport.copiedMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Picker("Menu bar", selection: $model.menuBarDisplayMode) {
@@ -186,6 +202,11 @@ struct MenuBarView: View {
             daemonInstaller.refresh()
             await model.pollOnce()
         }
+    }
+
+    private func copyHelperDiagnosticsCommand() {
+        HelperDiagnosticsSupport.copyDiagnoseCommand()
+        helperDiagnosticsCopied = true
     }
 
     private var helperHealthSystemImage: String {

@@ -14,18 +14,27 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("try? await Task.sleep(for: .milliseconds(750))"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.refresh()"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.actionDescription"))
-        XCTAssertTrue(menuBarView.contains("if let helperRecoverySuggestion = model.helperRecoverySuggestion {\n                Label(helperRecoverySuggestion, systemImage: \"wrench.and.screwdriver\")\n                    .font(.caption)\n                    .foregroundStyle(.secondary)\n                    .lineLimit(4)"))
+        XCTAssertTrue(menuBarView.contains("@State private var helperDiagnosticsCopied = false"))
+        XCTAssertTrue(menuBarView.contains("Text(helperRecoverySuggestion)"))
+        XCTAssertTrue(menuBarView.contains("Button {\n                            copyHelperDiagnosticsCommand()\n                        } label: {\n                            Label(\"Copy Diagnose\", systemImage: \"doc.on.doc\")"))
+        XCTAssertTrue(menuBarView.contains(".help(HelperDiagnosticsSupport.copyHelp)"))
+        XCTAssertTrue(menuBarView.contains("Text(HelperDiagnosticsSupport.copiedMessage)"))
         XCTAssertEqual(menuBarView.components(separatedBy: "await model.pollOnce()").count - 1, 2)
         XCTAssertTrue(menuBarView.contains("helperRefreshTask?.cancel()"))
     }
 
-    func testMainWindowHelperHealthShowsInstallerActionDescription() throws {
+    func testMainWindowHelperHealthShowsRepairAndReadOnlyDiagnosticsActions() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
         XCTAssertTrue(contentView.contains("daemonInstaller.actionDescription"))
-        XCTAssertTrue(contentView.contains("model.helperRepairActionAvailable ? daemonInstaller.actionDescription : nil"))
-        XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable {\n                    Button(daemonInstaller.actionTitle)"))
-        XCTAssertTrue(contentView.contains("if let suggestion = model.helperRecoverySuggestion {\n                        Text(suggestion)\n                            .font(.caption)\n                            .foregroundStyle(.secondary)\n                            .lineLimit(4)"))
+        XCTAssertTrue(contentView.contains("@State private var helperDiagnosticsCopied = false"))
+        XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {"))
+        XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable {\n                            Button(daemonInstaller.actionTitle)"))
+        XCTAssertTrue(contentView.contains("Button {\n                            copyHelperDiagnosticsCommand()\n                        } label: {\n                            Label(\"Copy Diagnose\", systemImage: \"doc.on.doc\")"))
+        XCTAssertTrue(contentView.contains(".help(HelperDiagnosticsSupport.copyHelp)"))
+        XCTAssertTrue(contentView.contains("Text(HelperDiagnosticsSupport.copiedMessage)"))
+        XCTAssertTrue(contentView.contains("Text(suggestion)"))
+        XCTAssertTrue(contentView.contains(".fixedSize(horizontal: false, vertical: true)"))
     }
 
     func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {

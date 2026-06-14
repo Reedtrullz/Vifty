@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (613 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (622 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
