@@ -226,8 +226,7 @@ final class AppModel: ObservableObject {
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
         },
         profileStore: CurveProfileStore = CurveProfileStore(),
-        preferencesStore: AppPreferencesStore? = nil,
-        preferences: UserDefaults = .standard
+        preferencesStore: AppPreferencesStore = AppPreferencesStore()
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
@@ -238,7 +237,7 @@ final class AppModel: ObservableObject {
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
         self.profileStore = profileStore
-        self.preferencesStore = preferencesStore ?? AppPreferencesStore(legacyDefaults: preferences)
+        self.preferencesStore = preferencesStore
         let appPreferences = self.preferencesStore.load()
         menuBarDisplayMode = appPreferences.menuBarDisplayMode
         notificationSettings = appPreferences.notificationSettings

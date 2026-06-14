@@ -847,7 +847,7 @@ final class AppModelTests: XCTestCase {
         let preferencesURL = temporaryPreferencesPath()
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: preferences)
 
-        let model = AppModel(preferencesStore: store, preferences: preferences)
+        let model = AppModel(preferencesStore: store)
 
         XCTAssertEqual(model.menuBarDisplayMode, .temperature)
         XCTAssertEqual(store.load().menuBarDisplayMode, .temperature)
@@ -872,7 +872,7 @@ final class AppModelTests: XCTestCase {
         let preferencesURL = temporaryPreferencesPath()
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: preferences)
 
-        let model = AppModel(preferencesStore: store, preferences: preferences)
+        let model = AppModel(preferencesStore: store)
 
         XCTAssertTrue(model.notificationSettings.helperFailure)
         XCTAssertTrue(model.notificationSettings.elevatedThermalPressure)
