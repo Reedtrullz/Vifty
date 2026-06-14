@@ -447,6 +447,20 @@ final class AppModel: ObservableObject {
         return sensor.celsius >= Self.highTemperatureAttentionThreshold ? "High temp" : nil
     }
 
+    var fanWriteBlockedWhileHotSummary: String? {
+        guard helperWritePathBlockedSummary != nil,
+              let sensor = selectedSensor ?? snapshot?.highestTemperature,
+              sensor.celsius >= Self.highTemperatureAttentionThreshold else {
+            return nil
+        }
+        return "High temp · fan writes blocked"
+    }
+
+    var fanWriteBlockedWhileHotRecoverySuggestion: String? {
+        guard fanWriteBlockedWhileHotSummary != nil else { return nil }
+        return "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds."
+    }
+
     var menuTitle: String {
         menuSummary(includePower: true)
     }
@@ -473,6 +487,9 @@ final class AppModel: ObservableObject {
             parts.append(thermal)
         } else if let temperatureAttentionSummary {
             parts.append(temperatureAttentionSummary)
+        }
+        if fanWriteBlockedWhileHotSummary != nil {
+            parts.append("Fan writes blocked")
         }
         if let agentCoolingMenuSummary {
             parts.append(agentCoolingMenuSummary)

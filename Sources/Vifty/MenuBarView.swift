@@ -29,7 +29,17 @@ struct MenuBarView: View {
             Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
 
-            if let temperatureAttentionSummary = model.temperatureAttentionSummary {
+            if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
+                Label(fanWriteBlockedWhileHotSummary, systemImage: "thermometer.high")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion {
+                    Label(recovery, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                }
+            } else if let temperatureAttentionSummary = model.temperatureAttentionSummary {
                 Label(temperatureAttentionSummary, systemImage: "thermometer.high")
                     .foregroundStyle(.orange)
             }

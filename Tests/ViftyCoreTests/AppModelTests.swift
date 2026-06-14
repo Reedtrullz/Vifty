@@ -585,10 +585,52 @@ final class AppModelTests: XCTestCase {
             isMacBookPro: true
         )
         model.thermalPressure = .nominal
+        model.daemonReachable = true
+        model.daemonResponding = true
 
         XCTAssertEqual(model.temperatureAttentionSummary, "High temp")
         XCTAssertEqual(model.menuTitle, "91 C | 1780 RPM | High temp")
         XCTAssertEqual(model.menuPanelTitle, "91 C | 1780 RPM | High temp")
+    }
+
+    func testMenuTitleFlagsFanWritesBlockedWhileHot() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.daemonReachable = true
+        model.daemonResponding = false
+        model.thermalPressure = .nominal
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertEqual(model.temperatureAttentionSummary, "High temp")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.menuTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
+        XCTAssertEqual(model.menuPanelTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
+        XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
+    }
+
+    func testFanWritesBlockedWhileHotRequiresBlockedHelperWritePath() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 92.0, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.daemonReachable = true
+        model.daemonResponding = true
+
+        XCTAssertNil(model.fanWriteBlockedWhileHotSummary)
+        XCTAssertNil(model.fanWriteBlockedWhileHotRecoverySuggestion)
+        XCTAssertEqual(model.menuTitle, "92 C | 2400 RPM | High temp")
     }
 
     func testMenuTitleDoesNotDuplicateHighTemperatureWhenThermalPressureIsElevated() {
@@ -601,6 +643,8 @@ final class AppModelTests: XCTestCase {
             isMacBookPro: true
         )
         model.thermalPressure = .serious
+        model.daemonReachable = true
+        model.daemonResponding = true
 
         XCTAssertNil(model.temperatureAttentionSummary)
         XCTAssertEqual(model.menuTitle, "92 C | 2400 RPM | Thermal: Serious")

@@ -109,9 +109,24 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(appModel.contains("static let highTemperatureAttentionThreshold = 90.0"))
         XCTAssertTrue(appModel.contains("var temperatureAttentionSummary: String?"))
         XCTAssertTrue(appModel.contains("return sensor.celsius >= Self.highTemperatureAttentionThreshold ? \"High temp\" : nil"))
+        XCTAssertTrue(appModel.contains("var fanWriteBlockedWhileHotSummary: String?"))
+        XCTAssertTrue(appModel.contains("var fanWriteBlockedWhileHotRecoverySuggestion: String?"))
+        XCTAssertTrue(appModel.contains("parts.append(\"Fan writes blocked\")"))
+        XCTAssertTrue(menuBarView.contains("if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary"))
+        XCTAssertTrue(menuBarView.contains("if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion"))
         XCTAssertTrue(menuBarView.contains("if let temperatureAttentionSummary = model.temperatureAttentionSummary"))
         XCTAssertTrue(menuBarView.contains("Label(temperatureAttentionSummary, systemImage: \"thermometer.high\")"))
         XCTAssertTrue(menuBarView.contains(".foregroundStyle(.orange)"))
+    }
+
+    func testMainWindowHotBlockedHelperAttentionIsWired() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary"))
+        XCTAssertTrue(contentView.contains("Text(fanWriteBlockedWhileHotSummary)"))
+        XCTAssertTrue(contentView.contains("if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion"))
+        XCTAssertTrue(contentView.contains("Text(recovery)"))
+        XCTAssertTrue(contentView.contains(".background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))"))
     }
 
     func testMenuBarNotificationSettingsAreWired() throws {

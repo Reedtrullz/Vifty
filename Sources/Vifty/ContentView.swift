@@ -125,6 +125,26 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 18) {
             modePicker
 
+            if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
+                HStack(spacing: 8) {
+                    Image(systemName: "thermometer.high")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(fanWriteBlockedWhileHotSummary)
+                            .font(.caption.weight(.semibold))
+                        if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion {
+                            Text(recovery)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+
             HStack(spacing: 8) {
                 Image(systemName: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
                     .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .green)
