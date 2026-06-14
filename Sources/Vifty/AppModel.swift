@@ -155,6 +155,7 @@ final class AppModel: ObservableObject {
     static let notificationAutoRestoreDefaultsKey = "notification.autoRestoreFailure"
     static let notificationPluggedInDrainDefaultsKey = "notification.pluggedInBatteryDrain"
     static let notificationAgentCoolingAttentionDefaultsKey = "notification.agentCoolingAttention"
+    static let manualTargetDriftRPMThreshold = 75
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
@@ -655,8 +656,14 @@ final class AppModel: ObservableObject {
         case .auto:
             return autoControlOwnershipSummary
         case .fixedRPM(let rpm):
+            if let manualControlDriftSummary {
+                return manualControlDriftSummary
+            }
             return "Vifty Fixed owns fan targets · \(rpm) RPM"
         case .temperatureCurve:
+            if let manualControlDriftSummary {
+                return manualControlDriftSummary
+            }
             if let sensor = selectedSensor {
                 return "Vifty Curve owns fan targets · \(sensor.name)"
             }
@@ -672,7 +679,9 @@ final class AppModel: ObservableObject {
             return true
         }
 
-        guard controlState.mode == .auto else { return false }
+        guard controlState.mode == .auto else {
+            return manualControlDriftSummary != nil
+        }
         guard let fans = snapshot?.fans, !fans.isEmpty else {
             return hasCompletedHardwarePoll || daemonReachable
         }
@@ -787,6 +796,61 @@ final class AppModel: ObservableObject {
             return helperWritePathBlockedSummary
         }
         return "macOS Auto owns fan control"
+    }
+
+    private var manualControlDriftSummary: String? {
+        guard controlState.mode != .auto,
+              let fans = snapshot?.fans.filter(\.controllable),
+              !fans.isEmpty else {
+            return nil
+        }
+
+        let reclaimed = fans.filter { fan in
+            guard let mode = fan.hardwareMode else { return false }
+            return mode != .forced
+        }
+        if !reclaimed.isEmpty {
+            let modes = reclaimed.reduce(into: [String]()) { names, fan in
+                guard let name = fan.hardwareMode?.displayName, !names.contains(name) else { return }
+                names.append(name)
+            }.joined(separator: "/")
+            let modeLabel = modes.isEmpty ? "non-forced mode" : modes
+            return "Hardware reports \(modeLabel) while Vifty manual is selected; Vifty will reassert · \(fanIDList(reclaimed))"
+        }
+
+        let drifted = fans.filter { fan in
+            guard let targetRPM = fan.targetRPM,
+                  let expectedRPM = expectedManualTargetRPM(for: fan) else {
+                return false
+            }
+            return abs(targetRPM - expectedRPM) >= Self.manualTargetDriftRPMThreshold
+        }
+        guard !drifted.isEmpty else { return nil }
+        return "Hardware fan target drift detected; Vifty will reassert · \(fanIDList(drifted))"
+    }
+
+    private func expectedManualTargetRPM(for fan: Fan) -> Int? {
+        if let lastAppliedRPM = controlState.lastAppliedRPM[fan.id] {
+            return lastAppliedRPM
+        }
+
+        switch controlState.mode {
+        case .auto:
+            return nil
+        case .fixedRPM(let rpm):
+            return FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        case .temperatureCurve(let curve):
+            guard let snapshot,
+                  let sensor = snapshot.temperatureSensors.first(where: { $0.id == (curve.sensorID ?? controlState.selectedSensorID) })
+                    ?? selectedSensor else {
+                return nil
+            }
+            return curve.targetRPM(
+                for: sensor.celsius,
+                minimumRPM: fan.minimumRPM,
+                maximumRPM: fan.maximumRPM
+            )
+        }
     }
 
     private var autoSystemModeFans: [Fan] {

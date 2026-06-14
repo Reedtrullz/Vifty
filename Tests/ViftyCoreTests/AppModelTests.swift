@@ -489,6 +489,51 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
     }
 
+    func testControlOwnershipWarnsWhenManualModeTelemetryShowsMacOSReclaimedAuto() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic, targetRPM: nil)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 84, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(
+            mode: .temperatureCurve(FanCurve.defaultCurve(sensorID: "Tp09")),
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Hardware reports Auto while Vifty manual is selected; Vifty will reassert · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipWarnsWhenManualTargetDrifts() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 2200)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 78, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(
+            mode: .fixedRPM(3600),
+            lastAppliedRPM: [0: 3600],
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Hardware fan target drift detected; Vifty will reassert · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
     func testMenuTitleIncludesPowerSummaryWhenPowerSnapshotAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
