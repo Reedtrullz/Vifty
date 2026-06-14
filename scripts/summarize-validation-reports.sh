@@ -86,7 +86,7 @@ if [[ "${#INPUTS[@]}" -eq 0 ]]; then
   exit 64
 fi
 
-ruby -rjson -rcsv -rfileutils -e '
+ruby -rjson -rcsv -rfileutils -rpathname -e '
   schema_id = ARGV.shift.to_s
   review_result_schema_id = ARGV.shift.to_s
   output_json = ARGV.shift.to_s
@@ -114,6 +114,23 @@ ruby -rjson -rcsv -rfileutils -e '
       failures << "no review-result.json files found under #{path}"
     end
     nested
+  end
+
+  def relative_child_path(path, base)
+    relative = Pathname.new(path).relative_path_from(Pathname.new(base)).to_s
+    return nil if relative == ".." || relative.start_with?("../")
+
+    relative
+  rescue ArgumentError
+    nil
+  end
+
+  def display_source_for(path, input_roots)
+    cwd_relative = relative_child_path(path, Dir.pwd)
+    return cwd_relative unless cwd_relative.nil?
+
+    input_relative = input_roots.map { |root| relative_child_path(path, root) }.compact
+    input_relative.min_by(&:length) || File.basename(path)
   end
 
   def read_result(path, failures)
@@ -375,6 +392,11 @@ ruby -rjson -rcsv -rfileutils -e '
     lines.join("\n") + "\n"
   end
 
+  input_roots = inputs.map do |input|
+    expanded = File.expand_path(input)
+    File.directory?(expanded) ? expanded : File.dirname(expanded)
+  end.uniq
+
   paths = inputs.flat_map { |input| resolve_input(input, failures) }.uniq
   if paths.empty? && failures.empty?
     failures << "no review-result.json files found"
@@ -401,7 +423,7 @@ ruby -rjson -rcsv -rfileutils -e '
     model_family = model_family_for(model_identifier)
 
     rows << {
-      "source" => path,
+      "source" => display_source_for(path, input_roots),
       "status" => result["status"].to_s,
       "mode" => result["mode"].to_s,
       "claim" => claim,

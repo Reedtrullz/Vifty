@@ -396,6 +396,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
     func testCompatibilityPageRequiresReportBackedEvidence() throws {
         let compatibility = try read("docs/compatibility.md")
+        let matrix = try read("docs/validation-reports/compatibility-matrix.md")
+        let index = try read("docs/validation-reports/compatibility-index.json")
+        let reportReadme = try read("docs/validation-reports/README.md")
 
         XCTAssertTrue(compatibility.contains("Vifty's compatibility claims are evidence-based"))
         XCTAssertTrue(compatibility.contains("Hardware Validation Report"))
@@ -420,6 +423,17 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(compatibility.contains("`PREPARE_RATE_LIMITED` response with `retryAfterSeconds`"))
         XCTAssertTrue(compatibility.contains("viftyctl diagnose --json"))
         XCTAssertTrue(compatibility.contains("ViftyHelper probeLocal"))
+        XCTAssertTrue(compatibility.contains("| M1 Pro/Max MacBook Pro | Needs manual smoke |"))
+        XCTAssertTrue(compatibility.contains("One read-only local ad-hoc `MacBookPro18,1` candidate report exists"))
+        XCTAssertTrue(compatibility.contains("manualSmokeTestResult: \"not-recorded\""))
+        XCTAssertTrue(matrix.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 |"))
+        XCTAssertTrue(index.contains("\"validatedHardwareReports\": 0"))
+        XCTAssertTrue(index.contains("\"manualSmokeRequiredReports\": 1"))
+        XCTAssertTrue(index.contains("\"source\": \"docs/validation-reports/2026-06-14-macbookpro18-local-readonly/review-result.json\""))
+        XCTAssertTrue(index.contains("\"sourceRef\": \"local-installed-app\""))
+        XCTAssertFalse(index.contains("/Users/"))
+        XCTAssertTrue(reportReadme.contains("reviewed validation summaries, not raw evidence bundles"))
+        XCTAssertTrue(reportReadme.contains("Candidate supported-hardware rows remain **Needs manual smoke**"))
         XCTAssertTrue(compatibility.contains("Do not run the manual smoke test when readiness is `blocked`"))
         XCTAssertTrue(compatibility.contains("Do not add a README compatibility badge or broad marketing claim until the status table has real report links."))
     }

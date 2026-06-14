@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "schemaID": "https://vifty.local/schemas/validation-review-result.schema.json",
+  "generatedAtUTC": "2026-06-14T19:00:52Z",
+  "status": "passed",
+  "mode": "supported-hardware",
+  "bundlePath": "vifty-validation-20260614T190000Z",
+  "readOnly": true,
+  "coolingCommandsRun": false,
+  "appPath": "/Applications/Vifty.app",
+  "releaseArtifactSummaryPath": "",
+  "releaseChecklistPath": "",
+  "installSource": "local-ad-hoc-build",
+  "sourceRef": "local-installed-app",
+  "sourceSHA": "",
+  "sourceArtifactName": "",
+  "sourceArtifactSHA256": "",
+  "sourceArtifactBytes": "",
+  "diagnoseState": "ready",
+  "recommendedAgentAction": "requestCooling",
+  "recommendedRecoveryAction": "none",
+  "safeToRequestCooling": true,
+  "daemonControlPathReady": true,
+  "modelIdentifier": "MacBookPro18,1",
+  "isAppleSilicon": true,
+  "isMacBookPro": true,
+  "fanCount": 2,
+  "controllableFanCount": 2,
+  "temperatureSensorCount": 6,
+  "thermalPressure": "nominal",
+  "manualSmokeTestResult": "not-recorded",
+  "manualSmokeTestSource": "",
+  "agentRunSmokeResult": "not-recorded",
+  "agentRunSmokeSource": "",
+  "failures": [
+
+  ],
+  "warnings": [
+    "manual fan-write smoke-test result is not recorded; keep this report as candidate evidence"
+  ]
+}

@@ -88,6 +88,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(json["agentRunSmokePassedReports"] as? Int, 1)
         XCTAssertEqual(json["validatedHardwareReports"] as? Int, 1)
         let reports = try XCTUnwrap(json["reports"] as? [[String: Any]])
+        let sources = reports.compactMap { $0["source"] as? String }
+        XCTAssertTrue(sources.contains("supported/review-result.json"))
+        XCTAssertFalse(sources.contains { $0.contains(FileManager.default.temporaryDirectory.path) })
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
         XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
