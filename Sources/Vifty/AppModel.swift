@@ -42,13 +42,13 @@ enum HelperHealthState: Equatable {
         case .healthy(let fanCount):
             return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
         case .error:
-            return "Fan helper error"
+            return "Fan helper error · repair needed"
         case .telemetryOnly:
-            return "Fan telemetry available · daemon not responding"
+            return "Read-only fan telemetry · repair daemon for writes"
         case .unreachable:
-            return "Fan helper unreachable"
+            return "Fan helper not responding · repair or approve"
         case .noFanData:
-            return "Fan helper reachable · no fan data"
+            return "Fan helper reachable · waiting for fan data"
         case .noControllableFans:
             return "Fan telemetry available · no controllable fans"
         case .unsupported:
@@ -61,13 +61,13 @@ enum HelperHealthState: Equatable {
         case .checking, .healthy:
             return nil
         case .error:
-            return "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
+            return "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
         case .telemetryOnly:
-            return "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only."
+            return "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds."
         case .unreachable:
-            return "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds."
+            return "Use Repair/Reinstall Helper or approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds."
         case .noFanData:
-            return "Fan data is unavailable. Fan writes stay blocked until controllable fans appear."
+            return "Keep Auto selected and collect read-only diagnostics. Fan writes stay blocked until controllable fans appear."
         case .noControllableFans(let fanCount):
             return "The helper can read \(fanCount) fan\(fanCount == 1 ? "" : "s"), but none are marked controllable. Keep fan writes blocked and collect read-only hardware validation evidence before changing support claims."
         case .unsupported:
@@ -541,8 +541,26 @@ final class AppModel: ObservableObject {
         preferences.set(settings.agentCoolingAttention, forKey: notificationAgentCoolingAttentionDefaultsKey)
     }
 
+    private var helperWritePathBlockedSummary: String? {
+        switch helperHealthState {
+        case .error, .unreachable:
+            return "Fan writes blocked until helper responds"
+        case .telemetryOnly:
+            return "Read-only fan telemetry; repair helper for fan writes"
+        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
+            return nil
+        }
+    }
+
+    private var shouldPreferHelperRecoveryOverAgentStatusError: Bool {
+        agentControlStatus?.activeLease == nil
+            && agentControlStatusError != nil
+            && helperWritePathBlockedSummary != nil
+    }
+
     var agentCoolingMenuSummary: String? {
         guard let lease = agentControlStatus?.activeLease else {
+            if shouldPreferHelperRecoveryOverAgentStatusError { return nil }
             return agentControlStatusError == nil ? nil : "Agent status unavailable"
         }
         if agentControlStatusError != nil {
@@ -553,6 +571,7 @@ final class AppModel: ObservableObject {
 
     var agentCoolingPanelTitle: String {
         if agentControlStatusError != nil {
+            if shouldPreferHelperRecoveryOverAgentStatusError { return "Agent cooling unavailable" }
             return agentControlStatus?.activeLease == nil ? "Agent status unavailable" : "Agent status warning"
         }
         return agentCoolingNeedsAttention ? "Agent restore pending" : "Agent cooling active"
@@ -560,6 +579,7 @@ final class AppModel: ObservableObject {
 
     var agentCoolingSummary: String? {
         guard let lease = agentControlStatus?.activeLease else {
+            if shouldPreferHelperRecoveryOverAgentStatusError { return nil }
             guard agentControlStatusError != nil else { return nil }
             return "Agent cooling status unavailable; repair helper before requesting cooling."
         }
@@ -584,6 +604,7 @@ final class AppModel: ObservableObject {
 
     var agentCoolingRecoverySuggestion: String? {
         if agentControlStatusError != nil {
+            if shouldPreferHelperRecoveryOverAgentStatusError { return nil }
             guard agentControlStatus?.activeLease != nil else {
                 return "Repair Helper before requesting agent cooling."
             }
@@ -597,6 +618,7 @@ final class AppModel: ObservableObject {
 
     var agentCoolingNeedsAttention: Bool {
         if agentControlStatusError != nil {
+            if shouldPreferHelperRecoveryOverAgentStatusError { return false }
             return true
         }
         guard let lease = agentControlStatus?.activeLease else { return false }
@@ -610,6 +632,10 @@ final class AppModel: ObservableObject {
                 return "Agent \(lease.request.workload.displayName) owns cooling until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))\(statusWarning)"
             }
             return "Agent \(lease.request.workload.displayName) lease expired; restore Auto to clear daemon control\(statusWarning)"
+        }
+
+        if controlState.mode == .auto, helperWritePathBlockedSummary != nil {
+            return autoControlOwnershipSummary
         }
 
         if agentControlStatusError != nil {
@@ -630,18 +656,22 @@ final class AppModel: ObservableObject {
     }
 
     var controlOwnershipNeedsAttention: Bool {
+        if let lease = agentControlStatus?.activeLease {
+            return agentControlStatusError != nil || !lease.isActive(at: now())
+        }
         if agentControlStatusError != nil {
             return true
         }
-        if let lease = agentControlStatus?.activeLease {
-            return !lease.isActive(at: now())
-        }
 
         guard controlState.mode == .auto else { return false }
+        guard let fans = snapshot?.fans, !fans.isEmpty else {
+            return hasCompletedHardwarePoll || daemonReachable
+        }
         return !autoSystemModeFans.isEmpty
             || !autoForcedModeFans.isEmpty
             || !autoUnknownModeFans.isEmpty
             || !autoMissingModeFans.isEmpty
+            || helperWritePathBlockedSummary != nil
     }
 
     var helperHealthState: HelperHealthState {
@@ -729,7 +759,7 @@ final class AppModel: ObservableObject {
         guard let fans = snapshot?.fans, !fans.isEmpty else {
             return daemonReachable
                 ? "Auto selected · fan hardware state unavailable"
-                : "Auto selected · fan helper unreachable"
+                : "Auto selected · fan writes blocked until helper responds"
         }
 
         if !autoSystemModeFans.isEmpty {
@@ -743,6 +773,9 @@ final class AppModel: ObservableObject {
         }
         if !autoMissingModeFans.isEmpty {
             return "Auto selected · hardware mode unavailable on \(fanIDList(autoMissingModeFans))"
+        }
+        if let helperWritePathBlockedSummary {
+            return helperWritePathBlockedSummary
         }
         return "macOS Auto owns fan control"
     }

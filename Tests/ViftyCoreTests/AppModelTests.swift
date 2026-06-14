@@ -188,11 +188,11 @@ final class AppModelTests: XCTestCase {
         )
         model.lastError = "The fan helper rejected the command"
 
-        XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper error · repair needed")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
     }
 
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
@@ -207,11 +207,11 @@ final class AppModelTests: XCTestCase {
             isMacBookPro: true
         )
 
-        XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · no fan data")
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper reachable · waiting for fan data")
         XCTAssertEqual(model.helperHealthState, .noFanData)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertFalse(model.helperRepairActionAvailable)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Fan data is unavailable. Fan writes stay blocked until controllable fans appear.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Keep Auto selected and collect read-only diagnostics. Fan writes stay blocked until controllable fans appear.")
     }
 
     func testHelperHealthSummaryPluralizesFanCount() {
@@ -247,11 +247,11 @@ final class AppModelTests: XCTestCase {
             isMacBookPro: true
         )
 
-        XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperHealthSummary, "Read-only fan telemetry · repair daemon for writes")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds.")
     }
 
     func testHelperHealthSummaryReportsNoControllableFansWithoutRepairAction() {
@@ -292,6 +292,25 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(model.manualFanControlAvailable)
         XCTAssertNil(model.manualFanControlBlockedReason)
+    }
+
+    func testHelperOutageSuppressesAgentStatusNoiseWhenTelemetryIsReadOnly() {
+        let model = AppModel()
+        model.snapshot = agentHardwareSnapshot(hardwareMode: .automatic)
+        model.daemonReachable = true
+        model.daemonResponding = false
+        model.controlState = ControlState(mode: .auto)
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertEqual(model.controlOwnershipSummary, "Read-only fan telemetry; repair helper for fan writes")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        XCTAssertNil(model.agentCoolingMenuSummary)
+        XCTAssertNil(model.agentCoolingSummary)
+        XCTAssertNil(model.agentCoolingRecoverySuggestion)
+        XCTAssertFalse(model.agentCoolingNeedsAttention)
+        XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
     }
 
     func testManualFanControlBlocksWhileAgentLeaseOwnsCooling() {
@@ -343,11 +362,11 @@ final class AppModelTests: XCTestCase {
         model.daemonReachable = false
         model.snapshot = HardwareSnapshot(fans: [], temperatureSensors: [], modelIdentifier: "MacBookPro18,3", isAppleSilicon: true, isMacBookPro: true)
 
-        XCTAssertEqual(model.helperHealthSummary, "Fan helper unreachable")
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper not responding · repair or approve")
         XCTAssertEqual(model.helperHealthState, .unreachable)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper copies the daemon, strips quarantine, restarts launchd, and may require Login Items approval. Fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds.")
     }
 
     func testHelperHealthSummaryReportsUnsupportedHardwareWithoutRepairAction() {
@@ -388,6 +407,24 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.controlOwnershipSummary, "macOS Auto owns fan control")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipSummaryReportsBlockedWritesWhenAutoHasNoHelperPath() {
+        let model = AppModel()
+        model.hasCompletedHardwarePoll = true
+        model.daemonResponding = false
+        model.daemonReachable = false
+        model.controlState = ControlState(mode: .auto)
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Auto selected · fan writes blocked until helper responds")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
     func testControlOwnershipSummaryWarnsWhenAutoSelectedButHardwareIsForced() {
@@ -484,6 +521,8 @@ final class AppModelTests: XCTestCase {
             isPluggedIn: true,
             adapter: PowerAdapter(ratedWatts: 96)
         )
+        model.daemonReachable = true
+        model.daemonResponding = true
         model.thermalPressure = .serious
         model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
 
@@ -860,10 +899,10 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(model.daemonReachable)
         XCTAssertFalse(model.daemonResponding)
-        XCTAssertEqual(model.helperHealthSummary, "Fan telemetry available · daemon not responding")
+        XCTAssertEqual(model.helperHealthSummary, "Read-only fan telemetry · repair daemon for writes")
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair/Reinstall Helper, approve Login Items if prompted, then retry manual or agent cooling only after the daemon responds; fallback telemetry is read-only.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds.")
     }
 
     func testPollOnceClearsStaleHelperUnreachableAfterDaemonRepair() async {
@@ -907,10 +946,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.daemonReachable)
         XCTAssertTrue(model.daemonResponding)
         XCTAssertEqual(model.agentControlStatus?.enabled, true)
-        XCTAssertEqual(model.helperHealthSummary, "Fan helper error")
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper error · repair needed")
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
-        XCTAssertEqual(model.helperRecoverySuggestion, "Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
         XCTAssertTrue(model.lastError?.contains("Snapshot failed") == true)
     }
 
@@ -1228,6 +1267,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuTitle.contains("Agent status unavailable"))
     }
 
+    func testPollOncePrioritizesHelperRepairWhenAgentStatusFailsThroughReadOnlyTelemetry() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot(hardwareMode: .automatic))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
+            daemonPing: { false },
+            agentStatusReader: {
+                throw ViftyError.helperRejected("Daemon request timed out.")
+            }
+        )
+
+        await model.pollOnce()
+
+        XCTAssertTrue(model.agentControlStatusError?.contains("Daemon request timed out") == true)
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertEqual(model.controlOwnershipSummary, "Read-only fan telemetry; repair helper for fan writes")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        XCTAssertNil(model.agentCoolingMenuSummary)
+        XCTAssertNil(model.agentCoolingSummary)
+        XCTAssertNil(model.agentCoolingRecoverySuggestion)
+        XCTAssertFalse(model.agentCoolingNeedsAttention)
+        XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
+    }
+
     func testPollOnceClearsAgentControlStatusFailureAfterSuccessfulRefresh() async {
         let lease = agentLease()
         let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
@@ -1405,9 +1471,9 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    private func agentHardwareSnapshot() -> HardwareSnapshot {
+    private func agentHardwareSnapshot(hardwareMode: FanHardwareMode? = nil) -> HardwareSnapshot {
         HardwareSnapshot(
-            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: hardwareMode)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
             modelIdentifier: "MacBookPro18,3",
             isAppleSilicon: true,
