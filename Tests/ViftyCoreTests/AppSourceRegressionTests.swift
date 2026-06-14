@@ -103,6 +103,8 @@ final class AppSourceRegressionTests: XCTestCase {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let contentView = try read("Sources/Vifty/ContentView.swift")
         let viftyApp = try read("Sources/Vifty/ViftyApp.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+        let appPreferencesStore = try read("Sources/Vifty/AppPreferencesStore.swift")
 
         XCTAssertTrue(menuBarView.contains("Text(model.menuPanelTitle)"))
         XCTAssertFalse(menuBarView.contains("Text(model.menuTitle)"))
@@ -118,6 +120,13 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".labelsHidden()"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtra {"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
+        XCTAssertTrue(appModel.contains("private let preferencesStore: AppPreferencesStore"))
+        XCTAssertTrue(appModel.contains("persistAppPreferences()"))
+        XCTAssertTrue(appPreferencesStore.contains("app-preferences.json"))
+        XCTAssertTrue(appPreferencesStore.contains("legacyDefaults: UserDefaults?"))
+        XCTAssertTrue(appPreferencesStore.contains(".posixPermissions: NSNumber(value: 0o700)"))
+        XCTAssertTrue(appPreferencesStore.contains(".posixPermissions: NSNumber(value: 0o600)"))
+        XCTAssertFalse(appModel.contains("preferences.set("))
     }
 
     func testMenuBarHighTemperatureAttentionIsWired() throws {

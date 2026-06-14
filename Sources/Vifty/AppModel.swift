@@ -112,7 +112,7 @@ enum HelperHealthState: Equatable {
     }
 }
 
-enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
+enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
     case fanIcon
     case temperature
     case fanRPM
@@ -167,12 +167,12 @@ final class AppModel: ObservableObject {
     @Published var thermalPressure: ThermalPressure = .nominal
     @Published var menuBarDisplayMode: MenuBarDisplayMode {
         didSet {
-            preferences.set(menuBarDisplayMode.rawValue, forKey: Self.menuBarDisplayModeDefaultsKey)
+            persistAppPreferences()
         }
     }
     @Published var notificationSettings: LocalNotificationSettings {
         didSet {
-            Self.saveNotificationSettings(notificationSettings, to: preferences)
+            persistAppPreferences()
         }
     }
     @Published var telemetryHistory = TelemetryHistory()
@@ -184,13 +184,13 @@ final class AppModel: ObservableObject {
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
 
-    static let menuBarDisplayModeDefaultsKey = "menuBarDisplayMode"
+    static let menuBarDisplayModeDefaultsKey = AppPreferencesStore.legacyMenuBarDisplayModeDefaultsKey
     static let highTemperatureAttentionThreshold = 90.0
-    static let notificationHelperFailureDefaultsKey = "notification.helperFailure"
-    static let notificationThermalPressureDefaultsKey = "notification.elevatedThermalPressure"
-    static let notificationAutoRestoreDefaultsKey = "notification.autoRestoreFailure"
-    static let notificationPluggedInDrainDefaultsKey = "notification.pluggedInBatteryDrain"
-    static let notificationAgentCoolingAttentionDefaultsKey = "notification.agentCoolingAttention"
+    static let notificationHelperFailureDefaultsKey = AppPreferencesStore.legacyNotificationHelperFailureDefaultsKey
+    static let notificationThermalPressureDefaultsKey = AppPreferencesStore.legacyNotificationThermalPressureDefaultsKey
+    static let notificationAutoRestoreDefaultsKey = AppPreferencesStore.legacyNotificationAutoRestoreDefaultsKey
+    static let notificationPluggedInDrainDefaultsKey = AppPreferencesStore.legacyNotificationPluggedInDrainDefaultsKey
+    static let notificationAgentCoolingAttentionDefaultsKey = AppPreferencesStore.legacyNotificationAgentCoolingAttentionDefaultsKey
     static let manualTargetDriftRPMThreshold = 75
 
     private let coordinator: FanControlCoordinator
@@ -202,7 +202,7 @@ final class AppModel: ObservableObject {
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
-    private let preferences: UserDefaults
+    private let preferencesStore: AppPreferencesStore
     private var pollingTask: Task<Void, Never>?
     private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
     private var previousHelperNeedsAttention = false
@@ -226,6 +226,7 @@ final class AppModel: ObservableObject {
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
         },
         profileStore: CurveProfileStore = CurveProfileStore(),
+        preferencesStore: AppPreferencesStore? = nil,
         preferences: UserDefaults = .standard
     ) {
         self.coordinator = coordinator
@@ -237,9 +238,10 @@ final class AppModel: ObservableObject {
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
         self.profileStore = profileStore
-        self.preferences = preferences
-        menuBarDisplayMode = Self.loadMenuBarDisplayMode(from: preferences)
-        notificationSettings = Self.loadNotificationSettings(from: preferences)
+        self.preferencesStore = preferencesStore ?? AppPreferencesStore(legacyDefaults: preferences)
+        let appPreferences = self.preferencesStore.load()
+        menuBarDisplayMode = appPreferences.menuBarDisplayMode
+        notificationSettings = appPreferences.notificationSettings
         savedProfiles = profileStore.load()
     }
 
@@ -577,31 +579,11 @@ final class AppModel: ObservableObject {
         powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Power --"
     }
 
-    private static func loadMenuBarDisplayMode(from preferences: UserDefaults) -> MenuBarDisplayMode {
-        guard let rawValue = preferences.string(forKey: menuBarDisplayModeDefaultsKey),
-              let displayMode = MenuBarDisplayMode(rawValue: rawValue)
-        else {
-            return .fanIcon
-        }
-        return displayMode
-    }
-
-    private static func loadNotificationSettings(from preferences: UserDefaults) -> LocalNotificationSettings {
-        LocalNotificationSettings(
-            helperFailure: preferences.bool(forKey: notificationHelperFailureDefaultsKey),
-            elevatedThermalPressure: preferences.bool(forKey: notificationThermalPressureDefaultsKey),
-            autoRestoreFailure: preferences.bool(forKey: notificationAutoRestoreDefaultsKey),
-            pluggedInBatteryDrain: preferences.bool(forKey: notificationPluggedInDrainDefaultsKey),
-            agentCoolingAttention: preferences.bool(forKey: notificationAgentCoolingAttentionDefaultsKey)
-        )
-    }
-
-    private static func saveNotificationSettings(_ settings: LocalNotificationSettings, to preferences: UserDefaults) {
-        preferences.set(settings.helperFailure, forKey: notificationHelperFailureDefaultsKey)
-        preferences.set(settings.elevatedThermalPressure, forKey: notificationThermalPressureDefaultsKey)
-        preferences.set(settings.autoRestoreFailure, forKey: notificationAutoRestoreDefaultsKey)
-        preferences.set(settings.pluggedInBatteryDrain, forKey: notificationPluggedInDrainDefaultsKey)
-        preferences.set(settings.agentCoolingAttention, forKey: notificationAgentCoolingAttentionDefaultsKey)
+    private func persistAppPreferences() {
+        preferencesStore.save(AppPreferences(
+            menuBarDisplayMode: menuBarDisplayMode,
+            notificationSettings: notificationSettings
+        ))
     }
 
     private var helperWritePathBlockedSummary: String? {

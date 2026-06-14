@@ -51,6 +51,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCtl/main.swift` — thin `viftyctl` command entrypoint.
 - `Sources/Vifty/ViftyApp.swift` — `@main` SwiftUI app entry (menu bar extra + window scene).
 - `Sources/Vifty/AppModel.swift` — `@MainActor ObservableObject` driving UI polling, fan/profile state, and power snapshot refresh.
+- `Sources/Vifty/AppPreferencesStore.swift` — Codable private JSON persistence for menu-bar display mode and local notification settings, with legacy UserDefaults migration.
 - `Sources/Vifty/LocalNotifications.swift` — opt-in local UserNotifications wrapper and notification settings model for helper, thermal-pressure, restore-failure, plugged-in-drain, and agent-cooling attention alerts.
 - `.github/workflows/ci.yml` — GitHub Actions CI: Swift tests, release app build, plist/code-sign checks, temp install verification, and app artifact upload.
 - `.github/workflows/release.yml` — tagged release workflow for Developer ID signing, notarization, stapling, checksums, and GitHub Release publishing.
@@ -165,7 +166,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - Temperature sensor IDs are SMC key strings or `hid-<index>`.
 - Bundle identifier: `tech.reidar.vifty` (app), `tech.reidar.vifty.daemon` (Mach service).
 - Release hardening knob: `make app CONFIGURATION=release SIGNING_IDENTITY="<identity>" VIFTY_XPC_ALLOWED_TEAM_ID="<TEAMID>"`.
-- UI-facing persistence uses `Codable` + JSON file in `~/Library/Application Support/Vifty/` (see `CurveProfileStore`). No UserDefaults for structured data. Saving a profile with an existing name overwrites it; no duplicate names are permitted.
+- UI-facing persistence uses `Codable` + JSON file in `~/Library/Application Support/Vifty/` (see `CurveProfileStore` and `AppPreferencesStore`). No UserDefaults for structured data except legacy migration reads. Saving a profile with an existing name overwrites it; no duplicate names are permitted.
 
 ## New Feature Checklist
 

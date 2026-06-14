@@ -27,7 +27,7 @@ enum LocalNotificationKind: String, CaseIterable, Identifiable {
     }
 }
 
-struct LocalNotificationSettings: Equatable {
+struct LocalNotificationSettings: Codable, Equatable {
     var helperFailure = false
     var elevatedThermalPressure = false
     var autoRestoreFailure = false

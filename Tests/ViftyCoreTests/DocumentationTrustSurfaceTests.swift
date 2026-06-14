@@ -54,6 +54,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let agents = try read("AGENTS.md")
 
         XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (627 tests)."))
+        XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
+        XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))

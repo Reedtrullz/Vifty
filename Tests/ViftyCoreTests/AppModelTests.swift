@@ -839,41 +839,60 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuBarLabelUsesFanIcon)
     }
 
-    func testMenuBarDisplayModeLoadsAndPersistsPreference() {
+    func testMenuBarDisplayModeMigratesLegacyDefaultAndPersistsPrivately() throws {
         let suiteName = "tech.reidar.vifty.tests.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suiteName)!
         defer { preferences.removePersistentDomain(forName: suiteName) }
         preferences.set(MenuBarDisplayMode.temperature.rawValue, forKey: AppModel.menuBarDisplayModeDefaultsKey)
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: preferences)
 
-        let model = AppModel(preferences: preferences)
+        let model = AppModel(preferencesStore: store, preferences: preferences)
 
         XCTAssertEqual(model.menuBarDisplayMode, .temperature)
+        XCTAssertEqual(store.load().menuBarDisplayMode, .temperature)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+
         model.menuBarDisplayMode = .averageFanRPM
-        XCTAssertEqual(preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey), MenuBarDisplayMode.averageFanRPM.rawValue)
+        XCTAssertEqual(store.load().menuBarDisplayMode, .averageFanRPM)
+        XCTAssertEqual(
+            preferences.string(forKey: AppModel.menuBarDisplayModeDefaultsKey),
+            MenuBarDisplayMode.temperature.rawValue,
+            "New preference writes should go to Vifty's private JSON store, not legacy UserDefaults."
+        )
     }
 
-    func testNotificationSettingsLoadAndPersistAsIndividualPreferences() {
+    func testNotificationSettingsMigrateLegacyDefaultsAndPersistPrivately() throws {
         let suiteName = "tech.reidar.vifty.tests.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suiteName)!
         defer { preferences.removePersistentDomain(forName: suiteName) }
         preferences.set(true, forKey: AppModel.notificationHelperFailureDefaultsKey)
         preferences.set(true, forKey: AppModel.notificationThermalPressureDefaultsKey)
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: preferences)
 
-        let model = AppModel(preferences: preferences)
+        let model = AppModel(preferencesStore: store, preferences: preferences)
 
         XCTAssertTrue(model.notificationSettings.helperFailure)
         XCTAssertTrue(model.notificationSettings.elevatedThermalPressure)
         XCTAssertFalse(model.notificationSettings.autoRestoreFailure)
         XCTAssertFalse(model.notificationSettings.pluggedInBatteryDrain)
         XCTAssertFalse(model.notificationSettings.agentCoolingAttention)
+        XCTAssertEqual(store.load().notificationSettings, model.notificationSettings)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
 
         model.notificationSettings.autoRestoreFailure = true
         model.notificationSettings.pluggedInBatteryDrain = true
         model.notificationSettings.agentCoolingAttention = true
 
-        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationAutoRestoreDefaultsKey))
-        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationPluggedInDrainDefaultsKey))
-        XCTAssertTrue(preferences.bool(forKey: AppModel.notificationAgentCoolingAttentionDefaultsKey))
+        XCTAssertTrue(store.load().notificationSettings.autoRestoreFailure)
+        XCTAssertTrue(store.load().notificationSettings.pluggedInBatteryDrain)
+        XCTAssertTrue(store.load().notificationSettings.agentCoolingAttention)
+        XCTAssertFalse(preferences.bool(forKey: AppModel.notificationAutoRestoreDefaultsKey))
+        XCTAssertFalse(preferences.bool(forKey: AppModel.notificationPluggedInDrainDefaultsKey))
+        XCTAssertFalse(preferences.bool(forKey: AppModel.notificationAgentCoolingAttentionDefaultsKey))
     }
 
     func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
@@ -1645,6 +1664,18 @@ final class AppModelTests: XCTestCase {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-app-model-tests")
             .appendingPathComponent(UUID().uuidString)
+    }
+
+    private func temporaryPreferencesPath() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-app-preferences-tests")
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("app-preferences.json")
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }
 
