@@ -178,6 +178,16 @@ public enum PowerDisplayFormatter {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    public static func adapterDescription(for adapter: PowerAdapter) -> String? {
+        var parts: [String] = []
+        if let detail = adapterDetail(for: adapter) { parts.append(detail) }
+        if let name = adapter.name { parts.append(name) }
+        if let manufacturer = adapter.manufacturer { parts.append(manufacturer) }
+        if let model = adapter.model { parts.append(model) }
+        if let family = adapter.family { parts.append(family) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     public static func batteryFlow(for snapshot: PowerSnapshot) -> String? {
         guard let batteryPower = snapshot.batteryPowerWatts, abs(batteryPower) >= 0.1 else { return nil }
         if batteryPower > 0 {

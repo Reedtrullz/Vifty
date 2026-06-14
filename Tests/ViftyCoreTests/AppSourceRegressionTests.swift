@@ -44,6 +44,8 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("HistoryPanel(history: model.telemetryHistory, compact: compact)"))
         XCTAssertTrue(contentView.contains("SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: compact)"))
         XCTAssertTrue(contentView.contains(".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)"))
+        XCTAssertTrue(contentView.contains("if let adapter = snapshot.adapter, adapter.powerWatts >= 0.5, adapterLine == nil"))
+        XCTAssertTrue(contentView.contains("PowerDisplayFormatter.adapterDescription(for: adapter)"))
         XCTAssertFalse(contentView.contains("if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {\n                ScrollView {"))
     }
 

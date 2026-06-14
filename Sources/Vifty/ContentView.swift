@@ -565,7 +565,7 @@ private struct PowerPanel: View {
                 if let flow = PowerDisplayFormatter.batteryFlow(for: snapshot) {
                     PowerMetric(label: "Battery flow", value: flow.replacingOccurrences(of: "Battery ", with: ""), systemImage: snapshot.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
                 }
-                if let adapter = snapshot.adapter, adapter.powerWatts >= 0.5 {
+                if let adapter = snapshot.adapter, adapter.powerWatts >= 0.5, adapterLine == nil {
                     PowerMetric(label: "Adapter", value: adapterValue(adapter), systemImage: "powerplug")
                 }
                 if let health = snapshot.healthPercent {
@@ -627,16 +627,10 @@ private struct PowerPanel: View {
     }
 
     private var adapterLine: String? {
-        guard let adapter = snapshot.adapter else { return nil }
-        var parts: [String] = []
-        if let name = adapter.name { parts.append(name) }
-        if let manufacturer = adapter.manufacturer { parts.append(manufacturer) }
-        if let model = adapter.model { parts.append(model) }
-        if let family = adapter.family { parts.append(family) }
-        if let voltage = adapter.negotiatedVoltageVolts, let current = adapter.negotiatedCurrentAmps {
-            parts.append("\(PowerDisplayFormatter.volts(voltage)) · \(PowerDisplayFormatter.amps(current))")
-        }
-        return parts.isEmpty ? nil : "Adapter: " + parts.joined(separator: " · ")
+        guard let adapter = snapshot.adapter,
+              let description = PowerDisplayFormatter.adapterDescription(for: adapter)
+        else { return nil }
+        return "Adapter: " + description
     }
 
     private var profilesLine: String? {
