@@ -61,6 +61,7 @@ final class PowerInfoTests: XCTestCase {
         XCTAssertEqual(snapshot.adapter?.family, "USB-C Power Delivery")
         XCTAssertEqual(snapshot.powerDeliveryProfiles.map { Int($0.watts.rounded()) }, [15, 27, 94])
         XCTAssertEqual(PowerDisplayFormatter.summary(for: snapshot), "96 W adapter")
+        XCTAssertEqual(PowerDisplayFormatter.panelHeadline(for: snapshot), "External power")
         XCTAssertEqual(
             snapshot.adapter.flatMap(PowerDisplayFormatter.adapterDescription(for:)),
             "96 W · 20.00 V · 4.70 A · USB-C Power Adapter · Apple Inc. · A2166 · USB-C Power Delivery"
@@ -77,6 +78,17 @@ final class PowerInfoTests: XCTestCase {
 
         XCTAssertEqual(PowerDisplayFormatter.adapterDetail(for: adapter), "140 W · 28.00 V · 4.99 A")
         XCTAssertEqual(PowerDisplayFormatter.adapterDescription(for: adapter), "140 W · 28.00 V · 4.99 A")
+    }
+
+    func testPowerPanelHeadlineFallsBackToSummaryWhenNoAdapterDetailExists() {
+        let snapshot = PowerSnapshot(
+            percent: 54,
+            isPluggedIn: false,
+            batteryPowerWatts: -16.9
+        )
+
+        XCTAssertEqual(PowerDisplayFormatter.summary(for: snapshot), "16.9 W drain")
+        XCTAssertEqual(PowerDisplayFormatter.panelHeadline(for: snapshot), "16.9 W drain")
     }
 
     func testExternalAdapterFallbackUsesNegotiatedVoltageAndCurrentWhenRatedWattsMissing() {

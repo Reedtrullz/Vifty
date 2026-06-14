@@ -614,7 +614,7 @@ private struct PowerPanel: View {
                     .font(.headline)
                     .foregroundStyle(snapshot.isPluggedIn ? .green : .primary)
                 Spacer()
-                Text(PowerDisplayFormatter.summary(for: snapshot))
+                Text(PowerDisplayFormatter.panelHeadline(for: snapshot))
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }

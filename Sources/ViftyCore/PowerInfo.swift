@@ -163,6 +163,15 @@ public enum PowerDisplayFormatter {
         return "Power unknown"
     }
 
+    public static func panelHeadline(for snapshot: PowerSnapshot) -> String {
+        if snapshot.isPluggedIn,
+           let adapter = snapshot.adapter,
+           adapterDescription(for: adapter) != nil {
+            return "External power"
+        }
+        return summary(for: snapshot)
+    }
+
     public static func adapterDetail(for adapter: PowerAdapter) -> String? {
         guard adapter.powerWatts >= 0.5 else { return nil }
 
