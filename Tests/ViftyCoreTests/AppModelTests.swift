@@ -1169,6 +1169,65 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(preferences.bool(forKey: AppModel.notificationAgentCoolingAttentionDefaultsKey))
     }
 
+    func testPerFanFixedRPMPreferencePersistsPrivately() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let fans = [
+            Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+            Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+        ]
+        let model = AppModel(preferencesStore: store)
+
+        model.fixedRPM = 3200
+        model.usePerFanFixedRPM = true
+        model.ensureFixedFanTargets(for: fans)
+        model.setFixedFanRPM(4400, for: fans[0])
+        model.setFixedFanRPM(4700, for: fans[1])
+
+        let saved = store.load()
+        XCTAssertTrue(saved.usePerFanFixedRPM)
+        XCTAssertEqual(saved.fixedFanTargets, [
+            FixedFanTarget(fanID: 0, rpm: 4296),
+            FixedFanTarget(fanID: 1, rpm: 4700)
+        ])
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+
+        let relaunched = AppModel(preferencesStore: store)
+        XCTAssertTrue(relaunched.usePerFanFixedRPM)
+        XCTAssertEqual(relaunched.fixedFanTargets, saved.fixedFanTargets)
+    }
+
+    func testOldAppPreferencesDecodeWithoutPerFanFixedFields() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        try FileManager.default.createDirectory(
+            at: preferencesURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let legacyPreferences = """
+        {
+          "menuBarDisplayMode": "temperature",
+          "notificationSettings": {
+            "helperFailure": true,
+            "elevatedThermalPressure": false,
+            "autoRestoreFailure": true,
+            "pluggedInBatteryDrain": false,
+            "agentCoolingAttention": false
+          }
+        }
+        """
+        try legacyPreferences.data(using: .utf8)?.write(to: preferencesURL)
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.menuBarDisplayMode, .temperature)
+        XCTAssertTrue(loaded.notificationSettings.helperFailure)
+        XCTAssertTrue(loaded.notificationSettings.autoRestoreFailure)
+        XCTAssertFalse(loaded.usePerFanFixedRPM)
+        XCTAssertTrue(loaded.fixedFanTargets.isEmpty)
+    }
+
     func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
         let recorder = AppModelNotificationRecorder()
         let model = AppModel(

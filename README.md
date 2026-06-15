@@ -202,7 +202,7 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 | `ViftyCtl` | executable | Agent-friendly JSON CLI for bounded cooling leases |
 | `ViftyPrivateIOKit` | library | C/IOKit bridge for HID temperature sensors |
 
-**Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles are persisted as JSON in `~/Library/Application Support/Vifty/`.
+**Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles and private app preferences, including menu-bar mode, notification toggles, and fixed-mode per-fan targets, are persisted as JSON in `~/Library/Application Support/Vifty/`.
 
 ## Safety and privacy
 

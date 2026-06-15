@@ -3,11 +3,35 @@ import Foundation
 struct AppPreferences: Codable, Equatable {
     var menuBarDisplayMode: MenuBarDisplayMode
     var notificationSettings: LocalNotificationSettings
+    var usePerFanFixedRPM: Bool
+    var fixedFanTargets: [FixedFanTarget]
 
     static let defaults = AppPreferences(
         menuBarDisplayMode: .fanIcon,
-        notificationSettings: .disabled
+        notificationSettings: .disabled,
+        usePerFanFixedRPM: false,
+        fixedFanTargets: []
     )
+
+    init(
+        menuBarDisplayMode: MenuBarDisplayMode,
+        notificationSettings: LocalNotificationSettings,
+        usePerFanFixedRPM: Bool = false,
+        fixedFanTargets: [FixedFanTarget] = []
+    ) {
+        self.menuBarDisplayMode = menuBarDisplayMode
+        self.notificationSettings = notificationSettings
+        self.usePerFanFixedRPM = usePerFanFixedRPM
+        self.fixedFanTargets = fixedFanTargets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        menuBarDisplayMode = try container.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .fanIcon
+        notificationSettings = try container.decodeIfPresent(LocalNotificationSettings.self, forKey: .notificationSettings) ?? .disabled
+        usePerFanFixedRPM = try container.decodeIfPresent(Bool.self, forKey: .usePerFanFixedRPM) ?? false
+        fixedFanTargets = try container.decodeIfPresent([FixedFanTarget].self, forKey: .fixedFanTargets) ?? []
+    }
 }
 
 final class AppPreferencesStore: @unchecked Sendable {

@@ -155,7 +155,11 @@ final class AppModel: ObservableObject {
     @Published var curveStartRPM = 1400.0
     @Published var curveMidRPM = 3500.0
     @Published var curveMaxRPM = 6000.0
-    @Published var usePerFanFixedRPM = false
+    @Published var usePerFanFixedRPM = false {
+        didSet {
+            persistAppPreferences()
+        }
+    }
     @Published var fixedFanTargets: [FixedFanTarget] = []
     @Published var usePerFanOverrides = false
     @Published var fanOverrides: [FanCurveOverride] = []
@@ -254,6 +258,8 @@ final class AppModel: ObservableObject {
         let appPreferences = self.preferencesStore.load()
         menuBarDisplayMode = appPreferences.menuBarDisplayMode
         notificationSettings = appPreferences.notificationSettings
+        usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
+        fixedFanTargets = appPreferences.fixedFanTargets
         savedProfiles = profileStore.load()
     }
 
@@ -567,6 +573,7 @@ final class AppModel: ObservableObject {
         updateFixedFanTarget(for: fan) { target in
             target.rpm = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         }
+        persistAppPreferences()
     }
 
     func ensureFanOverrides(for fans: [Fan]) {
@@ -732,7 +739,9 @@ final class AppModel: ObservableObject {
     private func persistAppPreferences() {
         preferencesStore.save(AppPreferences(
             menuBarDisplayMode: menuBarDisplayMode,
-            notificationSettings: notificationSettings
+            notificationSettings: notificationSettings,
+            usePerFanFixedRPM: usePerFanFixedRPM,
+            fixedFanTargets: fixedFanTargets
         ))
     }
 
@@ -1530,7 +1539,7 @@ enum ModeSelection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-struct FixedFanTarget: Equatable, Identifiable, Sendable {
+struct FixedFanTarget: Codable, Equatable, Identifiable, Sendable {
     var fanID: Int
     var rpm: Int
 
