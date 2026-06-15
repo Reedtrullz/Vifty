@@ -290,6 +290,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
         XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.helperFailureNotificationTitle, "Vifty fan writes are blocked while hot")
         XCTAssertEqual(model.helperHealthMenuSummary, "Fan writes blocked")
         XCTAssertNil(model.helperMenuRecoverySuggestion)
     }
@@ -312,6 +313,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
         XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry Curve when the daemon responds. Use Auto to stop retries.")
+        XCTAssertEqual(model.helperFailureNotificationTitle, "Vifty fan writes are blocked while hot")
         XCTAssertFalse(model.fanWriteBlockedWhileHotRecoverySuggestion?.contains("Keep Auto selected") == true)
     }
 
@@ -1025,6 +1027,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
         let notification = try XCTUnwrap(recorder.delivered.first)
         XCTAssertEqual(notification.title, "Vifty fan helper needs attention")
+        XCTAssertEqual(model.helperFailureNotificationTitle, "Vifty fan helper needs attention")
         XCTAssertEqual(
             notification.body,
             "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
@@ -1059,7 +1062,8 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
         let notification = try XCTUnwrap(recorder.delivered.first)
-        XCTAssertEqual(notification.title, "Vifty fan helper needs attention")
+        XCTAssertEqual(notification.title, "Vifty fan writes are blocked while hot")
+        XCTAssertEqual(model.helperFailureNotificationTitle, "Vifty fan writes are blocked while hot")
         XCTAssertEqual(
             notification.body,
             "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds."

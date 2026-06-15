@@ -820,6 +820,12 @@ final class AppModel: ObservableObject {
             ?? "Repair or approve the fan helper before requesting fan control."
     }
 
+    var helperFailureNotificationTitle: String {
+        fanWriteBlockedWhileHotSummary == nil
+            ? "Vifty fan helper needs attention"
+            : "Vifty fan writes are blocked while hot"
+    }
+
     var helperMenuRecoverySuggestion: String? {
         if fanWriteBlockedWhileHotSummary != nil {
             return nil
@@ -1141,7 +1147,7 @@ final class AppModel: ObservableObject {
         if helperNeedsAttention, !previousHelperNeedsAttention {
             await postNotification(
                 kind: .helperFailure,
-                title: "Vifty fan helper needs attention",
+                title: helperFailureNotificationTitle,
                 body: helperFailureNotificationBody
             )
         }
