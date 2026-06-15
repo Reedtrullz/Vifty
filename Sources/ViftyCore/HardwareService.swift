@@ -16,6 +16,7 @@ public actor FanControlCoordinator {
     private var lastManualWriteAtByFanID: [Int: Date] = [:]
 
     public private(set) var state: ControlState
+    public private(set) var lastObservedSnapshot: HardwareSnapshot?
 
     public init(
         hardware: HardwareService,
@@ -64,7 +65,9 @@ public actor FanControlCoordinator {
     }
 
     public func tick() async throws -> HardwareSnapshot {
+        lastObservedSnapshot = nil
         let snapshot = try await hardware.snapshot()
+        lastObservedSnapshot = snapshot
         if state.mode != .auto, snapshot.temperatureSensors.isEmpty {
             try await restoreAuto(for: snapshot.fans)
             autoRestoreRequested = false

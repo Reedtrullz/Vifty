@@ -288,22 +288,12 @@ final class AppModel: ObservableObject {
         let stateBeforeTick = await coordinator.state
         do {
             let nextSnapshot = try await coordinator.tick()
-            snapshot = nextSnapshot
-            telemetryHistory.append(TelemetrySample(
-                capturedAt: now(),
-                highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
-                firstFanRPM: nextSnapshot.fans.first?.currentRPM,
-                batteryPowerWatts: currentPower.batteryPowerWatts,
-                thermalPressure: currentThermalPressure
-            ))
+            recordHardwareSnapshot(nextSnapshot, power: currentPower, thermalPressure: currentThermalPressure)
             lastError = nil
             daemonResponding = await daemonPing()
             daemonReachable = daemonResponding || !nextSnapshot.fans.isEmpty
             await refreshAgentControlStatus()
-            fanAccessMessage = nextSnapshot.fans.isEmpty
-                ? (daemonResponding ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
-                : nil
-            syncCurveDefaultsIfNeeded(from: nextSnapshot)
+            fanAccessMessage = fanAccessMessage(for: nextSnapshot)
             await syncState()
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         } catch {
@@ -311,10 +301,16 @@ final class AppModel: ObservableObject {
                 afterTickFailure: error,
                 attemptedMode: stateBeforeTick.mode
             )
+            if preservesManualIntent, let observedSnapshot = await coordinator.lastObservedSnapshot {
+                recordHardwareSnapshot(observedSnapshot, power: currentPower, thermalPressure: currentThermalPressure)
+            }
             lastError = error.localizedDescription
             daemonResponding = await daemonPing()
             daemonReachable = daemonResponding || (preservesManualIntent && snapshot?.fans.isEmpty == false)
             await refreshAgentControlStatus()
+            if preservesManualIntent, let snapshot {
+                fanAccessMessage = fanAccessMessage(for: snapshot)
+            }
             if preservesManualIntent {
                 controlState = await coordinator.state
             } else {
@@ -323,6 +319,28 @@ final class AppModel: ObservableObject {
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
+    }
+
+    private func recordHardwareSnapshot(
+        _ nextSnapshot: HardwareSnapshot,
+        power: PowerSnapshot,
+        thermalPressure: ThermalPressure
+    ) {
+        snapshot = nextSnapshot
+        telemetryHistory.append(TelemetrySample(
+            capturedAt: now(),
+            highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
+            firstFanRPM: nextSnapshot.fans.first?.currentRPM,
+            batteryPowerWatts: power.batteryPowerWatts,
+            thermalPressure: thermalPressure
+        ))
+        syncCurveDefaultsIfNeeded(from: nextSnapshot)
+    }
+
+    private func fanAccessMessage(for snapshot: HardwareSnapshot) -> String? {
+        snapshot.fans.isEmpty
+            ? (daemonResponding ? "The fan helper is running but did not return fan data." : "Install and approve the fan helper to enable fan reads and control.")
+            : nil
     }
 
     func applyModeSelection() {

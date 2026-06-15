@@ -1585,6 +1585,140 @@ final class AppModelTests: XCTestCase {
         ])
     }
 
+    func testPollOnceKeepsLatestTelemetryVisibleAfterManualReassertFailure() async {
+        let initialSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3600,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .forced,
+                    targetRPM: 3600
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1000)
+        )
+        let hotReclaimedSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 1780,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .automatic,
+                    targetRPM: nil
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 91.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1010)
+        )
+        let hardware = AppModelFakeHardware(snapshot: initialSnapshot)
+        let now = Date(timeIntervalSince1970: 1100)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: 0) },
+            thermalReader: { .nominal },
+            now: { now },
+            daemonPing: { false },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = initialSnapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .curve
+        model.curveStartTemp = 50
+        model.curveStartRPM = 3000
+        model.curveMidTemp = 70
+        model.curveMidRPM = 5000
+        model.curveMaxTemp = 85
+        model.curveMaxRPM = 6000
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        await hardware.setSnapshot(hotReclaimedSnapshot)
+        await hardware.failNextApply(ViftyError.helperRejected("Daemon request timed out."))
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.snapshot, hotReclaimedSnapshot)
+        XCTAssertEqual(model.telemetryHistory.samples.last?.capturedAt, now)
+        XCTAssertEqual(model.telemetryHistory.samples.last?.highestTemperatureCelsius, 91.2)
+        XCTAssertEqual(model.telemetryHistory.samples.last?.firstFanRPM, 1780)
+        XCTAssertEqual(model.controlOwnershipSummary, "Read-only fan telemetry; repair helper for fan writes · Vifty will retry Curve when the helper responds")
+    }
+
+    func testPollOncePeriodicallyReassertsUntilChangedCurveWhenHardwareTelemetryCannotConfirmOwnership() async {
+        let startedAt = Date(timeIntervalSince1970: 2000)
+        func snapshot(capturedAt: Date) -> HardwareSnapshot {
+            HardwareSnapshot(
+                fans: [
+                    Fan(
+                        id: 0,
+                        name: "Left",
+                        currentRPM: 4400,
+                        minimumRPM: 1400,
+                        maximumRPM: 6000,
+                        controllable: true,
+                        hardwareMode: nil,
+                        targetRPM: nil
+                    )
+                ],
+                temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+                modelIdentifier: "MacBookPro18,3",
+                isAppleSilicon: true,
+                isMacBookPro: true,
+                capturedAt: capturedAt
+            )
+        }
+        let expectedCommand = FanCommand(fanID: 0, mode: .fixedRPM(4400))
+        let hardware = AppModelFakeHardware(snapshot: snapshot(capturedAt: startedAt))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot(capturedAt: startedAt)
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .curve
+        model.curveStartTemp = 50
+        model.curveStartRPM = 3000
+        model.curveMidTemp = 70
+        model.curveMidRPM = 5000
+        model.curveMaxTemp = 85
+        model.curveMaxRPM = 6000
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        var appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [expectedCommand])
+
+        await hardware.setSnapshot(snapshot(capturedAt: startedAt.addingTimeInterval(20)))
+        await model.pollOnce()
+        appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [expectedCommand])
+
+        await hardware.setSnapshot(snapshot(capturedAt: startedAt.addingTimeInterval(31)))
+        await model.pollOnce()
+        appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [expectedCommand, expectedCommand])
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Curve owns fan targets · CPU Proximity · until changed; reasserts if macOS drifts")
+    }
+
     func testManualModeSelectionFailsClosedWhenAgentLeaseIsActive() async {
         let snapshot = agentHardwareSnapshot()
         let hardware = AppModelFakeHardware(snapshot: snapshot)
