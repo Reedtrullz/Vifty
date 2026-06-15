@@ -157,6 +157,50 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertFalse(markdown.contains("MacBookPro18"))
     }
 
+    func testAgentRunSmokeDoesNotPromoteSupportedHardwareWithoutManualSmoke() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "agent-only/review-result.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,1",
+            safeToRequestCooling: true,
+            manualSmokeTestResult: "not-recorded",
+            agentRunSmokeResult: "passed-auto-restored",
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke",
+            warnings: ["manual fan-write smoke-test result is not recorded"]
+        )
+        let jsonURL = harness.rootURL.appendingPathComponent("summary/report-index.json")
+        let tsvURL = harness.rootURL.appendingPathComponent("summary/report-index.tsv")
+        let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
+
+        let result = try harness.runSummarizer([
+            "--input", reviewURL.path,
+            "--output-json", jsonURL.path,
+            "--output-tsv", tsvURL.path,
+            "--output-markdown", markdownURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
+        XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke"))
+        XCTAssertFalse(tsv.contains("validated-hardware-evidence"))
+
+        let json = try harness.readJSON(jsonURL)
+        XCTAssertEqual(json["manualSmokeRequiredReports"] as? Int, 1)
+        XCTAssertEqual(json["manualSmokePassedReports"] as? Int, 0)
+        XCTAssertEqual(json["agentRunSmokePassedReports"] as? Int, 1)
+        XCTAssertEqual(json["validatedHardwareReports"] as? Int, 0)
+        let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
+        XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
+        XCTAssertNil(countsByClaim["validated-hardware-evidence"])
+        let validatedByModelFamily = try XCTUnwrap(json["validatedHardwareReportsByModelFamily"] as? [String: Int])
+        XCTAssertTrue(validatedByModelFamily.isEmpty)
+
+        let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+    }
+
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/validation-report-index.schema.json")

@@ -156,6 +156,35 @@ Collect at least one passing GitHub hardware-validation report for each availabl
 | Apple Silicon non-MacBook-Pro | macOS 15+ | `blocked` | `viftyctl diagnose --json` |
 | Intel MacBook Pro | macOS 15+ if available | `blocked` | `viftyctl diagnose --json` |
 
+## M1 Pro Local Validation Quick Path
+
+Use this path for the available `MacBookPro18,1` / M1 Pro machine before changing the M1 Pro/Max row from **Needs manual smoke** to validated hardware evidence. Keep the installed app, helper, collected bundle, reviewed `sourceSHA`, and compatibility index aligned with the exact source build being validated.
+
+1. Collect the read-only bundle with explicit source provenance:
+
+   ```sh
+   scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
+     --install-source source-build-tag \
+     --source-ref <tag-or-commit> \
+     --source-sha <40-character-source-sha>
+   ```
+
+2. Collect the read-only helper probe when supported readiness is still safe:
+
+   ```sh
+   sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
+     --install-source source-build-tag \
+     --source-ref <tag-or-commit> \
+     --source-sha <40-character-source-sha> \
+     --include-probe-local
+   ```
+
+3. Run the daemon-backed manual smoke below only if `diagnose --json` is `ready` or safely `degraded`, `safeToRequestCooling=true`, and `daemonControlPathReady=true`. The `prepare` and `restore-auto` commands write fan state through Vifty's bounded daemon path; the diagnose and probe commands are read-only.
+
+4. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
+
+5. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `--manual-smoke-result passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
+
 ## Manual Fan Write Smoke Test
 
 Only run this on supported Apple Silicon MacBook Pro hardware after saving the readiness report.
