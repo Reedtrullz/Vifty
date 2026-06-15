@@ -228,6 +228,30 @@ run_capture() {
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
 }
 
+run_viftyctl_capture() {
+  local name="$1"
+  local stdout_name="$2"
+  shift 2
+
+  if [[ "${VIFTY_TEST_SHELL_FIXTURES:-0}" == "1" ]]; then
+    run_capture "${name}" "${stdout_name}" /bin/sh "${VIFTYCTL}" "$@"
+  else
+    run_capture "${name}" "${stdout_name}" "${VIFTYCTL}" "$@"
+  fi
+}
+
+run_viftyhelper_capture() {
+  local name="$1"
+  local stdout_name="$2"
+  shift 2
+
+  if [[ "${VIFTY_TEST_SHELL_FIXTURES:-0}" == "1" ]]; then
+    run_capture "${name}" "${stdout_name}" /bin/sh "${VIFTYHELPER}" "$@"
+  else
+    run_capture "${name}" "${stdout_name}" "${VIFTYHELPER}" "$@"
+  fi
+}
+
 status_for() {
   local name="$1"
   local status_path="${OUTPUT_DIR}/${name}.status"
@@ -1100,15 +1124,15 @@ run_capture "codesign-verify-viftydaemon" "codesign-verify-viftydaemon.txt" /usr
 run_capture "spctl-assess-app" "spctl-assess-app.txt" /usr/sbin/spctl --assess --type execute --verbose "${APP_PATH}"
 run_capture "stapler-validate-app" "stapler-validate-app.txt" /usr/bin/xcrun stapler validate "${APP_PATH}"
 
-run_capture "viftyctl-capabilities" "viftyctl-capabilities.json" "${VIFTYCTL}" capabilities --json
+run_viftyctl_capture "viftyctl-capabilities" "viftyctl-capabilities.json" capabilities --json
 capture_capabilities_schema_resources
 capture_capabilities_contract
-run_capture "viftyctl-status" "viftyctl-status.json" "${VIFTYCTL}" status --json
-run_capture "viftyctl-diagnose" "viftyctl-diagnose.json" "${VIFTYCTL}" diagnose --json
-run_capture "viftyctl-audit" "viftyctl-audit.json" "${VIFTYCTL}" audit --limit 20 --json
+run_viftyctl_capture "viftyctl-status" "viftyctl-status.json" status --json
+run_viftyctl_capture "viftyctl-diagnose" "viftyctl-diagnose.json" diagnose --json
+run_viftyctl_capture "viftyctl-audit" "viftyctl-audit.json" audit --limit 20 --json
 
 if [[ "${INCLUDE_PROBE_LOCAL}" == "1" ]]; then
-  run_capture "viftyhelper-probeLocal" "viftyhelper-probeLocal.txt" "${VIFTYHELPER}" probeLocal
+  run_viftyhelper_capture "viftyhelper-probeLocal" "viftyhelper-probeLocal.txt" probeLocal
 else
   echo "Skipped. Re-run with --include-probe-local to collect direct helper fan probe output." > "${OUTPUT_DIR}/viftyhelper-probeLocal.txt"
 fi

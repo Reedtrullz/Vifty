@@ -12,6 +12,9 @@ Options:
                          /Applications/Vifty.app/Contents/MacOS/viftyctl)
   --output <dir>         Output directory (default:
                          .build/vifty-agent-cooling-<timestamp>)
+  --ui-context-file <path>
+                         Optional current Vifty UI context text file to copy
+                         into the evidence bundle as ui-context.txt.
   --audit-limit <count>  Bounded audit event count, 1 through 200 (default: 20)
   -h, --help             Show this help.
 
@@ -37,6 +40,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VIFTYCTL="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 OUTPUT_DIR="${VIFTY_AGENT_EVIDENCE_OUTPUT_DIR:-}"
 AUDIT_LIMIT="${VIFTY_AGENT_EVIDENCE_AUDIT_LIMIT:-20}"
+UI_CONTEXT_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -64,6 +68,14 @@ while [[ $# -gt 0 ]]; do
       AUDIT_LIMIT="$2"
       shift 2
       ;;
+    --ui-context-file)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --ui-context-file requires a path" >&2
+        exit 64
+      fi
+      UI_CONTEXT_FILE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -86,6 +98,11 @@ if [[ ! -x "${VIFTYCTL}" ]]; then
   exit 69
 fi
 
+if [[ -n "${UI_CONTEXT_FILE}" && ! -f "${UI_CONTEXT_FILE}" ]]; then
+  echo "error: --ui-context-file is not a readable file: ${UI_CONTEXT_FILE}" >&2
+  exit 66
+fi
+
 if [[ -z "${OUTPUT_DIR}" ]]; then
   timestamp="$(date -u +"%Y%m%dT%H%M%SZ")"
   OUTPUT_DIR="${ROOT_DIR}/.build/vifty-agent-cooling-${timestamp}"
@@ -103,6 +120,10 @@ if [[ -e "${OUTPUT_DIR}" ]]; then
 fi
 
 mkdir -p "${OUTPUT_DIR}"
+if [[ -n "${UI_CONTEXT_FILE}" ]]; then
+  cp "${UI_CONTEXT_FILE}" "${OUTPUT_DIR}/ui-context.txt"
+  chmod 600 "${OUTPUT_DIR}/ui-context.txt"
+fi
 MANIFEST_PATH="${OUTPUT_DIR}/manifest.tsv"
 CHECKSUM_PATH="${OUTPUT_DIR}/checksums.tsv"
 SUMMARY_JSON_PATH="${OUTPUT_DIR}/agent-cooling-evidence-summary.json"
@@ -150,14 +171,22 @@ run_capture() {
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
 }
 
-run_capture "viftyctl-capabilities" "viftyctl-capabilities.json" \
-  "${VIFTYCTL}" capabilities --json
-run_capture "viftyctl-diagnose" "viftyctl-diagnose.json" \
-  "${VIFTYCTL}" diagnose --json
-run_capture "viftyctl-status" "viftyctl-status.json" \
-  "${VIFTYCTL}" status --json
-run_capture "viftyctl-audit" "viftyctl-audit.json" \
-  "${VIFTYCTL}" audit --limit "${AUDIT_LIMIT}" --json
+run_viftyctl_capture() {
+  local name="$1"
+  local stdout_name="$2"
+  shift 2
+
+  if [[ "${VIFTY_TEST_SHELL_FIXTURES:-0}" == "1" ]]; then
+    run_capture "${name}" "${stdout_name}" /bin/sh "${VIFTYCTL}" "$@"
+  else
+    run_capture "${name}" "${stdout_name}" "${VIFTYCTL}" "$@"
+  fi
+}
+
+run_viftyctl_capture "viftyctl-capabilities" "viftyctl-capabilities.json" capabilities --json
+run_viftyctl_capture "viftyctl-diagnose" "viftyctl-diagnose.json" diagnose --json
+run_viftyctl_capture "viftyctl-status" "viftyctl-status.json" status --json
+run_viftyctl_capture "viftyctl-audit" "viftyctl-audit.json" audit --limit "${AUDIT_LIMIT}" --json
 run_capture "launchctl-print-daemon" "launchctl-print-daemon.txt" \
   /bin/launchctl print system/tech.reidar.vifty.daemon
 run_capture "launchdaemon-plist" "launchdaemon-plist.txt" \

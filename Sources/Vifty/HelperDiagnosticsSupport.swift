@@ -1,8 +1,23 @@
 import AppKit
 import Foundation
 
+struct HelperSupportEvidenceContext: Equatable, Sendable {
+    let lines: [String]
+
+    init(lines: [String]) {
+        self.lines = lines
+            .map { line in
+                line
+                    .replacingOccurrences(of: "\r", with: " ")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+    }
+}
+
 enum HelperDiagnosticsSupport {
-    static let copyHelp = "Copy a Terminal command for read-only support evidence. It captures the richest available viftyctl evidence without requesting cooling, restoring Auto, or writing fan state."
+    static let copyHelp = "Copy a Terminal command for read-only support evidence. It captures the richest available viftyctl evidence plus current Vifty UI context without requesting cooling, restoring Auto, or writing fan state."
     static let copiedMessage = "Copied Terminal support command"
 
     private static let collectorResourceName = "collect-agent-cooling-evidence.sh"
@@ -11,7 +26,8 @@ enum HelperDiagnosticsSupport {
     static func supportEvidenceCommand(
         bundleURL: URL = Bundle.main.bundleURL,
         executableURL: URL? = Bundle.main.executableURL,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        context: HelperSupportEvidenceContext? = nil
     ) -> String {
         let bundledTool = bundleURL.appendingPathComponent("Contents/MacOS/viftyctl", isDirectory: false)
         let bundledCollector = bundleURL
@@ -20,6 +36,10 @@ enum HelperDiagnosticsSupport {
         if bundleURL.pathExtension == "app",
            fileManager.isExecutableFile(atPath: bundledTool.path),
            fileManager.isExecutableFile(atPath: bundledCollector.path) {
+            if let context, !context.lines.isEmpty {
+                let contextLines = context.lines.map(shellQuote).joined(separator: " ")
+                return "umask 077; context=\"$(mktemp \"${TMPDIR:-/tmp}/vifty-ui-context.XXXXXXXX\")\"; trap 'rm -f \"$context\"' EXIT; printf '%s\\n' \(contextLines) > \"$context\"; out=\"\(supportEvidenceOutputPath)\"; \(shellQuote(bundledCollector.path)) --viftyctl \(shellQuote(bundledTool.path)) --output \"$out\" --ui-context-file \"$context\""
+            }
             return "umask 077; \(shellQuote(bundledCollector.path)) --viftyctl \(shellQuote(bundledTool.path)) --output \"\(supportEvidenceOutputPath)\""
         }
         return diagnoseCommand(
@@ -48,10 +68,11 @@ enum HelperDiagnosticsSupport {
     @discardableResult
     @MainActor
     static func copySupportEvidenceCommand(
+        context: HelperSupportEvidenceContext? = nil,
         bundleURL: URL = Bundle.main.bundleURL,
         pasteboard: NSPasteboard = .general
     ) -> String {
-        let command = supportEvidenceCommand(bundleURL: bundleURL)
+        let command = supportEvidenceCommand(bundleURL: bundleURL, context: context)
         pasteboard.clearContents()
         pasteboard.setString(command, forType: .string)
         return command

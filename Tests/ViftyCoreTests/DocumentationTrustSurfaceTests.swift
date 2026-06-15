@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (686 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (691 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -206,6 +206,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("v1.1.1 source-first hotfix"))
         XCTAssertTrue(triage.contains("do not retag v1.1.0 or replace its unsigned-dev assets"))
         XCTAssertTrue(triage.contains("Do not treat a source tag, CI artifact, unsigned-dev convenience zip, or local ad-hoc build as a trusted public binary release."))
+        XCTAssertTrue(triage.contains("When the UI says `Fixed request pending` or `Curve request pending`"))
+        XCTAssertTrue(triage.contains("ui-context.txt"))
+        XCTAssertTrue(triage.contains("without requesting cooling or writing SMC keys"))
+        XCTAssertTrue(triage.contains("daemonControlPathReady: true"))
         XCTAssertTrue(triage.contains(".github/repo-metadata.json"))
         XCTAssertTrue(triage.contains("scripts/check-github-metadata.sh --repo Reedtrullz/Vifty --json"))
         XCTAssertTrue(triage.contains("Do not ask reporters to run raw SMC writes"))

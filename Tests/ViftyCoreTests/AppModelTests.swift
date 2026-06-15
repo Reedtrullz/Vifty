@@ -394,9 +394,86 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
-        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry Curve when the daemon responds. Use Auto to stop retries.")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry Curve when the daemon responds. Use Request Auto to stop retries.")
         XCTAssertEqual(model.helperFailureNotificationTitle, "Vifty fan writes are blocked while hot")
         XCTAssertFalse(model.fanWriteBlockedWhileHotRecoverySuggestion?.contains("Keep Auto selected") == true)
+    }
+
+    func testManualPendingHelperOutageShowsRetryCopyInsteadOfBlockedStartCopy() {
+        let model = AppModel()
+        model.selectedMode = .curve
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.controlState = ControlState(mode: .temperatureCurve(.defaultCurve()))
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 81.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.manualControlAttentionSummary, "Curve request pending · fan writes blocked")
+        XCTAssertEqual(
+            model.manualControlAttentionRecoverySuggestion,
+            "Vifty will retry Curve when the helper responds. Use Request Auto to stop retries; copy support evidence if repair does not clear it."
+        )
+        XCTAssertFalse(model.manualControlAttentionRecoverySuggestion?.contains("before manual fan control") == true)
+    }
+
+    func testHelperSupportEvidenceContextCapturesHotManualOutageState() {
+        let model = AppModel()
+        model.selectedMode = .curve
+        model.manualRunLimit = .indefinitely
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.thermalPressure = .nominal
+        model.controlState = ControlState(mode: .temperatureCurve(.defaultCurve()))
+        model.lastError = "Daemon request timed out."
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left Fan",
+                    currentRPM: 1780,
+                    minimumRPM: 1499,
+                    maximumRPM: 4296,
+                    controllable: true,
+                    hardwareMode: .automatic,
+                    targetRPM: nil
+                ),
+                Fan(
+                    id: 1,
+                    name: "Right Fan",
+                    currentRPM: 1939,
+                    minimumRPM: 1499,
+                    maximumRPM: 4744,
+                    controllable: true,
+                    hardwareMode: .automatic,
+                    targetRPM: nil
+                )
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        let context = model.helperSupportEvidenceContext
+
+        XCTAssertTrue(context.lines.contains("selectedMode=Curve"))
+        XCTAssertTrue(context.lines.contains("manualRun=Until changed"))
+        XCTAssertTrue(context.lines.contains("daemon=reachable=true responding=false"))
+        XCTAssertTrue(context.lines.contains("helper=Read-only fan telemetry · repair daemon for writes"))
+        XCTAssertTrue(context.lines.contains("controlOwner=Read-only fan telemetry; repair helper for fan writes · Vifty will retry Curve when the helper responds"))
+        XCTAssertTrue(context.lines.contains("hotFanWrites=High temp · fan writes blocked"))
+        XCTAssertTrue(context.lines.contains("selectedTemperature=CPU Efficiency Core 1 91.2 C"))
+        XCTAssertTrue(context.lines.contains("fans=Left Fan 1780 RPM (10%); Right Fan 1939 RPM (14%)"))
+        XCTAssertTrue(context.lines.contains("lastError=Daemon request timed out."))
     }
 
     func testVisibleLastErrorSuppressesManualHelperBlockedDuplicate() {

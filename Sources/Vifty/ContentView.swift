@@ -354,7 +354,7 @@ struct ContentView: View {
     }
 
     private func copyHelperDiagnosticsCommand() {
-        HelperDiagnosticsSupport.copySupportEvidenceCommand()
+        HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
     }
 
@@ -378,7 +378,18 @@ struct ContentView: View {
             .pickerStyle(.menu)
             .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
 
-            if let blockedReason = model.manualFanControlBlockedReason {
+            if let manualControlAttentionSummary = model.manualControlAttentionSummary {
+                Label(manualControlAttentionSummary, systemImage: "hourglass.badge.exclamationmark")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                if let recovery = model.manualControlAttentionRecoverySuggestion {
+                    Text(recovery)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+            } else if let blockedReason = model.manualFanControlBlockedReason {
                 Label(blockedReason, systemImage: "lock.shield")
                     .font(.caption)
                     .foregroundStyle(.secondary)

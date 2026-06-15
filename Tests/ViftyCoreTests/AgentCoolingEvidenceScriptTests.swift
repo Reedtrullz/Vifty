@@ -131,6 +131,35 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))
     }
 
+    func testCollectorCopiesOptionalUIContextIntoEvidenceBundle() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let contextURL = harness.rootURL.appendingPathComponent("ui-context-source.txt", isDirectory: false)
+        try """
+        selectedMode=Curve
+        manualRun=Until changed
+        helper=Read-only fan telemetry
+        """.write(to: contextURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--ui-context-file", contextURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertEqual(
+            try harness.read("ui-context.txt"),
+            """
+            selectedMode=Curve
+            manualRun=Until changed
+            helper=Read-only fan telemetry
+            """
+        )
+        XCTAssertTrue(try harness.read("checksums.tsv").contains("\tui-context.txt"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
+        XCTAssertFalse(try harness.read("manifest.tsv").contains("ui-context"))
+    }
+
     func testCollectorPreservesBlockedDiagnoseExitAsEvidence() throws {
         let harness = try AgentCoolingEvidenceHarness(
             diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
@@ -777,6 +806,10 @@ private final class AgentCoolingEvidenceHarness {
     let viftyctlURL: URL
     let appInfoPlistURL: URL
     let logURL: URL
+    private let capabilitiesJSONURL: URL
+    private let diagnoseJSONURL: URL
+    private let statusJSONURL: URL
+    private let auditJSONURL: URL
     private let capabilitiesJSON: String
     private let capabilitiesExitCode: Int
     private let diagnoseJSON: String
@@ -808,6 +841,10 @@ private final class AgentCoolingEvidenceHarness {
         viftyctlURL = appBundleURL.appendingPathComponent("Contents/MacOS/viftyctl")
         appInfoPlistURL = appBundleURL.appendingPathComponent("Contents/Info.plist")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
+        capabilitiesJSONURL = rootURL.appendingPathComponent("capabilities.json")
+        diagnoseJSONURL = rootURL.appendingPathComponent("diagnose.json")
+        statusJSONURL = rootURL.appendingPathComponent("status.json")
+        auditJSONURL = rootURL.appendingPathComponent("audit.json")
         self.capabilitiesJSON = capabilitiesJSON
         self.capabilitiesExitCode = capabilitiesExitCode
         self.diagnoseJSON = diagnoseJSON
@@ -820,6 +857,7 @@ private final class AgentCoolingEvidenceHarness {
         self.appShortVersion = appShortVersion
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try writeFakeJSONFixtures()
         try writeFakeAppInfoPlist()
         try writeFakeViftyCtl()
     }
@@ -836,13 +874,14 @@ private final class AgentCoolingEvidenceHarness {
         process.arguments = [script.path] + arguments
         process.environment = ProcessInfo.processInfo.environment.merging([
             "VIFTY_FAKE_LOG": logURL.path,
-            "VIFTY_FAKE_CAPABILITIES_JSON": capabilitiesJSON,
+            "VIFTY_TEST_SHELL_FIXTURES": "1",
+            "VIFTY_FAKE_CAPABILITIES_JSON_FILE": capabilitiesJSONURL.path,
             "VIFTY_FAKE_CAPABILITIES_EXIT": "\(capabilitiesExitCode)",
-            "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
+            "VIFTY_FAKE_DIAGNOSE_JSON_FILE": diagnoseJSONURL.path,
             "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
-            "VIFTY_FAKE_STATUS_JSON": statusJSON,
+            "VIFTY_FAKE_STATUS_JSON_FILE": statusJSONURL.path,
             "VIFTY_FAKE_STATUS_EXIT": "\(statusExitCode)",
-            "VIFTY_FAKE_AUDIT_JSON": auditJSON,
+            "VIFTY_FAKE_AUDIT_JSON_FILE": auditJSONURL.path,
             "VIFTY_FAKE_AUDIT_EXIT": "\(auditExitCode)"
         ]) { _, new in new }
 
@@ -916,6 +955,13 @@ private final class AgentCoolingEvidenceHarness {
             .map(String.init)
     }
 
+    private func writeFakeJSONFixtures() throws {
+        try capabilitiesJSON.write(to: capabilitiesJSONURL, atomically: true, encoding: .utf8)
+        try diagnoseJSON.write(to: diagnoseJSONURL, atomically: true, encoding: .utf8)
+        try statusJSON.write(to: statusJSONURL, atomically: true, encoding: .utf8)
+        try auditJSON.write(to: auditJSONURL, atomically: true, encoding: .utf8)
+    }
+
     private func writeFakeViftyCtl() throws {
         try FileManager.default.createDirectory(
             at: viftyctlURL.deletingLastPathComponent(),
@@ -930,12 +976,14 @@ private final class AgentCoolingEvidenceHarness {
         case "$1" in
           capabilities)
             test "${2:-}" = "--json"
-            printf '%s\\n' "${VIFTY_FAKE_CAPABILITIES_JSON}"
+            cat "${VIFTY_FAKE_CAPABILITIES_JSON_FILE:?}"
+            printf '\\n'
             exit "${VIFTY_FAKE_CAPABILITIES_EXIT}"
             ;;
           diagnose)
             test "${2:-}" = "--json"
-            printf '%s\\n' "${VIFTY_FAKE_DIAGNOSE_JSON}"
+            cat "${VIFTY_FAKE_DIAGNOSE_JSON_FILE:?}"
+            printf '\\n'
             exit "${VIFTY_FAKE_DIAGNOSE_EXIT}"
             ;;
           status)
@@ -943,14 +991,16 @@ private final class AgentCoolingEvidenceHarness {
             if [ "\(includePrivacyLeak ? "1" : "0")" = "1" ]; then
               printf '%s\\n' '{"enabled":true,"activeLease":null,"lastDecision":null,"debug":"Serial Number: C02SECRET1234 /Users/private-user/Vifty.app"}'
             else
-              printf '%s\\n' "${VIFTY_FAKE_STATUS_JSON}"
+              cat "${VIFTY_FAKE_STATUS_JSON_FILE:?}"
+              printf '\\n'
             fi
             exit "${VIFTY_FAKE_STATUS_EXIT}"
             ;;
           audit)
             test "${2:-}" = "--limit"
             test "${4:-}" = "--json"
-            printf '%s\\n' "${VIFTY_FAKE_AUDIT_JSON}"
+            cat "${VIFTY_FAKE_AUDIT_JSON_FILE:?}"
+            printf '\\n'
             exit "${VIFTY_FAKE_AUDIT_EXIT}"
             ;;
           *)

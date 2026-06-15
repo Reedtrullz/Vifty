@@ -100,6 +100,8 @@ evidence bundle and the fuller validation evidence bundle.
 | Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, read-only agent evidence bundle or manual `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json` | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending. |
 | UI or copy | Confusing owner/helper state, profile preset behavior, power/thermal display | screenshot, macOS version, `diagnose --json` if fan state is involved | Fix copy/state without changing SMC behavior unless evidence shows a control bug. |
 
+When the UI says `Fixed request pending` or `Curve request pending`, Vifty has preserved the user's manual intent but the helper write path is blocked. Treat **Copy Support Evidence** as the safest next evidence path: the bundled collector can write `ui-context.txt` next to the read-only `viftyctl` evidence so reviewers can see selected mode, manual-run choice, helper state, hot fan-write warning, current temperature/fan summary, and last app error without requesting cooling or writing SMC keys. Do not ask the user to run a fan-write smoke test until `diagnose --json` reports `daemonControlPathReady: true` and the normal hardware-validation gates pass.
+
 ## Labels
 
 Suggested labels:

@@ -235,7 +235,7 @@ If manual fan control misbehaves, restore Auto before trying anything else:
 
 > `AppleSMC call failed with kIOReturnNotPrivileged (-536870207)` means macOS rejected a direct fan write because it was not running through the privileged helper/root path. In the app or menu bar, use **Reinstall Helper** or **Repair Helper** and approve the helper if System Settings asks. From Terminal, direct `ViftyHelper setFixed` / `auto` writes require `sudo`.
 
-If repair still leaves the helper unreachable or telemetry-only, use **Copy Support Evidence** in the main window or menu bar. It copies a read-only support command that captures `viftyctl` readiness plus helper install/launchd evidence when the bundled collector is available, and falls back to `viftyctl diagnose --json` otherwise. It does not request cooling, restore Auto, call `ViftyHelper`, or write fan state.
+If repair still leaves the helper unreachable or telemetry-only, use **Copy Support Evidence** in the main window or menu bar. It copies a read-only support command that captures `viftyctl` readiness plus helper install/launchd evidence and the current Vifty UI context when the bundled collector is available, including whether Fixed or Curve is pending while fan writes are blocked. It falls back to `viftyctl diagnose --json` otherwise. It does not request cooling, restore Auto, call `ViftyHelper`, or write fan state.
 
 1. In the Vifty UI, select **Auto** in the Mode picker and click **Apply**.
 2. If the UI is unavailable, use the helper CLI from the repo root after building release binaries. First inspect supported fans and their limits:

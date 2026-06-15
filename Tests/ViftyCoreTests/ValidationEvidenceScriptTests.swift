@@ -826,6 +826,7 @@ private final class ValidationEvidenceHarness {
         var environment = ProcessInfo.processInfo.environment
         environment["FAKE_VIFTYCTL_LOG"] = viftyCtlLogURL.path
         environment["FAKE_VIFTYHELPER_LOG"] = helperLogURL.path
+        environment["VIFTY_TEST_SHELL_FIXTURES"] = "1"
         process.environment = environment
 
         let stdout = Pipe()

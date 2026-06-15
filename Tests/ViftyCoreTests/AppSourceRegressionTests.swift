@@ -21,6 +21,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("model.helperMenuRecoverySuggestion"))
         XCTAssertFalse(menuBarView.contains("model.helperRecoverySuggestion"))
         XCTAssertTrue(menuBarView.contains("Button {\n                            copyHelperDiagnosticsCommand()\n                        } label: {\n                            Label(\"Copy Support Evidence\", systemImage: \"doc.on.doc\")"))
+        XCTAssertTrue(menuBarView.contains("HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)"))
         XCTAssertTrue(menuBarView.contains(".help(HelperDiagnosticsSupport.copyHelp)"))
         XCTAssertTrue(menuBarView.contains("Text(HelperDiagnosticsSupport.copiedMessage)"))
         XCTAssertEqual(menuBarView.components(separatedBy: "await model.pollOnce()").count - 1, 2)
@@ -50,6 +51,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {"))
         XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable {\n                            Button(daemonInstaller.actionTitle)"))
         XCTAssertTrue(contentView.contains("Button {\n                            copyHelperDiagnosticsCommand()\n                        } label: {\n                            Label(\"Copy Support Evidence\", systemImage: \"doc.on.doc\")"))
+        XCTAssertTrue(contentView.contains("HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)"))
         XCTAssertTrue(contentView.contains(".help(HelperDiagnosticsSupport.copyHelp)"))
         XCTAssertTrue(contentView.contains("Text(HelperDiagnosticsSupport.copiedMessage)"))
         XCTAssertTrue(contentView.contains("Text(suggestion)"))
@@ -190,6 +192,22 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion"))
         XCTAssertTrue(contentView.contains("Text(recovery)"))
         XCTAssertTrue(contentView.contains(".background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))"))
+    }
+
+    func testMainWindowManualPendingHelperAttentionIsWired() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+
+        XCTAssertTrue(appModel.contains("var manualControlAttentionSummary: String?"))
+        XCTAssertTrue(appModel.contains("request pending · fan writes blocked"))
+        XCTAssertTrue(appModel.contains("Use \\(autoRestoreActionTitle) to stop retries; copy support evidence if repair does not clear it."))
+        XCTAssertTrue(appModel.contains("var helperSupportEvidenceContext: HelperSupportEvidenceContext"))
+        XCTAssertTrue(appModel.contains("hotFanWrites="))
+        XCTAssertTrue(appModel.contains("controlOwner="))
+        XCTAssertTrue(contentView.contains("if let manualControlAttentionSummary = model.manualControlAttentionSummary"))
+        XCTAssertTrue(contentView.contains("hourglass.badge.exclamationmark"))
+        XCTAssertTrue(contentView.contains("if let recovery = model.manualControlAttentionRecoverySuggestion"))
+        XCTAssertTrue(contentView.contains("Text(recovery)"))
     }
 
     func testMenuBarNotificationSettingsAreWired() throws {

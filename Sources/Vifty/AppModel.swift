@@ -606,7 +606,7 @@ final class AppModel: ObservableObject {
         case .auto:
             return "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds."
         case .fixedRPM, .temperatureCurve:
-            return "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry \(manualModeName) when the daemon responds. Use Auto to stop retries."
+            return "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry \(manualModeName) when the daemon responds. Use \(autoRestoreActionTitle) to stop retries."
         }
     }
 
@@ -966,6 +966,46 @@ final class AppModel: ObservableObject {
             : "Vifty fan writes are blocked while hot"
     }
 
+    var helperSupportEvidenceContext: HelperSupportEvidenceContext {
+        var lines: [String] = [
+            "selectedMode=\(selectedMode.rawValue)",
+            "manualRun=\(manualRunLimit.label)",
+            "daemon=reachable=\(daemonReachable) responding=\(daemonResponding)",
+            "helper=\(helperHealthSummary)",
+            "controlOwner=\(controlOwnershipSummary)"
+        ]
+
+        if let helperInstallRuntimeContext {
+            lines.append("helperRuntime=\(helperInstallRuntimeContext)")
+        }
+        if let helperRecoverySuggestion {
+            lines.append("helperRecovery=\(helperRecoverySuggestion)")
+        }
+        if let fanWriteBlockedWhileHotSummary {
+            lines.append("hotFanWrites=\(fanWriteBlockedWhileHotSummary)")
+        }
+        if let fanWriteBlockedWhileHotRecoverySuggestion {
+            lines.append("hotRecovery=\(fanWriteBlockedWhileHotRecoverySuggestion)")
+        }
+        if let sensor = selectedSensor ?? snapshot?.highestTemperature {
+            lines.append("selectedTemperature=\(sensor.name) \(String(format: "%.1f", sensor.celsius)) C")
+        }
+        if let fans = snapshot?.fans, !fans.isEmpty {
+            let fanSummary = fans
+                .map { "\($0.name) \($0.currentRPM) RPM (\($0.percentage)%)" }
+                .joined(separator: "; ")
+            lines.append("fans=\(fanSummary)")
+        }
+        if let agentCoolingSummary {
+            lines.append("agentCooling=\(agentCoolingSummary)")
+        }
+        if let lastError {
+            lines.append("lastError=\(lastError)")
+        }
+
+        return HelperSupportEvidenceContext(lines: lines)
+    }
+
     var helperMenuRecoverySuggestion: String? {
         if fanWriteBlockedWhileHotSummary != nil {
             return nil
@@ -1010,6 +1050,19 @@ final class AppModel: ObservableObject {
             return "Temperature sensors are unavailable. Manual fan control stays blocked."
         }
         return nil
+    }
+
+    var manualControlAttentionSummary: String? {
+        guard controlState.mode != .auto,
+              helperWritePathBlockedSummary != nil else {
+            return nil
+        }
+        return "\(manualModeName) request pending · fan writes blocked"
+    }
+
+    var manualControlAttentionRecoverySuggestion: String? {
+        guard manualControlAttentionSummary != nil else { return nil }
+        return "Vifty will retry \(manualModeName) when the helper responds. Use \(autoRestoreActionTitle) to stop retries; copy support evidence if repair does not clear it."
     }
 
     private var manualHelperWriteBlockedSummary: String? {

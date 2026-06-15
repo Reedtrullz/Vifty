@@ -217,7 +217,7 @@ struct MenuBarView: View {
     }
 
     private func copyHelperDiagnosticsCommand() {
-        HelperDiagnosticsSupport.copySupportEvidenceCommand()
+        HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
     }
 
