@@ -113,9 +113,9 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("Label(model.agentCoolingPanelTitle, systemImage: \"cpu\")"))
         XCTAssertTrue(menuBarView.contains("if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion"))
         XCTAssertTrue(menuBarView.contains("Label(agentCoolingRecoverySuggestion, systemImage: \"exclamationmark.triangle\")"))
-        XCTAssertTrue(menuBarView.contains("if model.agentCoolingNeedsAttention {"))
-        XCTAssertTrue(menuBarView.contains("Button(\"Auto\") {"))
-        XCTAssertTrue(menuBarView.contains("Restore Auto before starting another agent workload"))
+        XCTAssertTrue(menuBarView.contains("if model.agentCoolingNeedsAttention, model.agentCoolingRestoreActionAvailable {"))
+        XCTAssertTrue(menuBarView.contains("Button(model.agentCoolingRestoreActionTitle) {"))
+        XCTAssertTrue(menuBarView.contains(".help(model.agentCoolingRestoreActionHelp)"))
     }
 
     func testMenuBarPowerRowsAndStatusItemDisplayModeAreWired() throws {

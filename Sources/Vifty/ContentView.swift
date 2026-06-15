@@ -254,7 +254,11 @@ struct ContentView: View {
                         }
                     }
                     Spacer()
-                    Button("Auto") { model.restoreAuto() }.controlSize(.small)
+                    if model.agentCoolingRestoreActionAvailable {
+                        Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
+                            .controlSize(.small)
+                            .help(model.agentCoolingRestoreActionHelp)
+                    }
                 }
                 .padding(10)
                 .background((model.agentCoolingNeedsAttention ? Color.orange : Color.blue).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))

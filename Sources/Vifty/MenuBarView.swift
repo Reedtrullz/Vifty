@@ -93,10 +93,10 @@ struct MenuBarView: View {
                             .foregroundStyle(.orange)
                             .lineLimit(3)
                     }
-                    if model.agentCoolingNeedsAttention {
-                        Button("Auto") { model.restoreAuto() }
+                    if model.agentCoolingNeedsAttention, model.agentCoolingRestoreActionAvailable {
+                        Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
                         .controlSize(.small)
-                        .help("Restore Auto before starting another agent workload")
+                        .help(model.agentCoolingRestoreActionHelp)
                     }
                 }
             }

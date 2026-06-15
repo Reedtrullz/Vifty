@@ -713,6 +713,21 @@ final class AppModel: ObservableObject {
         return "Use Auto to restore daemon control before starting another workload."
     }
 
+    var agentCoolingRestoreActionAvailable: Bool {
+        agentControlStatus?.activeLease != nil
+    }
+
+    var agentCoolingRestoreActionTitle: String {
+        helperWritePathBlockedSummary == nil ? "Auto" : "Request Auto"
+    }
+
+    var agentCoolingRestoreActionHelp: String {
+        if helperWritePathBlockedSummary == nil {
+            return "Restore Auto before starting another agent workload"
+        }
+        return "Request Auto restore; the write cannot be confirmed until the helper responds"
+    }
+
     var agentCoolingNeedsAttention: Bool {
         if agentControlStatusError != nil {
             if shouldPreferHelperRecoveryOverAgentStatusError { return false }

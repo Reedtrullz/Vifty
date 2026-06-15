@@ -1861,6 +1861,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.agentCoolingPanelTitle, "Agent status unavailable")
         XCTAssertEqual(model.agentCoolingSummary, "Agent cooling status unavailable; repair helper before requesting cooling.")
         XCTAssertTrue(model.agentCoolingNeedsAttention)
+        XCTAssertFalse(model.agentCoolingRestoreActionAvailable)
         XCTAssertTrue(model.menuTitle.contains("Agent status unavailable"))
     }
 
@@ -1944,6 +1945,9 @@ final class AppModelTests: XCTestCase {
             model.agentCoolingRecoverySuggestion,
             "Do not start another workload; use Auto to restore cooling, then check viftyctl status/audit after helper repair."
         )
+        XCTAssertTrue(model.agentCoolingRestoreActionAvailable)
+        XCTAssertEqual(model.agentCoolingRestoreActionTitle, "Auto")
+        XCTAssertEqual(model.agentCoolingRestoreActionHelp, "Restore Auto before starting another agent workload")
     }
 
     func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {
@@ -1967,6 +1971,8 @@ final class AppModelTests: XCTestCase {
 
     func testAgentCoolingSummaryWarnsWhenLeaseExpiredButUnrestored() {
         let model = AppModel(now: { Date(timeIntervalSince1970: 1700) })
+        model.daemonResponding = true
+        model.daemonReachable = true
         model.snapshot = agentHardwareSnapshot()
         model.agentControlStatus = AgentControlStatus(
             enabled: true,
@@ -1986,6 +1992,28 @@ final class AppModelTests: XCTestCase {
             model.agentCoolingRecoverySuggestion,
             "Use Auto to restore daemon control before starting another workload."
         )
+        XCTAssertTrue(model.agentCoolingRestoreActionAvailable)
+        XCTAssertEqual(model.agentCoolingRestoreActionTitle, "Auto")
+        XCTAssertEqual(model.agentCoolingRestoreActionHelp, "Restore Auto before starting another agent workload")
+    }
+
+    func testAgentCoolingRestoreActionUsesRequestCopyWhenHelperCannotConfirmWrites() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1700) })
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.snapshot = agentHardwareSnapshot()
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertEqual(model.agentCoolingPanelTitle, "Agent restore pending")
+        XCTAssertTrue(model.agentCoolingNeedsAttention)
+        XCTAssertTrue(model.agentCoolingRestoreActionAvailable)
+        XCTAssertEqual(model.agentCoolingRestoreActionTitle, "Request Auto")
+        XCTAssertEqual(model.agentCoolingRestoreActionHelp, "Request Auto restore; the write cannot be confirmed until the helper responds")
     }
 
     func testAgentCoolingRecoverySuggestionRepairsStatusUnavailableBeforeCooling() {
