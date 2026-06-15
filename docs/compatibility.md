@@ -4,7 +4,7 @@ Vifty's compatibility claims are evidence-based. A model family is considered va
 
 Use the GitHub **Hardware Validation Report** issue template to contribute evidence. The validation procedure lives in [hardware-validation.md](hardware-validation.md), and `scripts/collect-validation-evidence.sh` can gather the standard read-only evidence bundle from an installed app.
 
-Install source matters. For `v1.1.1`, source builds from the tag and `Vifty-v1.1.1-unsigned-dev.zip` reports can contribute hardware compatibility evidence, but they are not Developer ID signed, notarized, Homebrew-trusted, or trusted public binary evidence. Use the collector's `install-provenance.tsv` and the reviewed `installSource` / `sourceRef` / `sourceSHA` / `sourceArtifactSHA256` fields to keep that distinction visible in indexes.
+Install source matters. For `v1.1.1`, source builds from the tag and `Vifty-v1.1.1-unsigned-dev.zip` reports can contribute hardware compatibility evidence, but they are not Developer ID signed, notarized, Homebrew-trusted, or trusted public binary evidence. Current `main` or other local ad-hoc builds can contribute candidate compatibility evidence only when they are recorded as `local-ad-hoc-build` with the exact source ref and 40-character commit SHA; do not relabel post-release local builds as `source-build-tag`. Use the collector's `install-provenance.tsv` and the reviewed `installSource` / `sourceRef` / `sourceSHA` / `sourceArtifactSHA256` fields to keep that distinction visible in indexes.
 
 ## Current Claim
 

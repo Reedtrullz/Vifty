@@ -101,7 +101,8 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("TelemetryHistoryChart(summary: summary, compact: compact)"))
         XCTAssertTrue(contentView.contains("private struct TelemetryHistoryChart: View"))
         XCTAssertTrue(contentView.contains("title: \"Temp\""))
-        XCTAssertTrue(contentView.contains("title: \"Fan\""))
+        XCTAssertTrue(contentView.contains("title: summary.fanRPMSparklineTitle"))
+        XCTAssertFalse(contentView.contains("title: \"Fan\""))
         XCTAssertTrue(contentView.contains("title: \"Power\""))
         XCTAssertTrue(contentView.contains("changeText: summary.temperatureChangeText"))
         XCTAssertTrue(contentView.contains("changeText: summary.fanRPMChangeText"))
@@ -221,6 +222,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("hourglass.badge.exclamationmark"))
         XCTAssertTrue(contentView.contains("if let recovery = model.manualControlAttentionRecoverySuggestion"))
         XCTAssertTrue(contentView.contains("Text(recovery)"))
+    }
+
+    func testFixedRPMPerFanEditorShowsFanSpecificRanges() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("Toggle(\"Per-fan\", isOn: $model.usePerFanFixedRPM)"))
+        XCTAssertTrue(contentView.contains("model.ensureFixedFanTargets(for: fans)"))
+        XCTAssertTrue(contentView.contains("Text(\"Range \\(fan.minimumRPM)-\\(fan.maximumRPM) RPM\")"))
+        XCTAssertTrue(contentView.contains("in: Double(fan.minimumRPM)...Double(fan.maximumRPM)"))
+        XCTAssertTrue(contentView.contains(".help(\"\\(fan.name) fixed target. Range \\(fan.minimumRPM)-\\(fan.maximumRPM) RPM.\")"))
     }
 
     func testMenuBarNotificationSettingsAreWired() throws {

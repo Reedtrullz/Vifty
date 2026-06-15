@@ -547,6 +547,8 @@ else
       ]
       missing = required - assets
       problems << "missing assets: #{missing.join(", ")}" unless missing.empty?
+      unsigned_dev_assets = assets.select { |asset| asset == "Vifty-v#{version}-unsigned-dev.zip" || asset == "Vifty-v#{version}-unsigned-dev.zip.sha256" }
+      problems << "Developer ID releases must not publish source-first unsigned-dev assets: #{unsigned_dev_assets.join(", ")}" unless unsigned_dev_assets.empty?
       if problems.empty?
         puts "GitHub Release #{tag} has required public trust assets: #{required.join(", ")}"
       else

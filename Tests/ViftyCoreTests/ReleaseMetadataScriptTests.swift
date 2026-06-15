@@ -550,6 +550,44 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0-release-checklist.md") == true)
     }
 
+    func testDeveloperIDReadinessRejectsUnsignedDevAssetsOnTrustedRelease() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(assetNames: [
+            "Vifty-v1.0.0.zip",
+            "Vifty-v1.0.0.zip.sha256",
+            "Vifty-v1.0.0-artifact-summary.json",
+            "Vifty-v1.0.0-release-checklist.md",
+            "Vifty-v1.0.0-unsigned-dev.zip",
+            "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+        ])
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        let message = try XCTUnwrap(checkMessage(named: "github-release", in: checks))
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertTrue(message.contains("Developer ID releases must not publish source-first unsigned-dev assets"))
+        XCTAssertTrue(message.contains("Vifty-v1.0.0-unsigned-dev.zip"))
+        XCTAssertTrue(message.contains("Vifty-v1.0.0-unsigned-dev.zip.sha256"))
+    }
+
     func testReleaseReadinessBlocksFailedReleaseWorkflowSeparatelyFromMissingAssets() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)

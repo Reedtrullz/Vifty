@@ -531,7 +531,7 @@ final class AppModel: ObservableObject {
             parts.append("Temp \(temperatureChangeText)")
         }
         if let fanRPMChangeText = summary.fanRPMChangeText {
-            parts.append("Fan \(fanRPMChangeText)")
+            parts.append("\(summary.fanRPMTrendLabel) \(fanRPMChangeText)")
         }
         if let batteryPowerChangeText = summary.batteryPowerChangeText {
             parts.append("Power \(batteryPowerChangeText)")

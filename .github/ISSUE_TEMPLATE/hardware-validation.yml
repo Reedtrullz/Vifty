@@ -12,11 +12,13 @@ body:
         scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
         ```
 
-        For source-first `v1.1.1` reports, add `--install-source source-build-tag --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972` when you built from source, or `--install-source source-first-unsigned-dev-zip --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip` when you installed the unsigned tester zip and still have it locally.
+        For source-first `v1.1.1` reports, add `--install-source source-build-tag --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972` when you built from the immutable source tag, or `--install-source source-first-unsigned-dev-zip --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip` when you installed the unsigned tester zip and still have it locally.
+
+        For current `main` or other local ad-hoc builds, use `--install-source local-ad-hoc-build --source-ref main --source-sha <40-character-source-sha>` instead. Do not label post-release local builds as `source-build-tag` unless the installed app was actually built from an immutable release tag.
 
         The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, Gatekeeper, and privacy-review evidence for the app, CLI, helper, and daemon. Check privacy-review.tsv before posting publicly; redact files it flags or share them privately with maintainers.
 
-        For `v1.1.1`, choose **Source build from tag** when you built from source, or **Source-first unsigned-dev zip** when you used the tester convenience artifact. Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release.
+        For `v1.1.1`, choose **Source build from tag** when you built from source, or **Source-first unsigned-dev zip** when you used the tester convenience artifact. For current `main` reports, choose **Local ad-hoc build** and paste the exact source ref/SHA. None of those paths are Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release.
 
         Or run these commands manually:
 
@@ -41,7 +43,7 @@ body:
     id: install-source
     attributes:
       label: Install source
-      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip; do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
+      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA. Do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
       options:
         - Source build from tag
         - Source-first unsigned-dev zip
@@ -57,8 +59,8 @@ body:
     id: source-provenance
     attributes:
       label: Source/ref or artifact checksum
-      description: For source-first reports, paste the tag/ref, immutable source commit SHA, and the unsigned-dev zip SHA-256 if applicable. These should match install-provenance.tsv.
-      placeholder: e.g. v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256 ...
+      description: For source-first or local ad-hoc reports, paste the tag/ref, exact source commit SHA, and the unsigned-dev zip SHA-256 if applicable. These should match install-provenance.tsv.
+      placeholder: e.g. v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256 ... or main / <40-character-source-sha>
     validations:
       required: false
 

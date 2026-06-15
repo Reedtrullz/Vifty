@@ -1594,6 +1594,7 @@ final class AppModelTests: XCTestCase {
             capturedAt: Date(timeIntervalSince1970: 1),
             highestTemperatureCelsius: 70.0,
             firstFanRPM: 2_000,
+            averageFanRPM: 2_100,
             batteryPowerWatts: -4.0,
             thermalPressure: .nominal
         ))
@@ -1601,13 +1602,14 @@ final class AppModelTests: XCTestCase {
             capturedAt: Date(timeIntervalSince1970: 2),
             highestTemperatureCelsius: 74.2,
             firstFanRPM: 2_250,
+            averageFanRPM: 2_350,
             batteryPowerWatts: -7.1,
             thermalPressure: .serious
         ))
 
         XCTAssertEqual(
             model.recentTelemetryTrendSummary,
-            "Temp +4.2 C · Fan +250 RPM · Power -3.1 W · Peak Serious"
+            "Temp +4.2 C · Avg fan +250 RPM · Power -3.1 W · Peak Serious"
         )
     }
 

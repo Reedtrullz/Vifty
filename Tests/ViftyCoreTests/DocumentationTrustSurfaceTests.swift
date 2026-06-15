@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (691 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (697 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -381,6 +381,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(compatibility.contains("Install source matters."))
         XCTAssertTrue(compatibility.contains("source builds from the tag and `Vifty-v1.1.1-unsigned-dev.zip` reports can contribute hardware compatibility evidence"))
+        XCTAssertTrue(compatibility.contains("Current `main` or other local ad-hoc builds can contribute candidate compatibility evidence only when they are recorded as `local-ad-hoc-build` with the exact source ref and 40-character commit SHA"))
+        XCTAssertTrue(compatibility.contains("do not relabel post-release local builds as `source-build-tag`"))
         XCTAssertTrue(compatibility.contains("`install-provenance.tsv`"))
         XCTAssertTrue(compatibility.contains("installSource"))
         XCTAssertTrue(compatibility.contains("sourceArtifactSHA256"))
@@ -401,13 +403,17 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof"))
         XCTAssertTrue(hardwareValidation.contains("Source-first and unsigned-dev `v1.1.1` hardware reports may leave release-artifact verifier evidence skipped or absent."))
         XCTAssertTrue(issueTemplate.contains("For `v1.1.1`, choose **Source build from tag**"))
+        XCTAssertTrue(issueTemplate.contains("For current `main` or other local ad-hoc builds, use `--install-source local-ad-hoc-build --source-ref main --source-sha <40-character-source-sha>` instead."))
+        XCTAssertTrue(issueTemplate.contains("Do not label post-release local builds as `source-build-tag` unless the installed app was actually built from an immutable release tag."))
+        XCTAssertTrue(issueTemplate.contains("For current `main` reports, choose **Local ad-hoc build** and paste the exact source ref/SHA."))
         XCTAssertTrue(issueTemplate.contains("install-provenance.tsv"))
         XCTAssertTrue(issueTemplate.contains("Source/ref or artifact checksum"))
-        XCTAssertTrue(issueTemplate.contains("Neither path is Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release."))
-        XCTAssertTrue(issueTemplate.contains("description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip"))
-        XCTAssertTrue(issueTemplate.contains("v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256"))
+        XCTAssertTrue(issueTemplate.contains("None of those paths are Developer ID signed, notarized, Homebrew-trusted, or a trusted public binary release."))
+        XCTAssertTrue(issueTemplate.contains("description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA."))
+        XCTAssertTrue(issueTemplate.contains("v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256 ... or main / <40-character-source-sha>"))
         XCTAssertTrue(issueTemplate.contains("- Source build from tag"))
         XCTAssertTrue(issueTemplate.contains("- Source-first unsigned-dev zip"))
+        XCTAssertTrue(issueTemplate.contains("- Local ad-hoc build"))
         XCTAssertTrue(issueTemplate.contains("Source-first source builds and unsigned-dev reports may skip release-artifact-summary evidence"))
     }
 

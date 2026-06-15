@@ -465,6 +465,9 @@ struct ContentView: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
+                        Text("Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
                         Slider(
                             value: Binding(
                                 get: { Double(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) },
@@ -476,6 +479,7 @@ struct ContentView: View {
                             in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
                             step: 50
                         )
+                        .help("\(fan.name) fixed target. Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM.")
                     }
                     .padding(.vertical, 2)
                 }
@@ -892,7 +896,7 @@ private struct TelemetryHistoryChart: View {
             }
             if summary.fanRPMValues.count > 1 {
                 HistorySparkline(
-                    title: "Fan",
+                    title: summary.fanRPMSparklineTitle,
                     values: summary.fanRPMValues,
                     color: .blue,
                     rangeText: summary.fanRPMRangeText,

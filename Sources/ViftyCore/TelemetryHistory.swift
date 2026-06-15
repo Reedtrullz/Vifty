@@ -70,6 +70,8 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
     public var latestTemperatureText: String?
     public var latestFanRPMLabel: String
     public var latestFanRPMText: String?
+    public var fanRPMTrendLabel: String
+    public var fanRPMSparklineTitle: String
     public var latestBatteryPowerLabel: String?
     public var latestBatteryPowerText: String?
     public var latestThermalPressureText: String
@@ -99,7 +101,10 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         sampleCountText = history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
         latestTemperatureLabel = Self.temperatureLabel(for: latest)
         latestTemperatureText = latest.flatMap(Self.sampleTemperature).map(Self.temperatureText)
-        latestFanRPMLabel = (latest?.averageFanRPM == nil) ? "Latest fan" : "Average fan"
+        let usesAverageFanRPM = latest?.averageFanRPM != nil
+        latestFanRPMLabel = usesAverageFanRPM ? "Average fan" : "Latest fan"
+        fanRPMTrendLabel = usesAverageFanRPM ? "Avg fan" : "Fan"
+        fanRPMSparklineTitle = usesAverageFanRPM ? "Avg fan" : "Fan"
         latestFanRPMText = latest.flatMap(Self.sampleFanRPM).map(Self.fanRPMText)
         if let batteryPowerWatts = latest?.batteryPowerWatts {
             if abs(batteryPowerWatts) < 0.1 {
