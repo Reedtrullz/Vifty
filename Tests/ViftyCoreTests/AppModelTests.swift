@@ -315,6 +315,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.fanWriteBlockedWhileHotRecoverySuggestion?.contains("Keep Auto selected") == true)
     }
 
+    func testVisibleLastErrorSuppressesManualHelperBlockedDuplicate() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.lastError = "Manual fan control blocked: Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked."
+
+        XCTAssertNil(model.visibleLastError)
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
+    }
+
+    func testVisibleLastErrorKeepsUnrelatedErrorsDuringHelperOutage() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.lastError = "Failed to save profiles: disk full"
+
+        XCTAssertEqual(model.visibleLastError, "Failed to save profiles: disk full")
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+    }
+
     func testHelperHealthSummaryReportsNoControllableFansWithoutRepairAction() {
         let model = AppModel()
         model.daemonResponding = true

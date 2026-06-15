@@ -25,6 +25,19 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("helperRefreshTask?.cancel()"))
     }
 
+    func testOperatorSurfacesUseFilteredLastError() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+
+        XCTAssertTrue(appModel.contains("var visibleLastError: String?"))
+        XCTAssertTrue(appModel.contains("lastErrorIsCoveredByHelperRecovery"))
+        XCTAssertTrue(menuBarView.contains("if let error = model.visibleLastError"))
+        XCTAssertTrue(contentView.contains("if let error = model.visibleLastError"))
+        XCTAssertFalse(menuBarView.contains("if let error = model.lastError"))
+        XCTAssertFalse(contentView.contains("if let error = model.lastError"))
+    }
+
     func testMainWindowHelperHealthShowsRepairAndReadOnlyDiagnosticsActions() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 

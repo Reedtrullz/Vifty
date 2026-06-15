@@ -16,7 +16,7 @@ struct MenuBarView: View {
                     .font(.headline)
             }
 
-            if let error = model.lastError {
+            if let error = model.visibleLastError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
                     .font(.caption)

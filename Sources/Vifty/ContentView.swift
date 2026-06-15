@@ -107,7 +107,7 @@ struct ContentView: View {
             .controlSize(.small)
             .disabled(!daemonInstaller.canInstall)
             .help(daemonInstaller.actionHelp)
-            if let error = model.lastError {
+            if let error = model.visibleLastError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.caption)

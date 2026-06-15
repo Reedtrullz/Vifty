@@ -512,6 +512,12 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var visibleLastError: String? {
+        guard let lastError else { return nil }
+        guard !lastErrorIsCoveredByHelperRecovery(lastError) else { return nil }
+        return lastError
+    }
+
     var menuTitle: String {
         menuSummary(includePower: true)
     }
@@ -615,6 +621,11 @@ final class AppModel: ObservableObject {
         case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
             return nil
         }
+    }
+
+    private func lastErrorIsCoveredByHelperRecovery(_ error: String) -> Bool {
+        guard helperWritePathBlockedSummary != nil else { return false }
+        return error.lowercased().hasPrefix("manual fan control blocked:")
     }
 
     private var shouldPreferHelperRecoveryOverAgentStatusError: Bool {
