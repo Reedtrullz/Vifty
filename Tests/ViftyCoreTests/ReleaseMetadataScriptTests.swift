@@ -31,6 +31,24 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("source-first mode does not publish or require Vifty-v1.1.1.zip"))
     }
 
+    func testSourceFirstValidatorRejectsSparkleUpdaterKeys() throws {
+        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUFeedURL"])
+
+        let result = try harness.runValidator(["--mode", "source-first"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("source-first Info.plist must not include Sparkle updater metadata: SUFeedURL"))
+    }
+
+    func testSourceFirstValidatorRejectsGenericSparkleMetadataKeys() throws {
+        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUFutureUpdaterKey"])
+
+        let result = try harness.runValidator(["--mode", "source-first"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("source-first Info.plist must not include Sparkle updater metadata: SUFutureUpdaterKey"))
+    }
+
     func testValidatorRejectsInvalidCaskSHA() throws {
         let harness = try ReleaseMetadataHarness(caskSHA: "not-a-real-sha")
 
@@ -681,6 +699,41 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("Vifty-v1.0.0.zip") == true)
     }
 
+    func testSourceFirstReadinessRejectsTrustedUpdaterAndHomebrewClaims() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0") + """
+
+            Auto-update is available. The Homebrew cask is updated. The attached app is the official trusted binary.
+            """
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        let message = try XCTUnwrap(checkMessage(named: "github-release", in: checks))
+        XCTAssertTrue(message.contains("auto-update is available"))
+        XCTAssertTrue(message.contains("Homebrew cask is updated"))
+        XCTAssertTrue(message.contains("official trusted binary"))
+    }
+
     func testSourceFirstReadinessRejectsUnsignedDevZipWithoutChecksum() throws {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
@@ -955,6 +1008,38 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip.sha256").path))
     }
 
+    func testUnsignedDevArtifactBuilderRejectsSparkleUpdaterKeysBeforeZip() throws {
+        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUPublicEDKey"])
+        try harness.writeUnsignedDevAppBundleFixture()
+        let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.0.0",
+            "--skip-build",
+            "--output-dir", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("source-first Info.plist must not include Sparkle updater metadata: SUPublicEDKey"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip").path))
+    }
+
+    func testUnsignedDevArtifactBuilderRejectsStaleAppBundleSparkleKeysBeforeZip() throws {
+        let harness = try ReleaseMetadataHarness()
+        try harness.writeUnsignedDevAppBundleFixture(sparkleInfoPlistKeys: ["SUFeedURL"])
+        let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
+
+        let result = try harness.runUnsignedDevArtifactBuilder([
+            "--version", "1.0.0",
+            "--skip-build",
+            "--output-dir", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("unsigned-dev app bundle must not include Sparkle updater metadata: SUFeedURL"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathComponent("Vifty-v1.0.0-unsigned-dev.zip").path))
+    }
+
     func testUnsignedDevArtifactBuilderRejectsRequiredSourceRefDrift() throws {
         let harness = try ReleaseMetadataHarness()
         try harness.writeUnsignedDevAppBundleFixture()
@@ -1052,6 +1137,7 @@ private final class ReleaseMetadataHarness {
 
     init(
         version: String = "1.0.0",
+        sparkleInfoPlistKeys: [String] = [],
         caskVersion: String? = nil,
         caskSHA: String = String(repeating: "a", count: 64),
         includeAdHocSigningIdentity: Bool = false,
@@ -1094,7 +1180,7 @@ private final class ReleaseMetadataHarness {
             withIntermediateDirectories: true
         )
 
-        try writeInfoPlist(version: version)
+        try writeInfoPlist(version: version, sparkleKeys: sparkleInfoPlistKeys)
         try writeCask(
             version: caskVersion ?? version,
             sha: caskSHA,
@@ -1335,14 +1421,23 @@ private final class ReleaseMetadataHarness {
         return result
     }
 
-    func writeUnsignedDevAppBundleFixture() throws {
+    func writeUnsignedDevAppBundleFixture(sparkleInfoPlistKeys: [String] = []) throws {
         let appURL = rootURL.appendingPathComponent(".build/Vifty.app", isDirectory: true)
         try FileManager.default.createDirectory(
             at: appURL.appendingPathComponent("Contents/MacOS", isDirectory: true),
             withIntermediateDirectories: true
         )
+        try FileManager.default.createDirectory(
+            at: appURL.appendingPathComponent("Contents", isDirectory: true),
+            withIntermediateDirectories: true
+        )
         try "fixture".write(
             to: appURL.appendingPathComponent("Contents/MacOS/Vifty"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try infoPlistContents(version: "1.0.0", sparkleKeys: sparkleInfoPlistKeys).write(
+            to: appURL.appendingPathComponent("Contents/Info.plist"),
             atomically: true,
             encoding: .utf8
         )
@@ -1461,7 +1556,21 @@ private final class ReleaseMetadataHarness {
         )
     }
 
-    private func writeInfoPlist(version: String) throws {
+    private func writeInfoPlist(version: String, sparkleKeys: [String]) throws {
+        try infoPlistContents(version: version, sparkleKeys: sparkleKeys).write(
+            to: rootURL.appendingPathComponent("Resources/Info.plist"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private func infoPlistContents(version: String, sparkleKeys: [String]) -> String {
+        let sparkleMetadata = sparkleKeys.map { key in
+            """
+              <key>\(key)</key>
+              <string>fixture</string>
+            """
+        }.joined(separator: "\n")
         let contents = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1469,14 +1578,11 @@ private final class ReleaseMetadataHarness {
         <dict>
           <key>CFBundleShortVersionString</key>
           <string>\(version)</string>
+        \(sparkleMetadata)
         </dict>
         </plist>
         """
-        try contents.write(
-            to: rootURL.appendingPathComponent("Resources/Info.plist"),
-            atomically: true,
-            encoding: .utf8
-        )
+        return contents
     }
 
     private func writeCask(

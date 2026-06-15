@@ -54,6 +54,14 @@ CI_WORKFLOW=".github/workflows/ci.yml"
 RELEASE_WORKFLOW=".github/workflows/release.yml"
 INFO_PLIST="Resources/Info.plist"
 
+source_first_sparkle_keys() {
+  /usr/bin/plutil -convert json -o - -- "$1" | ruby -rjson -e '
+    data = JSON.parse(STDIN.read)
+    keys = data.keys.grep(/\ASU/).sort
+    puts keys.join(", ") unless keys.empty?
+  '
+}
+
 bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}")"
 cask_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "${CASK_PATH}")"
 cask_sha="$(ruby -ne 'puts $1 if /^\s*sha256 "([^"]+)"/' "${CASK_PATH}")"
@@ -66,6 +74,14 @@ fi
 if [[ "${RELEASE_METADATA_MODE}" = "developer-id" && "${bundle_version}" != "${cask_version}" ]]; then
   echo "error: bundle version ${bundle_version} does not match cask version ${cask_version}" >&2
   exit 1
+fi
+
+if [[ "${RELEASE_METADATA_MODE}" = "source-first" ]]; then
+  sparkle_keys="$(source_first_sparkle_keys "${INFO_PLIST}")"
+  if [[ -n "${sparkle_keys}" ]]; then
+    echo "error: source-first Info.plist must not include Sparkle updater metadata: ${sparkle_keys}" >&2
+    exit 1
+  fi
 fi
 
 if [[ ! "${cask_sha}" =~ ^[0-9a-f]{64}$ ]]; then

@@ -1393,10 +1393,48 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.telemetryHistory.samples.count, 1)
         XCTAssertEqual(model.telemetryHistory.samples[0].capturedAt, now)
+        XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureID, "Tp09")
+        XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureName, "CPU Proximity")
+        XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureCelsius, 64)
         XCTAssertEqual(model.telemetryHistory.samples[0].highestTemperatureCelsius, 64)
         XCTAssertEqual(model.telemetryHistory.samples[0].firstFanRPM, 2500)
+        XCTAssertEqual(model.telemetryHistory.samples[0].averageFanRPM, 2500)
         XCTAssertEqual(model.telemetryHistory.samples[0].batteryPowerWatts, -12.5)
         XCTAssertEqual(model.telemetryHistory.samples[0].thermalPressure, .fair)
+    }
+
+    func testPollOnceAppendsSelectedSensorAndAverageFanTelemetryHistorySample() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2200, minimumRPM: 1400, maximumRPM: 6000, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 2800, minimumRPM: 1400, maximumRPM: 6000, controllable: true)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Performance Core 1", celsius: 73, source: .smc),
+                TemperatureSensor(id: "Tp01", name: "CPU Efficiency Core 1", celsius: 66, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: -8.0) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.selectedSensorID = "Tp01"
+
+        await model.pollOnce()
+
+        let sample = model.telemetryHistory.samples[0]
+        XCTAssertEqual(sample.selectedTemperatureID, "Tp01")
+        XCTAssertEqual(sample.selectedTemperatureName, "CPU Efficiency Core 1")
+        XCTAssertEqual(sample.selectedTemperatureCelsius, 66)
+        XCTAssertEqual(sample.highestTemperatureCelsius, 73)
+        XCTAssertEqual(sample.firstFanRPM, 2200)
+        XCTAssertEqual(sample.averageFanRPM, 2500)
     }
 
     func testMenuTitleIncludesElevatedThermalPressure() async {

@@ -789,10 +789,10 @@ private struct HistoryPanel: View {
             if let latest = history.samples.last {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 120), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
                     if let temperatureText = summary.latestTemperatureText {
-                        PowerMetric(label: "Latest temp", value: temperatureText, systemImage: "thermometer.medium")
+                        PowerMetric(label: summary.latestTemperatureLabel, value: temperatureText, systemImage: "thermometer.medium")
                     }
                     if let fanRPMText = summary.latestFanRPMText {
-                        PowerMetric(label: "Latest fan", value: fanRPMText, systemImage: "fan")
+                        PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
                     }
                     if let batteryPowerLabel = summary.latestBatteryPowerLabel,
                        let batteryPowerText = summary.latestBatteryPowerText,

@@ -514,6 +514,26 @@ else
         problems << "release notes must include #{needle.inspect}" unless body.include?(needle)
       end
 
+      forbidden_claims = [
+        ["auto-update is available", "auto-update is available"],
+        ["auto updates are available", "auto updates are available"],
+        ["automatic updates are available", "automatic updates are available"],
+        ["sparkle updates are enabled", "Sparkle updates are enabled"],
+        ["sparkle updater is enabled", "Sparkle updater is enabled"],
+        ["homebrew cask is updated", "Homebrew cask is updated"],
+        ["homebrew is updated for this release", "Homebrew is updated for this release"],
+        ["homebrew install is the recommended path", "Homebrew install is the recommended path"],
+        ["is the official trusted binary", "official trusted binary"],
+        ["official trusted binary is attached", "official trusted binary"],
+        ["developer id signed binary is attached", "Developer ID signed binary is attached"],
+        ["developer id signed and notarized binary is attached", "Developer ID signed and notarized binary is attached"],
+        ["notarized binary is attached", "notarized binary is attached"]
+      ]
+      body_downcase = body.downcase
+      forbidden_claims.each do |needle, claim|
+        problems << "source-first release notes must not claim #{claim.inspect}" if body_downcase.include?(needle)
+      end
+
       if problems.empty?
         if has_unsigned_zip
           puts "GitHub Release #{tag} is source-first and has unsigned tester assets: #{unsigned_zip}, #{unsigned_checksum}"

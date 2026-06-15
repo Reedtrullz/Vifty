@@ -3,21 +3,33 @@ import Foundation
 public struct TelemetrySample: Equatable, Identifiable, Sendable {
     public var id: Date { capturedAt }
     public var capturedAt: Date
+    public var selectedTemperatureID: String?
+    public var selectedTemperatureName: String?
+    public var selectedTemperatureCelsius: Double?
     public var highestTemperatureCelsius: Double?
     public var firstFanRPM: Int?
+    public var averageFanRPM: Double?
     public var batteryPowerWatts: Double?
     public var thermalPressure: ThermalPressure
 
     public init(
         capturedAt: Date,
+        selectedTemperatureID: String? = nil,
+        selectedTemperatureName: String? = nil,
+        selectedTemperatureCelsius: Double? = nil,
         highestTemperatureCelsius: Double?,
         firstFanRPM: Int?,
+        averageFanRPM: Double? = nil,
         batteryPowerWatts: Double?,
         thermalPressure: ThermalPressure
     ) {
         self.capturedAt = capturedAt
+        self.selectedTemperatureID = selectedTemperatureID
+        self.selectedTemperatureName = selectedTemperatureName
+        self.selectedTemperatureCelsius = selectedTemperatureCelsius
         self.highestTemperatureCelsius = highestTemperatureCelsius
         self.firstFanRPM = firstFanRPM
+        self.averageFanRPM = averageFanRPM
         self.batteryPowerWatts = batteryPowerWatts
         self.thermalPressure = thermalPressure
     }
@@ -51,7 +63,9 @@ public struct TelemetryHistory: Equatable, Sendable {
 public struct TelemetryHistorySummary: Equatable, Sendable {
     public var sampleCount: Int
     public var sampleCountText: String
+    public var latestTemperatureLabel: String
     public var latestTemperatureText: String?
+    public var latestFanRPMLabel: String
     public var latestFanRPMText: String?
     public var latestBatteryPowerLabel: String?
     public var latestBatteryPowerText: String?
@@ -76,8 +90,10 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
         sampleCount = history.samples.count
         sampleCountText = history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
-        latestTemperatureText = latest?.highestTemperatureCelsius.map(Self.temperatureText)
-        latestFanRPMText = latest?.firstFanRPM.map(Self.fanRPMText)
+        latestTemperatureLabel = latest?.selectedTemperatureCelsius == nil ? "Latest temp" : "Selected temp"
+        latestTemperatureText = latest.flatMap(Self.sampleTemperature).map(Self.temperatureText)
+        latestFanRPMLabel = (latest?.averageFanRPM == nil) ? "Latest fan" : "Average fan"
+        latestFanRPMText = latest.flatMap(Self.sampleFanRPM).map(Self.fanRPMText)
         if let batteryPowerWatts = latest?.batteryPowerWatts {
             latestBatteryPowerLabel = batteryPowerWatts < 0 ? "Battery drain" : "Battery charge"
             latestBatteryPowerText = PowerDisplayFormatter.watts(abs(batteryPowerWatts))
@@ -86,8 +102,8 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
             latestBatteryPowerText = nil
         }
         latestThermalPressureText = latest?.thermalPressure.displayName ?? "--"
-        temperatureValues = recentSamples.compactMap(\.highestTemperatureCelsius)
-        fanRPMValues = recentSamples.compactMap { $0.firstFanRPM.map(Double.init) }
+        temperatureValues = Self.temperatureValues(from: recentSamples, latest: latest)
+        fanRPMValues = recentSamples.compactMap(Self.sampleFanRPM)
         batteryPowerValues = recentSamples.compactMap(\.batteryPowerWatts)
         temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "C", decimals: 1)
         fanRPMRangeText = Self.unsignedRangeText(fanRPMValues, unit: "RPM", decimals: 0)
@@ -101,6 +117,10 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
     public static func fanRPMText(_ value: Int) -> String {
         "\(value) RPM"
+    }
+
+    public static func fanRPMText(_ value: Double) -> String {
+        "\(Int(value.rounded())) RPM"
     }
 
     public static func unsignedRangeText(_ values: [Double], unit: String, decimals: Int) -> String {
@@ -129,5 +149,27 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         if value < 0 { return "-\(formatted)" }
         if value > 0 { return "+\(formatted)" }
         return formatted
+    }
+
+    private static func sampleTemperature(_ sample: TelemetrySample) -> Double? {
+        sample.selectedTemperatureCelsius ?? sample.highestTemperatureCelsius
+    }
+
+    private static func temperatureValues(from samples: [TelemetrySample], latest: TelemetrySample?) -> [Double] {
+        if let selectedTemperatureID = latest?.selectedTemperatureID,
+           latest?.selectedTemperatureCelsius != nil {
+            let matchingSelectedValues = samples.compactMap { sample -> Double? in
+                guard sample.selectedTemperatureID == selectedTemperatureID else { return nil }
+                return sample.selectedTemperatureCelsius
+            }
+            if !matchingSelectedValues.isEmpty {
+                return matchingSelectedValues
+            }
+        }
+        return samples.compactMap(Self.sampleTemperature)
+    }
+
+    private static func sampleFanRPM(_ sample: TelemetrySample) -> Double? {
+        sample.averageFanRPM ?? sample.firstFanRPM.map(Double.init)
     }
 }

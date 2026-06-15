@@ -330,15 +330,39 @@ final class AppModel: ObservableObject {
         power: PowerSnapshot,
         thermalPressure: ThermalPressure
     ) {
+        let selectedTelemetrySensor = telemetryTemperatureSensor(in: nextSnapshot)
         snapshot = nextSnapshot
         telemetryHistory.append(TelemetrySample(
             capturedAt: now(),
+            selectedTemperatureID: selectedTelemetrySensor?.id,
+            selectedTemperatureName: selectedTelemetrySensor?.name,
+            selectedTemperatureCelsius: selectedTelemetrySensor?.celsius,
             highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
             firstFanRPM: nextSnapshot.fans.first?.currentRPM,
+            averageFanRPM: averageFanRPM(in: nextSnapshot.fans),
             batteryPowerWatts: power.batteryPowerWatts,
             thermalPressure: thermalPressure
         ))
         syncCurveDefaultsIfNeeded(from: nextSnapshot)
+    }
+
+    private func telemetryTemperatureSensor(in snapshot: HardwareSnapshot) -> TemperatureSensor? {
+        if let selectedSensorID,
+           let exact = snapshot.temperatureSensors.first(where: { $0.id == selectedSensorID }) {
+            return exact
+        }
+        return snapshot.temperatureSensors.first { sensor in
+            let lower = sensor.name.lowercased()
+            return lower.contains("cpu") || lower.contains("package") || lower.contains("die")
+        } ?? snapshot.highestTemperature
+    }
+
+    private func averageFanRPM(in fans: [Fan]) -> Double? {
+        guard !fans.isEmpty else { return nil }
+        let totalRPM = fans.reduce(0) { total, fan in
+            total + fan.currentRPM
+        }
+        return Double(totalRPM) / Double(fans.count)
     }
 
     private func fanAccessMessage(for snapshot: HardwareSnapshot) -> String? {

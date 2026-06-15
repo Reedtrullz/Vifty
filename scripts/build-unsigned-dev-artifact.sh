@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 cd "${ROOT_DIR}"
 
 VERSION=""
@@ -33,6 +34,29 @@ is_sha() {
 
 lowercase() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+source_first_sparkle_keys() {
+  /usr/bin/plutil -convert json -o - -- "$1" | ruby -rjson -e '
+    data = JSON.parse(STDIN.read)
+    keys = data.keys.grep(/\ASU/).sort
+    puts keys.join(", ") unless keys.empty?
+  '
+}
+
+validate_unsigned_app_plist() {
+  local plist_path="$1"
+  if [ ! -f "${plist_path}" ]; then
+    echo "error: unsigned-dev app bundle is missing ${plist_path}" >&2
+    exit 1
+  fi
+
+  local sparkle_keys
+  sparkle_keys="$(source_first_sparkle_keys "${plist_path}")"
+  if [ -n "${sparkle_keys}" ]; then
+    echo "error: unsigned-dev app bundle must not include Sparkle updater metadata: ${sparkle_keys}" >&2
+    exit 1
+  fi
 }
 
 resolve_ref() {
@@ -140,6 +164,8 @@ if [ "${ZIP_PATH}" = "${CANONICAL_ZIP}" ]; then
   exit 1
 fi
 
+"${SCRIPT_DIR}/validate-release-metadata.sh" --mode source-first
+
 if ! "${SKIP_BUILD}"; then
   /Applications/Xcode.app/Contents/Developer/usr/bin/make app \
     CONFIGURATION=release \
@@ -151,6 +177,8 @@ if [ ! -d ".build/Vifty.app" ]; then
   echo "error: .build/Vifty.app does not exist; run without --skip-build or build the app first" >&2
   exit 1
 fi
+
+validate_unsigned_app_plist ".build/Vifty.app/Contents/Info.plist"
 
 rm -f "${ZIP_PATH}" "${CHECKSUM_PATH}"
 ditto -c -k --keepParent ".build/Vifty.app" "${ZIP_PATH}"
