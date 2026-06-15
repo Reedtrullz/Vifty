@@ -176,7 +176,11 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var telemetryHistory = TelemetryHistory()
-    @Published var manualRunLimit: ManualRunLimit = .indefinitely
+    @Published var manualRunLimit: ManualRunLimit = .indefinitely {
+        didSet {
+            updateManualDeadlineForActiveManualMode()
+        }
+    }
     @Published var manualSessionExpiresAt: Date?
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
@@ -1112,6 +1116,11 @@ final class AppModel: ObservableObject {
         case .minutes(let minutes):
             manualSessionExpiresAt = now().addingTimeInterval(TimeInterval(minutes * 60))
         }
+    }
+
+    private func updateManualDeadlineForActiveManualMode() {
+        guard controlState.mode != .auto else { return }
+        updateManualDeadline(for: controlState.mode)
     }
 
     private func restoreAutoIfManualSessionExpired() async -> Bool {

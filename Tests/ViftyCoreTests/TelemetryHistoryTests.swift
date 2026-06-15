@@ -44,6 +44,60 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(history.samples.first?.firstFanRPM, 2003)
     }
 
+    func testSummaryFormatsLatestValuesAndRanges() {
+        var history = TelemetryHistory(limit: 10)
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 64.2,
+            firstFanRPM: 2_000,
+            batteryPowerWatts: -12.5,
+            thermalPressure: .nominal
+        ))
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            highestTemperatureCelsius: 72.6,
+            firstFanRPM: 3_450,
+            batteryPowerWatts: 8.25,
+            thermalPressure: .serious
+        ))
+
+        let summary = TelemetryHistorySummary(history: history)
+
+        XCTAssertEqual(summary.sampleCount, 2)
+        XCTAssertEqual(summary.sampleCountText, "2 samples")
+        XCTAssertEqual(summary.latestTemperatureText, "72.6 C")
+        XCTAssertEqual(summary.latestFanRPMText, "3450 RPM")
+        XCTAssertEqual(summary.latestBatteryPowerLabel, "Battery charge")
+        XCTAssertEqual(summary.latestBatteryPowerText, "8.2 W")
+        XCTAssertEqual(summary.latestThermalPressureText, "Serious")
+        XCTAssertEqual(summary.temperatureRangeText, "64.2 C-72.6 C")
+        XCTAssertEqual(summary.fanRPMRangeText, "2000 RPM-3450 RPM")
+        XCTAssertEqual(summary.batteryPowerRangeText, "-12.5 W-+8.2 W")
+        XCTAssertEqual(summary.thermalPressureSamples, [.nominal, .serious])
+    }
+
+    func testSummaryAppliesIndependentSampleAndThermalWindows() {
+        var history = TelemetryHistory(limit: 10)
+        for index in 0..<5 {
+            history.append(sample(index: index))
+        }
+
+        let summary = TelemetryHistorySummary(
+            history: history,
+            sampleLimit: 2,
+            thermalPressureLimit: 3
+        )
+
+        XCTAssertEqual(summary.sampleCount, 5)
+        XCTAssertEqual(summary.temperatureValues, [63, 64])
+        XCTAssertEqual(summary.fanRPMValues, [2003, 2004])
+        XCTAssertEqual(summary.batteryPowerValues, [-10, -10])
+        XCTAssertEqual(summary.temperatureRangeText, "63.0 C-64.0 C")
+        XCTAssertEqual(summary.fanRPMRangeText, "2003 RPM-2004 RPM")
+        XCTAssertEqual(summary.batteryPowerRangeText, "-10.0 W")
+        XCTAssertEqual(summary.thermalPressureSamples, [.nominal, .nominal, .nominal])
+    }
+
     private func sample(index: Int) -> TelemetrySample {
         TelemetrySample(
             capturedAt: Date(timeIntervalSince1970: Double(index)),

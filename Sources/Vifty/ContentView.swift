@@ -767,12 +767,12 @@ private struct HistoryPanel: View {
     let history: TelemetryHistory
     let compact: Bool
 
-    private var sampleCountText: String {
-        history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
-    }
-
-    private func batteryFlowLabel(for watts: Double) -> String {
-        watts < 0 ? "Battery drain" : "Battery charge"
+    private var summary: TelemetryHistorySummary {
+        TelemetryHistorySummary(
+            history: history,
+            sampleLimit: compact ? 90 : 180,
+            thermalPressureLimit: compact ? 24 : 36
+        )
     }
 
     var body: some View {
@@ -781,27 +781,29 @@ private struct HistoryPanel: View {
                 Label("History", systemImage: "chart.xyaxis.line")
                     .font(.headline)
                 Spacer()
-                Text(sampleCountText)
+                Text(summary.sampleCountText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let latest = history.samples.last {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 120), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
-                    if let temp = latest.highestTemperatureCelsius {
-                        PowerMetric(label: "Latest temp", value: String(format: "%.1f C", temp), systemImage: "thermometer.medium")
+                    if let temperatureText = summary.latestTemperatureText {
+                        PowerMetric(label: "Latest temp", value: temperatureText, systemImage: "thermometer.medium")
                     }
-                    if let rpm = latest.firstFanRPM {
-                        PowerMetric(label: "Latest fan", value: "\(rpm) RPM", systemImage: "fan")
+                    if let fanRPMText = summary.latestFanRPMText {
+                        PowerMetric(label: "Latest fan", value: fanRPMText, systemImage: "fan")
                     }
-                    if let watts = latest.batteryPowerWatts {
-                        PowerMetric(label: batteryFlowLabel(for: watts), value: PowerDisplayFormatter.watts(abs(watts)), systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
+                    if let batteryPowerLabel = summary.latestBatteryPowerLabel,
+                       let batteryPowerText = summary.latestBatteryPowerText,
+                       let watts = latest.batteryPowerWatts {
+                        PowerMetric(label: batteryPowerLabel, value: batteryPowerText, systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
                     }
-                    PowerMetric(label: "Thermal", value: latest.thermalPressure.displayName, systemImage: "speedometer")
+                    PowerMetric(label: "Thermal", value: summary.latestThermalPressureText, systemImage: "speedometer")
                 }
 
                 if history.samples.count > 1 {
-                    TelemetryHistoryChart(samples: history.samples, compact: compact)
+                    TelemetryHistoryChart(summary: summary, compact: compact)
                 }
             } else {
                 Text("History appears after the first successful poll.")
@@ -815,87 +817,41 @@ private struct HistoryPanel: View {
 }
 
 private struct TelemetryHistoryChart: View {
-    let samples: [TelemetrySample]
+    let summary: TelemetryHistorySummary
     let compact: Bool
-
-    private var recentSamples: [TelemetrySample] {
-        Array(samples.suffix(compact ? 90 : 180))
-    }
-
-    private var temperatureValues: [Double] {
-        recentSamples.compactMap(\.highestTemperatureCelsius)
-    }
-
-    private var fanValues: [Double] {
-        recentSamples.compactMap { sample in
-            sample.firstFanRPM.map(Double.init)
-        }
-    }
-
-    private var powerValues: [Double] {
-        recentSamples.compactMap(\.batteryPowerWatts)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
-            if temperatureValues.count > 1 {
+            if summary.temperatureValues.count > 1 {
                 HistorySparkline(
                     title: "Temp",
-                    values: temperatureValues,
+                    values: summary.temperatureValues,
                     color: .orange,
-                    rangeText: unsignedRangeText(temperatureValues, unit: "C", decimals: 1),
+                    rangeText: summary.temperatureRangeText,
                     compact: compact
                 )
             }
-            if fanValues.count > 1 {
+            if summary.fanRPMValues.count > 1 {
                 HistorySparkline(
                     title: "Fan",
-                    values: fanValues,
+                    values: summary.fanRPMValues,
                     color: .blue,
-                    rangeText: unsignedRangeText(fanValues, unit: "RPM", decimals: 0),
+                    rangeText: summary.fanRPMRangeText,
                     compact: compact
                 )
             }
-            if powerValues.count > 1 {
+            if summary.batteryPowerValues.count > 1 {
                 HistorySparkline(
                     title: "Power",
-                    values: powerValues,
+                    values: summary.batteryPowerValues,
                     color: .green,
-                    rangeText: signedWattRangeText(powerValues),
+                    rangeText: summary.batteryPowerRangeText,
                     compact: compact
                 )
             }
-            ThermalPressureTrail(samples: recentSamples, compact: compact)
+            ThermalPressureTrail(pressures: summary.thermalPressureSamples, compact: compact)
         }
         .padding(.top, compact ? 2 : 4)
-    }
-
-    private func unsignedRangeText(_ values: [Double], unit: String, decimals: Int) -> String {
-        guard let min = values.min(), let max = values.max() else { return "--" }
-        let lower = formatUnsigned(min, unit: unit, decimals: decimals)
-        let upper = formatUnsigned(max, unit: unit, decimals: decimals)
-        return lower == upper ? lower : "\(lower)-\(upper)"
-    }
-
-    private func formatUnsigned(_ value: Double, unit: String, decimals: Int) -> String {
-        if decimals == 0 {
-            return "\(Int(value.rounded())) \(unit)"
-        }
-        return String(format: "%.1f %@", value, unit)
-    }
-
-    private func signedWattRangeText(_ values: [Double]) -> String {
-        guard let min = values.min(), let max = values.max() else { return "--" }
-        let lower = signedWatts(min)
-        let upper = signedWatts(max)
-        return lower == upper ? lower : "\(lower)-\(upper)"
-    }
-
-    private func signedWatts(_ value: Double) -> String {
-        let formatted = PowerDisplayFormatter.watts(abs(value))
-        if value < 0 { return "-\(formatted)" }
-        if value > 0 { return "+\(formatted)" }
-        return formatted
     }
 }
 
@@ -961,12 +917,8 @@ private struct SparklinePath: View {
 }
 
 private struct ThermalPressureTrail: View {
-    let samples: [TelemetrySample]
+    let pressures: [ThermalPressure]
     let compact: Bool
-
-    private var recentSamples: [TelemetrySample] {
-        Array(samples.suffix(compact ? 24 : 36))
-    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -975,21 +927,21 @@ private struct ThermalPressureTrail: View {
                 .foregroundStyle(.secondary)
                 .frame(width: compact ? 34 : 42, alignment: .leading)
             HStack(spacing: 2) {
-                ForEach(Array(recentSamples.enumerated()), id: \.offset) { pair in
+                ForEach(Array(pressures.enumerated()), id: \.offset) { pair in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(color(for: pair.element.thermalPressure))
+                        .fill(color(for: pair.element))
                         .frame(maxWidth: .infinity)
                 }
             }
             .frame(height: compact ? 6 : 8)
-            Text(recentSamples.last?.thermalPressure.displayName ?? "--")
+            Text(pressures.last?.displayName ?? "--")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(width: compact ? 86 : 104, alignment: .trailing)
         }
-        .accessibilityLabel("Thermal pressure history \(recentSamples.last?.thermalPressure.displayName ?? "unknown")")
+        .accessibilityLabel("Thermal pressure history \(pressures.last?.displayName ?? "unknown")")
     }
 
     private func color(for pressure: ThermalPressure) -> Color {

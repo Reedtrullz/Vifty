@@ -1155,6 +1155,37 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(notification.body.contains("sustained serious thermal pressure"))
     }
 
+    func testSustainedThermalPressureNotificationRespectsCooldown() async {
+        let recorder = AppModelNotificationRecorder()
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .serious },
+            now: { clock.now },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.elevatedThermalPressure = true
+
+        await model.pollOnce()
+        clock.now = Date(timeIntervalSince1970: 1061)
+        await model.pollOnce()
+        clock.now = Date(timeIntervalSince1970: 1065)
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure])
+
+        clock.now = Date(timeIntervalSince1970: 1662)
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure, .elevatedThermalPressure])
+    }
+
     func testPluggedInBatteryDrainNotificationFiresOnDrainTransition() async throws {
         let recorder = AppModelNotificationRecorder()
         let model = AppModel(
@@ -1424,6 +1455,84 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.manualSessionExpiresAt)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0], "Timed expiry must issue a real Auto restore, not only update UI state")
+    }
+
+    func testChangingActiveTimedManualRunToUntilChangedClearsOldDeadline() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+        XCTAssertNotNil(model.manualSessionExpiresAt)
+
+        model.manualRunLimit = .indefinitely
+        XCTAssertNil(model.manualSessionExpiresAt)
+
+        clock.now = Date(timeIntervalSince1970: 1000 + 601)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .fixed)
+        switch model.controlState.mode {
+        case .fixedRPM(5000):
+            break
+        default:
+            XCTFail("Until-changed manual mode should survive past the stale timed deadline.")
+        }
+        let restored = await hardware.restoredFanIDs
+        XCTAssertTrue(restored.isEmpty)
+    }
+
+    func testChangingActiveUntilChangedManualRunToTimedCreatesFreshDeadline() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 2000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        XCTAssertNil(model.manualSessionExpiresAt)
+
+        model.manualRunLimit = .minutes(30)
+
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 2000 + 1800))
     }
 
     func testExplicitRestoreAutoClearsTimedManualDeadline() async {

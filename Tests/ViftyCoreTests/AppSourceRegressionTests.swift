@@ -95,13 +95,15 @@ final class AppSourceRegressionTests: XCTestCase {
     func testHistoryPanelShowsLocalSparklineVisualization() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
-        XCTAssertTrue(contentView.contains("TelemetryHistoryChart(samples: history.samples, compact: compact)"))
+        XCTAssertTrue(contentView.contains("TelemetryHistorySummary("))
+        XCTAssertTrue(contentView.contains("TelemetryHistoryChart(summary: summary, compact: compact)"))
         XCTAssertTrue(contentView.contains("private struct TelemetryHistoryChart: View"))
         XCTAssertTrue(contentView.contains("title: \"Temp\""))
         XCTAssertTrue(contentView.contains("title: \"Fan\""))
         XCTAssertTrue(contentView.contains("title: \"Power\""))
-        XCTAssertTrue(contentView.contains("ThermalPressureTrail(samples: recentSamples, compact: compact)"))
+        XCTAssertTrue(contentView.contains("ThermalPressureTrail(pressures: summary.thermalPressureSamples, compact: compact)"))
         XCTAssertTrue(contentView.contains("private struct SparklinePath: View"))
+        XCTAssertFalse(contentView.contains("private func signedWattRangeText"))
         XCTAssertFalse(contentView.contains("UserDefaults.standard.set(history"))
     }
 
