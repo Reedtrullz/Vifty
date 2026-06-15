@@ -24,26 +24,46 @@ struct ContentView: View {
 
     private var mainContent: some View {
         GeometryReader { proxy in
-            let compactTelemetry = proxy.size.height < 640 || proxy.size.width < 920
+            let layout = MainWindowLayout.resolve(width: proxy.size.width, height: proxy.size.height)
 
-            HStack(alignment: .top, spacing: 0) {
-                ScrollView(.vertical) {
-                    fanControlPane
+            Group {
+                switch layout.mode {
+                case .stacked:
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            fanControlPane
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                            Divider()
+
+                            sensorsPane(compact: layout.compactTelemetry)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .background(Color.secondary.opacity(0.035))
+                        }
                         .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
-                }
-                .scrollIndicators(.visible)
-                .frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                    }
+                    .scrollIndicators(.visible)
+                case .split:
+                    HStack(alignment: .top, spacing: 0) {
+                        ScrollView(.vertical) {
+                            fanControlPane
+                                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)
 
-                Divider()
-                    .frame(height: proxy.size.height)
+                        Divider()
+                            .frame(height: proxy.size.height)
 
-                ScrollView(.vertical) {
-                    sensorsPane(compact: compactTelemetry)
-                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        ScrollView(.vertical) {
+                            sensorsPane(compact: layout.compactTelemetry)
+                                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                        .background(Color.secondary.opacity(0.035))
+                    }
                 }
-                .scrollIndicators(.visible)
-                .frame(maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height)
-                .background(Color.secondary.opacity(0.035))
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
