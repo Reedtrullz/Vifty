@@ -729,15 +729,15 @@ final class AppModel: ObservableObject {
             if let manualControlDriftSummary {
                 return manualControlDriftSummary
             }
-            return "Vifty Fixed owns fan targets · \(rpm) RPM"
+            return "Vifty Fixed owns fan targets · \(rpm) RPM · \(manualRunOwnershipSummary)"
         case .temperatureCurve:
             if let manualControlDriftSummary {
                 return manualControlDriftSummary
             }
             if let sensor = selectedSensor {
-                return "Vifty Curve owns fan targets · \(sensor.name)"
+                return "Vifty Curve owns fan targets · \(sensor.name) · \(manualRunOwnershipSummary)"
             }
-            return "Vifty Curve owns fan targets"
+            return "Vifty Curve owns fan targets · \(manualRunOwnershipSummary)"
         }
     }
 
@@ -889,6 +889,13 @@ final class AppModel: ObservableObject {
         case .temperatureCurve:
             return "Curve"
         }
+    }
+
+    private var manualRunOwnershipSummary: String {
+        let runLimitSummary = manualSessionExpiresAt.map {
+            "until \($0.formatted(date: .omitted, time: .shortened))"
+        } ?? "until changed"
+        return "\(runLimitSummary); reasserts if macOS drifts"
     }
 
     private var autoControlOwnershipSummary: String {

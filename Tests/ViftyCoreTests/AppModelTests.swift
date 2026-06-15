@@ -601,12 +601,16 @@ final class AppModelTests: XCTestCase {
         model.selectedSensorID = "Tp09"
 
         model.controlState = ControlState(mode: .fixedRPM(3200), manualControlActive: true)
-        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3200 RPM")
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3200 RPM · until changed; reasserts if macOS drifts")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
 
         model.controlState = ControlState(mode: .temperatureCurve(FanCurve.defaultCurve(sensorID: "Tp09")), manualControlActive: true)
-        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Curve owns fan targets · CPU Proximity")
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Curve owns fan targets · CPU Proximity · until changed; reasserts if macOS drifts")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
+
+        model.manualSessionExpiresAt = Date(timeIntervalSince1970: 1600)
+        XCTAssertTrue(model.controlOwnershipSummary.contains("until "))
+        XCTAssertTrue(model.controlOwnershipSummary.hasSuffix("; reasserts if macOS drifts"))
     }
 
     func testControlOwnershipWarnsWhenManualModeTelemetryShowsMacOSReclaimedAuto() {
