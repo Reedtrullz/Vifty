@@ -325,6 +325,44 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
     compact.empty? ? "" : compact.join(", ")
   end
 
+  def short_digest(value, length = 7)
+    digest = value.to_s.strip
+    return "" if digest.empty?
+
+    digest[0, length]
+  end
+
+  def source_evidence_for(row)
+    source_ref = row["sourceRef"].to_s.strip
+    source_sha = row["sourceSHA"].to_s.strip
+    artifact_name = row["sourceArtifactName"].to_s.strip
+    artifact_sha = row["sourceArtifactSHA256"].to_s.strip
+
+    source = if !source_ref.empty? && !source_sha.empty?
+      "#{source_ref}@#{short_digest(source_sha)}"
+    elsif !source_ref.empty?
+      source_ref
+    elsif !source_sha.empty?
+      short_digest(source_sha)
+    else
+      ""
+    end
+
+    artifact = if !artifact_name.empty? && !artifact_sha.empty?
+      "#{artifact_name}@#{short_digest(artifact_sha)}"
+    else
+      artifact_name
+    end
+
+    if source.empty?
+      artifact
+    elsif artifact.empty?
+      source
+    else
+      "#{source} (#{artifact})"
+    end
+  end
+
   def compatibility_status_for(validated_count, candidate_count, safe_block_count, rejected_count)
     return "Validated hardware evidence" if validated_count.positive?
     return "Needs manual smoke" if candidate_count.positive?
@@ -367,11 +405,14 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
       install_sources = join_unique(group.map { |row| row["installSource"] })
 
       evidence = []
+      source_joined = join_unique(group.map { |row| source_evidence_for(row) })
       manual_sources = group.select { |row| row["manualSmokeValidated"] == "true" }.map { |row| row["manualSmokeTestSource"] }
       agent_sources = group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| row["agentRunSmokeSource"] }
       manual_joined = join_unique(manual_sources)
       agent_joined = join_unique(agent_sources)
+      evidence << "source: #{source_joined}" unless source_joined.empty?
       evidence << "manual: #{manual_joined}" unless manual_joined.empty?
+      evidence << "manual: not recorded" if candidate_count.positive? && validated_count.zero?
       evidence << "agent-run: #{agent_joined}" unless agent_joined.empty?
       evidence << "reviewed index only" if evidence.empty?
 

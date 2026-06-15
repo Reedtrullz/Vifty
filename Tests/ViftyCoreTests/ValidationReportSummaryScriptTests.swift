@@ -128,8 +128,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(markdown.contains("Generated from reviewed validation report summaries."))
         XCTAssertTrue(markdown.contains("source-first and unsigned-dev reports as compatibility evidence only"))
         XCTAssertTrue(markdown.contains("| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |"))
-        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | reviewed index only |"))
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | source: v1.1.0@aaaaaaa |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | source: v1.1.0@aaaaaaa<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
         XCTAssertFalse(markdown.contains("release-trust-evidence"))
     }
 
@@ -198,7 +198,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(validatedByModelFamily.isEmpty)
 
         let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | source: v1.1.0@aaaaaaa<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
     }
 
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {

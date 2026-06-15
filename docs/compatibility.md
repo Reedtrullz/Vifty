@@ -27,7 +27,7 @@ Until enough public reports exist, treat each model family as **needs validation
 
 ## Generated Compatibility Matrix
 
-Do not hand-edit the generated compatibility matrix. Use `scripts/summarize-validation-reports.sh --output-markdown <reports-dir>/compatibility-matrix.md` after review results are accepted, then copy or link the generated table with its report sources intact.
+Do not hand-edit the generated compatibility matrix. Use `scripts/summarize-validation-reports.sh --output-markdown <reports-dir>/compatibility-matrix.md` after review results are accepted, then copy or link the generated table with its report sources intact. The matrix evidence cell intentionally shows source ref plus short SHA and manual/agent smoke status so local ad-hoc `main` reports are not mistaken for current release-tag evidence or validated hardware support.
 
 The current checked-in generated index lives in [validation-reports/compatibility-index.json](validation-reports/compatibility-index.json), with TSV and Markdown drafts beside it. As of the latest index, `MacBookPro18` has one read-only local ad-hoc `MacBookPro18,1` candidate report with `daemonControlPathReady=true`, `safeToRequestCooling=true`, and `manualSmokeTestResult: "not-recorded"`. That moves the family to **Needs manual smoke** in the generated draft, not validated support.
 
