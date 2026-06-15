@@ -504,7 +504,12 @@ final class AppModel: ObservableObject {
 
     var fanWriteBlockedWhileHotRecoverySuggestion: String? {
         guard fanWriteBlockedWhileHotSummary != nil else { return nil }
-        return "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds."
+        switch controlState.mode {
+        case .auto:
+            return "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds."
+        case .fixedRPM, .temperatureCurve:
+            return "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry \(manualModeName) when the daemon responds. Use Auto to stop retries."
+        }
     }
 
     var menuTitle: String {

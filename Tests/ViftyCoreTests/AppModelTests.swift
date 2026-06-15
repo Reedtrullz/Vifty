@@ -289,9 +289,30 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
-        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds.")
         XCTAssertEqual(model.helperHealthMenuSummary, "Fan writes blocked")
         XCTAssertNil(model.helperMenuRecoverySuggestion)
+    }
+
+    func testHotBlockedFanWritesExplainManualRetryInsteadOfAutoOnlyGuidance() {
+        let model = AppModel()
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.thermalPressure = .nominal
+        model.controlState = ControlState(mode: .temperatureCurve(.defaultCurve()))
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Repair/Reinstall Helper; Vifty will retry Curve when the daemon responds. Use Auto to stop retries.")
+        XCTAssertFalse(model.fanWriteBlockedWhileHotRecoverySuggestion?.contains("Keep Auto selected") == true)
     }
 
     func testHelperHealthSummaryReportsNoControllableFansWithoutRepairAction() {
@@ -672,7 +693,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertEqual(model.temperatureAttentionSummary, "High temp")
         XCTAssertEqual(model.fanWriteBlockedWhileHotSummary, "High temp · fan writes blocked")
-        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now, keep Auto selected, then Repair/Reinstall Helper. Fan writes stay blocked until the daemon responds.")
+        XCTAssertEqual(model.fanWriteBlockedWhileHotRecoverySuggestion, "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds.")
         XCTAssertEqual(model.menuTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
         XCTAssertEqual(model.menuPanelTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
         XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
