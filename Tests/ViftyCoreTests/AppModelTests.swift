@@ -1025,6 +1025,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
         let notification = try XCTUnwrap(recorder.delivered.first)
         XCTAssertEqual(notification.title, "Vifty fan helper needs attention")
+        XCTAssertEqual(
+            notification.body,
+            "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
+        )
+    }
+
+    func testHelperFailureNotificationUsesHotBlockedFanWritesRecoveryWhenAvailable() async throws {
+        let recorder = AppModelNotificationRecorder()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: HardwareSnapshot(
+                    fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+                    temperatureSensors: [
+                        TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 91.2, source: .smc)
+                    ],
+                    modelIdentifier: "MacBookPro18,3",
+                    isAppleSilicon: true,
+                    isMacBookPro: true
+                )),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1000) },
+            notificationDeliverer: recorder,
+            daemonPing: { false },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.helperFailure = true
+
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
+        let notification = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertEqual(notification.title, "Vifty fan helper needs attention")
+        XCTAssertEqual(
+            notification.body,
+            "Reduce heavy work now. Keep Auto selected, then Repair/Reinstall Helper; writes stay blocked until the daemon responds."
+        )
     }
 
     func testSustainedThermalPressureNotificationWaitsBeforeFiring() async throws {
