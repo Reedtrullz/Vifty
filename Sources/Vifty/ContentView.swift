@@ -220,7 +220,7 @@ struct ContentView: View {
                         Button {
                             copyHelperDiagnosticsCommand()
                         } label: {
-                            Label("Copy Diagnose", systemImage: "doc.on.doc")
+                            Label("Copy Support Evidence", systemImage: "doc.on.doc")
                         }
                         .controlSize(.small)
                         .help(HelperDiagnosticsSupport.copyHelp)
@@ -321,7 +321,7 @@ struct ContentView: View {
     }
 
     private func copyHelperDiagnosticsCommand() {
-        HelperDiagnosticsSupport.copyDiagnoseCommand()
+        HelperDiagnosticsSupport.copySupportEvidenceCommand()
         helperDiagnosticsCopied = true
     }
 

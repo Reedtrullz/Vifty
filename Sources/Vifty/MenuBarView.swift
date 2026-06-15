@@ -130,7 +130,7 @@ struct MenuBarView: View {
                         Button {
                             copyHelperDiagnosticsCommand()
                         } label: {
-                            Label("Copy Diagnose", systemImage: "doc.on.doc")
+                            Label("Copy Support Evidence", systemImage: "doc.on.doc")
                         }
                         .help(HelperDiagnosticsSupport.copyHelp)
                     }
@@ -209,7 +209,7 @@ struct MenuBarView: View {
     }
 
     private func copyHelperDiagnosticsCommand() {
-        HelperDiagnosticsSupport.copyDiagnoseCommand()
+        HelperDiagnosticsSupport.copySupportEvidenceCommand()
         helperDiagnosticsCopied = true
     }
 
