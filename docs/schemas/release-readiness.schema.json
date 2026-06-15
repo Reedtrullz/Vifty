@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/release-readiness.schema.json",
   "title": "Vifty release readiness preflight report",
-  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, selected release mode, optional required source-ref alignment, source CI status, Release workflow status, required secret names, and GitHub Release asset presence. Developer ID mode keeps signed/notarized release checks strict; source-first mode permits a source release with optional unsigned-dev tester assets, no canonical trusted binary assets, and release notes that name the source provenance boundary. This report does not replace artifact signing, notarization, checksum, or hardware validation.",
+  "description": "Machine-readable report emitted by scripts/check-release-readiness.sh --json. This is a read-only preflight for local release metadata, selected release mode, optional required source-ref alignment, source CI status, Release workflow status, required secret names, and GitHub Release asset presence. Developer ID mode keeps signed/notarized release checks strict; source-first mode permits a source release with optional unsigned-dev tester assets, verifies any attached unsigned-dev tester zip has a `.sha256` sidecar whose SHA-256 digest matches the zip, rejects canonical trusted binary assets, and requires release notes that name the source provenance boundary. This report does not replace future Developer ID artifact verification, cask checksum verification, signing/notarization, or hardware validation.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -73,6 +73,7 @@
         "source-ci",
         "release-workflow",
         "release-secrets",
+        "source-first-unsigned-dev-assets",
         "github-release"
       ]
     },

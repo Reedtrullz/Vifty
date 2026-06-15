@@ -424,15 +424,62 @@ struct ContentView: View {
 
     private var fixedEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Fixed RPM")
-                .font(.headline)
-            Slider(value: $model.fixedRPM, in: model.fanRange, step: 50)
-                .onChange(of: model.fixedRPM) {
-                    model.applyModeSelection()
+            HStack {
+                Text("Fixed RPM")
+                    .font(.headline)
+                Spacer()
+                if let fans = model.snapshot?.fans, fans.count > 1 {
+                    Toggle("Per-fan", isOn: $model.usePerFanFixedRPM)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: model.usePerFanFixedRPM) {
+                            if model.usePerFanFixedRPM {
+                                model.ensureFixedFanTargets(for: fans)
+                            }
+                            model.applyModeSelection()
+                        }
+                        .help("Set different fixed RPM targets for fans with different speed ranges")
                 }
-            Text("\(Int(model.fixedRPM.rounded())) RPM")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
+            }
+
+            if let fans = model.snapshot?.fans, model.usePerFanFixedRPM, fans.count > 1 {
+                ForEach(fans) { fan in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(fan.name)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) RPM")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { Double(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) },
+                                set: { value in
+                                    model.setFixedFanRPM(Int(value.rounded()), for: fan)
+                                    model.applyModeSelection()
+                                }
+                            ),
+                            in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
+                            step: 50
+                        )
+                    }
+                    .padding(.vertical, 2)
+                }
+                .onAppear {
+                    model.ensureFixedFanTargets(for: fans)
+                }
+            } else {
+                Slider(value: $model.fixedRPM, in: model.fanRange, step: 50)
+                    .onChange(of: model.fixedRPM) {
+                        model.applyModeSelection()
+                    }
+                Text("\(Int(model.fixedRPM.rounded())) RPM")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
         .disabled(!model.manualFanControlAvailable)
     }

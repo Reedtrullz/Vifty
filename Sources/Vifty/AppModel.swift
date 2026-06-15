@@ -155,6 +155,8 @@ final class AppModel: ObservableObject {
     @Published var curveStartRPM = 1400.0
     @Published var curveMidRPM = 3500.0
     @Published var curveMaxRPM = 6000.0
+    @Published var usePerFanFixedRPM = false
+    @Published var fixedFanTargets: [FixedFanTarget] = []
     @Published var usePerFanOverrides = false
     @Published var fanOverrides: [FanCurveOverride] = []
     @Published var selectedSensorID: String? {
@@ -353,6 +355,9 @@ final class AppModel: ObservableObject {
             thermalPressure: thermalPressure
         ))
         syncCurveDefaultsIfNeeded(from: nextSnapshot)
+        if usePerFanFixedRPM {
+            ensureFixedFanTargets(for: nextSnapshot.fans)
+        }
     }
 
     private func telemetryTemperatureSensor(in snapshot: HardwareSnapshot) -> TemperatureSensor? {
@@ -402,6 +407,7 @@ final class AppModel: ObservableObject {
         }
 
         updateManualDeadline(for: mode)
+        await coordinator.setFixedFanTargets(fixedFanTargetMapForCurrentMode())
         await coordinator.setMode(mode)
         let agentRestoreError: String?
         if mode == .auto {
@@ -494,13 +500,47 @@ final class AppModel: ObservableObject {
     }
 
     func targetRPMPreview(for fan: Fan) -> Int? {
-        guard selectedMode == .curve else { return nil }
-        guard let sensor = selectedSensor else { return nil }
-        return currentCurve().targetRPM(
-            for: sensor.celsius,
-            minimumRPM: fan.minimumRPM,
-            maximumRPM: fan.maximumRPM
-        )
+        switch selectedMode {
+        case .auto:
+            return nil
+        case .fixed:
+            if usePerFanFixedRPM, let target = fixedFanTarget(for: fan.id)?.rpm {
+                return FanCurve.clamp(target, fan.minimumRPM, fan.maximumRPM)
+            }
+            return FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+        case .curve:
+            guard let sensor = selectedSensor else { return nil }
+            return currentCurve().targetRPM(
+                for: sensor.celsius,
+                minimumRPM: fan.minimumRPM,
+                maximumRPM: fan.maximumRPM
+            )
+        }
+    }
+
+    func ensureFixedFanTargets(for fans: [Fan]) {
+        let existingByFanID = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
+            targetsByID[target.fanID] = target
+        }
+        fixedFanTargets = fans.map { fan in
+            if let existing = existingByFanID[fan.id] {
+                return FixedFanTarget(
+                    fanID: fan.id,
+                    rpm: FanCurve.clamp(existing.rpm, fan.minimumRPM, fan.maximumRPM)
+                )
+            }
+            return defaultFixedFanTarget(for: fan)
+        }
+    }
+
+    func fixedFanTarget(for fanID: Int) -> FixedFanTarget? {
+        fixedFanTargets.first { $0.fanID == fanID }
+    }
+
+    func setFixedFanRPM(_ rpm: Int, for fan: Fan) {
+        updateFixedFanTarget(for: fan) { target in
+            target.rpm = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        }
     }
 
     func ensureFanOverrides(for fans: [Fan]) {
@@ -813,6 +853,9 @@ final class AppModel: ObservableObject {
             if let manualControlDriftSummary {
                 return manualControlDriftSummary
             }
+            if usePerFanFixedRPM {
+                return "Vifty Fixed owns fan targets · per-fan RPM · \(manualRunOwnershipSummary)"
+            }
             return "Vifty Fixed owns fan targets · \(rpm) RPM · \(manualRunOwnershipSummary)"
         case .temperatureCurve:
             if let manualControlDriftSummary {
@@ -1060,6 +1103,9 @@ final class AppModel: ObservableObject {
         case .auto:
             return nil
         case .fixedRPM(let rpm):
+            if usePerFanFixedRPM, let target = fixedFanTarget(for: fan.id)?.rpm {
+                return FanCurve.clamp(target, fan.minimumRPM, fan.maximumRPM)
+            }
             return FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         case .temperatureCurve(let curve):
             guard let snapshot,
@@ -1128,6 +1174,16 @@ final class AppModel: ObservableObject {
             CurvePoint(temperatureCelsius: curveMidTemp, rpm: Int(curveMidRPM.rounded())),
             CurvePoint(temperatureCelsius: curveMaxTemp, rpm: Int(curveMaxRPM.rounded()))
         ])
+    }
+
+    private func fixedFanTargetMapForCurrentMode() -> [Int: Int] {
+        guard selectedMode == .fixed, usePerFanFixedRPM else { return [:] }
+        if let fans = snapshot?.fans {
+            ensureFixedFanTargets(for: fans)
+        }
+        return fixedFanTargets.reduce(into: [Int: Int]()) { targetsByID, target in
+            targetsByID[target.fanID] = target.rpm
+        }
     }
 
     private func selectedFanMode() -> FanMode {
@@ -1259,6 +1315,28 @@ final class AppModel: ObservableObject {
         )
     }
 
+    private func defaultFixedFanTarget(for fan: Fan) -> FixedFanTarget {
+        FixedFanTarget(
+            fanID: fan.id,
+            rpm: FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+        )
+    }
+
+    private func updateFixedFanTarget(for fan: Fan, mutate: (inout FixedFanTarget) -> Void) {
+        if let index = fixedFanTargets.firstIndex(where: { $0.fanID == fan.id }) {
+            mutate(&fixedFanTargets[index])
+        } else {
+            var target = defaultFixedFanTarget(for: fan)
+            mutate(&target)
+            fixedFanTargets.append(target)
+        }
+        fixedFanTargets = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
+            targetsByID[target.fanID] = target
+        }
+        .sorted { $0.key < $1.key }
+        .map(\.value)
+    }
+
     private func updateFanOverride(for fan: Fan, mutate: (inout FanCurveOverride) -> Void) {
         if let index = fanOverrides.firstIndex(where: { $0.fanID == fan.id }) {
             mutate(&fanOverrides[index])
@@ -1371,6 +1449,13 @@ enum ModeSelection: String, CaseIterable, Identifiable {
     case fixed = "Fixed"
 
     var id: String { rawValue }
+}
+
+struct FixedFanTarget: Equatable, Identifiable, Sendable {
+    var fanID: Int
+    var rpm: Int
+
+    var id: Int { fanID }
 }
 
 enum ManualRunLimit: Equatable, Hashable, Identifiable {

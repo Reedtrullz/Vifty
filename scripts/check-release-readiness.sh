@@ -12,6 +12,8 @@ SECRET_LIST_FILE=""
 RELEASE_VIEW_FILE=""
 CI_RUN_LIST_FILE=""
 RELEASE_RUN_LIST_FILE=""
+UNSIGNED_DEV_ARTIFACT_FILE=""
+UNSIGNED_DEV_CHECKSUM_FILE=""
 SOURCE_SHA=""
 REQUIRE_SOURCE_REF=""
 RELEASE_MODE="developer-id"
@@ -19,7 +21,7 @@ JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--mode developer-id|source-first] [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--mode developer-id|source-first] [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--unsigned-dev-artifact-file path] [--unsigned-dev-checksum-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
 metadata, verifies source CI for the release tag commit, and inspects GitHub
@@ -47,6 +49,12 @@ Options:
                              Read pre-captured Release workflow `gh run list`
                              JSON output for tests.
   --release-view-file path   Read pre-captured `gh release view --json ...` output.
+  --unsigned-dev-artifact-file path
+                             Verify this local unsigned-dev artifact fixture
+                             instead of downloading the GitHub Release asset.
+  --unsigned-dev-checksum-file path
+                             Verify this local unsigned-dev checksum fixture
+                             instead of downloading the GitHub Release asset.
   --json                     Print a machine-readable summary instead of text.
   -h, --help                 Show this help.
 USAGE
@@ -108,6 +116,22 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       RELEASE_VIEW_FILE="$2"
+      shift 2
+      ;;
+    --unsigned-dev-artifact-file)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --unsigned-dev-artifact-file requires a value" >&2
+        exit 64
+      fi
+      UNSIGNED_DEV_ARTIFACT_FILE="$2"
+      shift 2
+      ;;
+    --unsigned-dev-checksum-file)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --unsigned-dev-checksum-file requires a value" >&2
+        exit 64
+      fi
+      UNSIGNED_DEV_CHECKSUM_FILE="$2"
       shift 2
       ;;
     --ci-run-list-file)
@@ -249,6 +273,50 @@ emit_text() {
   else
     echo "${TAG} has no known release-readiness blockers from this preflight."
   fi
+}
+
+verify_unsigned_dev_checksum() {
+  local artifact_file="$1"
+  local checksum_file="$2"
+  local artifact_name="$3"
+  local expected_sha=""
+  local actual_sha=""
+
+  if [ ! -f "${artifact_file}" ]; then
+    echo "unsigned-dev artifact file does not exist: ${artifact_file}"
+    return 1
+  fi
+  if [ ! -f "${checksum_file}" ]; then
+    echo "unsigned-dev checksum file does not exist: ${checksum_file}"
+    return 1
+  fi
+
+  if ! expected_sha="$(ruby -e '
+    checksum_file = ARGV.fetch(0)
+    expected_name = ARGV.fetch(1)
+    text = File.read(checksum_file).strip
+    match = text.match(/\A([0-9a-f]{64})(?:[[:space:]]+[* ]?(.+))?\z/)
+    unless match
+      warn "checksum file must contain a lowercase 64-character SHA-256, optionally followed by #{expected_name}"
+      exit 1
+    end
+    if match[2] && File.basename(match[2]) != expected_name
+      warn "checksum file names #{match[2].inspect}, expected #{expected_name}"
+      exit 1
+    end
+    print match[1]
+  ' "${checksum_file}" "${artifact_name}" 2>&1)"; then
+    echo "${expected_sha}"
+    return 1
+  fi
+
+  actual_sha="$(shasum -a 256 "${artifact_file}" | awk '{print $1}')"
+  if [ "${actual_sha}" != "${expected_sha}" ]; then
+    echo "checksum mismatch for ${artifact_name}: expected ${expected_sha}, actual ${actual_sha}"
+    return 1
+  fi
+
+  echo "checksum verified for ${artifact_name}: ${actual_sha}"
 }
 
 if [ "${RELEASE_MODE}" = "source-first" ]; then
@@ -434,6 +502,7 @@ fi
 
 release_json=""
 release_output=""
+github_release_check_status="blocked"
 if [ -n "${RELEASE_VIEW_FILE}" ]; then
   if [ ! -f "${RELEASE_VIEW_FILE}" ]; then
     release_output="release view file does not exist: ${RELEASE_VIEW_FILE}"
@@ -547,8 +616,81 @@ else
     end
   ' "${VERSION}" "${RELEASE_MODE}" "${resolved_source_sha}" <<< "${release_json}" 2>&1)"; then
     add_check "github-release" "passed" "${release_output}"
+    github_release_check_status="passed"
   else
     add_check "github-release" "blocked" "${release_output}"
+    github_release_check_status="blocked"
+  fi
+fi
+
+if [ "${RELEASE_MODE}" = "source-first" ]; then
+  unsigned_zip="Vifty-v${VERSION}-unsigned-dev.zip"
+  unsigned_checksum="${unsigned_zip}.sha256"
+
+  if [ -z "${release_json}" ]; then
+    add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev checksum verification skipped because GitHub Release metadata is unavailable; github-release check blocks readiness."
+  else
+    asset_probe=""
+    if asset_probe="$(ruby -rjson -e '
+      version = ARGV.fetch(0)
+      data = JSON.parse(STDIN.read)
+      assets = Array(data["assets"]).map { |asset| asset["name"].to_s }
+      unsigned_zip = "Vifty-v#{version}-unsigned-dev.zip"
+      unsigned_checksum = "#{unsigned_zip}.sha256"
+      puts [
+        assets.include?(unsigned_zip) ? "true" : "false",
+        assets.include?(unsigned_checksum) ? "true" : "false"
+      ].join("\t")
+    ' "${VERSION}" <<< "${release_json}" 2>&1)"; then
+      IFS=$'\t' read -r has_unsigned_zip has_unsigned_checksum <<< "${asset_probe}"
+
+      if [ "${has_unsigned_zip}" != "true" ] && [ "${has_unsigned_checksum}" != "true" ]; then
+        add_check "source-first-unsigned-dev-assets" "passed" "No unsigned-dev tester assets published; checksum verification is optional for source-first releases."
+      elif [ "${has_unsigned_zip}" != "true" ] || [ "${has_unsigned_checksum}" != "true" ]; then
+        add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev checksum verification skipped because the unsigned-dev asset pair is incomplete; github-release check blocks readiness."
+      elif [ "${github_release_check_status}" != "passed" ]; then
+        add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev checksum verification skipped because github-release check blocks readiness."
+      else
+        artifact_file="${UNSIGNED_DEV_ARTIFACT_FILE}"
+        checksum_file="${UNSIGNED_DEV_CHECKSUM_FILE}"
+        cleanup_unsigned_dev_dir=""
+
+        if [ -n "${artifact_file}" ] || [ -n "${checksum_file}" ]; then
+          if [ -z "${artifact_file}" ] || [ -z "${checksum_file}" ]; then
+            add_check "source-first-unsigned-dev-assets" "blocked" "Both --unsigned-dev-artifact-file and --unsigned-dev-checksum-file are required when verifying local unsigned-dev fixtures."
+          else
+            if verify_output="$(verify_unsigned_dev_checksum "${artifact_file}" "${checksum_file}" "${unsigned_zip}" 2>&1)"; then
+              add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev tester asset ${verify_output}"
+            else
+              add_check "source-first-unsigned-dev-assets" "blocked" "Unsigned-dev tester asset ${verify_output}"
+            fi
+          fi
+        elif command -v gh >/dev/null 2>&1; then
+          cleanup_unsigned_dev_dir="$(mktemp -d)"
+          download_args=("${TAG}" --pattern "${unsigned_zip}" --pattern "${unsigned_checksum}" --dir "${cleanup_unsigned_dev_dir}" --clobber)
+          if [ -n "${REPO}" ]; then
+            download_args+=(--repo "${REPO}")
+          fi
+
+          if download_output="$(gh release download "${download_args[@]}" 2>&1)"; then
+            artifact_file="${cleanup_unsigned_dev_dir}/${unsigned_zip}"
+            checksum_file="${cleanup_unsigned_dev_dir}/${unsigned_checksum}"
+            if verify_output="$(verify_unsigned_dev_checksum "${artifact_file}" "${checksum_file}" "${unsigned_zip}" 2>&1)"; then
+              add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev tester asset ${verify_output}"
+            else
+              add_check "source-first-unsigned-dev-assets" "blocked" "Unsigned-dev tester asset ${verify_output}"
+            fi
+          else
+            add_check "source-first-unsigned-dev-assets" "blocked" "Could not download unsigned-dev tester assets from GitHub Release ${TAG}: ${download_output}"
+          fi
+          rm -rf "${cleanup_unsigned_dev_dir}"
+        else
+          add_check "source-first-unsigned-dev-assets" "blocked" "gh CLI is required to download and verify unsigned-dev tester assets unless local fixture files are supplied."
+        fi
+      fi
+    else
+      add_check "source-first-unsigned-dev-assets" "passed" "Unsigned-dev checksum verification skipped because release asset metadata could not be parsed; github-release check blocks readiness: ${asset_probe}"
+    fi
   fi
 fi
 

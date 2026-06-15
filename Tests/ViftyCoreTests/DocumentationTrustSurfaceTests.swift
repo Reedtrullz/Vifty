@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (681 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (686 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -132,6 +132,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseTrustTemplate.contains("scripts/check-release-readiness.sh --mode developer-id --version 1.1.1 --repo Reedtrullz/Vifty --require-source-ref origin/main --json"))
         XCTAssertTrue(releaseTrustTemplate.contains("For unpublished source-first candidates, use `--require-source-ref <candidate-ref-or-sha>` only when the ref is intentionally the release commit."))
         XCTAssertTrue(releaseTrustTemplate.contains("Vifty-v<version>-unsigned-dev.zip"))
+        XCTAssertTrue(releaseTrustTemplate.contains("Unsigned-dev checksum missing or mismatched"))
+        XCTAssertTrue(releaseTrustTemplate.contains("the `.sha256` digest must match the zip bytes"))
         XCTAssertTrue(releaseTrustTemplate.contains("source-first unsigned-dev app zips are tester convenience artifacts"))
         XCTAssertTrue(releaseTrustTemplate.contains("Vifty-v<version>-artifact-summary.json"))
         XCTAssertTrue(releaseTrustTemplate.contains("Vifty-v<version>-release-checklist.md"))
@@ -270,11 +272,14 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let release = try read("docs/release.md")
         let sourceFirstNotes = try read("docs/release-notes/v1.1.0.md")
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
+        let unsignedDigestBoundary = "The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."
 
         XCTAssertTrue(readme.contains("The latest published public release is Vifty `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials."))
+        XCTAssertTrue(readme.contains("**Three fan modes** — Auto, Fixed RPM with optional per-fan targets, and a 3-point Temperature Curve."))
         XCTAssertTrue(readme.contains("The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
         XCTAssertTrue(readme.contains("Later `main` commits may contain post-release hardening"))
         XCTAssertTrue(readme.contains("Vifty-v1.1.1-unsigned-dev.zip"))
+        XCTAssertTrue(readme.contains(unsignedDigestBoundary))
         XCTAssertTrue(readme.contains("""
         git fetch origin main --tags
         git checkout v1.1.1
@@ -295,6 +300,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("The Makefile target resolves `v<version>` by default"))
         XCTAssertTrue(release.contains("SOURCE_FIRST_SOURCE_REF=<candidate-ref-or-sha> RELEASE_VERSION=<version> make source-first-release-notes"))
         XCTAssertTrue(release.contains("including the generated immutable source provenance"))
+        XCTAssertTrue(release.contains(unsignedDigestBoundary))
         XCTAssertFalse(release.contains("record the immutable `v<version>` tag commit SHA"))
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-readiness"))
         XCTAssertTrue(release.contains("scripts/check-release-readiness.sh \\"))
@@ -305,6 +311,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("`v1.1.1` is the recommended source tag."))
         XCTAssertTrue(releaseStatus.contains("Unsigned convenience app zip:** optional tester convenience only."))
         XCTAssertTrue(releaseStatus.contains("Vifty-v1.1.1-unsigned-dev.zip"))
+        XCTAssertTrue(releaseStatus.contains(unsignedDigestBoundary))
         XCTAssertTrue(releaseStatus.contains("Do not update the Homebrew cask checksum for a source-first release"))
         XCTAssertTrue(releaseStatus.contains("`main` may move after `v1.1.1` publication."))
         XCTAssertTrue(releaseStatus.contains("Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main`"))
@@ -351,6 +358,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(sourceFirstNotes.contains("Do not retag `v1.1.0` or silently replace `Vifty-v1.1.0-unsigned-dev.zip` with a build from later `main`."))
         XCTAssertTrue(sourceFirstNotes.contains("The immutable `v1.1.0` source tag is `f7d2c636ebf582ac3809998c3fac819d5d87eb72`."))
         XCTAssertTrue(sourceFirstNotes.contains("Later `main` commits may contain post-release hardening"))
+        XCTAssertTrue(sourceFirstNotes.contains(unsignedDigestBoundary))
         XCTAssertTrue(hotfixNotes.contains("# Vifty 1.1.1 Source-First Hotfix Notes"))
         XCTAssertTrue(hotfixNotes.contains("This is a source-first release. Vifty v1.1.1 does not yet include a Developer ID signed or notarized public binary"))
         XCTAssertTrue(hotfixNotes.contains("A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source."))
@@ -358,6 +366,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hotfixNotes.contains("The bundled daemon is ad-hoc signed with the `tech.reidar.vifty.daemon` identifier"))
         XCTAssertTrue(hotfixNotes.contains("The `v1.1.1` tag is the source release boundary at commit `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
         XCTAssertTrue(hotfixNotes.contains("Vifty-v1.1.1-unsigned-dev.zip"))
+        XCTAssertTrue(hotfixNotes.contains(unsignedDigestBoundary))
         XCTAssertTrue(hotfixNotes.contains("Do not update the Homebrew cask checksum for this source-first release"))
     }
 

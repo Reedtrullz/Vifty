@@ -198,6 +198,7 @@ The \`${SOURCE_REF_DISPLAY}\` ${SOURCE_BOUNDARY_KIND} is the source release boun
 
 - Optional artifact name: \`Vifty-v${VERSION}-unsigned-dev.zip\`
 - Optional checksum name: \`Vifty-v${VERSION}-unsigned-dev.zip.sha256\`
+- The unsigned-dev zip is valid only with its \`.sha256\` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes.
 - The unsigned convenience app is not Developer ID signed.
 - The unsigned convenience app is not notarized.
 - The unsigned convenience app is not the official trusted binary.
@@ -211,7 +212,7 @@ The \`${SOURCE_REF_DISPLAY}\` ${SOURCE_BOUNDARY_KIND} is the source release boun
 - [ ] The \`v${VERSION}\` tag points at the intended source commit.
 - [ ] Before publication, if checking a moving branch or candidate ref, \`scripts/check-release-readiness.sh --mode source-first --version ${VERSION} --repo Reedtrullz/Vifty --require-source-ref <candidate-ref-or-sha> --json\` passed against the intended release commit.
 - [ ] After publication, \`scripts/check-release-readiness.sh --mode source-first --version ${VERSION} --repo Reedtrullz/Vifty --json\` passed against the immutable release tag and GitHub Release assets. Do not require \`origin/main\` after \`main\` has moved on.
-- [ ] Any attached unsigned-dev zip uses the \`Vifty-v${VERSION}-unsigned-dev.zip\` name and has a matching \`.sha256\` file.
+- [ ] Any attached unsigned-dev zip uses the \`Vifty-v${VERSION}-unsigned-dev.zip\` name and has a \`.sha256\` sidecar whose digest matches the zip bytes.
 - [ ] No release notes, assets, README text, or cask metadata claim this source-first release is Developer ID signed, notarized, or Homebrew-trusted.
 
 The future Developer ID release path remains stricter: it still requires Apple Developer Program credentials, the signed/notarized Release workflow, canonical \`Vifty-v${VERSION}.zip\` assets, verifier summary, release checklist, and Homebrew checksum follow-up.

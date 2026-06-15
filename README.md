@@ -17,7 +17,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 ## Highlights
 
 - **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, and power state at a glance.
-- **Three fan modes** — Auto, Fixed RPM, and a 3-point Temperature Curve.
+- **Three fan modes** — Auto, Fixed RPM with optional per-fan targets, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
 - **Developer presets** — conservative curve presets for tests, builds, and local model runs.
 - **Hardware fan state** — shows actual SMC Auto/Forced/System mode and target RPM when available.
@@ -66,7 +66,7 @@ The latest published public release is Vifty `v1.1.1`, a source-first hotfix rel
 
 The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
-An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
+An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the GitHub Release for testers. It is ad-hoc signed, not notarized, not the official trusted binary, and macOS may show Gatekeeper warnings. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. See [docs/release-status.md](docs/release-status.md) before treating any binary path as trusted.
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
@@ -75,7 +75,7 @@ Auto-update is future trusted-binary work, not enabled for source-first or unsig
 ### Install trust levels
 
 1. **Source build:** recommended while Apple Developer Program credentials are unavailable. Build from the immutable source tag and run the local verification suite before installing.
-2. **Unsigned tester app:** optional `Vifty-v1.1.1-unsigned-dev.zip` convenience build for testers who understand Gatekeeper warnings. It is not Developer ID signed, not notarized, not Homebrew-trusted, and not the official trusted binary.
+2. **Unsigned tester app:** optional `Vifty-v1.1.1-unsigned-dev.zip` convenience build for testers who understand Gatekeeper warnings. It is valid only with a matching `.sha256` digest sidecar, not Developer ID signed, not notarized, not Homebrew-trusted, and not the official trusted binary.
 3. **Future trusted binary:** Developer ID signed, notarized, stapled, checksum-verified, and then eligible for Homebrew. This lane stays unavailable until Apple credentials exist and the release verifier passes.
 
 ### Why a privileged helper?
@@ -116,7 +116,7 @@ make unsigned-dev-artifact
 make source-first-readiness
 ```
 
-This verifies the immutable tag before generating release notes or the unsigned tester artifact. It writes `.build/Vifty-v1.1.1-source-first-release-notes.md`, creates `.build/Vifty-v1.1.1-unsigned-dev.zip` plus `.build/Vifty-v1.1.1-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state. The unsigned artifact target requires the working source to match the `v1.1.1` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.1.zip`; that name is reserved for a future signed and notarized release.
+This verifies the immutable tag before generating release notes or the unsigned tester artifact. It writes `.build/Vifty-v1.1.1-source-first-release-notes.md`, creates `.build/Vifty-v1.1.1-unsigned-dev.zip` plus `.build/Vifty-v1.1.1-unsigned-dev.zip.sha256`, and checks the published source-first GitHub Release state, including that the sidecar digest matches the zip bytes when the optional unsigned-dev assets are attached. The unsigned artifact target requires the working source to match the `v1.1.1` tag by default, so later `main` hardening cannot accidentally produce a zip named as the release attachment. Do not rename the unsigned artifact to `Vifty-v1.1.1.zip`; that name is reserved for a future signed and notarized release.
 
 To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RELEASE_VERSION=1.1.0`. Do not use the `v1.1.0` artifact target to refresh public tester assets from post-release `main`; use the `v1.1.1` hotfix release instead.
 
@@ -163,7 +163,7 @@ GitHub Actions runs the same verification on every push to `main`, every pull re
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.
 
-Source-first releases use `make source-first-release-notes`, `make unsigned-dev-artifact`, and `make source-first-readiness`; the unsigned-dev target requires `UNSIGNED_DEV_SOURCE_REF` to match the current source and defaults to `v<version>`, while the readiness target calls `scripts/check-release-readiness.sh --mode source-first` and allows only clearly named `Vifty-v<version>-unsigned-dev.zip` convenience builds. Tagged public Developer ID releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
+Source-first releases use `make source-first-release-notes`, `make unsigned-dev-artifact`, and `make source-first-readiness`; the unsigned-dev target requires `UNSIGNED_DEV_SOURCE_REF` to match the current source and defaults to `v<version>`, while the readiness target calls `scripts/check-release-readiness.sh --mode source-first` and allows only clearly named `Vifty-v<version>-unsigned-dev.zip` convenience builds whose attached `.sha256` digest matches the zip bytes. Tagged public Developer ID releases use the separate [release workflow](docs/release.md), which requires Developer ID signing, TeamID XPC allowlisting, Apple notarization, stapling, and SHA-256 checksum publication.
 
 After a public release artifact and cask checksum are published, `scripts/verify-release-artifact.sh --team-id <TEAMID>` verifies the cask SHA, bundle version, bundled release and agent JSON Schemas and stable IDs, signing TeamID, LaunchDaemon TeamID allowlist, stapled notarization ticket, and Gatekeeper assessment. The release workflow publishes a JSON artifact summary and release checklist for reviewer evidence, and `scripts/collect-validation-evidence.sh --release-summary <path> --release-checklist <path>` can copy those files into hardware-validation bundles while marking the release-summary row nonzero for skipped or failed verifier checks, checksum mismatches, artifact-name drift, schema drift, or version mismatch, and marking the release-checklist row nonzero for version drift or missing follow-up sections.
 

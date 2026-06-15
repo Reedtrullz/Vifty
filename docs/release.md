@@ -54,6 +54,8 @@ Source-first checklist:
    - `Vifty-v<version>-unsigned-dev.zip`
    - `Vifty-v<version>-unsigned-dev.zip.sha256`
 
+   The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes.
+
    The Makefile target requires the current source to match `v<version>` by default. If you are building from an unpublished candidate, run the script directly with `--require-source-ref <candidate-ref-or-sha>` or set `UNSIGNED_DEV_SOURCE_REF=<candidate-ref-or-sha>` intentionally. Do not build a `Vifty-v<version>-unsigned-dev.zip` from later `main` hardening, and do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
 
 4. Before pushing the source tag, optionally confirm that the tag or candidate commit matches the intended source ref:
@@ -70,7 +72,7 @@ Source-first checklist:
 
    Use a moving branch such as `origin/main` only while it is intentionally the release candidate. After publication, `main` may move on; do not compare an already-published source-first tag to `origin/main` unless that is still the intended release commit.
 
-5. Push the source tag and create or update the GitHub Release with the source-first notes, including the generated immutable source provenance. The unsigned-dev zip/checksum are optional tester convenience assets only.
+5. Push the source tag and create or update the GitHub Release with the source-first notes, including the generated immutable source provenance. The unsigned-dev zip/checksum are optional tester convenience assets only; if attached, the `.sha256` digest must match the zip bytes.
 6. Confirm published source-first readiness:
 
    ```sh

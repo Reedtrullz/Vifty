@@ -1751,6 +1751,95 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(appliedCommands.isEmpty)
     }
 
+    func testFixedPerFanTargetsSyncWithLiveFansAndClampToEachFanRange() {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: AppModelFakeHardware(snapshot: snapshot), uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.fixedRPM = 4600
+        model.ensureFixedFanTargets(for: snapshot.fans)
+
+        XCTAssertEqual(model.fixedFanTargets, [
+            FixedFanTarget(fanID: 0, rpm: 4296),
+            FixedFanTarget(fanID: 1, rpm: 4600)
+        ])
+
+        model.setFixedFanRPM(4900, for: snapshot.fans[1])
+        model.setFixedFanRPM(1200, for: snapshot.fans[0])
+
+        XCTAssertEqual(model.fixedFanTargets, [
+            FixedFanTarget(fanID: 0, rpm: 1499),
+            FixedFanTarget(fanID: 1, rpm: 4744)
+        ])
+
+        let replacementFans = [
+            snapshot.fans[1],
+            Fan(id: 2, name: "Center", currentRPM: 1500, minimumRPM: 1600, maximumRPM: 5000, controllable: true)
+        ]
+        model.ensureFixedFanTargets(for: replacementFans)
+
+        XCTAssertEqual(model.fixedFanTargets, [
+            FixedFanTarget(fanID: 1, rpm: 4744),
+            FixedFanTarget(fanID: 2, rpm: 4600)
+        ])
+    }
+
+    func testFixedPerFanModeAppliesDistinctTargetsThroughCoordinator() async {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3200
+        model.usePerFanFixedRPM = true
+        model.ensureFixedFanTargets(for: snapshot.fans)
+        model.setFixedFanRPM(4400, for: snapshot.fans[0])
+        model.setFixedFanRPM(4700, for: snapshot.fans[1])
+        model.manualRunLimit = .minutes(10)
+
+        await model.applyCurrentModeSelection()
+
+        XCTAssertNotNil(model.manualSessionExpiresAt)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [
+            FanCommand(fanID: 0, mode: .fixedRPM(4296)),
+            FanCommand(fanID: 1, mode: .fixedRPM(4700))
+        ])
+        XCTAssertEqual(model.controlState.lastAppliedRPM, [0: 4296, 1: 4700])
+        XCTAssertTrue(model.controlOwnershipSummary.contains("per-fan RPM"))
+    }
+
     func testPollOncePreservesUntilChangedManualModeAfterTransientWriteFailure() async {
         let initialSnapshot = HardwareSnapshot(
             fans: [

@@ -234,6 +234,8 @@ final class ReleaseArtifactScriptTests: XCTestCase {
 
         XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
         XCTAssertEqual(schema["$id"] as? String, "https://vifty.local/schemas/release-readiness.schema.json")
+        XCTAssertTrue((schema["description"] as? String)?.contains("unsigned-dev tester zip has a `.sha256` sidecar whose SHA-256 digest matches the zip") == true)
+        XCTAssertTrue((schema["description"] as? String)?.contains("does not replace future Developer ID artifact verification") == true)
 
         let required = try XCTUnwrap(schema["required"] as? [String])
         for field in [
@@ -258,6 +260,7 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         XCTAssertTrue(checkNames.contains("release-mode"))
         XCTAssertTrue(checkNames.contains("source-ci"))
         XCTAssertTrue(checkNames.contains("release-workflow"))
+        XCTAssertTrue(checkNames.contains("source-first-unsigned-dev-assets"))
 
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
         let releaseMode = try XCTUnwrap(properties["releaseMode"] as? [String: Any])

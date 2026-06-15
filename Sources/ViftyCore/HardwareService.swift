@@ -13,6 +13,7 @@ public actor FanControlCoordinator {
     private let manualReassertionInterval: TimeInterval
     private var autoRestoreRequested = false
     private var fanOverrides: [FanCurveOverride] = []
+    private var fixedFanTargets: [Int: Int] = [:]
     private var lastManualWriteAtByFanID: [Int: Date] = [:]
 
     public private(set) var state: ControlState
@@ -62,6 +63,10 @@ public actor FanControlCoordinator {
 
     public func setFanOverrides(_ overrides: [FanCurveOverride]) {
         fanOverrides = overrides
+    }
+
+    public func setFixedFanTargets(_ targets: [Int: Int]) {
+        fixedFanTargets = targets
     }
 
     public func tick() async throws -> HardwareSnapshot {
@@ -138,13 +143,13 @@ public actor FanControlCoordinator {
 
     private func applyFixedRPM(_ rpm: Int, snapshot: HardwareSnapshot) async throws {
         for fan in snapshot.fans where fan.controllable {
-            let target = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+            let target = FanCurve.clamp(fixedFanTargets[fan.id] ?? rpm, fan.minimumRPM, fan.maximumRPM)
             guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
             state.lastAppliedRPM[fan.id] = target
             lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
         }
-        state.statusMessage = "Fixed \(rpm) RPM"
+        state.statusMessage = fixedFanTargets.isEmpty ? "Fixed \(rpm) RPM" : "Fixed per-fan RPM"
     }
 
     private func applyCurve(_ curve: FanCurve, snapshot: HardwareSnapshot) async throws {

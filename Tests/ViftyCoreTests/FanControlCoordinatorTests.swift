@@ -300,6 +300,34 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(applied, [FanCommand(fanID: 0, mode: .fixedRPM(3000))])
     }
 
+    func testFixedRPMWithPerFanTargetsAppliesEachFanTargetAndClampsToFanRange() async throws {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [
+                    Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                    Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+                ],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setFixedFanTargets([0: 4400, 1: 4700])
+        await coordinator.setMode(.fixedRPM(3200))
+
+        _ = try await coordinator.tick()
+
+        let applied = await hardware.appliedCommands
+        XCTAssertEqual(applied, [
+            FanCommand(fanID: 0, mode: .fixedRPM(4296)),
+            FanCommand(fanID: 1, mode: .fixedRPM(4700))
+        ])
+        let state = await coordinator.state
+        XCTAssertEqual(state.lastAppliedRPM, [0: 4296, 1: 4700])
+    }
+
     func testFixedRPMReappliesWhenHardwareReturnsToAuto() async throws {
         let hardware = FakeHardware(
             snapshot: HardwareSnapshot(

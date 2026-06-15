@@ -50,7 +50,7 @@ body:
         - Source-first release notes missing warning
         - Known source-first helper unreachable issue
         - Unsigned-dev artifact mislabeled
-        - Unsigned-dev checksum missing
+        - Unsigned-dev checksum missing or mismatched
         - GitHub Release asset missing
         - Homebrew cask SHA mismatch
         - Bundle version mismatch
@@ -110,7 +110,7 @@ body:
     id: release-assets
     attributes:
       label: GitHub Release assets
-      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Source-first v1.1.1 includes only the unsigned-dev zip/checksum convenience assets; trusted Developer ID releases should include the canonical zip, checksum, verifier summary, and release checklist.
+      description: Paste `gh release view v<version> --repo Reedtrullz/Vifty` output or list the assets you saw. Source-first v1.1.1 includes only the unsigned-dev zip/checksum convenience assets, and the `.sha256` digest must match the zip bytes; trusted Developer ID releases should include the canonical zip, checksum, verifier summary, and release checklist.
       render: text
       placeholder: |
         Vifty-v<version>-unsigned-dev.zip

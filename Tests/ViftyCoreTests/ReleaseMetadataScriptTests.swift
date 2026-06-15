@@ -590,6 +590,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let harness = try ReleaseMetadataHarness()
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets()
         let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
             status: "completed",
@@ -610,6 +611,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--ci-run-list-file", ciRunList.path,
             "--release-run-list-file", releaseRunList.path,
             "--release-view-file", releaseView.path,
+            "--unsigned-dev-artifact-file", unsignedDevAssets.zip.path,
+            "--unsigned-dev-checksum-file", unsignedDevAssets.checksum.path,
             "--json"
         ])
 
@@ -626,17 +629,88 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-secrets", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "source-first-unsigned-dev-assets", in: checks), "passed")
         XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("source-first mode does not publish or require Vifty-v1.0.0.zip") == true)
         XCTAssertFalse(checkMessage(named: "release-metadata", in: checks)?.contains("artifact Vifty-v1.0.0.zip") == true)
         XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("does not require") == true)
         XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("does not require Apple Developer Program secrets") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("unsigned tester assets") == true)
+        XCTAssertTrue(checkMessage(named: "source-first-unsigned-dev-assets", in: checks)?.contains("checksum verified") == true)
+    }
+
+    func testSourceFirstReadinessAcceptsReleaseWithoutUnsignedDevAssets() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "ready")
+        XCTAssertEqual(summary["blockers"] as? [String], [])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "source-first-unsigned-dev-assets", in: checks), "passed")
+        XCTAssertTrue(checkMessage(named: "source-first-unsigned-dev-assets", in: checks)?.contains("No unsigned-dev tester assets published") == true)
+    }
+
+    func testSourceFirstReadinessRejectsUnsignedDevChecksumMismatch() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets(
+            checksumContents: "\(String(repeating: "0", count: 64))  Vifty-v1.0.0-unsigned-dev.zip\n"
+        )
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--unsigned-dev-artifact-file", unsignedDevAssets.zip.path,
+            "--unsigned-dev-checksum-file", unsignedDevAssets.checksum.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["source-first-unsigned-dev-assets"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "source-first-unsigned-dev-assets", in: checks), "blocked")
+        let message = try XCTUnwrap(checkMessage(named: "source-first-unsigned-dev-assets", in: checks))
+        XCTAssertTrue(message.contains("checksum mismatch"))
+        XCTAssertTrue(message.contains("Vifty-v1.0.0-unsigned-dev.zip"))
     }
 
     func testSourceFirstReadinessAllowsHomebrewCaskToRemainOnPriorVersion() throws {
         let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets(version: "1.1.1")
         let releaseView = try harness.writeReleaseView(
             version: "1.1.1",
             assetNames: [
@@ -652,6 +726,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--source-sha", sourceSHA,
             "--ci-run-list-file", ciRunList.path,
             "--release-view-file", releaseView.path,
+            "--unsigned-dev-artifact-file", unsignedDevAssets.zip.path,
+            "--unsigned-dev-checksum-file", unsignedDevAssets.checksum.path,
             "--json"
         ])
 
@@ -879,6 +955,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(notes.contains("Later `main` commits are post-release hardening until a future release is cut."))
         XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip"))
         XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip.sha256"))
+        XCTAssertTrue(notes.contains("The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."))
+        XCTAssertTrue(notes.contains("Any attached unsigned-dev zip uses the `Vifty-v1.2.3-unsigned-dev.zip` name and has a `.sha256` sidecar whose digest matches the zip bytes."))
         XCTAssertTrue(notes.contains("Do not use `Vifty-v1.2.3.zip` for the unsigned build"))
         XCTAssertTrue(notes.contains("Do not update the Homebrew cask for this source-first release."))
         XCTAssertTrue(notes.contains("--require-source-ref <candidate-ref-or-sha>"))
@@ -1450,6 +1528,25 @@ private final class ReleaseMetadataHarness {
         let url = rootURL.appendingPathComponent(name)
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
+    }
+
+    func writeUnsignedDevReleaseAssets(
+        version: String = "1.0.0",
+        checksumContents: String? = nil
+    ) throws -> (zip: URL, checksum: URL) {
+        let zipName = "Vifty-v\(version)-unsigned-dev.zip"
+        let checksumName = "\(zipName).sha256"
+        let zipURL = rootURL.appendingPathComponent(zipName)
+        let checksumURL = rootURL.appendingPathComponent(checksumName)
+
+        try "unsigned dev zip fixture\n".write(
+            to: zipURL,
+            atomically: true,
+            encoding: .utf8
+        )
+        let checksum = checksumContents ?? "53df399db4ab2c3dd719a9bb974a4708899c5c4f4af04db276991d237908fecd  \(zipName)\n"
+        try checksum.write(to: checksumURL, atomically: true, encoding: .utf8)
+        return (zipURL, checksumURL)
     }
 
     func writeSecretList(contents: String) throws -> URL {
