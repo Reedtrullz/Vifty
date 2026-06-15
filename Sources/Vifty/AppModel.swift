@@ -157,7 +157,12 @@ final class AppModel: ObservableObject {
     @Published var curveMaxRPM = 6000.0
     @Published var usePerFanOverrides = false
     @Published var fanOverrides: [FanCurveOverride] = []
-    @Published var selectedSensorID: String?
+    @Published var selectedSensorID: String? {
+        didSet {
+            guard !isSettingSelectedSensorProgrammatically else { return }
+            userSelectedSensorID = selectedSensorID
+        }
+    }
     @Published var lastError: String?
     @Published var fanAccessMessage: String?
     @Published var daemonResponding = false
@@ -187,6 +192,8 @@ final class AppModel: ObservableObject {
     @Published var hasCompletedHardwarePoll = false
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
+    private var isSettingSelectedSensorProgrammatically = false
+    private var userSelectedSensorID: String?
 
     static let menuBarDisplayModeDefaultsKey = AppPreferencesStore.legacyMenuBarDisplayModeDefaultsKey
     static let highTemperatureAttentionThreshold = 90.0
@@ -331,12 +338,14 @@ final class AppModel: ObservableObject {
         thermalPressure: ThermalPressure
     ) {
         let selectedTelemetrySensor = telemetryTemperatureSensor(in: nextSnapshot)
+        let temperatureWasUserSelected = userSelectedSensorID != nil && selectedTelemetrySensor?.id == userSelectedSensorID
         snapshot = nextSnapshot
         telemetryHistory.append(TelemetrySample(
             capturedAt: now(),
             selectedTemperatureID: selectedTelemetrySensor?.id,
             selectedTemperatureName: selectedTelemetrySensor?.name,
             selectedTemperatureCelsius: selectedTelemetrySensor?.celsius,
+            temperatureWasUserSelected: temperatureWasUserSelected,
             highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
             firstFanRPM: nextSnapshot.fans.first?.currentRPM,
             averageFanRPM: averageFanRPM(in: nextSnapshot.fans),
@@ -745,15 +754,26 @@ final class AppModel: ObservableObject {
         agentControlStatus?.activeLease != nil
     }
 
-    var agentCoolingRestoreActionTitle: String {
+    var autoRestoreActionTitle: String {
         helperWritePathBlockedSummary == nil ? "Auto" : "Request Auto"
+    }
+
+    var autoRestoreActionHelp: String {
+        if helperWritePathBlockedSummary == nil {
+            return "Restore Auto"
+        }
+        return "Request Auto restore; the write cannot be confirmed until the helper responds"
+    }
+
+    var agentCoolingRestoreActionTitle: String {
+        autoRestoreActionTitle
     }
 
     var agentCoolingRestoreActionHelp: String {
         if helperWritePathBlockedSummary == nil {
             return "Restore Auto before starting another agent workload"
         }
-        return "Request Auto restore; the write cannot be confirmed until the helper responds"
+        return autoRestoreActionHelp
     }
 
     var agentCoolingNeedsAttention: Bool {
@@ -1219,9 +1239,15 @@ final class AppModel: ObservableObject {
         curveStartRPM = Double(fan.minimumRPM)
         curveMaxRPM = Double(fan.maximumRPM)
         if selectedSensorID == nil {
-            selectedSensorID = selectedSensor?.id
+            setProgrammaticSelectedSensorID(selectedSensor?.id)
         }
         curveDefaultsSynced = true
+    }
+
+    private func setProgrammaticSelectedSensorID(_ sensorID: String?) {
+        isSettingSelectedSensorProgrammatically = true
+        selectedSensorID = sensorID
+        isSettingSelectedSensorProgrammatically = false
     }
 
     private func defaultFanOverride(for fan: Fan) -> FanCurveOverride {

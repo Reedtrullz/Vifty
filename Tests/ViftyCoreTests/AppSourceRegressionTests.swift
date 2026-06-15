@@ -101,7 +101,10 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("title: \"Temp\""))
         XCTAssertTrue(contentView.contains("title: \"Fan\""))
         XCTAssertTrue(contentView.contains("title: \"Power\""))
-        XCTAssertTrue(contentView.contains("ThermalPressureTrail(pressures: summary.thermalPressureSamples, compact: compact)"))
+        XCTAssertTrue(contentView.contains("changeText: summary.temperatureChangeText"))
+        XCTAssertTrue(contentView.contains("changeText: summary.fanRPMChangeText"))
+        XCTAssertTrue(contentView.contains("changeText: summary.batteryPowerChangeText"))
+        XCTAssertTrue(contentView.contains("summaryText: summary.thermalPressureSummaryText"))
         XCTAssertTrue(contentView.contains("private struct SparklinePath: View"))
         XCTAssertFalse(contentView.contains("private func signedWattRangeText"))
         XCTAssertFalse(contentView.contains("UserDefaults.standard.set(history"))
@@ -207,6 +210,20 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(notifications.contains("XCTestConfigurationFilePath"))
         XCTAssertTrue(notifications.contains("processName == \"xctest\""))
         XCTAssertTrue(notifications.contains("static let disabled = LocalNotificationSettings()"))
+    }
+
+    func testGlobalAutoActionsUseContextualRequestCopy() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+
+        XCTAssertTrue(appModel.contains("var autoRestoreActionTitle: String"))
+        XCTAssertTrue(appModel.contains("helperWritePathBlockedSummary == nil ? \"Auto\" : \"Request Auto\""))
+        XCTAssertTrue(appModel.contains("Request Auto restore; the write cannot be confirmed until the helper responds"))
+        XCTAssertTrue(contentView.contains(": model.autoRestoreActionHelp"))
+        XCTAssertTrue(menuBarView.contains("Button(model.autoRestoreActionTitle)"))
+        XCTAssertTrue(menuBarView.contains(".help(model.autoRestoreActionHelp)"))
+        XCTAssertFalse(menuBarView.contains("Button(\"Auto\")"))
     }
 
     private func read(_ relativePath: String) throws -> String {

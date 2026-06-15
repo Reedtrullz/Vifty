@@ -73,9 +73,13 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.latestBatteryPowerText, "8.2 W")
         XCTAssertEqual(summary.latestThermalPressureText, "Serious")
         XCTAssertEqual(summary.temperatureRangeText, "64.2 C-72.6 C")
+        XCTAssertEqual(summary.temperatureChangeText, "+8.4 C")
         XCTAssertEqual(summary.fanRPMRangeText, "2000 RPM-3450 RPM")
-        XCTAssertEqual(summary.batteryPowerRangeText, "-12.5 W-+8.2 W")
+        XCTAssertEqual(summary.fanRPMChangeText, "+1450 RPM")
+        XCTAssertEqual(summary.batteryPowerRangeText, "12.5 W drain to 8.2 W charge")
+        XCTAssertEqual(summary.batteryPowerChangeText, "+20.8 W")
         XCTAssertEqual(summary.thermalPressureSamples, [.nominal, .serious])
+        XCTAssertEqual(summary.thermalPressureSummaryText, "Peak Serious")
     }
 
     func testSummaryAppliesIndependentSampleAndThermalWindows() {
@@ -95,9 +99,13 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.fanRPMValues, [2003, 2004])
         XCTAssertEqual(summary.batteryPowerValues, [-10, -10])
         XCTAssertEqual(summary.temperatureRangeText, "63.0 C-64.0 C")
+        XCTAssertEqual(summary.temperatureChangeText, "+1.0 C")
         XCTAssertEqual(summary.fanRPMRangeText, "2003 RPM-2004 RPM")
-        XCTAssertEqual(summary.batteryPowerRangeText, "-10.0 W")
+        XCTAssertEqual(summary.fanRPMChangeText, "+1 RPM")
+        XCTAssertEqual(summary.batteryPowerRangeText, "10.0 W drain")
+        XCTAssertEqual(summary.batteryPowerChangeText, "steady")
         XCTAssertEqual(summary.thermalPressureSamples, [.nominal, .nominal, .nominal])
+        XCTAssertEqual(summary.thermalPressureSummaryText, "Stable Nominal")
     }
 
     func testSummaryPrefersSelectedTemperatureAndAverageFanRPMWhenAvailable() {
@@ -107,6 +115,7 @@ final class TelemetryHistoryTests: XCTestCase {
             selectedTemperatureID: "Tp01",
             selectedTemperatureName: "CPU Efficiency Core 1",
             selectedTemperatureCelsius: 67.4,
+            temperatureWasUserSelected: true,
             highestTemperatureCelsius: 72.1,
             firstFanRPM: 2_100,
             averageFanRPM: 2_250.5,
@@ -118,6 +127,7 @@ final class TelemetryHistoryTests: XCTestCase {
             selectedTemperatureID: "Tp01",
             selectedTemperatureName: "CPU Efficiency Core 1",
             selectedTemperatureCelsius: 69.2,
+            temperatureWasUserSelected: true,
             highestTemperatureCelsius: 78.0,
             firstFanRPM: 2_400,
             averageFanRPM: 2_550.5,
@@ -134,7 +144,11 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.temperatureValues, [67.4, 69.2])
         XCTAssertEqual(summary.fanRPMValues, [2_250.5, 2_550.5])
         XCTAssertEqual(summary.temperatureRangeText, "67.4 C-69.2 C")
+        XCTAssertEqual(summary.temperatureChangeText, "+1.8 C")
         XCTAssertEqual(summary.fanRPMRangeText, "2251 RPM-2551 RPM")
+        XCTAssertEqual(summary.fanRPMChangeText, "+300 RPM")
+        XCTAssertEqual(summary.batteryPowerChangeText, "-1.0 W")
+        XCTAssertEqual(summary.thermalPressureSummaryText, "Peak Serious")
     }
 
     func testSummaryDoesNotMixSelectedTemperatureSensorsInRecentRange() {
@@ -144,6 +158,7 @@ final class TelemetryHistoryTests: XCTestCase {
             selectedTemperatureID: "Tp01",
             selectedTemperatureName: "CPU Efficiency Core 1",
             selectedTemperatureCelsius: 67.4,
+            temperatureWasUserSelected: true,
             highestTemperatureCelsius: 72.1,
             firstFanRPM: 2_100,
             batteryPowerWatts: -6.2,
@@ -154,6 +169,7 @@ final class TelemetryHistoryTests: XCTestCase {
             selectedTemperatureID: "Tp09",
             selectedTemperatureName: "CPU Performance Core 1",
             selectedTemperatureCelsius: 78.8,
+            temperatureWasUserSelected: true,
             highestTemperatureCelsius: 78.8,
             firstFanRPM: 2_600,
             batteryPowerWatts: -9.2,
@@ -164,6 +180,7 @@ final class TelemetryHistoryTests: XCTestCase {
             selectedTemperatureID: "Tp01",
             selectedTemperatureName: "CPU Efficiency Core 1",
             selectedTemperatureCelsius: 69.2,
+            temperatureWasUserSelected: true,
             highestTemperatureCelsius: 79.1,
             firstFanRPM: 2_900,
             batteryPowerWatts: -11.0,
@@ -175,6 +192,102 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.latestTemperatureText, "69.2 C")
         XCTAssertEqual(summary.temperatureValues, [67.4, 69.2])
         XCTAssertEqual(summary.temperatureRangeText, "67.4 C-69.2 C")
+        XCTAssertEqual(summary.temperatureChangeText, "+1.8 C")
+    }
+
+    func testChangeTextRequiresTwoSamplesAndMarksFlatLinesSteady() {
+        XCTAssertNil(TelemetryHistorySummary.changeText([], unit: "C", decimals: 1))
+        XCTAssertNil(TelemetryHistorySummary.changeText([72.0], unit: "C", decimals: 1))
+        XCTAssertEqual(TelemetryHistorySummary.changeText([72.0, 72.02], unit: "C", decimals: 1), "steady")
+        XCTAssertEqual(TelemetryHistorySummary.changeText([72.0, 70.5], unit: "C", decimals: 1), "-1.5 C")
+        XCTAssertEqual(TelemetryHistorySummary.changeText([2200.0, 2400.0], unit: "RPM", decimals: 0), "+200 RPM")
+    }
+
+    func testSummaryDistinguishesAutomaticTemperatureSourceFromUserSelectedSensor() {
+        var automaticHistory = TelemetryHistory(limit: 10)
+        automaticHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            selectedTemperatureID: "Tp09",
+            selectedTemperatureName: "CPU Proximity",
+            selectedTemperatureCelsius: 71.0,
+            temperatureWasUserSelected: false,
+            highestTemperatureCelsius: 71.0,
+            firstFanRPM: 2_100,
+            batteryPowerWatts: -6.0,
+            thermalPressure: .nominal
+        ))
+
+        XCTAssertEqual(TelemetryHistorySummary(history: automaticHistory).latestTemperatureLabel, "CPU temp")
+
+        for name in ["Package Proximity", "SoC Die"] {
+            var automaticPackageHistory = TelemetryHistory(limit: 10)
+            automaticPackageHistory.append(TelemetrySample(
+                capturedAt: Date(timeIntervalSince1970: 2),
+                selectedTemperatureID: name,
+                selectedTemperatureName: name,
+                selectedTemperatureCelsius: 71.0,
+                temperatureWasUserSelected: false,
+                highestTemperatureCelsius: 71.0,
+                firstFanRPM: 2_100,
+                batteryPowerWatts: -6.0,
+                thermalPressure: .nominal
+            ))
+
+            XCTAssertEqual(TelemetryHistorySummary(history: automaticPackageHistory).latestTemperatureLabel, "CPU temp")
+        }
+
+        var automaticNonCPUHistory = TelemetryHistory(limit: 10)
+        automaticNonCPUHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            selectedTemperatureID: "TB0T",
+            selectedTemperatureName: "Battery",
+            selectedTemperatureCelsius: 42.0,
+            temperatureWasUserSelected: false,
+            highestTemperatureCelsius: 42.0,
+            firstFanRPM: 2_100,
+            batteryPowerWatts: -6.0,
+            thermalPressure: .nominal
+        ))
+
+        XCTAssertEqual(TelemetryHistorySummary(history: automaticNonCPUHistory).latestTemperatureLabel, "Highest temp")
+
+        var selectedHistory = TelemetryHistory(limit: 10)
+        selectedHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            selectedTemperatureID: "Tp01",
+            selectedTemperatureName: "CPU Efficiency Core 1",
+            selectedTemperatureCelsius: 66.0,
+            temperatureWasUserSelected: true,
+            highestTemperatureCelsius: 71.0,
+            firstFanRPM: 2_100,
+            batteryPowerWatts: -6.0,
+            thermalPressure: .nominal
+        ))
+
+        XCTAssertEqual(TelemetryHistorySummary(history: selectedHistory).latestTemperatureLabel, "Selected temp")
+    }
+
+    func testSignedWattRangeTextUsesDrainAndChargeLanguage() {
+        XCTAssertEqual(TelemetryHistorySummary.signedWattRangeText([-12.0, -5.0]), "5.0 W-12.0 W drain")
+        XCTAssertEqual(TelemetryHistorySummary.signedWattRangeText([3.0, 8.0]), "3.0 W-8.0 W charge")
+        XCTAssertEqual(TelemetryHistorySummary.signedWattRangeText([-12.0, 8.0]), "12.0 W drain to 8.0 W charge")
+        XCTAssertEqual(TelemetryHistorySummary.signedWattRangeText([0.0, 0.0]), "0.0 W")
+    }
+
+    func testZeroBatteryPowerUsesNeutralLabel() {
+        var history = TelemetryHistory(limit: 10)
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 64.2,
+            firstFanRPM: 2_000,
+            batteryPowerWatts: 0.0,
+            thermalPressure: .nominal
+        ))
+
+        let summary = TelemetryHistorySummary(history: history)
+
+        XCTAssertEqual(summary.latestBatteryPowerLabel, "Battery power")
+        XCTAssertEqual(summary.latestBatteryPowerText, "0.0 W")
     }
 
     private func sample(index: Int) -> TelemetrySample {

@@ -256,6 +256,36 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds.")
     }
 
+    func testAutoRestoreActionCopyUsesRequestLanguageWhenWritesCannotBeConfirmed() {
+        let healthy = AppModel()
+        healthy.daemonResponding = true
+        healthy.daemonReachable = true
+        healthy.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(healthy.autoRestoreActionTitle, "Auto")
+        XCTAssertEqual(healthy.autoRestoreActionHelp, "Restore Auto")
+
+        let telemetryOnly = AppModel()
+        telemetryOnly.daemonResponding = false
+        telemetryOnly.daemonReachable = true
+        telemetryOnly.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(telemetryOnly.autoRestoreActionTitle, "Request Auto")
+        XCTAssertEqual(telemetryOnly.autoRestoreActionHelp, "Request Auto restore; the write cannot be confirmed until the helper responds")
+    }
+
     func testHelperMenuCopyUsesCompactRepairHintWhenTelemetryIsReadOnly() {
         let model = AppModel()
         model.daemonResponding = false
@@ -1396,11 +1426,38 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureID, "Tp09")
         XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureName, "CPU Proximity")
         XCTAssertEqual(model.telemetryHistory.samples[0].selectedTemperatureCelsius, 64)
+        XCTAssertFalse(model.telemetryHistory.samples[0].temperatureWasUserSelected)
         XCTAssertEqual(model.telemetryHistory.samples[0].highestTemperatureCelsius, 64)
         XCTAssertEqual(model.telemetryHistory.samples[0].firstFanRPM, 2500)
         XCTAssertEqual(model.telemetryHistory.samples[0].averageFanRPM, 2500)
         XCTAssertEqual(model.telemetryHistory.samples[0].batteryPowerWatts, -12.5)
         XCTAssertEqual(model.telemetryHistory.samples[0].thermalPressure, .fair)
+    }
+
+    func testProgrammaticDefaultSensorDoesNotMarkTelemetryAsUserSelected() async {
+        let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: -12.5) },
+            thermalReader: { .fair },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        await model.pollOnce()
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedSensorID, "Tp09")
+        XCTAssertEqual(model.telemetryHistory.samples.count, 2)
+        XCTAssertFalse(model.telemetryHistory.samples[0].temperatureWasUserSelected)
+        XCTAssertFalse(model.telemetryHistory.samples[1].temperatureWasUserSelected)
+        XCTAssertEqual(TelemetryHistorySummary(history: model.telemetryHistory).latestTemperatureLabel, "CPU temp")
     }
 
     func testPollOnceAppendsSelectedSensorAndAverageFanTelemetryHistorySample() async {
@@ -1432,6 +1489,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(sample.selectedTemperatureID, "Tp01")
         XCTAssertEqual(sample.selectedTemperatureName, "CPU Efficiency Core 1")
         XCTAssertEqual(sample.selectedTemperatureCelsius, 66)
+        XCTAssertTrue(sample.temperatureWasUserSelected)
         XCTAssertEqual(sample.highestTemperatureCelsius, 73)
         XCTAssertEqual(sample.firstFanRPM, 2200)
         XCTAssertEqual(sample.averageFanRPM, 2500)

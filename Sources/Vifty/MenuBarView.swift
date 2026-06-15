@@ -176,10 +176,11 @@ struct MenuBarView: View {
                 Button("Open Vifty") {
                     openWindow(id: "main")
                 }
-                Button("Auto") {
+                Button(model.autoRestoreActionTitle) {
                     model.restoreAuto()
                 }
                 .keyboardShortcut("a")
+                .help(model.autoRestoreActionHelp)
                 Button("Quit") {
                     Task { @MainActor in
                         await model.stopAndRestore()

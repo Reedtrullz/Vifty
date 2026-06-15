@@ -399,7 +399,7 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
-            .help(model.selectedMode != .auto ? (model.manualFanControlBlockedReason ?? "Apply selected fan mode") : "Restore Auto")
+            .help(model.selectedMode != .auto ? (model.manualFanControlBlockedReason ?? "Apply selected fan mode") : model.autoRestoreActionHelp)
         }
     }
 
@@ -828,6 +828,7 @@ private struct TelemetryHistoryChart: View {
                     values: summary.temperatureValues,
                     color: .orange,
                     rangeText: summary.temperatureRangeText,
+                    changeText: summary.temperatureChangeText,
                     compact: compact
                 )
             }
@@ -837,6 +838,7 @@ private struct TelemetryHistoryChart: View {
                     values: summary.fanRPMValues,
                     color: .blue,
                     rangeText: summary.fanRPMRangeText,
+                    changeText: summary.fanRPMChangeText,
                     compact: compact
                 )
             }
@@ -846,10 +848,15 @@ private struct TelemetryHistoryChart: View {
                     values: summary.batteryPowerValues,
                     color: .green,
                     rangeText: summary.batteryPowerRangeText,
+                    changeText: summary.batteryPowerChangeText,
                     compact: compact
                 )
             }
-            ThermalPressureTrail(pressures: summary.thermalPressureSamples, compact: compact)
+            ThermalPressureTrail(
+                pressures: summary.thermalPressureSamples,
+                summaryText: summary.thermalPressureSummaryText,
+                compact: compact
+            )
         }
         .padding(.top, compact ? 2 : 4)
     }
@@ -860,6 +867,7 @@ private struct HistorySparkline: View {
     let values: [Double]
     let color: Color
     let rangeText: String
+    let changeText: String?
     let compact: Bool
 
     var body: some View {
@@ -870,14 +878,30 @@ private struct HistorySparkline: View {
                 .frame(width: compact ? 34 : 42, alignment: .leading)
             SparklinePath(values: values, color: color)
                 .frame(height: compact ? 16 : 20)
-            Text(rangeText)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(width: compact ? 86 : 104, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(rangeText)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                if let changeText {
+                    Text(changeText)
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.primary.opacity(0.8))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .frame(width: compact ? 86 : 104, alignment: .trailing)
         }
-        .accessibilityLabel("\(title) history \(rangeText)")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        if let changeText {
+            return "\(title) history \(rangeText), change \(changeText)"
+        }
+        return "\(title) history \(rangeText)"
     }
 }
 
@@ -918,6 +942,7 @@ private struct SparklinePath: View {
 
 private struct ThermalPressureTrail: View {
     let pressures: [ThermalPressure]
+    let summaryText: String
     let compact: Bool
 
     var body: some View {
@@ -934,14 +959,14 @@ private struct ThermalPressureTrail: View {
                 }
             }
             .frame(height: compact ? 6 : 8)
-            Text(pressures.last?.displayName ?? "--")
+            Text(summaryText)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(width: compact ? 86 : 104, alignment: .trailing)
         }
-        .accessibilityLabel("Thermal pressure history \(pressures.last?.displayName ?? "unknown")")
+        .accessibilityLabel("Thermal pressure history \(summaryText)")
     }
 
     private func color(for pressure: ThermalPressure) -> Color {

@@ -6,6 +6,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
     public var selectedTemperatureID: String?
     public var selectedTemperatureName: String?
     public var selectedTemperatureCelsius: Double?
+    public var temperatureWasUserSelected: Bool
     public var highestTemperatureCelsius: Double?
     public var firstFanRPM: Int?
     public var averageFanRPM: Double?
@@ -17,6 +18,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
         selectedTemperatureID: String? = nil,
         selectedTemperatureName: String? = nil,
         selectedTemperatureCelsius: Double? = nil,
+        temperatureWasUserSelected: Bool = false,
         highestTemperatureCelsius: Double?,
         firstFanRPM: Int?,
         averageFanRPM: Double? = nil,
@@ -27,6 +29,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
         self.selectedTemperatureID = selectedTemperatureID
         self.selectedTemperatureName = selectedTemperatureName
         self.selectedTemperatureCelsius = selectedTemperatureCelsius
+        self.temperatureWasUserSelected = temperatureWasUserSelected
         self.highestTemperatureCelsius = highestTemperatureCelsius
         self.firstFanRPM = firstFanRPM
         self.averageFanRPM = averageFanRPM
@@ -74,9 +77,13 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
     public var fanRPMValues: [Double]
     public var batteryPowerValues: [Double]
     public var temperatureRangeText: String
+    public var temperatureChangeText: String?
     public var fanRPMRangeText: String
+    public var fanRPMChangeText: String?
     public var batteryPowerRangeText: String
+    public var batteryPowerChangeText: String?
     public var thermalPressureSamples: [ThermalPressure]
+    public var thermalPressureSummaryText: String
 
     public init(
         history: TelemetryHistory,
@@ -90,12 +97,16 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
         sampleCount = history.samples.count
         sampleCountText = history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
-        latestTemperatureLabel = latest?.selectedTemperatureCelsius == nil ? "Latest temp" : "Selected temp"
+        latestTemperatureLabel = Self.temperatureLabel(for: latest)
         latestTemperatureText = latest.flatMap(Self.sampleTemperature).map(Self.temperatureText)
         latestFanRPMLabel = (latest?.averageFanRPM == nil) ? "Latest fan" : "Average fan"
         latestFanRPMText = latest.flatMap(Self.sampleFanRPM).map(Self.fanRPMText)
         if let batteryPowerWatts = latest?.batteryPowerWatts {
-            latestBatteryPowerLabel = batteryPowerWatts < 0 ? "Battery drain" : "Battery charge"
+            if abs(batteryPowerWatts) < 0.1 {
+                latestBatteryPowerLabel = "Battery power"
+            } else {
+                latestBatteryPowerLabel = batteryPowerWatts < 0 ? "Battery drain" : "Battery charge"
+            }
             latestBatteryPowerText = PowerDisplayFormatter.watts(abs(batteryPowerWatts))
         } else {
             latestBatteryPowerLabel = nil
@@ -106,9 +117,13 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         fanRPMValues = recentSamples.compactMap(Self.sampleFanRPM)
         batteryPowerValues = recentSamples.compactMap(\.batteryPowerWatts)
         temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "C", decimals: 1)
+        temperatureChangeText = Self.changeText(temperatureValues, unit: "C", decimals: 1)
         fanRPMRangeText = Self.unsignedRangeText(fanRPMValues, unit: "RPM", decimals: 0)
+        fanRPMChangeText = Self.changeText(fanRPMValues, unit: "RPM", decimals: 0)
         batteryPowerRangeText = Self.signedWattRangeText(batteryPowerValues)
+        batteryPowerChangeText = Self.changeText(batteryPowerValues, unit: "W", decimals: 1)
         thermalPressureSamples = history.samples.suffix(boundedThermalLimit).map(\.thermalPressure)
+        thermalPressureSummaryText = Self.thermalPressureSummaryText(thermalPressureSamples)
     }
 
     public static func temperatureText(_ value: Double) -> String {
@@ -132,9 +147,30 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
     public static func signedWattRangeText(_ values: [Double]) -> String {
         guard let min = values.min(), let max = values.max() else { return "--" }
-        let lower = signedWatts(min)
-        let upper = signedWatts(max)
-        return lower == upper ? lower : "\(lower)-\(upper)"
+        if abs(max - min) < 0.0001 {
+            return batteryPowerFlowText(min)
+        }
+        if max <= 0 {
+            let lowerDrain = PowerDisplayFormatter.watts(abs(max))
+            let upperDrain = PowerDisplayFormatter.watts(abs(min))
+            return lowerDrain == upperDrain ? "\(lowerDrain) drain" : "\(lowerDrain)-\(upperDrain) drain"
+        }
+        if min >= 0 {
+            let lowerCharge = PowerDisplayFormatter.watts(min)
+            let upperCharge = PowerDisplayFormatter.watts(max)
+            return lowerCharge == upperCharge ? "\(lowerCharge) charge" : "\(lowerCharge)-\(upperCharge) charge"
+        }
+        return "\(batteryPowerFlowText(min)) to \(batteryPowerFlowText(max))"
+    }
+
+    public static func changeText(_ values: [Double], unit: String, decimals: Int) -> String? {
+        guard let first = values.first, let last = values.last, values.count > 1 else { return nil }
+        let delta = last - first
+        let epsilon = decimals == 0 ? 0.5 : 0.05
+        guard abs(delta) >= epsilon else { return "steady" }
+        let sign = delta > 0 ? "+" : "-"
+        let formatted = formatUnsigned(abs(delta), unit: unit, decimals: decimals)
+        return "\(sign)\(formatted)"
     }
 
     private static func formatUnsigned(_ value: Double, unit: String, decimals: Int) -> String {
@@ -144,11 +180,26 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         return String(format: "%.1f %@", value, unit)
     }
 
-    private static func signedWatts(_ value: Double) -> String {
+    private static func batteryPowerFlowText(_ value: Double) -> String {
         let formatted = PowerDisplayFormatter.watts(abs(value))
-        if value < 0 { return "-\(formatted)" }
-        if value > 0 { return "+\(formatted)" }
+        if value < 0 { return "\(formatted) drain" }
+        if value > 0 { return "\(formatted) charge" }
         return formatted
+    }
+
+    private static func temperatureLabel(for sample: TelemetrySample?) -> String {
+        guard let sample, sample.selectedTemperatureCelsius != nil else { return "Latest temp" }
+        if sample.temperatureWasUserSelected { return "Selected temp" }
+        guard let name = sample.selectedTemperatureName else { return "Highest temp" }
+        return isCPUTemperatureName(name) ? "CPU temp" : "Highest temp"
+    }
+
+    private static func isCPUTemperatureName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.contains("cpu")
+            || lower.contains("processor")
+            || lower.contains("package")
+            || lower.contains("die")
     }
 
     private static func sampleTemperature(_ sample: TelemetrySample) -> Double? {
@@ -171,5 +222,24 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
     private static func sampleFanRPM(_ sample: TelemetrySample) -> Double? {
         sample.averageFanRPM ?? sample.firstFanRPM.map(Double.init)
+    }
+
+    private static func thermalPressureSummaryText(_ pressures: [ThermalPressure]) -> String {
+        guard !pressures.isEmpty else { return "--" }
+        let peak = pressures.max { severity($0) < severity($1) } ?? .unknown
+        if pressures.allSatisfy({ $0 == peak }) {
+            return "Stable \(peak.displayName)"
+        }
+        return "Peak \(peak.displayName)"
+    }
+
+    private static func severity(_ pressure: ThermalPressure) -> Int {
+        switch pressure {
+        case .unknown: 0
+        case .nominal: 1
+        case .fair: 2
+        case .serious: 3
+        case .critical: 4
+        }
     }
 }
