@@ -105,6 +105,10 @@ struct MenuBarView: View {
                 Label(model.helperHealthMenuSummary, systemImage: helperHealthSystemImage)
                     .font(.caption.weight(model.helperHealthNeedsAttention ? .semibold : .regular))
                     .foregroundStyle(helperHealthMenuColor)
+                Text(daemonInstaller.helperStatusSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
 
                 if let helperRecoverySuggestion = model.helperMenuRecoverySuggestion {
                     Text(helperRecoverySuggestion)

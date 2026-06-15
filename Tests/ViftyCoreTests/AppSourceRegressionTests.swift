@@ -14,6 +14,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBarView.contains("try? await Task.sleep(for: .milliseconds(750))"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.refresh()"))
         XCTAssertTrue(menuBarView.contains("daemonInstaller.actionDescription"))
+        XCTAssertTrue(menuBarView.contains("Text(daemonInstaller.helperStatusSummary)"))
         XCTAssertTrue(menuBarView.contains("@State private var helperDiagnosticsCopied = false"))
         XCTAssertTrue(menuBarView.contains("model.helperHealthMenuSummary"))
         XCTAssertTrue(menuBarView.contains("model.helperMenuRecoverySuggestion"))
@@ -42,6 +43,7 @@ final class AppSourceRegressionTests: XCTestCase {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
         XCTAssertTrue(contentView.contains("daemonInstaller.actionDescription"))
+        XCTAssertTrue(contentView.contains("Text(daemonInstaller.helperStatusSummary)"))
         XCTAssertTrue(contentView.contains("@State private var helperDiagnosticsCopied = false"))
         XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {"))
         XCTAssertTrue(contentView.contains("if model.helperRepairActionAvailable {\n                            Button(daemonInstaller.actionTitle)"))

@@ -10,21 +10,22 @@ final class DaemonInstallerTests: XCTestCase {
         let reinstallDetail = "Recopies the daemon, strips quarantine, fixes ownership, and restarts launchd. Fan writes stay blocked until the daemon responds."
         let repairDetail = "Repairs the helper install, fixes ownership, strips quarantine, and restarts launchd. Fan writes stay blocked until the daemon responds."
         let missingBundleDetail = "Vifty is missing its bundled LaunchDaemon plist. Rebuild or reinstall Vifty from source before installing the helper."
-        let cases: [(status: String, canInstall: Bool, title: String, help: String, detail: String)] = [
-            ("Checking helper", true, "Install Helper", "Install the privileged fan helper", installDetail),
-            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper", installDetail),
-            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper", approveDetail),
-            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
-            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
-            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail),
-            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper", repairDetail),
-            ("Fan helper plist not found in app bundle", false, "Helper Unavailable", missingBundleDetail, missingBundleDetail),
+        let cases: [(status: String, canInstall: Bool, title: String, help: String, detail: String, statusSummary: String)] = [
+            ("Checking helper", true, "Install Helper", "Install the privileged fan helper", installDetail, "macOS helper status: checking install state"),
+            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper", installDetail, "macOS helper status: not installed"),
+            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper", approveDetail, "macOS helper status: waiting for Login Items approval"),
+            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
+            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
+            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
+            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
+            ("Fan helper plist not found in app bundle", false, "Helper Unavailable", missingBundleDetail, missingBundleDetail, "macOS helper status: bundled plist missing"),
             (
                 "macOS 13 or newer is required for bundled daemon install",
                 false,
                 "Helper Unavailable",
                 "macOS 13 or newer is required for bundled daemon install",
-                "macOS 13 or newer is required for bundled daemon install"
+                "macOS 13 or newer is required for bundled daemon install",
+                "macOS helper status: unsupported macOS version"
             )
         ]
 
@@ -35,6 +36,7 @@ final class DaemonInstallerTests: XCTestCase {
             XCTAssertEqual(installer.actionTitle, testCase.title, testCase.status)
             XCTAssertEqual(installer.actionHelp, testCase.help, testCase.status)
             XCTAssertEqual(installer.actionDescription, testCase.detail, testCase.status)
+            XCTAssertEqual(installer.helperStatusSummary, testCase.statusSummary, testCase.status)
         }
     }
 

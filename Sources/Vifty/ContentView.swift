@@ -173,6 +173,10 @@ struct ContentView: View {
                         Text(model.helperHealthSummary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Text(daemonInstaller.helperStatusSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                         if let suggestion = model.helperRecoverySuggestion {
                             Text(suggestion)
                                 .font(.caption)

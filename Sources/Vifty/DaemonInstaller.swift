@@ -44,6 +44,38 @@ final class DaemonInstaller: ObservableObject {
         }
     }
 
+    var helperStatusSummary: String {
+        let status = statusText.lowercased()
+        if !canInstall {
+            if status.contains("plist not found") || status.contains("missing its bundled launchdaemon plist") {
+                return "macOS helper status: bundled plist missing"
+            }
+            if status.contains("macos 13") {
+                return "macOS helper status: unsupported macOS version"
+            }
+            return "macOS helper status: \(statusText)"
+        }
+        if status == "checking helper" {
+            return "macOS helper status: checking install state"
+        }
+        if status.contains("approve") {
+            return "macOS helper status: waiting for Login Items approval"
+        }
+        if status.contains("not installed") {
+            return "macOS helper status: not installed"
+        }
+        if status.contains("install failed") || status.contains("cancelled") {
+            return "macOS helper status: last install or repair failed"
+        }
+        if status.contains("enabled") || status.contains("fan helper installed") {
+            return "macOS helper status: installed"
+        }
+        if status.contains("unknown") {
+            return "macOS helper status: unknown"
+        }
+        return "macOS helper status: \(statusText)"
+    }
+
     var actionDescription: String {
         guard canInstall else { return unavailableActionMessage }
 
