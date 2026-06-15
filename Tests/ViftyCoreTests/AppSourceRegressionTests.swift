@@ -112,6 +112,19 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(contentView.contains("UserDefaults.standard.set(history"))
     }
 
+    func testMenuBarShowsReadOnlyRecentTelemetryTrend() throws {
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+
+        XCTAssertTrue(appModel.contains("var recentTelemetryTrendSummary: String?"))
+        XCTAssertTrue(appModel.contains("TelemetryHistorySummary("))
+        XCTAssertTrue(appModel.contains("sampleLimit: 90"))
+        XCTAssertTrue(appModel.contains("thermalPressureLimit: 24"))
+        XCTAssertTrue(menuBarView.contains("if let recentTelemetryTrendSummary = model.recentTelemetryTrendSummary"))
+        XCTAssertTrue(menuBarView.contains("Label(recentTelemetryTrendSummary, systemImage: \"chart.xyaxis.line\")"))
+        XCTAssertFalse(appModel.contains("UserDefaults.standard.set(telemetryHistory"))
+    }
+
     func testAppBundleIsDockVisibleAndHasAppIcon() throws {
         let plist = try read("Resources/Info.plist")
         let makefile = try read("Makefile")

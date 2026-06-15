@@ -160,12 +160,12 @@ Collect at least one passing GitHub hardware-validation report for each availabl
 
 Use this path for the available `MacBookPro18,1` / M1 Pro machine before changing the M1 Pro/Max row from **Needs manual smoke** to validated hardware evidence. Keep the installed app, helper, collected bundle, reviewed `sourceSHA`, and compatibility index aligned with the exact source build being validated.
 
-1. Collect the read-only bundle with explicit source provenance:
+1. Collect the read-only bundle with explicit source provenance. For current `main` or local ad-hoc builds, use the exact commit SHA of the installed app rather than a release-tag install source:
 
    ```sh
    scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-     --install-source source-build-tag \
-     --source-ref <tag-or-commit> \
+     --install-source local-ad-hoc-build \
+     --source-ref main \
      --source-sha <40-character-source-sha>
    ```
 
@@ -173,8 +173,8 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
 
    ```sh
    sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-     --install-source source-build-tag \
-     --source-ref <tag-or-commit> \
+     --install-source local-ad-hoc-build \
+     --source-ref main \
      --source-sha <40-character-source-sha> \
      --include-probe-local
    ```

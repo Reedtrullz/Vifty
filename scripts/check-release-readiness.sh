@@ -592,11 +592,16 @@ else
         ["homebrew cask is updated", "Homebrew cask is updated"],
         ["homebrew is updated for this release", "Homebrew is updated for this release"],
         ["homebrew install is the recommended path", "Homebrew install is the recommended path"],
+        ["homebrew-trusted", "Homebrew-trusted"],
         ["is the official trusted binary", "official trusted binary"],
         ["official trusted binary is attached", "official trusted binary"],
+        ["gatekeeper approved", "Gatekeeper approved"],
+        ["gatekeeper-approved", "Gatekeeper-approved"],
         ["developer id signed binary is attached", "Developer ID signed binary is attached"],
         ["developer id signed and notarized binary is attached", "Developer ID signed and notarized binary is attached"],
-        ["notarized binary is attached", "notarized binary is attached"]
+        ["developer id signed app", "Developer ID signed app"],
+        ["notarized binary is attached", "notarized binary is attached"],
+        ["notarized app", "notarized app"]
       ]
       body_downcase = body.downcase
       forbidden_claims.each do |needle, claim|

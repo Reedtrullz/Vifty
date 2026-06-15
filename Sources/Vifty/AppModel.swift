@@ -518,6 +518,32 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var recentTelemetryTrendSummary: String? {
+        let summary = TelemetryHistorySummary(
+            history: telemetryHistory,
+            sampleLimit: 90,
+            thermalPressureLimit: 24
+        )
+        guard summary.sampleCount >= 2 else { return nil }
+
+        var parts: [String] = []
+        if let temperatureChangeText = summary.temperatureChangeText {
+            parts.append("Temp \(temperatureChangeText)")
+        }
+        if let fanRPMChangeText = summary.fanRPMChangeText {
+            parts.append("Fan \(fanRPMChangeText)")
+        }
+        if let batteryPowerChangeText = summary.batteryPowerChangeText {
+            parts.append("Power \(batteryPowerChangeText)")
+        }
+        if summary.thermalPressureSamples.count >= 2,
+           summary.thermalPressureSummaryText != "Stable Nominal" {
+            parts.append(summary.thermalPressureSummaryText)
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     func ensureFixedFanTargets(for fans: [Fan]) {
         let existingByFanID = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
             targetsByID[target.fanID] = target

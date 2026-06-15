@@ -1572,6 +1572,65 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(sample.averageFanRPM, 2500)
     }
 
+    func testRecentTelemetryTrendSummaryRequiresAtLeastTwoSamples() {
+        let model = AppModel()
+
+        XCTAssertNil(model.recentTelemetryTrendSummary)
+
+        model.telemetryHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 70.0,
+            firstFanRPM: 2_000,
+            batteryPowerWatts: -4.0,
+            thermalPressure: .nominal
+        ))
+
+        XCTAssertNil(model.recentTelemetryTrendSummary)
+    }
+
+    func testRecentTelemetryTrendSummaryFormatsCompactDeltasAndPeakThermalPressure() {
+        let model = AppModel()
+        model.telemetryHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 70.0,
+            firstFanRPM: 2_000,
+            batteryPowerWatts: -4.0,
+            thermalPressure: .nominal
+        ))
+        model.telemetryHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            highestTemperatureCelsius: 74.2,
+            firstFanRPM: 2_250,
+            batteryPowerWatts: -7.1,
+            thermalPressure: .serious
+        ))
+
+        XCTAssertEqual(
+            model.recentTelemetryTrendSummary,
+            "Temp +4.2 C · Fan +250 RPM · Power -3.1 W · Peak Serious"
+        )
+    }
+
+    func testRecentTelemetryTrendSummaryOmitsMissingMetricsAndStableNominalThermalPressure() {
+        let model = AppModel()
+        model.telemetryHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: nil,
+            firstFanRPM: nil,
+            batteryPowerWatts: nil,
+            thermalPressure: .nominal
+        ))
+        model.telemetryHistory.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            highestTemperatureCelsius: nil,
+            firstFanRPM: nil,
+            batteryPowerWatts: nil,
+            thermalPressure: .nominal
+        ))
+
+        XCTAssertNil(model.recentTelemetryTrendSummary)
+    }
+
     func testMenuTitleIncludesElevatedThermalPressure() async {
         let hardware = AppModelFakeHardware(snapshot: HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],

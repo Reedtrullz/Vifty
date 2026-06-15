@@ -30,6 +30,13 @@ struct MenuBarView: View {
             Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
 
+            if let recentTelemetryTrendSummary = model.recentTelemetryTrendSummary {
+                Label(recentTelemetryTrendSummary, systemImage: "chart.xyaxis.line")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
                 Label(fanWriteBlockedWhileHotSummary, systemImage: "thermometer.high")
                     .font(.caption.weight(.semibold))

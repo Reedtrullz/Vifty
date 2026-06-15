@@ -787,6 +787,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             body: sourceFirstReleaseNotes(version: "1.0.0") + """
 
             Auto-update is available. The Homebrew cask is updated. The attached app is the official trusted binary.
+            This is a Developer ID signed app, notarized app, Gatekeeper approved, and Homebrew-trusted.
             """
         )
 
@@ -808,6 +809,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(message.contains("auto-update is available"))
         XCTAssertTrue(message.contains("Homebrew cask is updated"))
         XCTAssertTrue(message.contains("official trusted binary"))
+        XCTAssertTrue(message.contains("Developer ID signed app"))
+        XCTAssertTrue(message.contains("notarized app"))
+        XCTAssertTrue(message.contains("Gatekeeper approved"))
+        XCTAssertTrue(message.contains("Homebrew-trusted"))
     }
 
     func testSourceFirstReadinessRejectsUnsignedDevZipWithoutChecksum() throws {
