@@ -353,6 +353,9 @@ final class AppModel: ObservableObject {
 
     func applyCurrentModeSelection() async {
         let mode = selectedFanMode()
+        if mode != .auto {
+            await refreshManualControlPreflight()
+        }
         if mode != .auto, let blockedReason = manualFanControlBlockedReason {
             selectedMode = .auto
             manualSessionExpiresAt = nil
@@ -1123,6 +1126,27 @@ final class AppModel: ObservableObject {
     private func refreshAgentControlStatus() async {
         do {
             agentControlStatus = try await agentStatusReader()
+            agentControlStatusError = nil
+        } catch {
+            agentControlStatusError = error.localizedDescription
+        }
+    }
+
+    private func refreshManualControlPreflight() async {
+        daemonResponding = await daemonPing()
+        if let snapshot {
+            daemonReachable = daemonResponding || !snapshot.fans.isEmpty
+        } else {
+            daemonReachable = daemonResponding
+        }
+
+        guard agentControlStatus?.activeLease == nil || agentControlStatusError != nil else {
+            return
+        }
+
+        do {
+            guard let status = try await agentStatusReader() else { return }
+            agentControlStatus = status
             agentControlStatusError = nil
         } catch {
             agentControlStatusError = error.localizedDescription

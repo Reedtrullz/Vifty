@@ -74,21 +74,34 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         rpm: Int,
         minimumRPM: Int,
         maximumRPM: Int,
-        reply: @escaping (Bool, String?) -> Void
+        reply: @escaping @Sendable (Bool, String?) -> Void
     ) {
-        do {
-            let fan = Fan(
-                id: fanID,
-                name: fanID == 0 ? "Left Fan" : "Right Fan",
-                currentRPM: rpm,
-                minimumRPM: minimumRPM,
-                maximumRPM: maximumRPM,
-                controllable: true
-            )
-            try LocalFanHelperClient().apply(FanCommand(fanID: fanID, mode: .fixedRPM(rpm)), fan: fan)
-            reply(true, nil)
-        } catch {
-            reply(false, error.localizedDescription)
+        let agentControl = self.agentControl
+        Task {
+            let status = await agentControl.status()
+            if let lease = status.activeLease {
+                if lease.isActive(at: Date()) {
+                    reply(false, "Agent \(lease.request.workload.displayName) cooling owns fan control; restore Auto before manual fan control.")
+                } else {
+                    reply(false, "Agent cooling restore is pending; restore Auto before manual fan control.")
+                }
+                return
+            }
+
+            do {
+                let fan = Fan(
+                    id: fanID,
+                    name: fanID == 0 ? "Left Fan" : "Right Fan",
+                    currentRPM: rpm,
+                    minimumRPM: minimumRPM,
+                    maximumRPM: maximumRPM,
+                    controllable: true
+                )
+                try LocalFanHelperClient().apply(FanCommand(fanID: fanID, mode: .fixedRPM(rpm)), fan: fan)
+                reply(true, nil)
+            } catch {
+                reply(false, error.localizedDescription)
+            }
         }
     }
 

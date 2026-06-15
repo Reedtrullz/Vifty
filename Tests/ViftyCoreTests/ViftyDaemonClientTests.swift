@@ -272,7 +272,7 @@ private final class FakeDaemonProxy: ViftyDaemonProtocol, @unchecked Sendable {
     var agentControlAuditHandler: (@Sendable (Int, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var prepareAgentControlHandler: (@Sendable (NSDictionary, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var restoreAgentControlHandler: (@Sendable (String, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
-    var setFixedRPMHandler: (@Sendable (Int, Int, Int, Int, @escaping (Bool, String?) -> Void) -> Void)?
+    var setFixedRPMHandler: (@Sendable (Int, Int, Int, Int, @escaping @Sendable (Bool, String?) -> Void) -> Void)?
     var restoreAutoHandler: (@Sendable (Int, Int, Int, @escaping @Sendable (Bool, String?) -> Void) -> Void)?
 
     func ping(reply: @escaping (Bool) -> Void) {
@@ -304,7 +304,7 @@ private final class FakeDaemonProxy: ViftyDaemonProtocol, @unchecked Sendable {
         rpm: Int,
         minimumRPM: Int,
         maximumRPM: Int,
-        reply: @escaping (Bool, String?) -> Void
+        reply: @escaping @Sendable (Bool, String?) -> Void
     ) {
         setFixedRPMHandler?(fanID, rpm, minimumRPM, maximumRPM, reply)
     }

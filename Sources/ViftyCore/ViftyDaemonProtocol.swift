@@ -17,7 +17,7 @@ public enum ViftyDaemonConstants {
         rpm: Int,
         minimumRPM: Int,
         maximumRPM: Int,
-        reply: @escaping (Bool, String?) -> Void
+        reply: @escaping @Sendable (Bool, String?) -> Void
     )
     func restoreAuto(
         _ fanID: Int,

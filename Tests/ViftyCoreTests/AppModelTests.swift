@@ -1626,12 +1626,13 @@ final class AppModelTests: XCTestCase {
         )
         let hardware = AppModelFakeHardware(snapshot: initialSnapshot)
         let now = Date(timeIntervalSince1970: 1100)
+        let pingSequence = AppModelPingSequence(values: [true, false])
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { PowerSnapshot(percent: 50, batteryPowerWatts: 0) },
             thermalReader: { .nominal },
             now: { now },
-            daemonPing: { false },
+            daemonPing: { pingSequence.next() },
             agentStatusReader: { nil }
         )
         model.snapshot = initialSnapshot
@@ -1747,6 +1748,42 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedMode, .auto)
         XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
+        XCTAssertTrue(model.lastError?.contains("Agent Build cooling owns fan control") == true)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertTrue(appliedCommands.isEmpty)
+    }
+
+    func testManualModeSelectionRefreshesAgentStatusBeforeWritingFans() async {
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let lease = agentLease()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1200) },
+            daemonPing: { true },
+            agentStatusReader: {
+                AgentControlStatus(
+                    enabled: true,
+                    activeLease: lease,
+                    lastDecision: nil,
+                    lastErrorCode: nil
+                )
+            }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .curve
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
         XCTAssertTrue(model.lastError?.contains("Agent Build cooling owns fan control") == true)
         let appliedCommands = await hardware.appliedCommands
