@@ -353,6 +353,22 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
     }
 
+    func testManualControlOwnershipPrioritizesBlockedHelperRetryOverAgentStatusNoise() {
+        let model = AppModel()
+        model.snapshot = agentHardwareSnapshot(hardwareMode: .automatic)
+        model.daemonReachable = true
+        model.daemonResponding = false
+        model.controlState = ControlState(mode: .temperatureCurve(.defaultCurve()))
+        model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
+
+        XCTAssertEqual(
+            model.controlOwnershipSummary,
+            "Read-only fan telemetry; repair helper for fan writes · Vifty will retry Curve when the helper responds"
+        )
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        XCTAssertFalse(model.controlOwnershipSummary.contains("Agent control status unavailable"))
+    }
+
     func testManualFanControlBlocksWhileAgentLeaseOwnsCooling() {
         let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
         model.snapshot = agentHardwareSnapshot()
@@ -507,6 +523,8 @@ final class AppModelTests: XCTestCase {
 
     func testControlOwnershipSummaryReportsViftyManualModes() {
         let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
         model.snapshot = HardwareSnapshot(
             fans: [
                 Fan(id: 0, name: "Left", currentRPM: 3200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 3200)
@@ -531,6 +549,8 @@ final class AppModelTests: XCTestCase {
 
     func testControlOwnershipWarnsWhenManualModeTelemetryShowsMacOSReclaimedAuto() {
         let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
         model.snapshot = HardwareSnapshot(
             fans: [
                 Fan(id: 0, name: "Left", currentRPM: 1800, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic, targetRPM: nil)
@@ -553,6 +573,8 @@ final class AppModelTests: XCTestCase {
 
     func testControlOwnershipWarnsWhenManualTargetDrifts() {
         let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
         model.snapshot = HardwareSnapshot(
             fans: [
                 Fan(id: 0, name: "Left", currentRPM: 2200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 2200)

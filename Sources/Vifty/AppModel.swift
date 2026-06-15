@@ -694,6 +694,10 @@ final class AppModel: ObservableObject {
             return "Agent \(lease.request.workload.displayName) lease expired; restore Auto to clear daemon control\(statusWarning)"
         }
 
+        if let manualHelperWriteBlockedSummary {
+            return manualHelperWriteBlockedSummary
+        }
+
         if controlState.mode == .auto, helperWritePathBlockedSummary != nil {
             return autoControlOwnershipSummary
         }
@@ -730,7 +734,7 @@ final class AppModel: ObservableObject {
         }
 
         guard controlState.mode == .auto else {
-            return manualControlDriftSummary != nil
+            return manualHelperWriteBlockedSummary != nil || manualControlDriftSummary != nil
         }
         guard let fans = snapshot?.fans, !fans.isEmpty else {
             return hasCompletedHardwarePoll || daemonReachable
@@ -838,6 +842,25 @@ final class AppModel: ObservableObject {
             return "Temperature sensors are unavailable. Manual fan control stays blocked."
         }
         return nil
+    }
+
+    private var manualHelperWriteBlockedSummary: String? {
+        guard controlState.mode != .auto,
+              let helperWritePathBlockedSummary else {
+            return nil
+        }
+        return "\(helperWritePathBlockedSummary) · Vifty will retry \(manualModeName) when the helper responds"
+    }
+
+    private var manualModeName: String {
+        switch controlState.mode {
+        case .auto:
+            return "manual control"
+        case .fixedRPM:
+            return "Fixed"
+        case .temperatureCurve:
+            return "Curve"
+        }
     }
 
     private var autoControlOwnershipSummary: String {
