@@ -2,8 +2,8 @@ import AppKit
 import Foundation
 
 enum HelperDiagnosticsSupport {
-    static let copyHelp = "Copy a read-only support evidence command. It captures viftyctl and helper install evidence without requesting cooling, restoring Auto, or writing fan state."
-    static let copiedMessage = "Copied read-only support evidence command"
+    static let copyHelp = "Copy a Terminal command for read-only support evidence. It captures the richest available viftyctl evidence without requesting cooling, restoring Auto, or writing fan state."
+    static let copiedMessage = "Copied Terminal support command"
 
     private static let collectorResourceName = "collect-agent-cooling-evidence.sh"
     private static let supportEvidenceOutputPath = "$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)"

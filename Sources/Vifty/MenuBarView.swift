@@ -109,6 +109,13 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                if let context = model.helperInstallRuntimeContext {
+                    Text(context)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if let helperRecoverySuggestion = model.helperMenuRecoverySuggestion {
                     Text(helperRecoverySuggestion)

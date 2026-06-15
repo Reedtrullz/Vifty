@@ -117,16 +117,22 @@ struct ContentView: View {
             Label("Thermal \(model.thermalPressure.displayName)", systemImage: "speedometer")
                 .font(.caption)
                 .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
-            Button {
-                performHelperAction()
-            } label: {
-                Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
-                    .labelStyle(.titleAndIcon)
+            if model.helperRepairActionAvailable {
+                Button {
+                    performHelperAction()
+                } label: {
+                    Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!daemonInstaller.canInstall)
+                .help(daemonInstaller.actionHelp)
+            } else if model.helperHealthNeedsAttention {
+                Label("Diagnostics only", systemImage: "doc.text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(!daemonInstaller.canInstall)
-            .help(daemonInstaller.actionHelp)
             if let error = model.visibleLastError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
@@ -197,6 +203,13 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
+                        if let context = model.helperInstallRuntimeContext {
+                            Text(context)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         if let suggestion = model.helperRecoverySuggestion {
                             Text(suggestion)
                                 .font(.caption)
@@ -286,18 +299,34 @@ struct ContentView: View {
                         systemImage: "fan.slash",
                         description: Text(model.helperRecoverySuggestion ?? model.fanAccessMessage ?? daemonInstaller.statusText)
                     )
-                    Button {
-                        performHelperAction()
-                    } label: {
-                        Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
-                            .frame(maxWidth: 260)
+                    if model.helperRepairActionAvailable {
+                        Button {
+                            performHelperAction()
+                        } label: {
+                            Label(daemonInstaller.actionTitle, systemImage: "lock.shield")
+                                .frame(maxWidth: 260)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!daemonInstaller.canInstall)
+                        .help(daemonInstaller.actionHelp)
+                    } else {
+                        Button {
+                            copyHelperDiagnosticsCommand()
+                        } label: {
+                            Label("Copy Support Evidence", systemImage: "doc.on.doc")
+                                .frame(maxWidth: 260)
+                        }
+                        .buttonStyle(.bordered)
+                        .help(HelperDiagnosticsSupport.copyHelp)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!daemonInstaller.canInstall)
-                    .help(daemonInstaller.actionHelp)
                     Text(daemonInstaller.statusText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if helperDiagnosticsCopied {
+                        Text(HelperDiagnosticsSupport.copiedMessage)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, minHeight: 240)
             }

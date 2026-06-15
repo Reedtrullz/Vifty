@@ -2,6 +2,15 @@ import XCTest
 @testable import Vifty
 
 final class HelperDiagnosticsSupportTests: XCTestCase {
+    func testSupportEvidenceCopyExplainsTerminalAndReadOnlyScope() {
+        XCTAssertEqual(HelperDiagnosticsSupport.copiedMessage, "Copied Terminal support command")
+        XCTAssertTrue(HelperDiagnosticsSupport.copyHelp.contains("Terminal command"))
+        XCTAssertTrue(HelperDiagnosticsSupport.copyHelp.contains("read-only support evidence"))
+        XCTAssertTrue(HelperDiagnosticsSupport.copyHelp.contains("richest available viftyctl evidence"))
+        XCTAssertTrue(HelperDiagnosticsSupport.copyHelp.contains("without requesting cooling"))
+        XCTAssertTrue(HelperDiagnosticsSupport.copyHelp.contains("writing fan state"))
+    }
+
     func testSupportEvidenceCommandUsesBundledCollectorAndViftyCtlWhenAvailable() throws {
         let root = try temporaryDirectory()
         let appURL = root.appendingPathComponent("Vifty Dev.app", isDirectory: true)

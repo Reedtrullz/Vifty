@@ -192,6 +192,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthState, .error)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperInstallRuntimeContext, "The helper may be installed, but the current daemon path still needs repair.")
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
     }
 
@@ -251,6 +252,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthState, .telemetryOnly)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperInstallRuntimeContext, "macOS helper may be installed, but daemon XPC is not responding; fan reads are read-only and writes stay blocked.")
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds.")
     }
 
@@ -270,7 +272,57 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.helperHealthSummary, "Read-only fan telemetry · repair daemon for writes")
         XCTAssertEqual(model.helperHealthMenuSummary, "Fan writes blocked")
+        XCTAssertEqual(model.helperInstallRuntimeContext, "macOS helper may be installed, but daemon XPC is not responding; fan reads are read-only and writes stay blocked.")
         XCTAssertEqual(model.helperMenuRecoverySuggestion, "Repair/Reinstall Helper; approve Login Items if prompted.")
+    }
+
+    func testHelperInstallRuntimeContextIsNilForHealthyAndEvidenceOnlyStates() {
+        let model = AppModel()
+
+        model.daemonResponding = true
+        model.daemonReachable = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        XCTAssertEqual(model.helperHealthState, .healthy(fanCount: 1))
+        XCTAssertNil(model.helperInstallRuntimeContext)
+
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        XCTAssertEqual(model.helperHealthState, .noFanData)
+        XCTAssertNil(model.helperInstallRuntimeContext)
+
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: false),
+                Fan(id: 1, name: "Right", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: false)
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        XCTAssertEqual(model.helperHealthState, .noControllableFans(fanCount: 2))
+        XCTAssertNil(model.helperInstallRuntimeContext)
+
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "Mac14,2",
+            isAppleSilicon: true,
+            isMacBookPro: false
+        )
+        XCTAssertEqual(model.helperHealthState, .unsupported)
+        XCTAssertNil(model.helperInstallRuntimeContext)
     }
 
     func testHotBlockedFanWritesSuppressRedundantHelperMenuRecovery() {
@@ -484,6 +536,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperHealthState, .unreachable)
         XCTAssertTrue(model.helperHealthNeedsAttention)
         XCTAssertTrue(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperInstallRuntimeContext, "Install status and daemon response are separate; approve or repair before fan writes.")
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper or approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds.")
     }
 

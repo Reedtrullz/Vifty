@@ -850,6 +850,19 @@ final class AppModel: ObservableObject {
         helperHealthState.recoverySuggestion
     }
 
+    var helperInstallRuntimeContext: String? {
+        switch helperHealthState {
+        case .telemetryOnly:
+            return "macOS helper may be installed, but daemon XPC is not responding; fan reads are read-only and writes stay blocked."
+        case .unreachable:
+            return "Install status and daemon response are separate; approve or repair before fan writes."
+        case .error:
+            return "The helper may be installed, but the current daemon path still needs repair."
+        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
+            return nil
+        }
+    }
+
     var helperFailureNotificationBody: String {
         fanWriteBlockedWhileHotRecoverySuggestion
             ?? helperRecoverySuggestion
