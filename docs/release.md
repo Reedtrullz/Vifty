@@ -33,7 +33,13 @@ Source-first checklist:
    RELEASE_VERSION=<version> make source-first-release-notes
    ```
 
-   The generated notes must include a **Source Provenance** section. Before publication, record the immutable `v<version>` tag commit SHA there and keep any later `main` commits described as post-release hardening until a future release is cut.
+   The generated notes include a **Source Provenance** section with the source ref and immutable commit SHA. The Makefile target resolves `v<version>` by default, so fetch tags first if needed. For an unpublished candidate, intentionally override the ref:
+
+   ```sh
+   SOURCE_FIRST_SOURCE_REF=<candidate-ref-or-sha> RELEASE_VERSION=<version> make source-first-release-notes
+   ```
+
+   Keep any later `main` commits described as post-release hardening until a future release is cut.
 
 3. Optionally build the unsigned tester artifact:
 
@@ -64,7 +70,7 @@ Source-first checklist:
 
    Use a moving branch such as `origin/main` only while it is intentionally the release candidate. After publication, `main` may move on; do not compare an already-published source-first tag to `origin/main` unless that is still the intended release commit.
 
-5. Push the source tag and create or update the GitHub Release with the source-first notes, including the immutable source tag commit. The unsigned-dev zip/checksum are optional tester convenience assets only.
+5. Push the source tag and create or update the GitHub Release with the source-first notes, including the generated immutable source provenance. The unsigned-dev zip/checksum are optional tester convenience assets only.
 6. Confirm published source-first readiness:
 
    ```sh

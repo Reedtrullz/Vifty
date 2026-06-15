@@ -5,6 +5,7 @@ SIGNING_IDENTITY ?= -
 VIFTY_XPC_ALLOWED_TEAM_ID ?=
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
+SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)
 UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
 RELEASE_METADATA_MODE ?= source-first
 VIFTYCTL ?= /Applications/Vifty.app/Contents/MacOS/viftyctl
@@ -58,7 +59,7 @@ agent-cooling-evidence-review: ## Review a read-only agent/helper support eviden
 	./scripts/review-agent-cooling-evidence.sh --bundle "$(AGENT_EVIDENCE_BUNDLE)" $(if $(AGENT_EVIDENCE_REVIEW_SUMMARY),--summary "$(AGENT_EVIDENCE_REVIEW_SUMMARY)",)
 
 source-first-release-notes: ## Write source-first release notes for the current version
-	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)"
+	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)" $(if $(SOURCE_FIRST_SOURCE_REF),--source-ref "$(SOURCE_FIRST_SOURCE_REF)",)
 
 unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum
 	./scripts/build-unsigned-dev-artifact.sh --version "$(RELEASE_VERSION)" $(if $(UNSIGNED_DEV_SOURCE_REF),--require-source-ref "$(UNSIGNED_DEV_SOURCE_REF)",)

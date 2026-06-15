@@ -69,6 +69,14 @@ It also includes `recommendedAgentAction`, `safeToRequestCooling`, and `daemonCo
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
 - `daemonControlPathReady: false` - the daemon-backed snapshot or agent-control path is unavailable; repair the helper before requesting cooling, even if other telemetry exists.
 
+Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl). Use them to test agent behavior against the three non-happy-path decisions:
+
+- [diagnose-degraded-caution.json](examples/viftyctl/diagnose-degraded-caution.json) - degraded + `requestCoolingWithCaution` + `safeToRequestCooling: true`.
+- [diagnose-degraded-active-lease.json](examples/viftyctl/diagnose-degraded-active-lease.json) - degraded + `restoreAutoBeforeRequestingCooling` + `safeToRequestCooling: false`.
+- [diagnose-blocked-helper-unreachable.json](examples/viftyctl/diagnose-blocked-helper-unreachable.json) - blocked + `doNotRequestCooling` + `daemonControlPathReady: false`.
+
+Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop.
+
 `recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
 
 - `none` - no recovery is needed before following `recommendedAgentAction`.

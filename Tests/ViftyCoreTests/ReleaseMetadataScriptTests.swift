@@ -418,6 +418,20 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-source-ref", in: checks)?.contains("matches required source ref") == true)
     }
 
+    func testReleaseReadinessRejectsAbbreviatedSourceSHA() throws {
+        let harness = try ReleaseMetadataHarness()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", "bbbbbbb",
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("--source-sha must be a 40-character hexadecimal commit SHA"))
+        XCTAssertTrue(result.stdout.isEmpty)
+    }
+
     func testReleaseReadinessBlocksStaleRequiredSourceRef() throws {
         let harness = try ReleaseMetadataHarness()
         let tagSHA = String(repeating: "b", count: 40)
@@ -782,10 +796,13 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checklist.contains("scripts/update-cask-checksum.sh --version 1.2.3"))
         XCTAssertTrue(checklist.contains("manualSmokeTestResult: \"passed-auto-restored\""))
         XCTAssertTrue(checklist.contains("do not describe the Homebrew path as a fully trusted public binary install"))
+        XCTAssertFalse(checklist.contains("Source Provenance"))
+        XCTAssertFalse(checklist.contains("Source commit"))
     }
 
     func testReleaseChecklistWriterCreatesSourceFirstReleaseNotes() throws {
         let harness = try ReleaseMetadataHarness()
+        let sourceSHA = try harness.initializeGitRepoWithTaggedCommit(tag: "v1.2.3")
         let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
 
         let result = try harness.runReleaseChecklistWriter([
@@ -802,8 +819,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(notes.contains("This is a source-first release. Vifty v1.2.3 does not yet include a Developer ID signed or notarized public binary"))
         XCTAssertTrue(notes.contains("For the most trusted path, build from source."))
         XCTAssertTrue(notes.contains("## Source Provenance"))
-        XCTAssertTrue(notes.contains("The `v1.2.3` tag is the source release boundary."))
-        XCTAssertTrue(notes.contains("Record the immutable tag commit SHA before publishing"))
+        XCTAssertTrue(notes.contains("- Source ref: `v1.2.3`"))
+        XCTAssertTrue(notes.contains("- Source commit: `\(sourceSHA)`"))
+        XCTAssertTrue(notes.contains("The `v1.2.3` tag is the source release boundary at commit `\(sourceSHA)`."))
+        XCTAssertFalse(notes.contains("Record the immutable tag commit SHA before publishing"))
         XCTAssertTrue(notes.contains("Later `main` commits are post-release hardening until a future release is cut."))
         XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip"))
         XCTAssertTrue(notes.contains("Vifty-v1.2.3-unsigned-dev.zip.sha256"))
@@ -813,6 +832,97 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(notes.contains("After publication, `scripts/check-release-readiness.sh --mode source-first --version 1.2.3 --repo Reedtrullz/Vifty --json` passed"))
         XCTAssertTrue(notes.contains("Do not require `origin/main` after `main` has moved on."))
         XCTAssertFalse(notes.contains("source-first --version 1.2.3 --repo Reedtrullz/Vifty --require-source-ref origin/main"))
+    }
+
+    func testReleaseChecklistWriterAcceptsExplicitMatchingSourceRefAndSHA() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--source-ref", sourceSHA.uppercased(),
+            "--source-sha", sourceSHA,
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let notes = try String(contentsOf: output, encoding: .utf8)
+        XCTAssertTrue(notes.contains("- Source ref: `\(sourceSHA.uppercased())`"))
+        XCTAssertTrue(notes.contains("- Source commit: `\(sourceSHA)`"))
+        XCTAssertFalse(notes.contains("Record the immutable tag commit SHA"))
+    }
+
+    func testReleaseChecklistWriterAcceptsSourceSHAWithoutPretendingTagResolved() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "d", count: 40)
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--source-sha", sourceSHA,
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let notes = try String(contentsOf: output, encoding: .utf8)
+        XCTAssertTrue(notes.contains("- Source ref: `\(sourceSHA)`"))
+        XCTAssertTrue(notes.contains("- Source commit: `\(sourceSHA)`"))
+        XCTAssertTrue(notes.contains("The `\(sourceSHA)` source ref is the source release boundary at commit `\(sourceSHA)`."))
+        XCTAssertFalse(notes.contains("The `v1.2.3` tag is the source release boundary at commit `\(sourceSHA)`."))
+    }
+
+    func testReleaseChecklistWriterRejectsMismatchedSourceRefAndSHA() throws {
+        let harness = try ReleaseMetadataHarness()
+        let refSHA = String(repeating: "b", count: 40)
+        let sourceSHA = String(repeating: "c", count: 40)
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--source-ref", refSHA,
+            "--source-sha", sourceSHA,
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("source ref"))
+        XCTAssertTrue(result.stderr.contains("does not match --source-sha"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testReleaseChecklistWriterFailsSourceFirstWhenDefaultTagCannotResolve() throws {
+        let harness = try ReleaseMetadataHarness()
+        let output = harness.rootURL.appendingPathComponent("Vifty-v1.2.3-source-first-release-notes.md")
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--output", output.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("could not resolve source ref v1.2.3"))
+        XCTAssertTrue(result.stderr.contains("run git fetch origin --tags"))
+        XCTAssertTrue(result.stderr.contains("--source-ref"))
+        XCTAssertTrue(result.stderr.contains("--source-sha"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testReleaseChecklistWriterRejectsMalformedSourceSHA() throws {
+        let harness = try ReleaseMetadataHarness()
+
+        let result = try harness.runReleaseChecklistWriter([
+            "--mode", "source-first",
+            "--version", "1.2.3",
+            "--source-sha", "bbbbbbb"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("--source-sha must be a 40-character hexadecimal commit SHA"))
     }
 
     func testReleaseChecklistWriterRejectsMalformedVersion() throws {
@@ -1184,6 +1294,45 @@ private final class ReleaseMetadataHarness {
             stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             exitCode: process.terminationStatus
         )
+    }
+
+    func initializeGitRepoWithTaggedCommit(tag: String) throws -> String {
+        _ = try runGit(["init"])
+        _ = try runGit(["config", "user.email", "vifty-release-tests@example.invalid"])
+        _ = try runGit(["config", "user.name", "Vifty Release Tests"])
+        try "source boundary\n".write(
+            to: rootURL.appendingPathComponent("release-source.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        _ = try runGit(["add", "release-source.txt"])
+        _ = try runGit(["commit", "-m", "source boundary"])
+        _ = try runGit(["tag", tag])
+        return try runGit(["rev-parse", "HEAD"]).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @discardableResult
+    private func runGit(_ arguments: [String]) throws -> ReleaseMetadataProcessResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+        process.currentDirectoryURL = rootURL
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        let result = ReleaseMetadataProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+        XCTAssertEqual(result.exitCode, 0, "git \(arguments.joined(separator: " ")) failed: \(result.stderr)")
+        return result
     }
 
     func writeUnsignedDevAppBundleFixture() throws {

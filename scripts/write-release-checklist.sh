@@ -7,10 +7,12 @@ cd "${ROOT_DIR}"
 VERSION=""
 OUTPUT_PATH=""
 RELEASE_MODE="developer-id"
+SOURCE_REF=""
+SOURCE_SHA=""
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/write-release-checklist.sh [--mode developer-id|source-first] [--version version] [--output path]
+Usage: scripts/write-release-checklist.sh [--mode developer-id|source-first] [--version version] [--source-ref ref-or-sha] [--source-sha sha] [--output path]
 
 Writes release checklist or source-first release-note text. Developer ID mode
 is the default and writes the checklist prepended to notarized GitHub Release
@@ -18,6 +20,24 @@ notes. Source-first mode writes release notes for a source-first release with
 an optional unsigned-dev tester artifact. If --version is omitted, the version
 is read from Resources/Info.plist.
 USAGE
+}
+
+is_full_commit_sha() {
+  [[ "$1" =~ ^[0-9a-fA-F]{40}$ ]]
+}
+
+lowercase_hex() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+resolve_source_ref_commit() {
+  local ref="$1"
+  if is_full_commit_sha "${ref}"; then
+    lowercase_hex "${ref}"
+    return 0
+  fi
+
+  git rev-parse "${ref}^{commit}" 2>/dev/null | tr '[:upper:]' '[:lower:]'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -44,6 +64,22 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       OUTPUT_PATH="$2"
+      shift 2
+      ;;
+    --source-ref)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --source-ref requires a value" >&2
+        exit 64
+      fi
+      SOURCE_REF="$2"
+      shift 2
+      ;;
+    --source-sha)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --source-sha requires a value" >&2
+        exit 64
+      fi
+      SOURCE_SHA="$2"
       shift 2
       ;;
     -h|--help)
@@ -75,6 +111,51 @@ case "${RELEASE_MODE}" in
     exit 64
     ;;
 esac
+
+SOURCE_REF_DISPLAY=""
+SOURCE_COMMIT_SHA=""
+SOURCE_BOUNDARY_KIND="source ref"
+
+if [ "${RELEASE_MODE}" = "source-first" ]; then
+  if [ -n "${SOURCE_SHA}" ] && ! is_full_commit_sha "${SOURCE_SHA}"; then
+    echo "error: --source-sha must be a 40-character hexadecimal commit SHA" >&2
+    exit 64
+  fi
+
+  if [ -z "${SOURCE_REF}" ] && [ -z "${SOURCE_SHA}" ]; then
+    SOURCE_REF="v${VERSION}"
+  fi
+
+  if [ -n "${SOURCE_REF}" ]; then
+    if ! RESOLVED_SOURCE_SHA="$(resolve_source_ref_commit "${SOURCE_REF}")"; then
+      echo "error: could not resolve source ref ${SOURCE_REF}; run git fetch origin --tags, pass --source-ref <ref-or-sha>, or pass --source-sha <40-character-sha> for source-first release notes." >&2
+      exit 1
+    fi
+    if [ -z "${RESOLVED_SOURCE_SHA}" ] || ! is_full_commit_sha "${RESOLVED_SOURCE_SHA}"; then
+      echo "error: could not resolve source ref ${SOURCE_REF}; run git fetch origin --tags, pass --source-ref <ref-or-sha>, or pass --source-sha <40-character-sha> for source-first release notes." >&2
+      exit 1
+    fi
+
+    RESOLVED_SOURCE_SHA="$(lowercase_hex "${RESOLVED_SOURCE_SHA}")"
+    if [ -n "${SOURCE_SHA}" ]; then
+      SOURCE_SHA="$(lowercase_hex "${SOURCE_SHA}")"
+      if [ "${RESOLVED_SOURCE_SHA}" != "${SOURCE_SHA}" ]; then
+        echo "error: source ref ${SOURCE_REF} resolves to ${RESOLVED_SOURCE_SHA}, which does not match --source-sha ${SOURCE_SHA}" >&2
+        exit 1
+      fi
+    fi
+
+    SOURCE_REF_DISPLAY="${SOURCE_REF}"
+    SOURCE_COMMIT_SHA="${RESOLVED_SOURCE_SHA}"
+  else
+    SOURCE_COMMIT_SHA="$(lowercase_hex "${SOURCE_SHA}")"
+    SOURCE_REF_DISPLAY="${SOURCE_COMMIT_SHA}"
+  fi
+
+  if [ "${SOURCE_REF_DISPLAY}" = "v${VERSION}" ]; then
+    SOURCE_BOUNDARY_KIND="tag"
+  fi
+fi
 
 if [ -z "${OUTPUT_PATH}" ]; then
   if [ "${RELEASE_MODE}" = "source-first" ]; then
@@ -108,7 +189,10 @@ make install
 
 ## Source Provenance
 
-The \`v${VERSION}\` tag is the source release boundary. Record the immutable tag commit SHA before publishing, and do not replace it with a moving branch such as \`origin/main\` after publication. Later \`main\` commits are post-release hardening until a future release is cut.
+- Source ref: \`${SOURCE_REF_DISPLAY}\`
+- Source commit: \`${SOURCE_COMMIT_SHA}\`
+
+The \`${SOURCE_REF_DISPLAY}\` ${SOURCE_BOUNDARY_KIND} is the source release boundary at commit \`${SOURCE_COMMIT_SHA}\`. Do not replace it with a moving branch such as \`origin/main\` after publication. Later \`main\` commits are post-release hardening until a future release is cut.
 
 ## Optional Unsigned Tester Artifact
 

@@ -151,6 +151,11 @@ if [[ ! "${VERSION}" =~ ^[0-9]+([.][0-9]+){1,2}([-.][0-9A-Za-z]+)?$ ]]; then
   exit 64
 fi
 
+if [ -n "${SOURCE_SHA}" ] && [[ ! "${SOURCE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "error: --source-sha must be a 40-character hexadecimal commit SHA" >&2
+  exit 64
+fi
+
 case "${RELEASE_MODE}" in
   developer-id|source-first)
     ;;

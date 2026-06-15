@@ -11,6 +11,9 @@ Files:
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`
 - [audit.json](audit.json) - `viftyctl audit --json`
 - [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware with `recommendedRecoveryAction`
+- [diagnose-blocked-helper-unreachable.json](diagnose-blocked-helper-unreachable.json) - `viftyctl diagnose --json` when helper telemetry exists but the daemon agent-control path is unreachable
+- [diagnose-degraded-active-lease.json](diagnose-degraded-active-lease.json) - `viftyctl diagnose --json` when another bounded cooling lease is active and new cooling is unsafe
+- [diagnose-degraded-caution.json](diagnose-degraded-caution.json) - `viftyctl diagnose --json` when warning-only thermal pressure makes cooling safe only with caution
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
 - [command-error.json](command-error.json) - structured `--json` command failure with `recommendedRecoveryAction`
 - [command-error-run-child-command-failed.json](command-error-run-child-command-failed.json) - `viftyctl run --json` child-command failure before any cooling lease is prepared
@@ -24,5 +27,7 @@ Schema:
 - [../../schemas/viftyctl-command-error.schema.json](../../schemas/viftyctl-command-error.schema.json) - agent-facing schema for structured command failures
 - [../../schemas/viftyctl-diagnose.schema.json](../../schemas/viftyctl-diagnose.schema.json) - agent-facing schema for the readiness report
 - [../../schemas/viftyctl-status.schema.json](../../schemas/viftyctl-status.schema.json) - agent-facing schema for status, prepare, and restore-auto reports
+
+Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop before requesting cooling.
 
 Dates use Swift's current `JSONEncoder` default date representation, matching the CLI output.

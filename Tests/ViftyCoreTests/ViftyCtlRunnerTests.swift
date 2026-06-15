@@ -368,6 +368,68 @@ final class ViftyCtlRunnerTests: XCTestCase {
         })
     }
 
+    func testDiagnoseJSONReturnsDegradedUnsafeReportWhenActiveLeaseExists() async throws {
+        let activeLease = AgentCoolingLease(
+            id: "lease-example-test",
+            request: AgentControlRequest(
+                workload: .test,
+                durationSeconds: 1_200,
+                maxRPMPercent: 70,
+                reason: "swift test",
+                idempotencyKey: "example-test-001"
+            ),
+            createdAt: Date(timeIntervalSince1970: 700_000_000),
+            expiresAt: Date(timeIntervalSince1970: 700_001_200),
+            targetRPMByFanID: [0: 3_600, 1: 3_700]
+        )
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: activeLease,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "degraded")
+        XCTAssertEqual(
+            json["recommendedAgentAction"] as? String,
+            ViftyCtlRecommendedAgentAction.restoreAutoBeforeRequestingCooling.rawValue
+        )
+        XCTAssertEqual(
+            json["recommendedRecoveryAction"] as? String,
+            ViftyCtlReadinessRecoveryAction.restoreAutoBeforeRetry.rawValue
+        )
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
+        let agentControl = try XCTUnwrap(json["agentControl"] as? [String: Any])
+        let lease = try XCTUnwrap(agentControl["activeLease"] as? [String: Any])
+        XCTAssertEqual(lease["id"] as? String, "lease-example-test")
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "activeLeaseClear"
+                && (check["passed"] as? Bool) == false
+                && (check["severity"] as? String) == "warning"
+        })
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
     func testDiagnoseHumanReadableShowsWarnings() async throws {
         let client = FakeAgentControlClient(
             snapshot: Self.readySnapshot(fanMode: .system),

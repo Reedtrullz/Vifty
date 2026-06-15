@@ -80,6 +80,70 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.agentControlStatusError)
     }
 
+    func testDiagnoseBlockedHelperUnreachableExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-blocked-helper-unreachable.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.state, .blocked)
+        XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertFalse(report.daemonControlPathReady)
+        XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
+        XCTAssertEqual(report.thermalPressure, .nominal)
+        XCTAssertNil(report.daemonSnapshotError)
+        XCTAssertNotNil(report.agentControlStatusError)
+        XCTAssertFalse(report.agentControl.enabled)
+        XCTAssertNil(report.agentControl.activeLease)
+        XCTAssertEqual(report.agentControl.lastDecision?.errorCode, .helperUnreachable)
+        XCTAssertEqual(report.agentControl.lastErrorCode, .helperUnreachable)
+        try assertCheck("daemonSnapshotAvailable", in: report.checks, passed: true, severity: .info)
+        try assertCheck("agentControlStatusAvailable", in: report.checks, passed: false, severity: .error)
+        try assertCheck("daemonControlPathReady", in: report.checks, passed: false, severity: .error)
+        try assertCheck("agentControlEnabled", in: report.checks, passed: false, severity: .error)
+        try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
+    }
+
+    func testDiagnoseDegradedActiveLeaseExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-degraded-active-lease.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.state, .degraded)
+        XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.thermalPressure, .nominal)
+        XCTAssertTrue(report.agentControl.enabled)
+        XCTAssertEqual(report.agentControl.activeLease?.id, "lease-example-test")
+        XCTAssertEqual(report.agentControl.activeLease?.request.workload, .test)
+        XCTAssertEqual(report.agentControl.activeLease?.targetRPMByFanID[0], 3600)
+        XCTAssertNil(report.agentControl.lastErrorCode)
+        try assertCheck("daemonControlPathReady", in: report.checks, passed: true, severity: .error)
+        try assertCheck("agentControlEnabled", in: report.checks, passed: true, severity: .error)
+        try assertCheck("activeLeaseClear", in: report.checks, passed: false, severity: .warning)
+        try assertCheck("thermalPressureSafe", in: report.checks, passed: true, severity: .info)
+    }
+
+    func testDiagnoseDegradedCautionExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-degraded-caution.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.state, .degraded)
+        XCTAssertEqual(report.recommendedAgentAction, .requestCoolingWithCaution)
+        XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.safeToRequestCooling, true)
+        XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.thermalPressure, .serious)
+        XCTAssertTrue(report.agentControl.enabled)
+        XCTAssertNil(report.agentControl.activeLease)
+        XCTAssertNil(report.agentControl.lastErrorCode)
+        try assertCheck("daemonControlPathReady", in: report.checks, passed: true, severity: .error)
+        try assertCheck("activeLeaseClear", in: report.checks, passed: true, severity: .warning)
+        try assertCheck("thermalPressureSafe", in: report.checks, passed: false, severity: .warning)
+        try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
+    }
+
     func testDiagnoseLegacyPayloadDecodesWithRecoveryDefault() throws {
         var payload = try readJSON(fixtureURL("diagnose-ready.json"))
         payload.removeValue(forKey: "recommendedRecoveryAction")
@@ -257,19 +321,21 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "fanModeTelemetry"
         ])
 
-        let example = try readJSON(fixtureURL("diagnose-ready.json"))
-        for field in required {
-            XCTAssertNotNil(example[field], "diagnose-ready.json should include required schema field \(field)")
-        }
-        let fans = try XCTUnwrap(example["fans"] as? [[String: Any]])
         let fanRequired = try requiredFields(for: "fanReport", in: definitions)
-        for field in fanRequired {
-            XCTAssertNotNil(fans.first?[field], "diagnose-ready.json fan should include \(field)")
-        }
-        let checks = try XCTUnwrap(example["checks"] as? [[String: Any]])
         let checkRequired = try XCTUnwrap(readinessCheck["required"] as? [String])
-        for field in checkRequired {
-            XCTAssertNotNil(checks.first?[field], "diagnose-ready.json check should include \(field)")
+        for exampleFilename in try diagnoseExampleFilenames() {
+            let example = try readJSON(fixtureURL(exampleFilename))
+            for field in required {
+                XCTAssertNotNil(example[field], "\(exampleFilename) should include required schema field \(field)")
+            }
+            let fans = try XCTUnwrap(example["fans"] as? [[String: Any]])
+            for field in fanRequired {
+                XCTAssertNotNil(fans.first?[field], "\(exampleFilename) fan should include \(field)")
+            }
+            let checks = try XCTUnwrap(example["checks"] as? [[String: Any]])
+            for field in checkRequired {
+                XCTAssertNotNil(checks.first?[field], "\(exampleFilename) check should include \(field)")
+            }
         }
     }
 
@@ -283,6 +349,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             ("viftyctl-command-error.schema.json", "command-error-run-cleanup-restored.json"),
             ("viftyctl-command-error.schema.json", "command-error-run-cleanup-failed.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-ready.json"),
+            ("viftyctl-diagnose.schema.json", "diagnose-blocked-helper-unreachable.json"),
+            ("viftyctl-diagnose.schema.json", "diagnose-degraded-active-lease.json"),
+            ("viftyctl-diagnose.schema.json", "diagnose-degraded-caution.json"),
             ("viftyctl-status.schema.json", "status-active-lease.json")
         ]
 
@@ -487,6 +556,25 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         for field in try requiredFields(for: definition, in: definitions) {
             XCTAssertNotNil(object[field], "\(context) should include required schema field \(field)")
         }
+    }
+
+    private func assertCheck(
+        _ id: String,
+        in checks: [ViftyCtlReadinessCheck],
+        passed: Bool,
+        severity: ViftyCtlReadinessSeverity
+    ) throws {
+        let check = try XCTUnwrap(checks.first { $0.id == id }, "missing readiness check \(id)")
+        XCTAssertEqual(check.passed, passed, "readiness check \(id) passed mismatch")
+        XCTAssertEqual(check.severity, severity, "readiness check \(id) severity mismatch")
+    }
+
+    private func diagnoseExampleFilenames() throws -> [String] {
+        let directory = fixtureURL("")
+        let filenames = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        return filenames
+            .filter { $0.hasPrefix("diagnose-") && $0.hasSuffix(".json") }
+            .sorted()
     }
 
     private var agentErrorCodeStrings: [String] {

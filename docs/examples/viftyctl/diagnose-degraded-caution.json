@@ -1,0 +1,152 @@
+{
+  "agentControl": {
+    "activeLease": null,
+    "enabled": true,
+    "lastDecision": null,
+    "lastErrorCode": null,
+    "policy": {
+      "enabled": true,
+      "maxDurationSeconds": 1800,
+      "maximumAllowedRPMPercent": 80,
+      "minimumAgentRPMPercent": 45,
+      "prepareCooldownSeconds": 30
+    }
+  },
+  "agentControlStatusError": null,
+  "checks": [
+    {
+      "id": "daemonSnapshotAvailable",
+      "message": "Daemon hardware snapshot is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "agentControlStatusAvailable",
+      "message": "Daemon agent-control status is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "daemonControlPathReady",
+      "message": "Daemon-backed control path is ready for bounded agent cooling requests.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "supportedHardware",
+      "message": "Apple Silicon MacBook Pro hardware detected.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "agentControlEnabled",
+      "message": "Agent cooling policy is enabled in the daemon.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "temperatureSensorsPresent",
+      "message": "2 temperature sensor(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "controllableFansPresent",
+      "message": "2 controllable fan(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsValid",
+      "message": "Controllable fan IDs are valid.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsUnique",
+      "message": "Controllable fan IDs are unique.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanRangesValid",
+      "message": "Controllable fan RPM ranges are valid.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "thermalPressureSafe",
+      "message": "Thermal pressure is serious; cooling may help, but the workload should be ready to back off.",
+      "passed": false,
+      "severity": "warning"
+    },
+    {
+      "id": "activeLeaseClear",
+      "message": "No active agent cooling lease.",
+      "passed": true,
+      "severity": "warning"
+    },
+    {
+      "id": "fanModeTelemetry",
+      "message": "Fan hardware mode telemetry is available.",
+      "passed": true,
+      "severity": "info"
+    }
+  ],
+  "controllableFanCount": 2,
+  "daemonControlPathReady": true,
+  "daemonSnapshotError": null,
+  "fanCount": 2,
+  "fans": [
+    {
+      "controllable": true,
+      "currentRPM": 2600,
+      "hardwareMode": "Auto",
+      "hardwareModeKey": "F0Md",
+      "hardwareModeRawValue": 0,
+      "id": 0,
+      "maximumRPM": 6800,
+      "minimumRPM": 1400,
+      "name": "Left Fan",
+      "targetRPM": null
+    },
+    {
+      "controllable": true,
+      "currentRPM": 2650,
+      "hardwareMode": "Auto",
+      "hardwareModeKey": "F1md",
+      "hardwareModeRawValue": 0,
+      "id": 1,
+      "maximumRPM": 7200,
+      "minimumRPM": 1500,
+      "name": "Right Fan",
+      "targetRPM": null
+    }
+  ],
+  "generatedAt": 700000000,
+  "highestTemperatureCelsius": 76.8,
+  "isAppleSilicon": true,
+  "isMacBookPro": true,
+  "modelIdentifier": "MacBookPro18,3",
+  "recommendedAgentAction": "requestCoolingWithCaution",
+  "recommendedRecoveryAction": "none",
+  "safeToRequestCooling": true,
+  "schemaVersion": 1,
+  "state": "degraded",
+  "temperatureSensorCount": 2,
+  "temperatureSensors": [
+    {
+      "celsius": 76.8,
+      "id": "Tp09",
+      "name": "CPU Proximity",
+      "source": "SMC"
+    },
+    {
+      "celsius": 57.1,
+      "id": "hid-0",
+      "name": "HID Temperature 0",
+      "source": "HID"
+    }
+  ],
+  "thermalPressure": "serious"
+}

@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (645 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (655 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -291,9 +291,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("Source-First Release Mode"))
         XCTAssertTrue(release.contains("This is a source-first release. Vifty v<version> does not yet include a Developer ID signed or notarized public binary"))
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-release-notes"))
-        XCTAssertTrue(release.contains("The generated notes must include a **Source Provenance** section."))
-        XCTAssertTrue(release.contains("record the immutable `v<version>` tag commit SHA"))
-        XCTAssertTrue(release.contains("including the immutable source tag commit"))
+        XCTAssertTrue(release.contains("The generated notes include a **Source Provenance** section with the source ref and immutable commit SHA."))
+        XCTAssertTrue(release.contains("The Makefile target resolves `v<version>` by default"))
+        XCTAssertTrue(release.contains("SOURCE_FIRST_SOURCE_REF=<candidate-ref-or-sha> RELEASE_VERSION=<version> make source-first-release-notes"))
+        XCTAssertTrue(release.contains("including the generated immutable source provenance"))
+        XCTAssertFalse(release.contains("record the immutable `v<version>` tag commit SHA"))
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-readiness"))
         XCTAssertTrue(release.contains("scripts/check-release-readiness.sh \\"))
         XCTAssertTrue(release.contains("--mode source-first"))
