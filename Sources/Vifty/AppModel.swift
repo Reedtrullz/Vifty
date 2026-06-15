@@ -285,6 +285,7 @@ final class AppModel: ObservableObject {
         powerSnapshot = currentPower
         thermalPressure = currentThermalPressure
         _ = await restoreAutoIfManualSessionExpired()
+        let stateBeforeTick = await coordinator.state
         do {
             let nextSnapshot = try await coordinator.tick()
             snapshot = nextSnapshot
@@ -306,12 +307,20 @@ final class AppModel: ObservableObject {
             await syncState()
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         } catch {
+            let preservesManualIntent = shouldPreserveManualIntent(
+                afterTickFailure: error,
+                attemptedMode: stateBeforeTick.mode
+            )
             lastError = error.localizedDescription
             daemonResponding = await daemonPing()
-            daemonReachable = daemonResponding
+            daemonReachable = daemonResponding || (preservesManualIntent && snapshot?.fans.isEmpty == false)
             await refreshAgentControlStatus()
-            await coordinator.forceAuto()
-            await syncState()
+            if preservesManualIntent {
+                controlState = await coordinator.state
+            } else {
+                await coordinator.forceAuto()
+                await syncState()
+            }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
     }
@@ -737,24 +746,30 @@ final class AppModel: ObservableObject {
         if let snapshot, !snapshot.isAppleSilicon || !snapshot.isMacBookPro {
             return .unsupported
         }
-        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
-            return .error
-        }
         if !hasCompletedHardwarePoll, snapshot == nil, !daemonReachable {
             return .checking
         }
-        guard daemonReachable else {
-            return .unreachable
-        }
         let fanCount = snapshot?.fans.count ?? 0
         if fanCount > 0 {
+            guard daemonReachable else {
+                return .unreachable
+            }
             guard daemonResponding else {
                 return .telemetryOnly
+            }
+            if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
+                return .error
             }
             guard snapshot?.fans.contains(where: \.controllable) == true else {
                 return .noControllableFans(fanCount: fanCount)
             }
             return .healthy(fanCount: fanCount)
+        }
+        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
+            return .error
+        }
+        guard daemonReachable else {
+            return .unreachable
         }
         return .noFanData
     }
@@ -1003,6 +1018,18 @@ final class AppModel: ObservableObject {
         self.manualSessionExpiresAt = nil
         await coordinator.setMode(.auto)
         return true
+    }
+
+    private func shouldPreserveManualIntent(afterTickFailure error: Error, attemptedMode: FanMode) -> Bool {
+        guard attemptedMode != .auto else { return false }
+        guard let viftyError = error as? ViftyError else { return false }
+
+        switch viftyError {
+        case .helperRejected, .smcUnavailable, .smcOpenFailed, .smcCallFailed, .smcKeyUnavailable, .smcWriteRejected:
+            return true
+        case .unsupportedHardware, .noTemperatureSensors, .noControllableFans:
+            return false
+        }
     }
 
     private func clearAgentLeaseForUserAutoIfNeeded() async -> String? {

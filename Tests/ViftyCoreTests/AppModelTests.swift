@@ -1364,6 +1364,98 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(appliedCommands.isEmpty)
     }
 
+    func testPollOncePreservesUntilChangedManualModeAfterTransientWriteFailure() async {
+        let initialSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3600,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .forced,
+                    targetRPM: 3600
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1000)
+        )
+        let reclaimedSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 1800,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .automatic,
+                    targetRPM: nil
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1010)
+        )
+        let hardware = AppModelFakeHardware(snapshot: initialSnapshot)
+        let pingSequence = AppModelPingSequence(values: [true, false, false])
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { pingSequence.next() },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = initialSnapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .curve
+        model.curveStartTemp = 50
+        model.curveStartRPM = 3000
+        model.curveMidTemp = 70
+        model.curveMidRPM = 5000
+        model.curveMaxTemp = 85
+        model.curveMaxRPM = 6000
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        await hardware.setSnapshot(reclaimedSnapshot)
+        await hardware.failNextApply(ViftyError.helperRejected("Daemon request timed out."))
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .curve)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("Daemon request timed out") == true)
+        XCTAssertFalse(model.daemonResponding)
+        XCTAssertTrue(model.daemonReachable)
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        switch model.controlState.mode {
+        case .temperatureCurve:
+            break
+        default:
+            XCTFail("Until-changed curve intent should survive a transient manual reassert failure.")
+        }
+        let restoredAfterFailure = await hardware.restoredFanIDs
+        XCTAssertTrue(restoredAfterFailure.isEmpty, "A transient reassert failure should not force Auto and abandon the selected curve.")
+
+        await model.pollOnce()
+
+        XCTAssertNil(model.lastError)
+        XCTAssertEqual(model.selectedMode, .curve)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [
+            FanCommand(fanID: 0, mode: .fixedRPM(4400)),
+            FanCommand(fanID: 0, mode: .fixedRPM(4400))
+        ])
+    }
+
     func testManualModeSelectionFailsClosedWhenAgentLeaseIsActive() async {
         let snapshot = agentHardwareSnapshot()
         let hardware = AppModelFakeHardware(snapshot: snapshot)
@@ -1727,10 +1819,27 @@ private final class AppModelTestClock: @unchecked Sendable {
     }
 }
 
+private final class AppModelPingSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [Bool]
+
+    init(values: [Bool]) {
+        self.values = values
+    }
+
+    func next() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !values.isEmpty else { return false }
+        return values.removeFirst()
+    }
+}
+
 private actor AppModelFakeHardware: HardwareService {
     var snapshotValue: HardwareSnapshot
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
+    private var applyFailures: [Error] = []
 
     init(snapshot: HardwareSnapshot) {
         self.snapshotValue = snapshot
@@ -1740,7 +1849,18 @@ private actor AppModelFakeHardware: HardwareService {
         snapshotValue
     }
 
+    func setSnapshot(_ snapshot: HardwareSnapshot) {
+        snapshotValue = snapshot
+    }
+
+    func failNextApply(_ error: Error) {
+        applyFailures.append(error)
+    }
+
     func apply(_ command: FanCommand, fan: Fan) async throws {
+        if !applyFailures.isEmpty {
+            throw applyFailures.removeFirst()
+        }
         appliedCommands.append(command)
     }
 
