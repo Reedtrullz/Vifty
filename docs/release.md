@@ -82,7 +82,7 @@ Source-first checklist:
 
    If you need an immutable source-ref check after publication, use the release commit SHA rather than a moving branch.
 
-7. Do not update `Casks/vifty.rb` for the source-first release and do not point the cask at the unsigned-dev artifact.
+7. Keep `Casks/vifty.rb` disabled for the source-first release. Do not update its checksum, re-enable it, or point the cask at the unsigned-dev artifact.
 
 ## Developer ID Release Mode
 
@@ -139,7 +139,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    ```
 
 4. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
-5. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version.
+5. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version. Remove the cask `disable!` stanza only for the Developer ID/notarized release lane, after the canonical `Vifty-v<version>.zip` artifact and release verifier are ready.
 6. Commit the release prep. The cask checksum can be updated in a follow-up commit after the notarized artifact exists.
 7. Tag the commit:
 

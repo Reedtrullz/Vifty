@@ -871,6 +871,82 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
+    func testControlOwnershipWarnsWhenHotManualResponseCannotBeConfirmed() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: nil)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(
+            mode: .fixedRPM(3600),
+            lastAppliedRPM: [0: 3600],
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Manual fan response not confirmed; current RPM is still below requested target · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipWarnsWhenElevatedThermalPressureCannotConfirmManualResponse() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.thermalPressure = .serious
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 2100, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: nil)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 78, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(
+            mode: .temperatureCurve(FanCurve.defaultCurve(sensorID: "Tp09")),
+            lastAppliedRPM: [0: 3600],
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Manual fan response not confirmed; current RPM is still below requested target · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+    }
+
+    func testControlOwnershipDoesNotWarnForMissingManualTargetWhenRPMIsNearExpected() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 3425, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: nil)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 91.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(
+            mode: .fixedRPM(3600),
+            lastAppliedRPM: [0: 3600],
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3600 RPM · until changed; reasserts if macOS drifts")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+    }
+
     func testMenuTitleIncludesPowerSummaryWhenPowerSnapshotAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
@@ -2133,7 +2209,50 @@ final class AppModelTests: XCTestCase {
             FanCommand(fanID: 1, mode: .fixedRPM(4700))
         ])
         XCTAssertEqual(model.controlState.lastAppliedRPM, [0: 4296, 1: 4700])
-        XCTAssertTrue(model.controlOwnershipSummary.contains("per-fan RPM"))
+        XCTAssertEqual(
+            model.controlOwnershipSummary,
+            "Vifty Fixed owns fan targets · Left 4296 RPM, Right 4700 RPM · until \(model.manualSessionExpiresAt!.formatted(date: .omitted, time: .shortened)); reasserts if macOS drifts"
+        )
+    }
+
+    func testFixedPerFanModeFallsBackToGlobalRPMWhenOnlyOneFanIsControllable() async {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: false)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3200
+        model.usePerFanFixedRPM = true
+        model.ensureFixedFanTargets(for: snapshot.fans)
+        model.setFixedFanRPM(4200, for: snapshot.fans[0])
+
+        XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[0]), 3200)
+
+        await model.applyCurrentModeSelection()
+
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [
+            FanCommand(fanID: 0, mode: .fixedRPM(3200))
+        ])
+        XCTAssertEqual(model.controlState.lastAppliedRPM, [0: 3200])
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3200 RPM · until changed; reasserts if macOS drifts")
     }
 
     func testPollOncePreservesUntilChangedManualModeAfterTransientWriteFailure() async {

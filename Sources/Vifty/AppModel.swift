@@ -209,6 +209,7 @@ final class AppModel: ObservableObject {
     static let notificationPluggedInDrainDefaultsKey = AppPreferencesStore.legacyNotificationPluggedInDrainDefaultsKey
     static let notificationAgentCoolingAttentionDefaultsKey = AppPreferencesStore.legacyNotificationAgentCoolingAttentionDefaultsKey
     static let manualTargetDriftRPMThreshold = 75
+    static let manualResponseRPMGapThreshold = 250
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
@@ -522,7 +523,7 @@ final class AppModel: ObservableObject {
         case .auto:
             return nil
         case .fixed:
-            if usePerFanFixedRPM, let target = fixedFanTarget(for: fan.id)?.rpm {
+            if perFanFixedRPMApplies, let target = fixedFanTarget(for: fan.id)?.rpm {
                 return FanCurve.clamp(target, fan.minimumRPM, fan.maximumRPM)
             }
             return FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
@@ -948,10 +949,7 @@ final class AppModel: ObservableObject {
             if let manualControlDriftSummary {
                 return manualControlDriftSummary
             }
-            if usePerFanFixedRPM {
-                return "Vifty Fixed owns fan targets · per-fan RPM · \(manualRunOwnershipSummary)"
-            }
-            return "Vifty Fixed owns fan targets · \(rpm) RPM · \(manualRunOwnershipSummary)"
+            return "Vifty Fixed owns fan targets · \(fixedModeTargetSummary(fallbackRPM: rpm)) · \(manualRunOwnershipSummary)"
         case .temperatureCurve:
             if let manualControlDriftSummary {
                 return manualControlDriftSummary
@@ -1238,8 +1236,48 @@ final class AppModel: ObservableObject {
             }
             return abs(targetRPM - expectedRPM) >= Self.manualTargetDriftRPMThreshold
         }
-        guard !drifted.isEmpty else { return nil }
-        return "Hardware fan target drift detected; Vifty will reassert · \(fanIDList(drifted))"
+        if !drifted.isEmpty {
+            return "Hardware fan target drift detected; Vifty will reassert · \(fanIDList(drifted))"
+        }
+
+        let unconfirmedResponse = fans.filter { fan in
+            guard fan.targetRPM == nil,
+                  manualResponseAttentionIsWarranted,
+                  let expectedRPM = expectedManualTargetRPM(for: fan) else {
+                return false
+            }
+            return expectedRPM - fan.currentRPM >= Self.manualResponseRPMGapThreshold
+        }
+        guard !unconfirmedResponse.isEmpty else { return nil }
+        return "Manual fan response not confirmed; current RPM is still below requested target · \(fanIDList(unconfirmedResponse))"
+    }
+
+    private var manualResponseAttentionIsWarranted: Bool {
+        if thermalPressure == .serious || thermalPressure == .critical {
+            return true
+        }
+        guard let sensor = selectedSensor ?? snapshot?.highestTemperature else { return false }
+        return sensor.celsius >= Self.highTemperatureAttentionThreshold
+    }
+
+    private func fixedModeTargetSummary(fallbackRPM: Int) -> String {
+        guard perFanFixedRPMApplies else { return "\(fallbackRPM) RPM" }
+
+        let controllableFans = snapshot?.fans.filter(\.controllable) ?? []
+        if !controllableFans.isEmpty {
+            return controllableFans.map { fan in
+                let rpm = expectedManualTargetRPM(for: fan)
+                    ?? FanCurve.clamp(fallbackRPM, fan.minimumRPM, fan.maximumRPM)
+                return "\(fan.name) \(rpm) RPM"
+            }
+            .joined(separator: ", ")
+        }
+
+        let targets = fixedFanTargets.sorted { $0.fanID < $1.fanID }
+        guard !targets.isEmpty else { return "per-fan RPM" }
+        return targets
+            .map { target in "F\(target.fanID) \(target.rpm) RPM" }
+            .joined(separator: ", ")
     }
 
     private func expectedManualTargetRPM(for fan: Fan) -> Int? {
@@ -1251,7 +1289,7 @@ final class AppModel: ObservableObject {
         case .auto:
             return nil
         case .fixedRPM(let rpm):
-            if usePerFanFixedRPM, let target = fixedFanTarget(for: fan.id)?.rpm {
+            if perFanFixedRPMApplies, let target = fixedFanTarget(for: fan.id)?.rpm {
                 return FanCurve.clamp(target, fan.minimumRPM, fan.maximumRPM)
             }
             return FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
@@ -1327,11 +1365,22 @@ final class AppModel: ObservableObject {
     private func fixedFanTargetMapForCurrentMode() -> [Int: Int] {
         guard selectedMode == .fixed, usePerFanFixedRPM else { return [:] }
         if let fans = snapshot?.fans {
+            guard fans.filter(\.controllable).count > 1 else { return [:] }
             ensureFixedFanTargets(for: fans)
+        } else {
+            guard fixedFanTargets.count > 1 else { return [:] }
         }
         return fixedFanTargets.reduce(into: [Int: Int]()) { targetsByID, target in
             targetsByID[target.fanID] = target.rpm
         }
+    }
+
+    private var perFanFixedRPMApplies: Bool {
+        guard usePerFanFixedRPM else { return false }
+        if let fans = snapshot?.fans {
+            return fans.filter(\.controllable).count > 1
+        }
+        return fixedFanTargets.count > 1
     }
 
     private func selectedFanMode() -> FanMode {

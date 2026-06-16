@@ -20,19 +20,44 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("bundle version 1.1.1 does not match cask version 1.1.0"))
     }
 
-    func testSourceFirstValidatorAllowsBundleVersionWithoutUpdatingHomebrew() throws {
-        let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
+    func testDeveloperIDValidatorRejectsDisabledHomebrewCask() throws {
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("Casks/vifty.rb must not be disabled for a Developer ID/Homebrew release"))
+    }
+
+    func testSourceFirstValidatorAllowsBundleVersionWithoutUpdatingDisabledHomebrew() throws {
+        let harness = try ReleaseMetadataHarness(
+            version: "1.1.1",
+            caskVersion: "1.1.0",
+            includeCaskDisable: true
+        )
 
         let result = try harness.runValidator(["--mode", "source-first"])
 
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.contains("Source-first release metadata OK: bundle version 1.1.1, cask version 1.1.0"))
-        XCTAssertTrue(result.stdout.contains("Homebrew remains held until a future Developer ID release"))
+        XCTAssertTrue(result.stdout.contains("Homebrew cask is disabled and held until a future Developer ID release"))
         XCTAssertTrue(result.stdout.contains("source-first mode does not publish or require Vifty-v1.1.1.zip"))
     }
 
+    func testSourceFirstValidatorRejectsEnabledHomebrewCask() throws {
+        let harness = try ReleaseMetadataHarness()
+
+        let result = try harness.runValidator(["--mode", "source-first"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("Casks/vifty.rb must remain disabled for a source-first release"))
+    }
+
     func testSourceFirstValidatorRejectsSparkleUpdaterKeys() throws {
-        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUFeedURL"])
+        let harness = try ReleaseMetadataHarness(
+            sparkleInfoPlistKeys: ["SUFeedURL"],
+            includeCaskDisable: true
+        )
 
         let result = try harness.runValidator(["--mode", "source-first"])
 
@@ -41,7 +66,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstValidatorRejectsGenericSparkleMetadataKeys() throws {
-        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUFutureUpdaterKey"])
+        let harness = try ReleaseMetadataHarness(
+            sparkleInfoPlistKeys: ["SUFutureUpdaterKey"],
+            includeCaskDisable: true
+        )
 
         let result = try harness.runValidator(["--mode", "source-first"])
 
@@ -659,7 +687,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessAcceptsUnsignedDevAssetsWithoutAppleSecretsOrReleaseWorkflow() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets()
@@ -711,7 +739,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessRejectsUnsignedDevAssetsWithoutSidecarWarning() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets()
@@ -754,7 +782,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessAcceptsReleaseWithoutUnsignedDevAssets() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(
@@ -783,7 +811,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessRejectsUnsignedDevChecksumMismatch() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets(
@@ -822,7 +850,11 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessAllowsHomebrewCaskToRemainOnPriorVersion() throws {
-        let harness = try ReleaseMetadataHarness(version: "1.1.1", caskVersion: "1.1.0")
+        let harness = try ReleaseMetadataHarness(
+            version: "1.1.1",
+            caskVersion: "1.1.0",
+            includeCaskDisable: true
+        )
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets(version: "1.1.1")
@@ -853,11 +885,40 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "passed")
         XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("bundle version 1.1.1, cask version 1.1.0") == true)
+        XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("Homebrew cask is disabled and held") == true)
         XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("source-first mode does not publish or require Vifty-v1.1.1.zip") == true)
     }
 
-    func testSourceFirstReadinessRejectsCanonicalTrustedBinaryAssets() throws {
+    func testSourceFirstReadinessRejectsEnabledHomebrewCask() throws {
         let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [],
+            body: sourceFirstReleaseNotes(version: "1.0.0")
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-metadata"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-metadata", in: checks), "blocked")
+        XCTAssertTrue(checkMessage(named: "release-metadata", in: checks)?.contains("Casks/vifty.rb must remain disabled for a source-first release") == true)
+    }
+
+    func testSourceFirstReadinessRejectsCanonicalTrustedBinaryAssets() throws {
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(
@@ -891,7 +952,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessRejectsTrustedUpdaterAndHomebrewClaims() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(
@@ -931,7 +992,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessRejectsUnsignedDevZipWithoutChecksum() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(
@@ -960,7 +1021,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testSourceFirstReadinessRejectsReleaseNotesWithoutSourceProvenance() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         let sourceSHA = String(repeating: "b", count: 40)
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseView = try harness.writeReleaseView(
@@ -1186,7 +1247,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testUnsignedDevArtifactBuilderAcceptsMatchingRequiredSourceRef() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         try harness.writeUnsignedDevAppBundleFixture()
         let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
         let sourceSHA = String(repeating: "b", count: 40)
@@ -1207,7 +1268,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testUnsignedDevArtifactBuilderRejectsSparkleUpdaterKeysBeforeZip() throws {
-        let harness = try ReleaseMetadataHarness(sparkleInfoPlistKeys: ["SUPublicEDKey"])
+        let harness = try ReleaseMetadataHarness(
+            sparkleInfoPlistKeys: ["SUPublicEDKey"],
+            includeCaskDisable: true
+        )
         try harness.writeUnsignedDevAppBundleFixture()
         let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
 
@@ -1223,7 +1287,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
     }
 
     func testUnsignedDevArtifactBuilderRejectsStaleAppBundleSparkleKeysBeforeZip() throws {
-        let harness = try ReleaseMetadataHarness()
+        let harness = try ReleaseMetadataHarness(includeCaskDisable: true)
         try harness.writeUnsignedDevAppBundleFixture(sparkleInfoPlistKeys: ["SUFeedURL"])
         let output = harness.rootURL.appendingPathComponent("unsigned-output", isDirectory: true)
 
@@ -1370,7 +1434,8 @@ private final class ReleaseMetadataHarness {
         includeVerifyTag: Bool = true,
         includeCIWorkflowNode24ActionsRuntime: Bool = true,
         includeCINode24CacheAction: Bool = true,
-        includeReleaseWorkflowNode24ActionsRuntime: Bool = true
+        includeReleaseWorkflowNode24ActionsRuntime: Bool = true,
+        includeCaskDisable: Bool = false
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-release-metadata-\(UUID().uuidString)", isDirectory: true)
@@ -1393,7 +1458,8 @@ private final class ReleaseMetadataHarness {
             version: caskVersion ?? version,
             sha: caskSHA,
             includeAdHocSigningIdentity: includeAdHocSigningIdentity,
-            privilegedHelperCleanupPath: privilegedHelperCleanupPath
+            privilegedHelperCleanupPath: privilegedHelperCleanupPath,
+            includeCaskDisable: includeCaskDisable
         )
         try writeCIWorkflow(
             includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime,
@@ -1816,16 +1882,21 @@ private final class ReleaseMetadataHarness {
         version: String,
         sha: String,
         includeAdHocSigningIdentity: Bool,
-        privilegedHelperCleanupPath: String?
+        privilegedHelperCleanupPath: String?,
+        includeCaskDisable: Bool
     ) throws {
         let signingIdentityLine = includeAdHocSigningIdentity
             ? "\n  signing_identity identity: \"-\"\n"
+            : ""
+        let disableLine = includeCaskDisable
+            ? "\n  disable! date: \"2026-06-16\", because: \"requires a Developer ID signed and notarized release\"\n"
             : ""
         let helperCleanupLine = privilegedHelperCleanupPath.map { "    sudo rm \($0)\n" } ?? ""
         let contents = """
         cask "vifty" do
           version "\(version)"
           sha256 "\(sha)"
+        \(disableLine)
 
           url "https://github.com/Reedtrullz/Vifty/releases/download/v#{version}/Vifty-v#{version}.zip"
           \(signingIdentityLine)

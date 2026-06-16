@@ -65,6 +65,10 @@ source_first_sparkle_keys() {
 bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}")"
 cask_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "${CASK_PATH}")"
 cask_sha="$(ruby -ne 'puts $1 if /^\s*sha256 "([^"]+)"/' "${CASK_PATH}")"
+cask_disabled=0
+if grep -Fq 'disable!' "${CASK_PATH}"; then
+  cask_disabled=1
+fi
 
 if [[ -z "${cask_version}" ]]; then
   echo "error: could not read version from ${CASK_PATH}" >&2
@@ -76,10 +80,19 @@ if [[ "${RELEASE_METADATA_MODE}" = "developer-id" && "${bundle_version}" != "${c
   exit 1
 fi
 
+if [[ "${RELEASE_METADATA_MODE}" = "developer-id" && "${cask_disabled}" = "1" ]]; then
+  echo "error: ${CASK_PATH} must not be disabled for a Developer ID/Homebrew release" >&2
+  exit 1
+fi
+
 if [[ "${RELEASE_METADATA_MODE}" = "source-first" ]]; then
   sparkle_keys="$(source_first_sparkle_keys "${INFO_PLIST}")"
   if [[ -n "${sparkle_keys}" ]]; then
     echo "error: source-first Info.plist must not include Sparkle updater metadata: ${sparkle_keys}" >&2
+    exit 1
+  fi
+  if [[ "${cask_disabled}" != "1" ]]; then
+    echo "error: ${CASK_PATH} must remain disabled for a source-first release until a Developer ID signed and notarized artifact exists" >&2
     exit 1
   fi
 fi
@@ -285,10 +298,11 @@ if ! grep -Fq -- '--verify-tag' "${RELEASE_WORKFLOW}"; then
 fi
 
 if [[ "${RELEASE_METADATA_MODE}" = "source-first" ]]; then
+  cask_hold="Homebrew cask is disabled and held until a future Developer ID release"
   if [[ "${bundle_version}" = "${cask_version}" ]]; then
-    echo "Source-first release metadata OK: bundle version ${bundle_version}; Homebrew cask remains held for the future Developer ID lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+    echo "Source-first release metadata OK: bundle version ${bundle_version}; ${cask_hold} and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
   else
-    echo "Source-first release metadata OK: bundle version ${bundle_version}, cask version ${cask_version}; Homebrew remains held until a future Developer ID release and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+    echo "Source-first release metadata OK: bundle version ${bundle_version}, cask version ${cask_version}; ${cask_hold} and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
   fi
 else
   echo "Release metadata OK: version ${bundle_version}, artifact Vifty-v${bundle_version}.zip"

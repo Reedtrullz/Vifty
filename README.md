@@ -122,12 +122,7 @@ To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RE
 
 ### Homebrew
 
-```sh
-brew tap Reedtrullz/vifty https://github.com/Reedtrullz/Vifty
-brew install --cask vifty
-```
-
-Do not use Homebrew as the recommended or trusted source-first install path. The Homebrew cask is for the future Developer ID/notarized release lane and must not point at unsigned-dev artifacts. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
+The Homebrew cask is intentionally disabled and parked until Vifty has a Developer ID signed, notarized, stapled, and verifier-passing `Vifty-v<version>.zip` release artifact. Do not use Homebrew as the recommended or trusted source-first install path, and do not point the cask at unsigned-dev artifacts. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
 
 ## Build and verify
 

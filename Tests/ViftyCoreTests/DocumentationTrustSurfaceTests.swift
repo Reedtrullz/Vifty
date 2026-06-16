@@ -53,7 +53,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (697 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (723 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -274,10 +274,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")
         let release = try read("docs/release.md")
+        let cask = try read("Casks/vifty.rb")
         let sourceFirstNotes = try read("docs/release-notes/v1.1.0.md")
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
         let unsignedDigestBoundary = "The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."
 
+        XCTAssertTrue(cask.contains("disable! date: \"2026-06-16\", because: \"requires a Developer ID signed and notarized release\""))
         XCTAssertTrue(readme.contains("The latest published public release is Vifty `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials."))
         XCTAssertTrue(readme.contains("**Three fan modes** — Auto, Fixed RPM with optional per-fan targets, and a 3-point Temperature Curve."))
         XCTAssertTrue(readme.contains("The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
@@ -295,7 +297,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("This verifies the immutable tag before generating release notes or the unsigned tester artifact."))
         XCTAssertTrue(readme.contains("Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening"))
         XCTAssertTrue(readme.contains("use the `v1.1.1` source-first hotfix release instead"))
-        XCTAssertTrue(readme.contains("Do not use Homebrew as the recommended or trusted source-first install path."))
+        XCTAssertTrue(readme.contains("The Homebrew cask is intentionally disabled and parked until Vifty has a Developer ID signed, notarized, stapled, and verifier-passing `Vifty-v<version>.zip` release artifact."))
+        XCTAssertTrue(readme.contains("Do not use Homebrew as the recommended or trusted source-first install path"))
+        XCTAssertFalse(readme.contains("brew install --cask vifty"))
         XCTAssertTrue(release.contains("[release-status.md](release-status.md)"))
         XCTAssertTrue(release.contains("Source-First Release Mode"))
         XCTAssertTrue(release.contains("This is a source-first release. Vifty v<version> does not yet include a Developer ID signed or notarized public binary"))
@@ -309,6 +313,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("RELEASE_VERSION=<version> make source-first-readiness"))
         XCTAssertTrue(release.contains("scripts/check-release-readiness.sh \\"))
         XCTAssertTrue(release.contains("--mode source-first"))
+        XCTAssertTrue(release.contains("Keep `Casks/vifty.rb` disabled for the source-first release. Do not update its checksum, re-enable it, or point the cask at the unsigned-dev artifact."))
+        XCTAssertTrue(release.contains("Remove the cask `disable!` stanza only for the Developer ID/notarized release lane"))
         XCTAssertTrue(releaseStatus.contains("the latest published public release is `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials."))
         XCTAssertTrue(releaseStatus.contains("The immutable `v1.1.1` source tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`"))
         XCTAssertTrue(releaseStatus.contains("Trusted notarized Developer ID release:** unavailable until the project has Apple Developer Program credentials."))
@@ -321,7 +327,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main`"))
         XCTAssertTrue(releaseStatus.contains("Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary."))
         XCTAssertTrue(releaseStatus.contains("The honest remediation is the `v1.1.1` source-first hotfix release"))
-        XCTAssertTrue(releaseStatus.contains("`Resources/Info.plist` now carries `1.1.1`; `Casks/vifty.rb` remains on `1.1.0`"))
+        XCTAssertTrue(releaseStatus.contains("`Resources/Info.plist` now carries `1.1.1`; `Casks/vifty.rb` remains on `1.1.0` and is explicitly disabled"))
+        XCTAssertTrue(releaseStatus.contains("Do not update the Homebrew cask checksum for a source-first release, do not re-enable the cask, and do not point Homebrew at unsigned-dev artifacts."))
         XCTAssertTrue(releaseStatus.contains("## Source-First v1.1.1 Operator Checks"))
         XCTAssertOrder(
             in: releaseStatus,

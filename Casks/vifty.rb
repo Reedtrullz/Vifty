@@ -2,6 +2,8 @@ cask "vifty" do
   version "1.1.0"
   sha256 "5b3d6c67acfb7833e71edeb250d238b7c8c362285189e118278fc5bd350cd884"
 
+  disable! date: "2026-06-16", because: "requires a Developer ID signed and notarized release"
+
   url "https://github.com/Reedtrullz/Vifty/releases/download/v#{version}/Vifty-v#{version}.zip"
   name "Vifty"
   desc "Menu-bar fan control and power monitor for MacBook Pro"

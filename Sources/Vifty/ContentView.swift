@@ -434,18 +434,21 @@ struct ContentView: View {
     }
 
     private var fixedEditor: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let fans = model.snapshot?.fans ?? []
+        let controllableFans = fans.filter(\.controllable)
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Fixed RPM")
                     .font(.headline)
                 Spacer()
-                if let fans = model.snapshot?.fans, fans.count > 1 {
+                if controllableFans.count > 1 {
                     Toggle("Per-fan targets", isOn: $model.usePerFanFixedRPM)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .onChange(of: model.usePerFanFixedRPM) {
                             if model.usePerFanFixedRPM {
-                                model.ensureFixedFanTargets(for: fans)
+                                model.ensureFixedFanTargets(for: controllableFans)
                             }
                             model.applyModeSelection()
                         }
@@ -455,8 +458,8 @@ struct ContentView: View {
                 }
             }
 
-            if let fans = model.snapshot?.fans, model.usePerFanFixedRPM, fans.count > 1 {
-                ForEach(fans) { fan in
+            if model.usePerFanFixedRPM, controllableFans.count > 1 {
+                ForEach(controllableFans) { fan in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(fan.name)
@@ -489,7 +492,7 @@ struct ContentView: View {
                     .padding(.vertical, 2)
                 }
                 .onAppear {
-                    model.ensureFixedFanTargets(for: fans)
+                    model.ensureFixedFanTargets(for: controllableFans)
                 }
             } else {
                 Slider(value: $model.fixedRPM, in: model.fanRange, step: 50)
