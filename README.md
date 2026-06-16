@@ -336,10 +336,9 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --force -- swif
 
 ## Daemon installation
 
-The app bundles a LaunchDaemon plist. On first launch:
+The app bundles a LaunchDaemon plist. When you choose **Install Helper**, **Approve Helper**, **Repair Helper**, or **Reinstall Helper**, Vifty starts the helper install or repair only after that user action; normal app launch only checks and reports helper status.
 
-1. `SMAppService.register()` attempts Login Items approval on macOS 13+.
-2. Fallback: administrator-prompted install via `osascript` to `/Library/PrivilegedHelperTools/` plus `launchctl bootstrap`.
+On macOS 13+, the helper action first uses `SMAppService.register()` for Login Items approval. If registration cannot complete or the helper needs repair, Vifty falls back to an administrator-prompted install via `osascript` to `/Library/PrivilegedHelperTools/` plus `launchctl bootstrap`.
 
 The **Reinstall Helper** button retries this flow. The fallback installer stops any existing launchd service, copies `ViftyDaemon` to `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`, removes stale `BundleProgram`, patches the staged LaunchDaemon plist with `ProgramArguments` pointing at that privileged-helper path, and then bootstraps and kickstarts launchd so the daemon can respond immediately after repair. It sets the helper and LaunchDaemon plist to `root:wheel` ownership, with the executable at `0755` and plist at `0644`, strips quarantine from the staged files, and pre-creates the daemon log files as `0600 root:wheel` before bootstrapping launchd.
 

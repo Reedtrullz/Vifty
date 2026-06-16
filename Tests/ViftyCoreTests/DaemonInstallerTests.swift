@@ -18,6 +18,8 @@ final class DaemonInstallerTests: XCTestCase {
             ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
             ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
             ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
+            ("Fan helper repair was canceled; fan writes stay blocked until the helper is installed.", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
+            ("Fan helper repair failed; fan writes stay blocked. Copy support evidence if it keeps failing.", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
             ("Fan helper plist not found in app bundle", false, "Helper Unavailable", missingBundleDetail, missingBundleDetail, "macOS helper status: bundled plist missing"),
             (
                 "macOS 13 or newer is required for bundled daemon install",
@@ -37,6 +39,36 @@ final class DaemonInstallerTests: XCTestCase {
             XCTAssertEqual(installer.actionHelp, testCase.help, testCase.status)
             XCTAssertEqual(installer.actionDescription, testCase.detail, testCase.status)
             XCTAssertEqual(installer.helperStatusSummary, testCase.statusSummary, testCase.status)
+        }
+    }
+
+    func testAdministratorInstallFailureStatusSanitizesRawFallbackErrors() {
+        let installer = DaemonInstaller()
+        let cases: [(stderr: String, expected: String)] = [
+            (
+                "",
+                "Fan helper repair was canceled or failed; fan writes stay blocked until the helper is installed."
+            ),
+            (
+                "execution error: User canceled. (-128)",
+                "Fan helper repair was canceled; fan writes stay blocked until the helper is installed."
+            ),
+            (
+                "osascript: authorization denied by user",
+                "Fan helper repair was denied; fan writes stay blocked until the helper is installed."
+            ),
+            (
+                "launchctl bootstrap system /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist failed: 5: Input/output error",
+                "Fan helper repair failed; fan writes stay blocked. Copy support evidence if it keeps failing."
+            )
+        ]
+
+        for testCase in cases {
+            let status = installer.administratorInstallFailureStatus(stderr: testCase.stderr)
+
+            XCTAssertEqual(status, testCase.expected, testCase.stderr)
+            XCTAssertFalse(status.contains("osascript"))
+            XCTAssertFalse(status.contains("launchctl"))
         }
     }
 

@@ -44,16 +44,19 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
         let readme = try read("README.md")
 
+        XCTAssertTrue(readme.contains("When you choose **Install Helper**, **Approve Helper**, **Repair Helper**, or **Reinstall Helper**"))
+        XCTAssertTrue(readme.contains("Vifty starts the helper install or repair only after that user action; normal app launch only checks and reports helper status."))
         XCTAssertTrue(readme.contains("copies `ViftyDaemon` to `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`"))
         XCTAssertTrue(readme.contains("removes stale `BundleProgram`"))
         XCTAssertTrue(readme.contains("patches the staged LaunchDaemon plist with `ProgramArguments`"))
+        XCTAssertFalse(readme.contains("On first launch:"))
         XCTAssertFalse(readme.contains("launchd points at the daemon inside the installed app bundle"))
     }
 
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (734 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (735 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))

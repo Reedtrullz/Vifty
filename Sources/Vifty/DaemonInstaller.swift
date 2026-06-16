@@ -64,7 +64,11 @@ final class DaemonInstaller: ObservableObject {
         if status.contains("not installed") {
             return "macOS helper status: not installed"
         }
-        if status.contains("install failed") || status.contains("cancelled") {
+        if status.contains("install failed")
+            || status.contains("repair failed")
+            || status.contains("cancelled")
+            || status.contains("canceled")
+            || status.contains("was denied") {
             return "macOS helper status: last install or repair failed"
         }
         if status.contains("enabled") || status.contains("fan helper installed") {
@@ -209,11 +213,25 @@ final class DaemonInstaller: ObservableObject {
             } else {
                 let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
                 let message = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-                statusText = message.isEmpty ? "Fan helper install was cancelled or failed" : message
+                statusText = administratorInstallFailureStatus(stderr: message)
             }
         } catch {
             statusText = "Fan helper install failed: \(error.localizedDescription)"
         }
+    }
+
+    func administratorInstallFailureStatus(stderr: String) -> String {
+        let normalized = stderr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else {
+            return "Fan helper repair was canceled or failed; fan writes stay blocked until the helper is installed."
+        }
+        if normalized.contains("cancelled") || normalized.contains("canceled") {
+            return "Fan helper repair was canceled; fan writes stay blocked until the helper is installed."
+        }
+        if normalized.contains("denied") || normalized.contains("authorization") {
+            return "Fan helper repair was denied; fan writes stay blocked until the helper is installed."
+        }
+        return "Fan helper repair failed; fan writes stay blocked. Copy support evidence if it keeps failing."
     }
 
     private func escapeForAppleScript(_ value: String) -> String {
