@@ -403,13 +403,13 @@ struct ContentView: View {
             }
 
             Button {
-                model.applyModeSelection()
+                model.performModeSelectionAction()
             } label: {
                 Label(model.modeSelectionActionTitle, systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
+            .disabled(model.modeSelectionActionDisabled)
             .help(model.modeSelectionActionHelp)
         }
     }
@@ -440,7 +440,7 @@ struct ContentView: View {
                     .font(.headline)
                 Spacer()
                 if let fans = model.snapshot?.fans, fans.count > 1 {
-                    Toggle("Per-fan", isOn: $model.usePerFanFixedRPM)
+                    Toggle("Per-fan targets", isOn: $model.usePerFanFixedRPM)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .onChange(of: model.usePerFanFixedRPM) {
@@ -450,6 +450,8 @@ struct ContentView: View {
                             model.applyModeSelection()
                         }
                         .help("Set different fixed RPM targets for fans with different speed ranges")
+                        .accessibilityLabel("Per-fan fixed RPM targets")
+                        .accessibilityHint("Set separate fixed RPM targets for each fan.")
                 }
             }
 
@@ -480,6 +482,9 @@ struct ContentView: View {
                             step: 50
                         )
                         .help("\(fan.name) fixed target. Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM.")
+                        .accessibilityLabel("\(fan.name) fixed RPM target")
+                        .accessibilityValue("\(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) RPM")
+                        .accessibilityHint("\(fan.name) target is clamped to \(fan.minimumRPM)-\(fan.maximumRPM) RPM.")
                     }
                     .padding(.vertical, 2)
                 }
@@ -491,6 +496,9 @@ struct ContentView: View {
                     .onChange(of: model.fixedRPM) {
                         model.applyModeSelection()
                     }
+                    .accessibilityLabel("Fixed RPM target")
+                    .accessibilityValue("\(Int(model.fixedRPM.rounded())) RPM")
+                    .accessibilityHint("Sets one fixed target for every controllable fan.")
                 Text("\(Int(model.fixedRPM.rounded())) RPM")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

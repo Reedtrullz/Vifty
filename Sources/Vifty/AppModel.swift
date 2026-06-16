@@ -395,6 +395,18 @@ final class AppModel: ObservableObject {
         Task { await applyCurrentModeSelection() }
     }
 
+    func performModeSelectionAction() {
+        Task { await performModeSelectionActionNow() }
+    }
+
+    func performModeSelectionActionNow() async {
+        if modeSelectionActionRestoresAuto {
+            await restoreAutoNow()
+        } else {
+            await applyCurrentModeSelection()
+        }
+    }
+
     func restoreAuto() {
         Task { await restoreAutoNow() }
     }
@@ -844,13 +856,21 @@ final class AppModel: ObservableObject {
     }
 
     var modeSelectionActionTitle: String {
-        selectedMode == .auto ? autoRestoreActionTitle : "Apply"
+        modeSelectionActionRestoresAuto ? autoRestoreActionTitle : "Apply"
     }
 
     var modeSelectionActionHelp: String {
-        selectedMode == .auto
+        modeSelectionActionRestoresAuto
             ? autoRestoreActionHelp
             : (manualFanControlBlockedReason ?? "Apply selected fan mode")
+    }
+
+    var modeSelectionActionRestoresAuto: Bool {
+        selectedMode == .auto || manualControlAttentionSummary != nil
+    }
+
+    var modeSelectionActionDisabled: Bool {
+        !modeSelectionActionRestoresAuto && !manualFanControlAvailable
     }
 
     var agentCoolingRestoreActionTitle: String {

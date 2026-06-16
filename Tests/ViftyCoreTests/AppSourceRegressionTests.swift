@@ -215,11 +215,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(appModel.contains("var manualControlAttentionSummary: String?"))
         XCTAssertTrue(appModel.contains("request pending · fan writes blocked"))
         XCTAssertTrue(appModel.contains("Use \\(autoRestoreActionTitle) to stop retries; copy support evidence if repair does not clear it."))
+        XCTAssertTrue(appModel.contains("var modeSelectionActionRestoresAuto: Bool"))
+        XCTAssertTrue(appModel.contains("selectedMode == .auto || manualControlAttentionSummary != nil"))
+        XCTAssertTrue(appModel.contains("var modeSelectionActionDisabled: Bool"))
         XCTAssertTrue(appModel.contains("var helperSupportEvidenceContext: HelperSupportEvidenceContext"))
         XCTAssertTrue(appModel.contains("hotFanWrites="))
         XCTAssertTrue(appModel.contains("controlOwner="))
         XCTAssertTrue(contentView.contains("if let manualControlAttentionSummary = model.manualControlAttentionSummary"))
         XCTAssertTrue(contentView.contains("hourglass.badge.exclamationmark"))
+        XCTAssertTrue(contentView.contains("model.performModeSelectionAction()"))
+        XCTAssertTrue(contentView.contains(".disabled(model.modeSelectionActionDisabled)"))
         XCTAssertTrue(contentView.contains("if let recovery = model.manualControlAttentionRecoverySuggestion"))
         XCTAssertTrue(contentView.contains("Text(recovery)"))
     }
@@ -227,11 +232,18 @@ final class AppSourceRegressionTests: XCTestCase {
     func testFixedRPMPerFanEditorShowsFanSpecificRanges() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
-        XCTAssertTrue(contentView.contains("Toggle(\"Per-fan\", isOn: $model.usePerFanFixedRPM)"))
+        XCTAssertTrue(contentView.contains("Toggle(\"Per-fan targets\", isOn: $model.usePerFanFixedRPM)"))
+        XCTAssertTrue(contentView.contains(".accessibilityLabel(\"Per-fan fixed RPM targets\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityHint(\"Set separate fixed RPM targets for each fan.\")"))
         XCTAssertTrue(contentView.contains("model.ensureFixedFanTargets(for: fans)"))
         XCTAssertTrue(contentView.contains("Text(\"Range \\(fan.minimumRPM)-\\(fan.maximumRPM) RPM\")"))
         XCTAssertTrue(contentView.contains("in: Double(fan.minimumRPM)...Double(fan.maximumRPM)"))
         XCTAssertTrue(contentView.contains(".help(\"\\(fan.name) fixed target. Range \\(fan.minimumRPM)-\\(fan.maximumRPM) RPM.\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityLabel(\"\\(fan.name) fixed RPM target\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityValue(\"\\(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) RPM\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityHint(\"\\(fan.name) target is clamped to \\(fan.minimumRPM)-\\(fan.maximumRPM) RPM.\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityLabel(\"Fixed RPM target\")"))
+        XCTAssertTrue(contentView.contains(".accessibilityHint(\"Sets one fixed target for every controllable fan.\")"))
     }
 
     func testMenuBarNotificationSettingsAreWired() throws {

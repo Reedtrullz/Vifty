@@ -430,7 +430,46 @@ final class AppModelTests: XCTestCase {
             model.manualControlAttentionRecoverySuggestion,
             "Vifty will retry Curve when the helper responds. Use Request Auto to stop retries; copy support evidence if repair does not clear it."
         )
+        XCTAssertEqual(model.modeSelectionActionTitle, "Request Auto")
+        XCTAssertEqual(
+            model.modeSelectionActionHelp,
+            "Request Auto restore; the write cannot be confirmed until the helper responds"
+        )
+        XCTAssertTrue(model.modeSelectionActionRestoresAuto)
+        XCTAssertFalse(model.modeSelectionActionDisabled)
         XCTAssertFalse(model.manualControlAttentionRecoverySuggestion?.contains("before manual fan control") == true)
+    }
+
+    func testManualPendingBlockedPrimaryActionRestoresAutoThroughCoordinator() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 81.2, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { false },
+            agentStatusReader: { nil }
+        )
+        model.selectedMode = .curve
+        model.daemonResponding = false
+        model.daemonReachable = true
+        model.controlState = ControlState(mode: .temperatureCurve(.defaultCurve()))
+        model.snapshot = snapshot
+
+        await model.performModeSelectionActionNow()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredFanIDs, [0])
     }
 
     func testHelperSupportEvidenceContextCapturesHotManualOutageState() {
