@@ -216,6 +216,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   }.freeze
 
   EXPECTED_CAPABILITIES_CONTRACT = {
+    "policyStatusAvailable" => "true",
     "supportsForceRetry" => "true",
     "runLifecycle.childCommandPreflightBeforeCooling" => "true",
     "runLifecycle.autoRestoreAfterChildExit" => "true",
@@ -829,6 +830,20 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "could not validate agent-run-smoke bundle: #{error.message}"
   end
 
+  def agent_run_smoke_command_json(summary_path, summary, command_name, failures)
+    commands = summary["commands"].is_a?(Array) ? summary["commands"] : []
+    command = commands.find { |entry| entry.is_a?(Hash) && entry["name"].to_s == command_name }
+    if command.nil?
+      failures << "agent-run-smoke summary commands is missing #{command_name}"
+      return nil
+    end
+
+    relative_path = agent_run_smoke_local_filename(command["stdout"], "#{command_name} stdout", failures)
+    return nil if relative_path.nil?
+
+    parse_external_json(File.join(File.dirname(summary_path), relative_path), failures, "agent-run-smoke #{command_name} JSON")
+  end
+
   def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
@@ -867,6 +882,20 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       end
       unless %w[requestCooling requestCoolingWithCaution].include?(preflight["recommendedAgentAction"].to_s)
         failures << "passed agent-run-smoke summary must recommend requestCooling or requestCoolingWithCaution"
+      end
+      unless preflight["capabilitiesExitStatus"] == 0 &&
+          preflight["daemonStatusAvailable"] == true &&
+          preflight["policySource"] == "daemonStatus" &&
+          preflight["policyStatusAvailable"] == true
+        failures << "passed agent-run-smoke summary must have daemon-backed capabilities policy status"
+      end
+      pre_capabilities = agent_run_smoke_command_json(path, summary, "pre-capabilities", failures)
+      if pre_capabilities
+        unless pre_capabilities["daemonStatusAvailable"] == true &&
+            pre_capabilities["policySource"] == "daemonStatus" &&
+            pre_capabilities["policyStatusAvailable"] == true
+          failures << "passed agent-run-smoke pre-capabilities JSON must have daemon-backed policy status"
+        end
       end
       unless run["exitStatus"] == 0
         failures << "passed agent-run-smoke summary run.exitStatus must be 0"
@@ -1001,7 +1030,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   COMMON_ZERO_CHECKS.each do |name|
     require_status(checks, name, ["0"], failures)
   end
-  require_status(checks, "viftyctl-capabilities", ["0", "69"], failures)
+  require_status(checks, "viftyctl-capabilities", ["0"], failures)
 
   install_rows = parse_tsv(bundle, "install-provenance.tsv", failures)
   install_fields = field_rows_to_map(install_rows, "install-provenance.tsv", failures)

@@ -40,7 +40,7 @@ missing or contradict the diagnose exit code, the review fails, except legacy
 boolean can be inferred from structured readiness/recovery fields. It also
 writes `capabilitiesDecision` for advertised `viftyctl run` support,
 force-retry discovery, safe `runLifecycle`, safe direct prepare/restore
-lifecycle, metadata limits, daemon status, and unavailable-exit metadata;
+lifecycle, metadata limits, policy status availability, daemon status, and unavailable-exit metadata;
 missing or unsafe capabilities contract fields fail review, except absent
 legacy `metadataLimits` is recorded as a warning for read-only triage evidence.
 It also writes `appInfo` from the captured app plist: app plist command exit

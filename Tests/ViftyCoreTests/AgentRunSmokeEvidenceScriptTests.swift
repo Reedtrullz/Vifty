@@ -66,6 +66,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["state"] as? String, "ready")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(preflight["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(preflight["capabilitiesExitStatus"] as? Int, 0)
+        XCTAssertEqual(preflight["daemonStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(preflight["policySource"] as? String, "daemonStatus")
+        XCTAssertEqual(preflight["policyStatusAvailable"] as? Bool, true)
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCooling")
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
@@ -137,7 +141,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
     func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesDoNotAdvertiseSafeRunLifecycle() throws {
         let harness = try AgentRunSmokeEvidenceHarness(
-            capabilitiesJSON: #"{"schemaVersion":1,"daemonStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto"],"workloads":["build","test"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":false,"signalsForwardedToChild":["INT"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}"#
+            capabilitiesJSON: #"{"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto"],"workloads":["build","test"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":false,"signalsForwardedToChild":["INT"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}"#
         )
 
         let result = try harness.runCollector([
@@ -175,6 +179,54 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
         XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue(run["childExitCode"] is NSNull)
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenPolicyStatusIsUnavailable() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            capabilitiesJSON: #"{"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":false,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}"#
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertTrue(run["exitStatus"] is NSNull)
+        XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesAreNotDaemonBacked() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            capabilitiesJSON: #"{"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}"#
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["capabilitiesExitStatus"] as? Int, 0)
+        XCTAssertEqual(preflight["daemonStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(preflight["policySource"] as? String, "fallbackUnavailable")
+        XCTAssertEqual(preflight["policyStatusAvailable"] as? Bool, true)
     }
 
     func testSmokeCollectorDerivesPassedRunLifecycleProofWhenRunStdoutIsChildOutput() throws {
@@ -272,6 +324,16 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "childExitCode"
         ] {
             XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
+        }
+        let preflight = try XCTUnwrap(defs["preflight"] as? [String: Any])
+        let preflightRequired = try XCTUnwrap(preflight["required"] as? [String])
+        for field in [
+            "capabilitiesExitStatus",
+            "daemonStatusAvailable",
+            "policySource",
+            "policyStatusAvailable"
+        ] {
+            XCTAssertTrue(preflightRequired.contains(field), "preflight should require \(field)")
         }
     }
 }
@@ -428,6 +490,6 @@ private final class AgentRunSmokeEvidenceHarness {
     }
 
     private static let defaultCapabilitiesJSON = """
-    {"schemaVersion":1,"daemonStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}
+    {"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}
     """
 }

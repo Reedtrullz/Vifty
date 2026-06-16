@@ -111,6 +111,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
         XCTAssertEqual(json["daemonStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(json["policyStatusAvailable"] as? Bool, true)
         XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.daemonStatus.rawValue)
         XCTAssertNil(json["agentControlStatusError"] as? String)
         XCTAssertTrue((json["commands"] as? [String])?.contains("run") == true)
@@ -160,6 +161,32 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(policy["prepareCooldownSeconds"] as? Int, 12)
     }
 
+    func testCapabilitiesJSONMarksPolicyStatusUnavailableWhenDaemonStatusOmitsPolicy() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: nil
+            )),
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.capabilities(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["daemonStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(json["policyStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.daemonStatus.rawValue)
+        XCTAssertNil(json["agentControlStatusError"] as? String)
+        let policy = try XCTUnwrap(json["policy"] as? [String: Any])
+        XCTAssertEqual(policy["enabled"] as? Bool, true)
+        XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
+    }
+
     func testCapabilitiesJSONReturnsStaticContractWhenDaemonStatusUnavailable() async throws {
         let runner = ViftyCtlRunner(
             client: FakeAgentControlClient(
@@ -176,6 +203,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
         XCTAssertEqual(json["daemonStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(json["policyStatusAvailable"] as? Bool, false)
         XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.fallbackUnavailable.rawValue)
         XCTAssertTrue((json["agentControlStatusError"] as? String)?.contains("Daemon request timed out") == true)
         XCTAssertTrue((json["commands"] as? [String])?.contains("diagnose") == true)

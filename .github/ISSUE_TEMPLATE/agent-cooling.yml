@@ -97,7 +97,7 @@ body:
     id: capabilities-json
     attributes:
       label: viftyctl capabilities --json
-      description: Paste the read-only capabilities JSON from the same app/CLI build, or attach the file from scripts/collect-agent-cooling-evidence.sh. This captures runLifecycle, policy limits, metadataLimits, supported workloads, and force-retry support used by guarded wrappers.
+      description: Paste the read-only capabilities JSON from the same app/CLI build, or attach the file from scripts/collect-agent-cooling-evidence.sh. This captures runLifecycle, policyStatusAvailable and, when true, daemon-backed policy limits, metadataLimits, supported workloads, and force-retry support used by guarded wrappers.
       render: json
       placeholder: |
         {

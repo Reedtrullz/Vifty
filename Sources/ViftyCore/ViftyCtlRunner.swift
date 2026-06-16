@@ -96,6 +96,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var policy: AgentControlPolicySnapshot
     public var policySource: ViftyCtlPolicySource
     public var daemonStatusAvailable: Bool
+    public var policyStatusAvailable: Bool
     public var agentControlStatusError: String?
     public var supportsForceRetry: Bool
     public var runLifecycle: ViftyCtlRunLifecycleCapabilities
@@ -113,6 +114,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         policy: AgentControlPolicySnapshot,
         policySource: ViftyCtlPolicySource = .daemonStatus,
         daemonStatusAvailable: Bool = true,
+        policyStatusAvailable: Bool = true,
         agentControlStatusError: String? = nil,
         supportsForceRetry: Bool = true,
         runLifecycle: ViftyCtlRunLifecycleCapabilities = ViftyCtlRunLifecycleCapabilities(),
@@ -129,6 +131,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.policy = policy
         self.policySource = policySource
         self.daemonStatusAvailable = daemonStatusAvailable
+        self.policyStatusAvailable = policyStatusAvailable
         self.agentControlStatusError = agentControlStatusError
         self.supportsForceRetry = supportsForceRetry
         self.runLifecycle = runLifecycle
@@ -147,6 +150,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         case policy
         case policySource
         case daemonStatusAvailable
+        case policyStatusAvailable
         case agentControlStatusError
         case supportsForceRetry
         case runLifecycle
@@ -166,6 +170,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         policy = try container.decode(AgentControlPolicySnapshot.self, forKey: .policy)
         policySource = try container.decode(ViftyCtlPolicySource.self, forKey: .policySource)
         daemonStatusAvailable = try container.decode(Bool.self, forKey: .daemonStatusAvailable)
+        policyStatusAvailable = try container.decodeIfPresent(Bool.self, forKey: .policyStatusAvailable) ?? false
         agentControlStatusError = try container.decodeIfPresent(String.self, forKey: .agentControlStatusError)
         supportsForceRetry = try container.decodeIfPresent(Bool.self, forKey: .supportsForceRetry) ?? false
         runLifecycle = try container.decodeIfPresent(
@@ -194,6 +199,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         try container.encode(policy, forKey: .policy)
         try container.encode(policySource, forKey: .policySource)
         try container.encode(daemonStatusAvailable, forKey: .daemonStatusAvailable)
+        try container.encode(policyStatusAvailable, forKey: .policyStatusAvailable)
         if let agentControlStatusError {
             try container.encode(agentControlStatusError, forKey: .agentControlStatusError)
         } else {
@@ -732,14 +738,17 @@ public struct ViftyCtlRunner: Sendable {
     private func capabilitiesReport() async -> ViftyCtlCapabilities {
         do {
             let status = try await client.status()
+            let policy = status.policy ?? AgentControlPolicy(enabled: status.enabled).snapshot
             return ViftyCtlCapabilities(
-                policy: status.policy ?? AgentControlPolicy(enabled: status.enabled).snapshot
+                policy: policy,
+                policyStatusAvailable: status.policy != nil
             )
         } catch {
             return ViftyCtlCapabilities(
                 policy: AgentControlPolicy(enabled: false).snapshot,
                 policySource: .fallbackUnavailable,
                 daemonStatusAvailable: false,
+                policyStatusAvailable: false,
                 agentControlStatusError: error.localizedDescription
             )
         }

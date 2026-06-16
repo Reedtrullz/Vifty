@@ -96,6 +96,10 @@
     "preflight": {
       "type": "object",
       "required": [
+        "capabilitiesExitStatus",
+        "daemonStatusAvailable",
+        "policySource",
+        "policyStatusAvailable",
         "exitStatus",
         "state",
         "recommendedAgentAction",
@@ -104,6 +108,27 @@
         "daemonControlPathReady"
       ],
       "properties": {
+        "capabilitiesExitStatus": {
+          "type": "integer"
+        },
+        "daemonStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policySource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policyStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "exitStatus": {
           "type": "integer"
         },

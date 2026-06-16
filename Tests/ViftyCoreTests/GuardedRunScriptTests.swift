@@ -25,27 +25,77 @@ final class GuardedRunScriptTests: XCTestCase {
         )
     }
 
-    func testGuardedRunAcceptsCapabilitiesUnavailableWhenRunLifecycleIsSafe() throws {
+    func testGuardedRunRejectsCapabilitiesUnavailableEvenWhenRunLifecycleIsSafe() throws {
         let harness = try ScriptHarness(state: "ready", capabilitiesExitCode: 69)
 
         let result = try harness.runGuardedRun([
             "test", "20m", "70", "swift test", "--", "swift", "test"
         ])
 
-        XCTAssertEqual(result.exitCode, 0)
-        XCTAssertEqual(
-            try harness.loggedArguments(),
-            [
-                "run",
-                "--json",
-                "--workload", "test",
-                "--duration", "20m",
-                "--max-rpm-percent", "70",
-                "--reason", "swift test",
-                "--",
-                "swift", "test"
-            ]
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("policyStatusAvailable=true"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsUnavailableCapabilitiesEvenIfPayloadClaimsPolicyStatusAvailable() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilitiesExitCode: 69,
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
         )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon-backed policy status"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsFallbackPolicySourceEvenWithSuccessfulCapabilitiesExit() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon-backed policy status"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRequiresPolicyStatusBeforeTrustingPolicyLimits() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyStatusAvailable: false
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("policyStatusAvailable=true"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRequiresPolicyStatusFieldBeforeTrustingPolicyLimits() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            includePolicyStatusAvailable: false
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("policyStatusAvailable=true"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
     func testGuardedRunRejectsUnexpectedCapabilitiesFailureEvenWhenContractLooksSafe() throws {
@@ -709,6 +759,8 @@ private final class ScriptHarness {
         commandErrorOverride: String? = nil,
         capabilitiesExitCode: Int = 0,
         includeRunLifecycle: Bool = true,
+        includePolicyStatusAvailable: Bool = true,
+        policyStatusAvailable: Bool? = nil,
         supportsForceRetry: Bool = true,
         capabilityCommands: [String] = ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"],
         capabilityWorkloads: [String] = ["build", "test", "localModel", "custom"],
@@ -744,6 +796,8 @@ private final class ScriptHarness {
                 commandErrorOverride: commandErrorOverride,
                 capabilitiesExitCode: capabilitiesExitCode,
                 includeRunLifecycle: includeRunLifecycle,
+                includePolicyStatusAvailable: includePolicyStatusAvailable,
+                policyStatusAvailable: policyStatusAvailable ?? (capabilitiesExitCode == 0),
                 supportsForceRetry: supportsForceRetry,
                 capabilityCommands: capabilityCommands,
                 capabilityWorkloads: capabilityWorkloads,
@@ -850,6 +904,8 @@ private final class ScriptHarness {
         commandErrorOverride: String?,
         capabilitiesExitCode: Int,
         includeRunLifecycle: Bool,
+        includePolicyStatusAvailable: Bool,
+        policyStatusAvailable: Bool,
         supportsForceRetry: Bool,
         capabilityCommands: [String],
         capabilityWorkloads: [String],
@@ -866,6 +922,7 @@ private final class ScriptHarness {
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
             ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
             : "")
+        let policyStatus = includePolicyStatusAvailable ? #""policyStatusAvailable":\#(policyStatusAvailable),"# : ""
         let supportsForceRetryValue = supportsForceRetry ? "true" : "false"
         let commandsJSON = Self.jsonStringArray(capabilityCommands)
         let workloadsJSON = Self.jsonStringArray(capabilityWorkloads)
@@ -875,8 +932,8 @@ private final class ScriptHarness {
         let metadataLimits = metadataLimitsOverride
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(exitCodes)}"#
-            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(exitCodes)}"#)
+            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(exitCodes)}"#
+            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu

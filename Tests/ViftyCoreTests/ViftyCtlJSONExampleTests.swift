@@ -13,6 +13,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(capabilities.workloads.contains("localModel"))
         XCTAssertEqual(capabilities.policySource, .daemonStatus)
         XCTAssertTrue(capabilities.daemonStatusAvailable)
+        XCTAssertTrue(capabilities.policyStatusAvailable)
         XCTAssertNil(capabilities.agentControlStatusError)
         XCTAssertEqual(capabilities.policy.prepareCooldownSeconds, 30)
         XCTAssertTrue(capabilities.supportsForceRetry)
@@ -51,6 +52,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "runLifecycle")
         payload.removeValue(forKey: "directControlLifecycle")
         payload.removeValue(forKey: "metadataLimits")
+        payload.removeValue(forKey: "policyStatusAvailable")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
@@ -59,6 +61,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.runLifecycle, .unsupported)
         XCTAssertEqual(capabilities.directControlLifecycle, .unsupported)
         XCTAssertEqual(capabilities.metadataLimits, .unsupported)
+        XCTAssertFalse(capabilities.policyStatusAvailable)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -372,7 +375,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
 
         let capabilitiesSchema = try readJSON(schemaURL("viftyctl-capabilities.schema.json"))
         let capabilitiesExample = try readJSON(fixtureURL("capabilities.json"))
+        let capabilitiesRequired = try XCTUnwrap(capabilitiesSchema["required"] as? [String])
+        XCTAssertTrue(capabilitiesRequired.contains("policyStatusAvailable"))
+        XCTAssertEqual(capabilitiesExample["policyStatusAvailable"] as? Bool, true)
         let capabilitiesProperties = try XCTUnwrap(capabilitiesSchema["properties"] as? [String: Any])
+        let policyStatusAvailable = try XCTUnwrap(capabilitiesProperties["policyStatusAvailable"] as? [String: Any])
+        XCTAssertEqual(policyStatusAvailable["type"] as? String, "boolean")
         let commandItems = try XCTUnwrap((capabilitiesProperties["commands"] as? [String: Any])?["items"] as? [String: Any])
         XCTAssertEqual(commandItems["enum"] as? [String], ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"])
         XCTAssertEqual(enumValues(named: "policySource", in: capabilitiesProperties), ["daemonStatus", "fallbackUnavailable"])

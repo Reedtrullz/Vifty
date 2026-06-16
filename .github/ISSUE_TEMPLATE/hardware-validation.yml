@@ -215,7 +215,7 @@ body:
         release-artifact-summary	0	0 or skipped	release-trust	Optional verifier summary should pass and match the installed app version when supplied.
         schema-resources	0	0	agent-contract	Bundled viftyctl JSON Schemas should be present and hashed.
         capabilities-schema-resources	0	0	agent-contract	Capabilities output should advertise installed schema resource paths.
-        capabilities-contract	0	0	agent-contract	Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, and supervised force-retry support.
+        capabilities-contract	0	0	agent-contract	Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, policyStatusAvailable: true, and supervised force-retry support.
         launchdaemon-teamid	0	0 for public release	release-trust	Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty.
         spctl-assess-app	0	0 for public release	release-trust	Gatekeeper assessment should pass for notarized releases.
     validations:

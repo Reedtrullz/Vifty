@@ -115,6 +115,7 @@
         "exitStatus",
         "daemonStatusAvailable",
         "policySource",
+        "policyStatusAvailable",
         "supportsRunCommand",
         "supportsForceRetry",
         "runLifecycleSafe",
@@ -144,6 +145,12 @@
             "daemonStatus",
             "fallbackUnavailable",
             null
+          ]
+        },
+        "policyStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "supportsRunCommand": {

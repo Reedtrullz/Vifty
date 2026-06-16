@@ -68,8 +68,8 @@ diagnose decision fields fail review, except legacy `v1.1.x` bundles that omit
 `daemonControlPathReady` may pass only when the reviewer can infer the same
 boolean from structured readiness and recovery fields. It also records
 `capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
-discovery, safe run/direct-control lifecycle, metadata limits, daemon status,
-and unavailable exit-code contract; missing or unsafe capabilities contract
+discovery, safe run/direct-control lifecycle, metadata limits, policy status
+availability, daemon status, and unavailable exit-code contract; missing or unsafe capabilities contract
 fields fail review, except absent legacy `metadataLimits` is a warning rather
 than a blocker for read-only triage evidence. The summary also records
 `appInfo` from the captured app plist: app plist command exit status, bundle

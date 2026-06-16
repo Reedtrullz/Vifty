@@ -31,13 +31,13 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("viftyctl-diagnose.json recommendedRecoveryAction must be one of"))
     }
 
-    func testReviewAcceptsCapabilitiesUnavailableWhenStaticContractEvidencePasses() throws {
+    func testReviewRejectsCapabilitiesUnavailableForHardwareValidationEvidence() throws {
         let harness = try ValidationEvidenceReviewHarness(capabilitiesStatus: "69")
 
         let result = try harness.runReview(mode: "supported-hardware")
 
-        XCTAssertEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode supported-hardware"))
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("viftyctl-capabilities status \"69\" was not one of 0"))
     }
 
     func testReviewRejectsSourceEvidenceWithoutImmutableSourceSHA() throws {
@@ -119,6 +119,21 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv runLifecycle.autoRestoreAfterChildExit actual"))
+    }
+
+    func testReviewRejectsCapabilitiesPolicyStatusDriftEvenWhenSummaryStatusPasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            capabilitiesContractText: ValidationEvidenceReviewHarness.defaultCapabilitiesContractTSV
+                .replacingOccurrences(
+                    of: "policyStatusAvailable\ttrue\ttrue",
+                    with: "policyStatusAvailable\tfalse\ttrue"
+                )
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv policyStatusAvailable actual"))
     }
 
     func testReviewRejectsReviewSummaryTSVStatusDrift() throws {
@@ -600,6 +615,29 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithoutDaemonBackedCapabilities() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            daemonStatusAvailable: false,
+            policySource: "fallbackUnavailable",
+            policyStatusAvailable: true
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have daemon-backed capabilities policy status"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -940,7 +978,10 @@ private final class ValidationEvidenceReviewHarness {
         coolingLeasePrepared: Bool = true,
         autoRestoreAttempted: Bool = true,
         autoRestoreSucceeded: Bool = true,
-        childExitCode: Int = 0
+        childExitCode: Int = 0,
+        daemonStatusAvailable: Bool = true,
+        policySource: String = "daemonStatus",
+        policyStatusAvailable: Bool = true
     ) throws -> URL {
         try writeAgentRunSmokeBundleSummary(
             status: status,
@@ -949,7 +990,10 @@ private final class ValidationEvidenceReviewHarness {
             coolingLeasePrepared: coolingLeasePrepared,
             autoRestoreAttempted: autoRestoreAttempted,
             autoRestoreSucceeded: autoRestoreSucceeded,
-            childExitCode: childExitCode
+            childExitCode: childExitCode,
+            daemonStatusAvailable: daemonStatusAvailable,
+            policySource: policySource,
+            policyStatusAvailable: policyStatusAvailable
         )
     }
 
@@ -960,7 +1004,10 @@ private final class ValidationEvidenceReviewHarness {
         coolingLeasePrepared: Bool = true,
         autoRestoreAttempted: Bool = true,
         autoRestoreSucceeded: Bool = true,
-        childExitCode: Int = 0
+        childExitCode: Int = 0,
+        daemonStatusAvailable: Bool = true,
+        policySource: String = "daemonStatus",
+        policyStatusAvailable: Bool = true
     ) throws -> URL {
         let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
@@ -979,8 +1026,17 @@ private final class ValidationEvidenceReviewHarness {
                 "childExitCode": NSNull()
             ]
             commands = [
+                ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
                 ["name": "pre-diagnose", "status": 75, "stdout": "pre-diagnose.json", "stderr": "pre-diagnose.stderr", "statusFile": "pre-diagnose.status"]
             ]
+            try writeAgentRunSmokeCommandFiles(
+                in: smokeBundleURL,
+                name: "pre-capabilities",
+                status: 0,
+                stdout: "pre-capabilities.json",
+                stderr: "pre-capabilities.stderr",
+                stdoutContents: #"{"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true}"#
+            )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "pre-diagnose",
@@ -1001,9 +1057,18 @@ private final class ValidationEvidenceReviewHarness {
                 "childExitCode": childExitCode
             ]
             commands = [
+                ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
                 ["name": "pre-diagnose", "status": 0, "stdout": "pre-diagnose.json", "stderr": "pre-diagnose.stderr", "statusFile": "pre-diagnose.status"],
                 ["name": "viftyctl-run", "status": runExitStatus, "stdout": "viftyctl-run.json", "stderr": "viftyctl-run.stderr", "statusFile": "viftyctl-run.status"]
             ]
+            try writeAgentRunSmokeCommandFiles(
+                in: smokeBundleURL,
+                name: "pre-capabilities",
+                status: 0,
+                stdout: "pre-capabilities.json",
+                stderr: "pre-capabilities.stderr",
+                stdoutContents: #"{"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable)}"#
+            )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "pre-diagnose",
@@ -1042,7 +1107,11 @@ private final class ValidationEvidenceReviewHarness {
                 "recommendedAgentAction": status == "blocked" ? "doNotRequestCooling" : "requestCooling",
                 "recommendedRecoveryAction": status == "blocked" ? "repairHelper" : "none",
                 "safeToRequestCooling": status != "blocked",
-                "daemonControlPathReady": status != "blocked"
+                "daemonControlPathReady": status != "blocked",
+                "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
+                "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
+                "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
+                "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable
             ],
             "run": run,
             "commands": commands
@@ -1498,6 +1567,7 @@ private final class ValidationEvidenceReviewHarness {
 
     static let defaultCapabilitiesContractTSV = """
     field\tactual\texpected
+    policyStatusAvailable\ttrue\ttrue
     supportsForceRetry\ttrue\ttrue
     runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue
     runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue

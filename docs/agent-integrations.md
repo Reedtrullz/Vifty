@@ -51,7 +51,7 @@ after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
 read-only checks, print the diagnose JSON, refuse to request cooling, and avoid the uncooled fallback when Vifty recommends backing off or restoring Auto first.
 
-The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the CLI no longer advertises `run`, if the requested workload is not advertised, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
+The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `policyStatusAvailable` is missing or not true, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 ````
 
 ## Codex
