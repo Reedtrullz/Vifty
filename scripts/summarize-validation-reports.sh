@@ -290,6 +290,12 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
       valid = false
     end
 
+    if result["manualSmokeTestResult"].to_s == "passed-auto-restored" &&
+        result["manualSmokeTestSource"].to_s.strip.empty?
+      failures << "#{path} manualSmokeTestSource is required when manualSmokeTestResult is passed-auto-restored"
+      valid = false
+    end
+
     valid
   end
 

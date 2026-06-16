@@ -187,6 +187,10 @@
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
+    "requiredNonEmptyString": {
+      "type": "string",
+      "pattern": "\\S"
+    },
     "versionTag": {
       "type": "string",
       "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$"
@@ -385,6 +389,25 @@
             "properties": {
               "installSource": {
                 "$ref": "#/$defs/releaseInstallSource"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "manualSmokeTestResult": {
+                "const": "passed-auto-restored"
+              }
+            },
+            "required": [
+              "manualSmokeTestResult"
+            ]
+          },
+          "then": {
+            "properties": {
+              "manualSmokeTestSource": {
+                "$ref": "#/$defs/requiredNonEmptyString"
               }
             }
           }

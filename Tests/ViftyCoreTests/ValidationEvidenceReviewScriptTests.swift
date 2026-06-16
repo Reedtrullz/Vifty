@@ -457,6 +457,24 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewRejectsValidatedManualSmokeWithoutSource() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/source-less-manual-smoke-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored"
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("manual smoke result passed-auto-restored requires --manual-smoke-source"))
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "failed")
+        XCTAssertEqual(summary["manualSmokeTestResult"] as? String, "passed-auto-restored")
+        XCTAssertEqual(summary["manualSmokeTestSource"] as? String, "")
+    }
+
     func testReviewWritesValidatedAgentRunSmokeSummary() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("summaries/agent-run-review.json")

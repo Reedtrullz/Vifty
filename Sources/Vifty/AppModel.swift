@@ -694,8 +694,11 @@ final class AppModel: ObservableObject {
         } else if let temperatureAttentionSummary {
             parts.append(temperatureAttentionSummary)
         }
-        if fanWriteBlockedWhileHotSummary != nil {
+        let hasHotFanWriteBlock = fanWriteBlockedWhileHotSummary != nil
+        if hasHotFanWriteBlock {
             parts.append("Fan writes blocked")
+        } else if helperHealthAttentionIsActionable {
+            parts.append(helperHealthMenuSummary)
         }
         if let agentCoolingMenuSummary {
             parts.append(agentCoolingMenuSummary)
@@ -708,22 +711,46 @@ final class AppModel: ObservableObject {
         case .fanIcon:
             return menuTitle
         case .temperature:
-            return menuBarTemperatureText ?? menuTitle
+            return menuBarLabelWithAttention(menuBarTemperatureText ?? menuTitle)
         case .fanRPM:
-            return menuBarFanText ?? menuTitle
+            return menuBarLabelWithAttention(menuBarFanText ?? menuTitle)
         case .averageFanRPM:
-            return menuBarAverageFanText ?? menuTitle
+            return menuBarLabelWithAttention(menuBarAverageFanText ?? menuTitle)
         case .adapterWattage:
-            return menuBarPowerText ?? menuTitle
+            return menuBarLabelWithAttention(menuBarPowerText ?? menuTitle)
         case .temperatureAndRPM:
             if let temperature = menuBarTemperatureText,
                let fan = menuBarFanText {
-                return "\(temperature) | \(fan)"
+                return menuBarLabelWithAttention("\(temperature) | \(fan)")
             }
             return menuTitle
         case .compactSummary:
             return menuTitle
         }
+    }
+
+    private func menuBarLabelWithAttention(_ label: String) -> String {
+        guard let attention = menuBarMetricAttentionSummary,
+              !label.contains(attention)
+        else {
+            return label
+        }
+        return "\(label) | \(attention)"
+    }
+
+    private var menuBarMetricAttentionSummary: String? {
+        if fanWriteBlockedWhileHotSummary != nil {
+            return "Fan writes blocked"
+        }
+        if helperHealthAttentionIsActionable {
+            return helperHealthMenuSummary
+        }
+        return nil
+    }
+
+    private var helperHealthAttentionIsActionable: Bool {
+        helperHealthNeedsAttention &&
+            (hasCompletedHardwarePoll || daemonReachable || daemonResponding || agentControlStatusError != nil || lastError != nil)
     }
 
     var menuBarLabelUsesFanIcon: Bool {

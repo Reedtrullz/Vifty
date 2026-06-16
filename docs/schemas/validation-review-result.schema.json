@@ -199,6 +199,25 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "manualSmokeTestResult": {
+            "const": "passed-auto-restored"
+          }
+        },
+        "required": [
+          "manualSmokeTestResult"
+        ]
+      },
+      "then": {
+        "properties": {
+          "manualSmokeTestSource": {
+            "$ref": "#/$defs/requiredNonEmptyString"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -283,6 +302,10 @@
     "requiredGitSHA": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
+    },
+    "requiredNonEmptyString": {
+      "type": "string",
+      "pattern": "\\S"
     },
     "versionTag": {
       "type": "string",

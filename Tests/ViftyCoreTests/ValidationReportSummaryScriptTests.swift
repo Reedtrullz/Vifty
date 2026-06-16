@@ -201,6 +201,35 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | source: v1.1.0@aaaaaaa<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
     }
 
+    func testSummarizerRejectsValidatedManualSmokeWithoutSource() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "source-less-manual-smoke/review-result.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,1",
+            safeToRequestCooling: true,
+            manualSmokeTestResult: "passed-auto-restored",
+            manualSmokeTestSource: ""
+        )
+        let jsonURL = harness.rootURL.appendingPathComponent("summary/report-index.json")
+        let tsvURL = harness.rootURL.appendingPathComponent("summary/report-index.tsv")
+        let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
+
+        let result = try harness.runSummarizer([
+            "--input", reviewURL.path,
+            "--output-json", jsonURL.path,
+            "--output-tsv", tsvURL.path,
+            "--output-markdown", markdownURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("manualSmokeTestSource is required when manualSmokeTestResult is passed-auto-restored"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: jsonURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tsvURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markdownURL.path))
+    }
+
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/validation-report-index.schema.json")
@@ -254,7 +283,22 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
         XCTAssertNotNil(defs["requiredGitSHA"] as? [String: Any])
+        let requiredNonEmptyString = try XCTUnwrap(defs["requiredNonEmptyString"] as? [String: Any])
+        XCTAssertEqual(requiredNonEmptyString["pattern"] as? String, "\\S")
         XCTAssertNotNil(defs["versionTag"] as? [String: Any])
+        let reportAllOf = try XCTUnwrap(report["allOf"] as? [[String: Any]])
+        XCTAssertTrue(reportAllOf.contains { condition in
+            guard
+                let ifBlock = condition["if"] as? [String: Any],
+                let ifProperties = ifBlock["properties"] as? [String: Any],
+                let result = ifProperties["manualSmokeTestResult"] as? [String: Any],
+                result["const"] as? String == "passed-auto-restored",
+                let thenBlock = condition["then"] as? [String: Any],
+                let thenProperties = thenBlock["properties"] as? [String: Any],
+                let source = thenProperties["manualSmokeTestSource"] as? [String: Any]
+            else { return false }
+            return source["$ref"] as? String == "#/$defs/requiredNonEmptyString"
+        })
         let releaseInstallSource = try XCTUnwrap(defs["releaseInstallSource"] as? [String: Any])
         let releaseInstallSourceValues = try XCTUnwrap(releaseInstallSource["enum"] as? [String])
         XCTAssertTrue(releaseInstallSourceValues.contains("notarized-github-release"))
@@ -297,7 +341,22 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
         XCTAssertNotNil(defs["requiredGitSHA"] as? [String: Any])
+        let requiredNonEmptyString = try XCTUnwrap(defs["requiredNonEmptyString"] as? [String: Any])
+        XCTAssertEqual(requiredNonEmptyString["pattern"] as? String, "\\S")
         XCTAssertNotNil(defs["versionTag"] as? [String: Any])
+        let allOf = try XCTUnwrap(schema["allOf"] as? [[String: Any]])
+        XCTAssertTrue(allOf.contains { condition in
+            guard
+                let ifBlock = condition["if"] as? [String: Any],
+                let ifProperties = ifBlock["properties"] as? [String: Any],
+                let result = ifProperties["manualSmokeTestResult"] as? [String: Any],
+                result["const"] as? String == "passed-auto-restored",
+                let thenBlock = condition["then"] as? [String: Any],
+                let thenProperties = thenBlock["properties"] as? [String: Any],
+                let source = thenProperties["manualSmokeTestSource"] as? [String: Any]
+            else { return false }
+            return source["$ref"] as? String == "#/$defs/requiredNonEmptyString"
+        })
     }
 
     func testSummarizerPrintsTSVToStdoutWhenNoOutputTSVIsProvided() throws {

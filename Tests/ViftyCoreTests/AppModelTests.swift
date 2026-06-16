@@ -889,6 +889,42 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "65 C | 2400 RPM | 96 W adapter")
     }
 
+    func testMenuTitleShowsHelperAttentionWhenFanTelemetryIsReadOnly() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 65, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.daemonReachable = true
+        model.daemonResponding = false
+
+        XCTAssertEqual(model.helperHealthState, .telemetryOnly)
+        XCTAssertEqual(model.menuTitle, "65 C | 2400 RPM | Fan writes blocked")
+        XCTAssertEqual(model.menuPanelTitle, "65 C | 2400 RPM | Fan writes blocked")
+        model.menuBarDisplayMode = .temperature
+        XCTAssertEqual(model.menuBarLabelText, "65 C | Fan writes blocked")
+    }
+
+    func testMenuTitleShowsHelperAttentionWhenDaemonIsUnreachable() {
+        let model = AppModel()
+        model.hasCompletedHardwarePoll = true
+        model.daemonReachable = false
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+
+        XCTAssertEqual(model.helperHealthState, .unreachable)
+        XCTAssertEqual(model.menuTitle, "Vifty | Helper not responding")
+        XCTAssertEqual(model.menuPanelTitle, "Vifty | Helper not responding")
+    }
+
     func testMenuPanelTitleOmitsPowerSummaryButKeepsWarnings() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
@@ -951,6 +987,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
         XCTAssertEqual(model.menuPanelTitle, "91 C | 1780 RPM | High temp | Fan writes blocked")
         XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
+        model.menuBarDisplayMode = .temperatureAndRPM
+        XCTAssertEqual(model.menuBarLabelText, "91 C | 1780 RPM | Fan writes blocked")
     }
 
     func testFanWritesBlockedWhileHotRequiresBlockedHelperWritePath() {
@@ -1523,7 +1561,7 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
 
         XCTAssertEqual(model.powerSnapshot, expectedPower)
-        XCTAssertEqual(model.menuTitle, "64 C | 2500 RPM | 16.9 W drain")
+        XCTAssertEqual(model.menuTitle, "64 C | 2500 RPM | 16.9 W drain | Fan writes blocked")
     }
 
     func testPollOnceTreatsFanSnapshotAsReachableWhenPingFails() async {
@@ -2494,6 +2532,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.agentCoolingRecoverySuggestion)
         XCTAssertFalse(model.agentCoolingNeedsAttention)
         XCTAssertFalse(model.menuTitle.contains("Agent status unavailable"))
+        XCTAssertTrue(model.menuTitle.contains("Fan writes blocked"))
+        model.menuBarDisplayMode = .temperature
+        XCTAssertFalse(model.menuBarLabelText.contains("Agent status unavailable"))
+        XCTAssertTrue(model.menuBarLabelText.contains("Fan writes blocked"))
         XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
     }
 

@@ -61,7 +61,7 @@ For full conventions, see [AGENTS.md](AGENTS.md).
 6. **Update documentation** if you change public APIs, CLI flags, architecture rules, JSON contracts, release behavior, compatibility claims, or safety policy.
 7. **Sign your commits** — we prefer signed commits.
 
-Tagged public releases follow [docs/release.md](docs/release.md) and require Developer ID signing plus notarization.
+Public release mode must be explicit. Current source-first tags may publish source plus clearly marked unsigned-dev tester artifacts while Apple Developer Program credentials are unavailable, without claiming Developer ID signing, notarization, Homebrew trust, or official trusted binary status. Future trusted binary releases follow [docs/release.md](docs/release.md) and require Developer ID signing, notarization, stapling, release verification, and Homebrew updates only after the canonical artifact passes those checks.
 
 ## Issue Triage
 

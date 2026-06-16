@@ -1148,8 +1148,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     case manual_smoke_result
     when "passed-auto-restored"
-      if manual_smoke_source.to_s.empty?
-        warnings << "manual smoke test passed, but no issue URL or source note was recorded"
+      if manual_smoke_source.to_s.strip.empty?
+        failures << "manual smoke result passed-auto-restored requires --manual-smoke-source"
       end
     when "not-recorded"
       warnings << "manual fan-write smoke-test result is not recorded; keep this report as candidate evidence"

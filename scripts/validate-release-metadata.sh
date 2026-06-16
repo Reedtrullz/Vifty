@@ -286,9 +286,9 @@ fi
 
 if [[ "${RELEASE_METADATA_MODE}" = "source-first" ]]; then
   if [[ "${bundle_version}" = "${cask_version}" ]]; then
-    echo "Source-first release metadata OK: bundle version ${bundle_version}; Homebrew cask remains canonical for the future Developer ID lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+    echo "Source-first release metadata OK: bundle version ${bundle_version}; Homebrew cask remains held for the future Developer ID lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
   else
-    echo "Source-first release metadata OK: bundle version ${bundle_version}, cask version ${cask_version}; Homebrew may remain on its prior trusted-binary lane and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
+    echo "Source-first release metadata OK: bundle version ${bundle_version}, cask version ${cask_version}; Homebrew remains held until a future Developer ID release and source-first mode does not publish or require Vifty-v${bundle_version}.zip"
   fi
 else
   echo "Release metadata OK: version ${bundle_version}, artifact Vifty-v${bundle_version}.zip"

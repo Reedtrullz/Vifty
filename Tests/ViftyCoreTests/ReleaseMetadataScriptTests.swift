@@ -27,7 +27,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.contains("Source-first release metadata OK: bundle version 1.1.1, cask version 1.1.0"))
-        XCTAssertTrue(result.stdout.contains("Homebrew may remain on its prior trusted-binary lane"))
+        XCTAssertTrue(result.stdout.contains("Homebrew remains held until a future Developer ID release"))
         XCTAssertTrue(result.stdout.contains("source-first mode does not publish or require Vifty-v1.1.1.zip"))
     }
 
