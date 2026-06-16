@@ -40,6 +40,42 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode supported-hardware"))
     }
 
+    func testReviewRejectsSourceEvidenceWithoutImmutableSourceSHA() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip", "local-ad-hoc-build"] {
+            let harness = try ValidationEvidenceReviewHarness(
+                installSource: installSource,
+                sourceRef: installSource == "local-ad-hoc-build" ? "" : "v1.2.3",
+                sourceSHA: ""
+            )
+
+            let result = try harness.runReview(mode: "supported-hardware")
+
+            XCTAssertEqual(result.exitCode, 65)
+            XCTAssertTrue(
+                result.stderr.contains("\(installSource) evidence requires install-provenance.tsv sourceSHA"),
+                installSource
+            )
+        }
+    }
+
+    func testReviewRejectsSourceBuildEvidenceWithoutVersionTagRef() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip"] {
+            let harness = try ValidationEvidenceReviewHarness(
+                installSource: installSource,
+                sourceRef: "main",
+                sourceSHA: String(repeating: "c", count: 40)
+            )
+
+            let result = try harness.runReview(mode: "supported-hardware")
+
+            XCTAssertEqual(result.exitCode, 65)
+            XCTAssertTrue(
+                result.stderr.contains("\(installSource) evidence requires install-provenance.tsv sourceRef"),
+                installSource
+            )
+        }
+    }
+
     func testReviewRejectsSchemaResourceDriftEvenWhenSummaryStatusPasses() throws {
         let harness = try ValidationEvidenceReviewHarness(
             schemaResourcesText: ValidationEvidenceReviewHarness.defaultSchemaResourcesTSV

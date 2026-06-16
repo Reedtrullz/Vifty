@@ -154,6 +154,53 @@
       "$ref": "#/$defs/stringArray"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "installSource": {
+            "enum": [
+              "source-build-tag",
+              "source-first-unsigned-dev-zip",
+              "local-ad-hoc-build"
+            ]
+          }
+        },
+        "required": [
+          "installSource"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sourceSHA": {
+            "$ref": "#/$defs/requiredGitSHA"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "installSource": {
+            "enum": [
+              "source-build-tag",
+              "source-first-unsigned-dev-zip"
+            ]
+          }
+        },
+        "required": [
+          "installSource"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sourceRef": {
+            "$ref": "#/$defs/versionTag"
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "nullableString": {
       "type": [
@@ -232,6 +279,14 @@
     "gitSHA": {
       "type": "string",
       "pattern": "^([0-9a-f]{40})?$"
+    },
+    "requiredGitSHA": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "versionTag": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$"
     },
     "sha256": {
       "type": "string",

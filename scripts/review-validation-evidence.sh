@@ -241,6 +241,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     other
   ].freeze
 
+  SOURCE_SHA_REQUIRED_INSTALL_SOURCES = %w[
+    source-build-tag
+    source-first-unsigned-dev-zip
+    local-ad-hoc-build
+  ].freeze
+
   RELEASE_INSTALL_SOURCES = %w[
     notarized-github-release
     homebrew-cask
@@ -605,10 +611,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     if install_source.empty? || install_source == "not-recorded"
       warnings << "install source provenance is not recorded; keep compatibility and trust claims conservative"
     end
+    if SOURCE_SHA_REQUIRED_INSTALL_SOURCES.include?(install_source) && fields["sourceSHA"].to_s.empty?
+      failures << "#{install_source} evidence requires install-provenance.tsv sourceSHA to pin the immutable source commit"
+    end
     if %w[source-build-tag source-first-unsigned-dev-zip].include?(install_source) &&
-        fields["sourceRef"].to_s.empty? &&
-        fields["sourceSHA"].to_s.empty?
-      warnings << "#{install_source} evidence should record sourceRef or sourceSHA before promotion"
+        !fields["sourceRef"].to_s.match?(/\Av[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?\z/)
+      failures << "#{install_source} evidence requires install-provenance.tsv sourceRef to be the version tag used for the source build"
     end
     if install_source == "source-first-unsigned-dev-zip" && fields["sourceArtifactSHA256"].to_s.empty?
       warnings << "source-first unsigned-dev zip evidence should include sourceArtifactSHA256 when the tester zip is available"

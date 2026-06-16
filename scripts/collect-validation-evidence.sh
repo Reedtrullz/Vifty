@@ -22,7 +22,11 @@ Options:
                             notarized-github-release, homebrew-cask,
                             local-developer-id-build, local-ad-hoc-build, other.
   --source-ref <ref>        Record the source tag/ref/commit used for the build.
+                            Required version tag for source-build-tag and
+                            source-first-unsigned-dev-zip evidence.
   --source-sha <sha>        Record the immutable 40-character source commit SHA.
+                            Required for source-build-tag,
+                            source-first-unsigned-dev-zip, and local-ad-hoc-build.
   --source-artifact <path>  Hash the source-first tester zip or release artifact
                             that was installed, when available locally.
   --include-probe-local     Also run ViftyHelper probeLocal. Run the script with sudo if
@@ -453,8 +457,27 @@ capture_install_provenance() {
       status=1
     else
       normalized_source_sha="$(printf '%s' "${SOURCE_SHA}" | /usr/bin/tr '[:upper:]' '[:lower:]')"
+      SOURCE_SHA="${normalized_source_sha}"
     fi
   fi
+
+  case "${INSTALL_SOURCE}" in
+    source-build-tag|source-first-unsigned-dev-zip|local-ad-hoc-build)
+      if [[ -z "${normalized_source_sha}" ]]; then
+        printf '%s evidence requires --source-sha with the immutable 40-character source commit SHA\n' "${INSTALL_SOURCE}" >> "${stderr_path}"
+        status=1
+      fi
+      ;;
+  esac
+
+  case "${INSTALL_SOURCE}" in
+    source-build-tag|source-first-unsigned-dev-zip)
+      if [[ ! "${SOURCE_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+        printf '%s evidence requires --source-ref to be the version tag used for the source build, for example v1.1.1\n' "${INSTALL_SOURCE}" >> "${stderr_path}"
+        status=1
+      fi
+      ;;
+  esac
 
   if [[ -n "${SOURCE_ARTIFACT_PATH}" ]]; then
     artifact_name="$(basename "${SOURCE_ARTIFACT_PATH}")"

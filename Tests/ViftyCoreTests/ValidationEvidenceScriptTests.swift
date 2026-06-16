@@ -293,8 +293,68 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let summary = try harness.readJSON("review-summary.json")
         XCTAssertEqual(summary["installSource"] as? String, "source-first-unsigned-dev-zip")
         XCTAssertEqual(summary["sourceRef"] as? String, "v1.1.0")
-        XCTAssertEqual(summary["sourceSHA"] as? String, sourceSHA)
+        XCTAssertEqual(summary["sourceSHA"] as? String, sourceSHA.lowercased())
         XCTAssertEqual(summary["sourceArtifactPath"] as? String, artifactURL.path)
+    }
+
+    func testCollectorMarksSourceEvidenceWithoutImmutableSourceSHAIncomplete() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip", "local-ad-hoc-build"] {
+            let harness = try ValidationEvidenceHarness()
+            var arguments = [
+                "--app", harness.appURL.path,
+                "--output", harness.outputURL.path,
+                "--install-source", installSource
+            ]
+            if installSource != "local-ad-hoc-build" {
+                arguments += ["--source-ref", "v1.1.0"]
+            }
+
+            let result = try harness.runCollector(arguments)
+
+            XCTAssertEqual(result.exitCode, 0)
+            XCTAssertEqual(try harness.read("install-provenance.status").trimmingCharacters(in: .whitespacesAndNewlines), "1")
+            XCTAssertTrue(
+                try harness.read("install-provenance.stderr")
+                    .contains("\(installSource) evidence requires --source-sha"),
+                installSource
+            )
+            XCTAssertTrue(try harness.read("review-summary.tsv").contains("install-provenance\t1\t0\tsource-and-release-trust"))
+        }
+    }
+
+    func testCollectorMarksSourceBuildEvidenceWithoutVersionTagRefIncomplete() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip"] {
+            let harness = try ValidationEvidenceHarness()
+            let result = try harness.runCollector([
+                "--app", harness.appURL.path,
+                "--output", harness.outputURL.path,
+                "--install-source", installSource,
+                "--source-sha", String(repeating: "a", count: 40)
+            ])
+
+            XCTAssertEqual(result.exitCode, 0)
+            XCTAssertEqual(try harness.read("install-provenance.status").trimmingCharacters(in: .whitespacesAndNewlines), "1")
+            XCTAssertTrue(
+                try harness.read("install-provenance.stderr")
+                    .contains("\(installSource) evidence requires --source-ref to be the version tag"),
+                installSource
+            )
+        }
+    }
+
+    func testCollectorAcceptsLocalAdHocBuildWithImmutableSourceSHAOnly() throws {
+        let harness = try ValidationEvidenceHarness()
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path,
+            "--install-source", "local-ad-hoc-build",
+            "--source-sha", String(repeating: "b", count: 40)
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(try harness.read("install-provenance.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertTrue(try harness.read("install-provenance.tsv").contains("sourceSHA\t\(String(repeating: "b", count: 40))"))
     }
 
     func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {

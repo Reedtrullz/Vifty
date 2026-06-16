@@ -14,7 +14,7 @@ body:
 
         For source-first `v1.1.1` reports, add `--install-source source-build-tag --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972` when you built from the immutable source tag, or `--install-source source-first-unsigned-dev-zip --source-ref v1.1.1 --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip` when you installed the unsigned tester zip and still have it locally.
 
-        For current `main` or other local ad-hoc builds, use `--install-source local-ad-hoc-build --source-ref main --source-sha <40-character-source-sha>` instead. Do not label post-release local builds as `source-build-tag` unless the installed app was actually built from an immutable release tag.
+        For current `main` or other local ad-hoc builds, use `--install-source local-ad-hoc-build --source-ref main --source-sha <40-character-source-sha>` instead. `--source-sha` is required for source-build-tag, source-first-unsigned-dev-zip, and local-ad-hoc-build evidence; source-build-tag and source-first-unsigned-dev-zip also require a version tag source ref. Do not label post-release local builds as `source-build-tag` unless the installed app was actually built from an immutable release tag.
 
         The bundle includes read-only diagnostics plus bundle plist, LaunchDaemon TeamID, signing, notarization, Gatekeeper, and privacy-review evidence for the app, CLI, helper, and daemon. Check privacy-review.tsv before posting publicly; redact files it flags or share them privately with maintainers.
 
@@ -59,7 +59,7 @@ body:
     id: source-provenance
     attributes:
       label: Source/ref or artifact checksum
-      description: For source-first or local ad-hoc reports, paste the tag/ref, exact source commit SHA, and the unsigned-dev zip SHA-256 if applicable. These should match install-provenance.tsv.
+      description: For source-first or local ad-hoc reports, paste the tag/ref, required exact 40-character source commit SHA, and the unsigned-dev zip SHA-256 if applicable. These should match install-provenance.tsv.
       placeholder: e.g. v1.1.1 / a82f2237ff39c24a6b366dca8f95a17ee54fd972 / Vifty-v1.1.1-unsigned-dev.zip sha256 ... or main / <40-character-source-sha>
     validations:
       required: false

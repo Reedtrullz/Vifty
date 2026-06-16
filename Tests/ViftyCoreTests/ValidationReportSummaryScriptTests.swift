@@ -253,6 +253,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(installSourceValues.contains(""))
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
+        XCTAssertNotNil(defs["requiredGitSHA"] as? [String: Any])
+        XCTAssertNotNil(defs["versionTag"] as? [String: Any])
         let releaseInstallSource = try XCTUnwrap(defs["releaseInstallSource"] as? [String: Any])
         let releaseInstallSourceValues = try XCTUnwrap(releaseInstallSource["enum"] as? [String])
         XCTAssertTrue(releaseInstallSourceValues.contains("notarized-github-release"))
@@ -294,6 +296,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let installSourceValues = try XCTUnwrap(installSource["enum"] as? [String])
         XCTAssertTrue(installSourceValues.contains("source-build-tag"))
         XCTAssertTrue(installSourceValues.contains("source-first-unsigned-dev-zip"))
+        XCTAssertNotNil(defs["requiredGitSHA"] as? [String: Any])
+        XCTAssertNotNil(defs["versionTag"] as? [String: Any])
     }
 
     func testSummarizerPrintsTSVToStdoutWhenNoOutputTSVIsProvided() throws {
@@ -413,6 +417,84 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             result.stderr.contains("release mode requires installSource notarized-github-release, homebrew-cask, or local-developer-id-build"),
             result.stderr
         )
+    }
+
+    func testSummarizerRejectsSourceEvidenceWithoutImmutableSourceSHA() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip", "local-ad-hoc-build"] {
+            let harness = try ValidationReportSummaryHarness()
+            try harness.writeReviewResult(
+                at: "\(installSource)/review-result.json",
+                status: "passed",
+                mode: "supported-hardware",
+                modelIdentifier: "MacBookPro18,3",
+                safeToRequestCooling: true,
+                installSource: installSource,
+                sourceRef: installSource == "local-ad-hoc-build" ? "" : "v1.1.0",
+                sourceSHA: ""
+            )
+
+            let result = try harness.runSummarizer(["--input", harness.rootURL.path])
+
+            XCTAssertEqual(result.exitCode, 65)
+            XCTAssertTrue(
+                result.stderr.contains("\(installSource) review result requires sourceSHA"),
+                installSource
+            )
+        }
+    }
+
+    func testSummarizerRejectsSourceBuildEvidenceWithoutVersionTagRef() throws {
+        for installSource in ["source-build-tag", "source-first-unsigned-dev-zip"] {
+            let harness = try ValidationReportSummaryHarness()
+            try harness.writeReviewResult(
+                at: "\(installSource)/review-result.json",
+                status: "passed",
+                mode: "supported-hardware",
+                modelIdentifier: "MacBookPro18,3",
+                safeToRequestCooling: true,
+                installSource: installSource,
+                sourceRef: "main",
+                sourceSHA: String(repeating: "d", count: 40)
+            )
+
+            let result = try harness.runSummarizer(["--input", harness.rootURL.path])
+
+            XCTAssertEqual(result.exitCode, 65)
+            XCTAssertTrue(
+                result.stderr.contains("\(installSource) review result requires sourceRef"),
+                installSource
+            )
+        }
+    }
+
+    func testSummarizerDoesNotWriteCandidateRowsWhenSourceSHAIsMissing() throws {
+        let harness = try ValidationReportSummaryHarness()
+        try harness.writeReviewResult(
+            at: "supported/review-result.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            installSource: "source-build-tag",
+            sourceRef: "v1.1.0",
+            sourceSHA: ""
+        )
+        let jsonURL = harness.rootURL.appendingPathComponent("summary/report-index.json")
+        let tsvURL = harness.rootURL.appendingPathComponent("summary/report-index.tsv")
+        let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
+
+        let result = try harness.runSummarizer([
+            "--input", harness.rootURL.path,
+            "--output-json", jsonURL.path,
+            "--output-tsv", tsvURL.path,
+            "--output-markdown", markdownURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("source-build-tag review result requires sourceSHA"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: jsonURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tsvURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markdownURL.path))
     }
 
     func testSummarizerRejectsReviewResultWithoutDaemonControlPathReadiness() throws {
@@ -555,7 +637,9 @@ private final class ValidationReportSummaryHarness {
         coolingCommandsRun: Bool = false,
         includeSchemaID: Bool = true,
         schemaID: String = "https://vifty.local/schemas/validation-review-result.schema.json",
-        sourceArtifactBytes: String = ""
+        sourceArtifactBytes: String = "",
+        sourceRef: String = "v1.1.0",
+        sourceSHA: String = String(repeating: "a", count: 40)
     ) throws -> URL {
         let url = rootURL.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
@@ -572,8 +656,8 @@ private final class ValidationReportSummaryHarness {
             "coolingCommandsRun": coolingCommandsRun,
             "appPath": "/Applications/Vifty.app",
             "installSource": installSource,
-            "sourceRef": "v1.1.0",
-            "sourceSHA": String(repeating: "a", count: 40),
+            "sourceRef": sourceRef,
+            "sourceSHA": sourceSHA,
             "sourceArtifactName": "",
             "sourceArtifactSHA256": "",
             "sourceArtifactBytes": sourceArtifactBytes,

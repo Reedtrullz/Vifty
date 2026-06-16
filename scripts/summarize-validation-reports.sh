@@ -94,6 +94,11 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
   output_markdown = ARGV.shift.to_s
   inputs = ARGV
   failures = []
+  SOURCE_SHA_REQUIRED_INSTALL_SOURCES = %w[
+    source-build-tag
+    source-first-unsigned-dev-zip
+    local-ad-hoc-build
+  ].freeze
 
   def resolve_input(path, failures)
     expanded = File.expand_path(path)
@@ -236,6 +241,15 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
     source_sha = result.fetch("sourceSHA", "").to_s
     unless source_sha.empty? || source_sha.match?(/\A[0-9a-f]{40}\z/)
       failures << "#{path} sourceSHA must be a lowercase 40-character git commit SHA"
+      valid = false
+    end
+    if SOURCE_SHA_REQUIRED_INSTALL_SOURCES.include?(install_source) && source_sha.empty?
+      failures << "#{path} #{install_source} review result requires sourceSHA to pin the immutable source commit"
+      valid = false
+    end
+    if %w[source-build-tag source-first-unsigned-dev-zip].include?(install_source) &&
+        !result.fetch("sourceRef", "").to_s.match?(/\Av[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?\z/)
+      failures << "#{path} #{install_source} review result requires sourceRef to be the version tag used for the source build"
       valid = false
     end
 
