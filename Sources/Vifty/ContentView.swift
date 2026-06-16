@@ -405,12 +405,12 @@ struct ContentView: View {
             Button {
                 model.applyModeSelection()
             } label: {
-                Label("Apply", systemImage: "checkmark.circle")
+                Label(model.modeSelectionActionTitle, systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.selectedMode != .auto && !model.manualFanControlAvailable)
-            .help(model.selectedMode != .auto ? (model.manualFanControlBlockedReason ?? "Apply selected fan mode") : model.autoRestoreActionHelp)
+            .help(model.modeSelectionActionHelp)
         }
     }
 

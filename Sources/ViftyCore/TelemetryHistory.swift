@@ -119,7 +119,7 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         }
         latestThermalPressureText = latest?.thermalPressure.displayName ?? "--"
         temperatureValues = Self.temperatureValues(from: recentSamples, latest: latest)
-        fanRPMValues = recentSamples.compactMap(Self.sampleFanRPM)
+        fanRPMValues = Self.fanRPMValues(from: recentSamples, usesAverageFanRPM: usesAverageFanRPM)
         batteryPowerValues = recentSamples.compactMap(\.batteryPowerWatts)
         temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "C", decimals: 1)
         temperatureChangeText = Self.changeText(temperatureValues, unit: "C", decimals: 1)
@@ -223,6 +223,13 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
             }
         }
         return samples.compactMap(Self.sampleTemperature)
+    }
+
+    private static func fanRPMValues(from samples: [TelemetrySample], usesAverageFanRPM: Bool) -> [Double] {
+        if usesAverageFanRPM {
+            return samples.compactMap(\.averageFanRPM)
+        }
+        return samples.compactMap { $0.firstFanRPM.map(Double.init) }
     }
 
     private static func sampleFanRPM(_ sample: TelemetrySample) -> Double? {

@@ -554,7 +554,7 @@ final class AppModel: ObservableObject {
         let existingByFanID = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
             targetsByID[target.fanID] = target
         }
-        fixedFanTargets = fans.map { fan in
+        let nextTargets = fans.map { fan in
             if let existing = existingByFanID[fan.id] {
                 return FixedFanTarget(
                     fanID: fan.id,
@@ -563,6 +563,9 @@ final class AppModel: ObservableObject {
             }
             return defaultFixedFanTarget(for: fan)
         }
+        guard nextTargets != fixedFanTargets else { return }
+        fixedFanTargets = nextTargets
+        persistAppPreferences()
     }
 
     func fixedFanTarget(for fanID: Int) -> FixedFanTarget? {
@@ -838,6 +841,16 @@ final class AppModel: ObservableObject {
             return "Restore Auto"
         }
         return "Request Auto restore; the write cannot be confirmed until the helper responds"
+    }
+
+    var modeSelectionActionTitle: String {
+        selectedMode == .auto ? autoRestoreActionTitle : "Apply"
+    }
+
+    var modeSelectionActionHelp: String {
+        selectedMode == .auto
+            ? autoRestoreActionHelp
+            : (manualFanControlBlockedReason ?? "Apply selected fan mode")
     }
 
     var agentCoolingRestoreActionTitle: String {

@@ -436,6 +436,40 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-source-ref", in: checks)?.contains("matches required source ref") == true)
     }
 
+    func testReleaseReadinessRejectsSourceSHAMismatchWhenLocalTagResolves() throws {
+        let harness = try ReleaseMetadataHarness()
+        let tagSHA = try harness.initializeGitRepoWithTaggedCommit(tag: "v1.0.0")
+        let suppliedSHA = String(repeating: "c", count: 40)
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: tagSHA)
+        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: tagSHA)
+        let releaseView = try harness.writeReleaseView()
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", suppliedSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["sourceCommit"] as? String, tagSHA)
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-source-ref"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-source-ref", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "source-ci", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "passed")
+        let message = try XCTUnwrap(checkMessage(named: "release-source-ref", in: checks))
+        XCTAssertTrue(message.contains("resolves locally to \(tagSHA)"))
+        XCTAssertTrue(message.contains("--source-sha supplied \(suppliedSHA)"))
+    }
+
     func testReleaseReadinessRejectsAbbreviatedSourceSHA() throws {
         let harness = try ReleaseMetadataHarness()
 
@@ -674,6 +708,49 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-secrets", in: checks)?.contains("does not require Apple Developer Program secrets") == true)
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("unsigned tester assets") == true)
         XCTAssertTrue(checkMessage(named: "source-first-unsigned-dev-assets", in: checks)?.contains("checksum verified") == true)
+    }
+
+    func testSourceFirstReadinessRejectsUnsignedDevAssetsWithoutSidecarWarning() throws {
+        let harness = try ReleaseMetadataHarness()
+        let sourceSHA = String(repeating: "b", count: 40)
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let unsignedDevAssets = try harness.writeUnsignedDevReleaseAssets()
+        let releaseView = try harness.writeReleaseView(
+            assetNames: [
+                "Vifty-v1.0.0-unsigned-dev.zip",
+                "Vifty-v1.0.0-unsigned-dev.zip.sha256"
+            ],
+            body: sourceFirstReleaseNotes(
+                version: "1.0.0",
+                includeUnsignedDevSidecarWarning: false
+            )
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--mode", "source-first",
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-view-file", releaseView.path,
+            "--unsigned-dev-artifact-file", unsignedDevAssets.zip.path,
+            "--unsigned-dev-checksum-file", unsignedDevAssets.checksum.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["blockers"] as? [String], ["github-release"])
+
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "github-release", in: checks), "blocked")
+        XCTAssertEqual(checkStatus(named: "source-first-unsigned-dev-assets", in: checks), "passed")
+        let message = try XCTUnwrap(checkMessage(named: "github-release", in: checks))
+        XCTAssertTrue(message.contains("release notes for unsigned-dev assets must include"))
+        XCTAssertTrue(message.contains("Vifty-v1.0.0-unsigned-dev.zip"))
+        XCTAssertTrue(message.contains("Vifty-v1.0.0-unsigned-dev.zip.sha256"))
+        XCTAssertTrue(message.contains("The unsigned-dev zip is valid only with its `.sha256` sidecar"))
+        XCTAssertTrue(message.contains("SHA-256 digest in that sidecar must match the zip bytes"))
     }
 
     func testSourceFirstReadinessAcceptsReleaseWithoutUnsignedDevAssets() throws {
@@ -1229,12 +1306,22 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         checks.first { $0["name"] as? String == name }?["message"] as? String
     }
 
-    private func sourceFirstReleaseNotes(version: String, includeProvenance: Bool = true) -> String {
+    private func sourceFirstReleaseNotes(
+        version: String,
+        includeProvenance: Bool = true,
+        includeUnsignedDevSidecarWarning: Bool = true
+    ) -> String {
         var notes = """
         This is a source-first release. Vifty v\(version) does not yet include a Developer ID signed or notarized public binary because the project does not currently have Apple Developer Program credentials.
 
         A convenience unsigned `.app` build is attached for testers who understand macOS Gatekeeper warnings and prefer not to build locally. For the most trusted path, build from source.
         """
+        if includeUnsignedDevSidecarWarning {
+            notes += """
+
+            Unsigned-dev artifact integrity: `Vifty-v\(version)-unsigned-dev.zip` is accompanied by `Vifty-v\(version)-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar. The SHA-256 digest in that sidecar must match the zip bytes before opening the app.
+            """
+        }
         if includeProvenance {
             notes += """
 

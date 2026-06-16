@@ -335,14 +335,24 @@ else
   add_check "release-metadata" "blocked" "${metadata_output}"
 fi
 
+local_tag_source_sha=""
 resolved_source_sha=""
-if [ -n "${SOURCE_SHA}" ]; then
-  resolved_source_sha="${SOURCE_SHA}"
-elif command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if resolved_source_sha="$(git rev-parse "${TAG}^{commit}" 2>&1)"; then
-    :
+source_sha_tag_mismatch=false
+if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if local_tag_source_sha="$(git rev-parse "${TAG}^{commit}" 2>&1)"; then
+    resolved_source_sha="${local_tag_source_sha}"
   else
-    resolved_source_sha=""
+    local_tag_source_sha=""
+  fi
+fi
+
+if [ -n "${SOURCE_SHA}" ]; then
+  if [[ "${local_tag_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    if [ "$(printf '%s' "${SOURCE_SHA}" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "${local_tag_source_sha}" | tr '[:upper:]' '[:lower:]')" ]; then
+      source_sha_tag_mismatch=true
+    fi
+  else
+    resolved_source_sha="${SOURCE_SHA}"
   fi
 fi
 
@@ -354,7 +364,9 @@ if [[ ! "${resolved_source_sha}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
     add_check "release-workflow" "passed" "Source-first mode does not require the Developer ID Release workflow; the notarized workflow remains strict for future developer-id releases."
   fi
 else
-  if [ -n "${REQUIRE_SOURCE_REF}" ]; then
+  if [ "${source_sha_tag_mismatch}" = true ]; then
+    add_check "release-source-ref" "blocked" "Release tag ${TAG} resolves locally to ${local_tag_source_sha}, but --source-sha supplied ${SOURCE_SHA}. Fetch tags or pass the actual tag commit SHA."
+  elif [ -n "${REQUIRE_SOURCE_REF}" ]; then
     required_source_sha=""
     if [[ "${REQUIRE_SOURCE_REF}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
       required_source_sha="${REQUIRE_SOURCE_REF}"
@@ -583,6 +595,17 @@ else
         "post-release hardening"
       ].each do |needle|
         problems << "release notes must include #{needle.inspect}" unless body.include?(needle)
+      end
+
+      if has_unsigned_zip || has_unsigned_checksum
+        [
+          unsigned_zip,
+          unsigned_checksum,
+          "The unsigned-dev zip is valid only with its `.sha256` sidecar",
+          "SHA-256 digest in that sidecar must match the zip bytes"
+        ].each do |needle|
+          problems << "release notes for unsigned-dev assets must include #{needle.inspect}" unless body.include?(needle)
+        end
       end
 
       forbidden_claims = [

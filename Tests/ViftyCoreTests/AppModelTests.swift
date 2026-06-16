@@ -262,7 +262,7 @@ final class AppModelTests: XCTestCase {
         healthy.daemonReachable = true
         healthy.snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2400, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
-            temperatureSensors: [],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 65, source: .smc)],
             modelIdentifier: "MacBookPro18,3",
             isAppleSilicon: true,
             isMacBookPro: true
@@ -270,6 +270,11 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(healthy.autoRestoreActionTitle, "Auto")
         XCTAssertEqual(healthy.autoRestoreActionHelp, "Restore Auto")
+        XCTAssertEqual(healthy.modeSelectionActionTitle, "Auto")
+        XCTAssertEqual(healthy.modeSelectionActionHelp, "Restore Auto")
+        healthy.selectedMode = .fixed
+        XCTAssertEqual(healthy.modeSelectionActionTitle, "Apply")
+        XCTAssertEqual(healthy.modeSelectionActionHelp, "Apply selected fan mode")
 
         let telemetryOnly = AppModel()
         telemetryOnly.daemonResponding = false
@@ -284,6 +289,11 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(telemetryOnly.autoRestoreActionTitle, "Request Auto")
         XCTAssertEqual(telemetryOnly.autoRestoreActionHelp, "Request Auto restore; the write cannot be confirmed until the helper responds")
+        XCTAssertEqual(telemetryOnly.modeSelectionActionTitle, "Request Auto")
+        XCTAssertEqual(telemetryOnly.modeSelectionActionHelp, "Request Auto restore; the write cannot be confirmed until the helper responds")
+        telemetryOnly.selectedMode = .fixed
+        XCTAssertEqual(telemetryOnly.modeSelectionActionTitle, "Apply")
+        XCTAssertEqual(telemetryOnly.modeSelectionActionHelp, "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked.")
     }
 
     func testHelperMenuCopyUsesCompactRepairHintWhenTelemetryIsReadOnly() {
@@ -1181,6 +1191,18 @@ final class AppModelTests: XCTestCase {
         model.fixedRPM = 3200
         model.usePerFanFixedRPM = true
         model.ensureFixedFanTargets(for: fans)
+
+        let generatedDefaults = store.load()
+        XCTAssertTrue(generatedDefaults.usePerFanFixedRPM)
+        XCTAssertEqual(generatedDefaults.fixedFanTargets, [
+            FixedFanTarget(fanID: 0, rpm: 3200),
+            FixedFanTarget(fanID: 1, rpm: 3200)
+        ])
+
+        let relaunchedBeforeSliderEdit = AppModel(preferencesStore: store)
+        XCTAssertTrue(relaunchedBeforeSliderEdit.usePerFanFixedRPM)
+        XCTAssertEqual(relaunchedBeforeSliderEdit.fixedFanTargets, generatedDefaults.fixedFanTargets)
+
         model.setFixedFanRPM(4400, for: fans[0])
         model.setFixedFanRPM(4700, for: fans[1])
 

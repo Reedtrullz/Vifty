@@ -260,9 +260,12 @@ final class AppSourceRegressionTests: XCTestCase {
         let appModel = try read("Sources/Vifty/AppModel.swift")
 
         XCTAssertTrue(appModel.contains("var autoRestoreActionTitle: String"))
+        XCTAssertTrue(appModel.contains("var modeSelectionActionTitle: String"))
         XCTAssertTrue(appModel.contains("helperWritePathBlockedSummary == nil ? \"Auto\" : \"Request Auto\""))
         XCTAssertTrue(appModel.contains("Request Auto restore; the write cannot be confirmed until the helper responds"))
-        XCTAssertTrue(contentView.contains(": model.autoRestoreActionHelp"))
+        XCTAssertTrue(contentView.contains("Label(model.modeSelectionActionTitle"))
+        XCTAssertTrue(contentView.contains(".help(model.modeSelectionActionHelp)"))
+        XCTAssertFalse(contentView.contains("Label(\"Apply\""))
         XCTAssertTrue(menuBarView.contains("Button(model.autoRestoreActionTitle)"))
         XCTAssertTrue(menuBarView.contains(".help(model.autoRestoreActionHelp)"))
         XCTAssertFalse(menuBarView.contains("Button(\"Auto\")"))

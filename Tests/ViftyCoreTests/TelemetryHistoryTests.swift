@@ -155,6 +155,62 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.thermalPressureSummaryText, "Peak Serious")
     }
 
+    func testSummaryDoesNotMixAverageFanTrendWithFirstFanFallbacks() {
+        var history = TelemetryHistory(limit: 10)
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 64.0,
+            firstFanRPM: 2_100,
+            batteryPowerWatts: -6.2,
+            thermalPressure: .fair
+        ))
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            highestTemperatureCelsius: 65.0,
+            firstFanRPM: 2_400,
+            averageFanRPM: 2_550.5,
+            batteryPowerWatts: -7.2,
+            thermalPressure: .serious
+        ))
+
+        let summary = TelemetryHistorySummary(history: history)
+
+        XCTAssertEqual(summary.latestFanRPMLabel, "Average fan")
+        XCTAssertEqual(summary.latestFanRPMText, "2551 RPM")
+        XCTAssertEqual(summary.fanRPMTrendLabel, "Avg fan")
+        XCTAssertEqual(summary.fanRPMValues, [2_550.5])
+        XCTAssertEqual(summary.fanRPMRangeText, "2551 RPM")
+        XCTAssertNil(summary.fanRPMChangeText)
+    }
+
+    func testSummaryDoesNotMixFirstFanTrendWithOlderAverageSamples() {
+        var history = TelemetryHistory(limit: 10)
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            highestTemperatureCelsius: 64.0,
+            firstFanRPM: 2_100,
+            averageFanRPM: 2_700.0,
+            batteryPowerWatts: -6.2,
+            thermalPressure: .fair
+        ))
+        history.append(TelemetrySample(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            highestTemperatureCelsius: 65.0,
+            firstFanRPM: 2_400,
+            batteryPowerWatts: -7.2,
+            thermalPressure: .serious
+        ))
+
+        let summary = TelemetryHistorySummary(history: history)
+
+        XCTAssertEqual(summary.latestFanRPMLabel, "Latest fan")
+        XCTAssertEqual(summary.latestFanRPMText, "2400 RPM")
+        XCTAssertEqual(summary.fanRPMTrendLabel, "Fan")
+        XCTAssertEqual(summary.fanRPMValues, [2_100, 2_400])
+        XCTAssertEqual(summary.fanRPMRangeText, "2100 RPM-2400 RPM")
+        XCTAssertEqual(summary.fanRPMChangeText, "+300 RPM")
+    }
+
     func testSummaryDoesNotMixSelectedTemperatureSensorsInRecentRange() {
         var history = TelemetryHistory(limit: 10)
         history.append(TelemetrySample(
