@@ -4,4 +4,4 @@ Generated from reviewed validation report summaries. Treat source-first and unsi
 
 | Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| MacBookPro18 | Needs manual smoke | 0 | 1 | 0 | 0 | 0 | MacBookPro18,1 | local-ad-hoc-build | source: main@b757c4b<br>manual: not recorded |
+| MacBookPro18 | Needs manual smoke | 0 | 2 | 0 | 0 | 0 | MacBookPro18,1 | local-ad-hoc-build | source: main@8cbabb9, main@b757c4b<br>manual: not recorded |

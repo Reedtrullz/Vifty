@@ -16,7 +16,7 @@ Until enough public reports exist, treat each model family as **needs validation
 
 | Hardware family | Public status | Required evidence |
 | --- | --- | --- |
-| M1 Pro/Max MacBook Pro | Needs manual smoke | One read-only local ad-hoc `MacBookPro18,1` candidate report exists; still requires Auto restore plus Fixed/Curve smoke before validated support |
+| M1 Pro/Max MacBook Pro | Needs manual smoke | Two read-only local ad-hoc `MacBookPro18,1` candidate reports exist; still requires Auto restore plus Fixed/Curve smoke before validated support |
 | M2 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | M3 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | M4 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
@@ -29,7 +29,7 @@ Until enough public reports exist, treat each model family as **needs validation
 
 Do not hand-edit the generated compatibility matrix. Use `scripts/summarize-validation-reports.sh --output-markdown <reports-dir>/compatibility-matrix.md` after review results are accepted, then copy or link the generated table with its report sources intact. The matrix evidence cell intentionally shows source ref plus short SHA and manual/agent smoke status so local ad-hoc `main` reports are not mistaken for current release-tag evidence or validated hardware support.
 
-The current checked-in generated index lives in [validation-reports/compatibility-index.json](validation-reports/compatibility-index.json), with TSV and Markdown drafts beside it. As of the latest index, `MacBookPro18` has one read-only local ad-hoc `MacBookPro18,1` candidate report with `daemonControlPathReady=true`, `safeToRequestCooling=true`, and `manualSmokeTestResult: "not-recorded"`. That moves the family to **Needs manual smoke** in the generated draft, not validated support.
+The current checked-in generated index lives in [validation-reports/compatibility-index.json](validation-reports/compatibility-index.json), with TSV and Markdown drafts beside it. As of the latest index, `MacBookPro18` has two read-only local ad-hoc `MacBookPro18,1` candidate reports, including a current-`main` report at `8cbabb90a67934a7fe6a79ab090ff5c3a6da796b`, with `daemonControlPathReady=true`, `safeToRequestCooling=true`, and `manualSmokeTestResult: "not-recorded"`. That keeps the family at **Needs manual smoke** in the generated draft, not validated support.
 
 Rows without reviewed evidence stay **Needs report**. A supported row must include helper health, fan count, min/max RPM, Auto restore, Fixed/Curve smoke, and `viftyctl diagnose --json` evidence before it can move beyond candidate status. First-report priority is M1 Pro/Max, M2 Pro/Max, M3 Pro/Max, and M4 Pro/Max MacBook Pro hardware.
 

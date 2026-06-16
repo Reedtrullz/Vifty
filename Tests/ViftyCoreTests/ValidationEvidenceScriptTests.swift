@@ -382,6 +382,24 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
     }
 
+    func testCollectorRedactsKnownCurrentHomePathBeforePrivacyReview() throws {
+        let currentHome = try XCTUnwrap(ProcessInfo.processInfo.environment["HOME"])
+        let harness = try ValidationEvidenceHarness(includeCurrentHomePathLeak: true)
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertFalse(try harness.read("viftyctl-status.json").contains(currentHome))
+        XCTAssertTrue(try harness.read("viftyctl-status.json").contains("<home>"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("privacy-review\t0\tprivacy-review.tsv"))
+        XCTAssertTrue(try harness.read("review-summary.tsv").contains("privacy-review\t0\t0\tpublic-report-privacy"))
+        XCTAssertEqual(try harness.loggedViftyCtlInvocations(), expectedReadOnlyViftyCtlInvocations)
+    }
+
     func testCollectorPrivacyReviewScansGeneratedReviewSummary() throws {
         let harness = try ValidationEvidenceHarness(
             appPathComponents: ["Users", "private-user", "Vifty.app"]
@@ -802,6 +820,7 @@ private final class ValidationEvidenceHarness {
     private let statusSchemaResourcePath: String
     private let runLifecycleAutoRestore: Bool
     private let includePrivacyLeak: Bool
+    private let includeCurrentHomePathLeak: Bool
 
     init(
         createViftyCtl: Bool = true,
@@ -812,6 +831,7 @@ private final class ValidationEvidenceHarness {
         diagnoseState: String = "ready",
         diagnoseExitCode: Int = 0,
         includePrivacyLeak: Bool = false,
+        includeCurrentHomePathLeak: Bool = false,
         appPathComponents: [String] = ["Vifty.app"]
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -829,6 +849,7 @@ private final class ValidationEvidenceHarness {
         self.statusSchemaResourcePath = statusSchemaResourcePath
         self.runLifecycleAutoRestore = runLifecycleAutoRestore
         self.includePrivacyLeak = includePrivacyLeak
+        self.includeCurrentHomePathLeak = includeCurrentHomePathLeak
 
         let macOSURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
@@ -1143,6 +1164,8 @@ private final class ValidationEvidenceHarness {
         if [ "$#" -eq 2 ] && [ "$1" = "status" ] && [ "$2" = "--json" ]; then
           if [ "\(includePrivacyLeak ? "1" : "0")" = "1" ]; then
             printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true},"debug":"Serial Number: C02SECRET1234 /Users/private-user/Vifty.app"}\\n'
+          elif [ "\(includeCurrentHomePathLeak ? "1" : "0")" = "1" ]; then
+            printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true},"debug":"current home: \(ProcessInfo.processInfo.environment["HOME"] ?? "")"}\\n'
           else
             printf '{"enabled":true,"activeLease":null,"lastDecision":null,"lastErrorCode":null,"policy":{"enabled":true}}\\n'
           fi

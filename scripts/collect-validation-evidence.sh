@@ -144,6 +144,8 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 69
 fi
 
+APP_ABSOLUTE_PATH="$(cd "$(dirname "${APP_PATH}")" && pwd)/$(basename "${APP_PATH}")"
+
 if [[ -n "${RELEASE_SUMMARY_PATH}" && ! -f "${RELEASE_SUMMARY_PATH}" ]]; then
   echo "error: release summary not found: ${RELEASE_SUMMARY_PATH}" >&2
   exit 66
@@ -212,6 +214,27 @@ SUMMARY_JSON_PATH="${OUTPUT_DIR}/review-summary.json"
 CHECKSUM_PATH="${OUTPUT_DIR}/checksums.tsv"
 GENERATED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+sanitize_captured_output() {
+  local path
+  for path in "$@"; do
+    [[ -f "${path}" ]] || continue
+    ruby -e '
+      file = ARGV.shift
+      replacements = ARGV.each_slice(2).to_a
+        .select { |source, _replacement| source && !source.empty? && source != "/" }
+        .sort_by { |source, _replacement| -source.length }
+      text = File.binread(file)
+      replacements.each do |source, replacement|
+        text = text.gsub(source, replacement)
+      end
+      File.binwrite(file, text)
+    ' "${path}" \
+      "${APP_ABSOLUTE_PATH}" "<app>" \
+      "${ROOT_DIR}" "<repo>" \
+      "${HOME:-}" "<home>"
+  done
+}
+
 run_capture() {
   local name="$1"
   local stdout_name="$2"
@@ -227,6 +250,7 @@ run_capture() {
   "$@" > "${stdout_path}" 2> "${stderr_path}"
   status=$?
   set -e
+  sanitize_captured_output "${stdout_path}" "${stderr_path}"
 
   printf '%s\n' "${status}" > "${status_path}"
   printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
