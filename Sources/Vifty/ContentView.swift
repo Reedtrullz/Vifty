@@ -854,7 +854,7 @@ private struct HistoryPanel: View {
                 Label("History", systemImage: "chart.xyaxis.line")
                     .font(.headline)
                 Spacer()
-                Text(summary.sampleCountText)
+                Text(summaryHeaderText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -886,6 +886,13 @@ private struct HistoryPanel: View {
         }
         .padding(compact ? 10 : 12)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var summaryHeaderText: String {
+        guard let sampleWindowText = summary.sampleWindowText else {
+            return summary.sampleCountText
+        }
+        return "\(summary.sampleCountText) · last \(sampleWindowText)"
     }
 }
 

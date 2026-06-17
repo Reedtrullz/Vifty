@@ -23,11 +23,12 @@ Plain-name comparison set: Macs Fan Control, TG Pro, iStat Menus, Stats, Hot and
 - Source-first honesty while Apple Developer Program credentials are unavailable, with Homebrew stays parked until a Developer ID signed, notarized release exists.
 - Report-backed compatibility: generated validation indexes and compatibility tables, not handwritten support claims.
 - Helper repair clarity: every blocked write path should tell the user the next safe action and explain why fan writes remain blocked.
+- Subtle in-memory trend sparklines are in scope when they help users judge build, test, or agent workload impact; full historical monitoring, cloud sync, analytics, and persistent telemetry remain out of scope without a separate privacy plan.
 
 ## What Vifty Should Avoid For Now
 
 - A broad iStat-style dashboard that dilutes the fan-control trust story.
-- Battery charge limiting, battery aging policy, cloud sync, analytics, or persistent telemetry without a separate privacy plan.
+- Battery charge limiting, battery aging policy, cloud sync, analytics, full historical monitoring, or persistent telemetry without a separate privacy plan.
 - Raw agent SMC writes, arbitrary fan-key access, or automation that prepares cooling before validating the child command.
 - Public binary trust claims before Developer ID signing, notarization, stapling, checksum verification, and Homebrew alignment pass.
 

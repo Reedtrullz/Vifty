@@ -116,7 +116,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs `ViftyCoreTests` (737 tests).
+- `swift test` runs `ViftyCoreTests` (740 tests).
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.
@@ -131,7 +131,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `CurveProfileStoreTests` tests JSON round-trip, missing/corrupt file handling, backup file creation, throwing save failures, and private profile/backup permissions.
 - `PowerInfoTests` tests IOKit dictionary parsing for adapter watts, negotiated USB-C voltage/current, PD profiles, signed charge/drain watts, fallback formatting, battery runtime estimates, and plugged-in-but-draining warnings.
 - `ThermalPressureTests` tests thermal-pressure labels and elevated menu summaries.
-- `TelemetryHistoryTests` tests rolling-buffer trimming and limit clamping.
+- `TelemetryHistoryTests` tests rolling-buffer trimming, limit clamping, recent-window labels, range/change formatting, selected-temperature semantics, average fan RPM trend semantics, thermal-pressure summaries, and battery power flow wording.
 - `XPCSnapshotCodingTests` tests fan hardware mode/target round trips and older snapshot compatibility.
 - `XPCAgentControlCodingTests` tests agent lease, policy, decision, retry metadata, and audit event round trips plus older status compatibility.
 - `XPCAuditTokenCodingTests` tests the daemon XPC audit-token byte bridge without requiring a live connection.

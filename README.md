@@ -26,7 +26,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Thermal pressure** — surfaces macOS thermal-pressure state alongside raw temperatures, and flags high selected-sensor temperatures when macOS has not raised thermal pressure.
 - **Timed manual modes** — Fixed RPM and Temperature Curve modes can automatically restore Auto after a selected duration.
 - **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
-- **Telemetry history** — keeps a local in-memory rolling history for recent temperature, fan, power, and thermal-pressure state.
+- **Telemetry history** — shows subtle in-memory trend sparklines for recent selected temperature, fan RPM, power flow, and thermal-pressure state; samples stay local and reset with the app.
 - **Optional local notifications** — alerts for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; all are off by default.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
@@ -211,7 +211,7 @@ For the detailed privileged-helper and agent-control boundaries, see [docs/trust
 - If temperature sensors disappear mid-curve, Vifty restores Auto.
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
-- Power, thermal, and telemetry-history data stay on the Mac. The telemetry history is in-memory only; there are no analytics, accounts, network uploads, or cloud dependencies.
+- Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export.
 - Local notifications use macOS UserNotifications only. They are opt-in, rate-limited, and do not add analytics, network calls, or persistent telemetry export.
 
 ### Optional: Harden XPC with your TeamID

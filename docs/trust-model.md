@@ -104,7 +104,7 @@ Local files:
 - curve profiles and backups live under `~/Library/Application Support/Vifty/`;
 - manual-control markers live under the same app support directory;
 - agent lease/audit state is local, permission-restricted, and bounded to the most recent 2,000 audit events by default;
-- telemetry history is in-memory only.
+- telemetry history and trend visualizations are derived from an in-memory rolling sample buffer only; Vifty does not persist or export those samples.
 
 `viftyctl audit [--limit N] --json` reads recent agent-control audit events through the daemon and declares `readOnly: true` / `coolingCommandsRun: false`. It is intended for local troubleshooting after blocked readiness, failed restores, or user reports; it does not request cooling, restore Auto, or perform SMC reads/writes.
 

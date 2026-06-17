@@ -100,6 +100,8 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("TelemetryHistorySummary("))
         XCTAssertTrue(contentView.contains("TelemetryHistoryChart(summary: summary, compact: compact)"))
         XCTAssertTrue(contentView.contains("private struct TelemetryHistoryChart: View"))
+        XCTAssertTrue(contentView.contains("summary.sampleWindowText"))
+        XCTAssertTrue(contentView.contains("return \"\\(summary.sampleCountText) · last \\(sampleWindowText)\""))
         XCTAssertTrue(contentView.contains("title: \"Temp\""))
         XCTAssertTrue(contentView.contains("title: summary.fanRPMSparklineTitle"))
         XCTAssertFalse(contentView.contains("title: \"Fan\""))
@@ -109,6 +111,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("changeText: summary.batteryPowerChangeText"))
         XCTAssertTrue(contentView.contains("summaryText: summary.thermalPressureSummaryText"))
         XCTAssertTrue(contentView.contains("private struct SparklinePath: View"))
+        XCTAssertFalse(contentView.contains("import Charts"))
         XCTAssertFalse(contentView.contains("private func signedWattRangeText"))
         XCTAssertFalse(contentView.contains("UserDefaults.standard.set(history"))
     }

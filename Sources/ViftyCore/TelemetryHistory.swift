@@ -66,6 +66,7 @@ public struct TelemetryHistory: Equatable, Sendable {
 public struct TelemetryHistorySummary: Equatable, Sendable {
     public var sampleCount: Int
     public var sampleCountText: String
+    public var sampleWindowText: String?
     public var latestTemperatureLabel: String
     public var latestTemperatureText: String?
     public var latestFanRPMLabel: String
@@ -99,6 +100,7 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
         sampleCount = history.samples.count
         sampleCountText = history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
+        sampleWindowText = Self.sampleWindowText(for: recentSamples)
         latestTemperatureLabel = Self.temperatureLabel(for: latest)
         latestTemperatureText = latest.flatMap(Self.sampleTemperature).map(Self.temperatureText)
         let usesAverageFanRPM = latest?.averageFanRPM != nil
@@ -166,6 +168,25 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
             return lowerCharge == upperCharge ? "\(lowerCharge) charge" : "\(lowerCharge)-\(upperCharge) charge"
         }
         return "\(batteryPowerFlowText(min)) to \(batteryPowerFlowText(max))"
+    }
+
+    public static func sampleWindowText(for samples: [TelemetrySample]) -> String? {
+        guard samples.count > 1,
+              let first = samples.first?.capturedAt,
+              let last = samples.last?.capturedAt
+        else { return nil }
+
+        let seconds = Int(last.timeIntervalSince(first).rounded())
+        guard seconds > 0 else { return nil }
+        if seconds < 60 { return "\(seconds) s" }
+
+        let minutes = max(1, Int((Double(seconds) / 60.0).rounded()))
+        if minutes < 60 { return "\(minutes) min" }
+
+        let hours = minutes / 60
+        let remainderMinutes = minutes % 60
+        if remainderMinutes == 0 { return "\(hours) h" }
+        return "\(hours) h \(remainderMinutes) min"
     }
 
     public static func changeText(_ values: [Double], unit: String, decimals: Int) -> String? {

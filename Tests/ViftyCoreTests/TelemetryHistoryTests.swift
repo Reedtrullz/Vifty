@@ -65,6 +65,7 @@ final class TelemetryHistoryTests: XCTestCase {
 
         XCTAssertEqual(summary.sampleCount, 2)
         XCTAssertEqual(summary.sampleCountText, "2 samples")
+        XCTAssertEqual(summary.sampleWindowText, "1 s")
         XCTAssertEqual(summary.latestTemperatureLabel, "Latest temp")
         XCTAssertEqual(summary.latestTemperatureText, "72.6 C")
         XCTAssertEqual(summary.latestFanRPMLabel, "Latest fan")
@@ -82,6 +83,41 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.batteryPowerChangeText, "+20.8 W")
         XCTAssertEqual(summary.thermalPressureSamples, [.nominal, .serious])
         XCTAssertEqual(summary.thermalPressureSummaryText, "Peak Serious")
+    }
+
+    func testSummaryFormatsBoundedRecentSampleWindow() {
+        var history = TelemetryHistory(limit: 10)
+        history.append(sample(index: 0, capturedAt: 0))
+        history.append(sample(index: 1, capturedAt: 30))
+        history.append(sample(index: 2, capturedAt: 90))
+        history.append(sample(index: 3, capturedAt: 150))
+
+        let summary = TelemetryHistorySummary(history: history, sampleLimit: 3)
+
+        XCTAssertEqual(summary.sampleCount, 4)
+        XCTAssertEqual(summary.sampleWindowText, "2 min")
+        XCTAssertEqual(summary.temperatureValues, [61, 62, 63])
+    }
+
+    func testSampleWindowTextHandlesShortLongAndInvalidWindows() {
+        XCTAssertNil(TelemetryHistorySummary.sampleWindowText(for: []))
+        XCTAssertNil(TelemetryHistorySummary.sampleWindowText(for: [sample(index: 0, capturedAt: 10)]))
+        XCTAssertNil(TelemetryHistorySummary.sampleWindowText(for: [
+            sample(index: 0, capturedAt: 10),
+            sample(index: 1, capturedAt: 10)
+        ]))
+        XCTAssertEqual(TelemetryHistorySummary.sampleWindowText(for: [
+            sample(index: 0, capturedAt: 10),
+            sample(index: 1, capturedAt: 55)
+        ]), "45 s")
+        XCTAssertEqual(TelemetryHistorySummary.sampleWindowText(for: [
+            sample(index: 0, capturedAt: 0),
+            sample(index: 1, capturedAt: 3_600)
+        ]), "1 h")
+        XCTAssertEqual(TelemetryHistorySummary.sampleWindowText(for: [
+            sample(index: 0, capturedAt: 0),
+            sample(index: 1, capturedAt: 5_400)
+        ]), "1 h 30 min")
     }
 
     func testSummaryAppliesIndependentSampleAndThermalWindows() {
@@ -350,9 +386,9 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.latestBatteryPowerText, "0.0 W")
     }
 
-    private func sample(index: Int) -> TelemetrySample {
+    private func sample(index: Int, capturedAt: TimeInterval? = nil) -> TelemetrySample {
         TelemetrySample(
-            capturedAt: Date(timeIntervalSince1970: Double(index)),
+            capturedAt: Date(timeIntervalSince1970: capturedAt ?? Double(index)),
             highestTemperatureCelsius: Double(60 + index),
             firstFanRPM: 2000 + index,
             batteryPowerWatts: -10,

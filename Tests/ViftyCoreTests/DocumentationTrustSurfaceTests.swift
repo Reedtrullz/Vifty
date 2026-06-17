@@ -56,7 +56,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (737 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (740 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -502,6 +502,29 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(analysis.contains("defer MCP and Shortcuts"))
         XCTAssertTrue(analysis.contains("No breaking changes to existing `viftyctl` JSON fields."))
         XCTAssertTrue(analysis.contains("Homebrew stays parked until a Developer ID signed, notarized release exists."))
+        XCTAssertTrue(analysis.contains("Subtle in-memory trend sparklines are in scope when they help users judge build, test, or agent workload impact"))
+        XCTAssertTrue(analysis.contains("full historical monitoring, cloud sync, analytics, and persistent telemetry remain out of scope without a separate privacy plan"))
+    }
+
+    func testDocsKeepTelemetryHistoryVisualizationLocalAndScoped() throws {
+        let readme = try read("README.md")
+        let trustModel = try read("docs/trust-model.md")
+        let analysis = try read("docs/competitive-analysis.md")
+        let plan = try read("docs/plans/2026-06-13-next-workplan.md")
+        let agents = try read("AGENTS.md")
+
+        XCTAssertTrue(readme.contains("subtle in-memory trend sparklines for recent selected temperature, fan RPM, power flow, and thermal-pressure state"))
+        XCTAssertTrue(readme.contains("samples stay local and reset with the app"))
+        XCTAssertTrue(readme.contains("Trend sparklines and readouts are rendered from the in-memory rolling buffer only"))
+        XCTAssertTrue(readme.contains("no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export"))
+        XCTAssertTrue(trustModel.contains("telemetry history and trend visualizations are derived from an in-memory rolling sample buffer only"))
+        XCTAssertTrue(trustModel.contains("Vifty does not persist or export those samples"))
+        XCTAssertTrue(analysis.contains("Do not compete as a general-purpose system monitor yet."))
+        XCTAssertTrue(analysis.contains("full historical monitoring, cloud sync, analytics, and persistent telemetry remain out of scope without a separate privacy plan"))
+        XCTAssertTrue(plan.contains("Keep history in memory unless a future privacy plan approves persistence."))
+        XCTAssertTrue(plan.contains("No persistent telemetry is added."))
+        XCTAssertTrue(agents.contains("Telemetry history is in-memory only"))
+        XCTAssertFalse(readme.contains("persistent telemetry history"))
     }
 
     func testNextWorkplanPrioritizesAvailableHardwareAndTrustBoundaries() throws {
