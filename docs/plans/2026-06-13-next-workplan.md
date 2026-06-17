@@ -50,29 +50,28 @@ For public compatibility, prefer `v1.1.1` source or unsigned-dev evidence. For c
 Run the read-only collector before any fan write:
 
 ```sh
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --install-source local-ad-hoc-build \
-  --source-ref main \
-  --source-sha "$(git rev-parse HEAD)"
+make validation-evidence
 ```
+
+The target is read-only and defaults to `/Applications/Vifty.app`, `local-ad-hoc-build`, `source-ref main`, and the current `git rev-parse HEAD` source SHA. Override `VALIDATION_EVIDENCE_APP`, `VALIDATION_EVIDENCE_OUTPUT`, `VALIDATION_EVIDENCE_INSTALL_SOURCE`, `VALIDATION_EVIDENCE_SOURCE_REF`, `VALIDATION_EVIDENCE_SOURCE_SHA`, or `VALIDATION_EVIDENCE_SOURCE_ARTIFACT` when the installed app came from a different source.
 
 If validating the published source-first release instead, use:
 
 ```sh
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --install-source source-build-tag \
-  --source-ref v1.1.1 \
-  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972
+make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=source-build-tag \
+  VALIDATION_EVIDENCE_SOURCE_REF=v1.1.1 \
+  VALIDATION_EVIDENCE_SOURCE_SHA=a82f2237ff39c24a6b366dca8f95a17ee54fd972
 ```
 
 If helper fan probe output is needed for the report, run the explicit probe path:
 
 ```sh
-sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --install-source source-build-tag \
-  --source-ref v1.1.1 \
-  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 \
-  --include-probe-local
+sudo make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=source-build-tag \
+  VALIDATION_EVIDENCE_SOURCE_REF=v1.1.1 \
+  VALIDATION_EVIDENCE_SOURCE_SHA=a82f2237ff39c24a6b366dca8f95a17ee54fd972 \
+  VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL=1
 ```
 
 ### 1.3 Review The Evidence Bundle

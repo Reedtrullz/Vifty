@@ -1,4 +1,4 @@
-.PHONY: app install pkg agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -9,6 +9,15 @@ SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)
 UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)
 RELEASE_METADATA_MODE ?= source-first
 VIFTYCTL ?= /Applications/Vifty.app/Contents/MacOS/viftyctl
+VALIDATION_EVIDENCE_APP ?= /Applications/Vifty.app
+VALIDATION_EVIDENCE_OUTPUT ?=
+VALIDATION_EVIDENCE_INSTALL_SOURCE ?= local-ad-hoc-build
+VALIDATION_EVIDENCE_SOURCE_REF ?= main
+VALIDATION_EVIDENCE_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
+VALIDATION_EVIDENCE_SOURCE_ARTIFACT ?=
+VALIDATION_EVIDENCE_RELEASE_SUMMARY ?=
+VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
+VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_BUNDLE ?=
 AGENT_EVIDENCE_REVIEW_SUMMARY ?=
@@ -56,6 +65,9 @@ install: ## Build and install to /Applications
 
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
+
+validation-evidence: ## Collect read-only release/hardware validation evidence
+	./scripts/collect-validation-evidence.sh --app "$(VALIDATION_EVIDENCE_APP)" --install-source "$(VALIDATION_EVIDENCE_INSTALL_SOURCE)" $(if $(VALIDATION_EVIDENCE_SOURCE_REF),--source-ref "$(VALIDATION_EVIDENCE_SOURCE_REF)",) $(if $(VALIDATION_EVIDENCE_SOURCE_SHA),--source-sha "$(VALIDATION_EVIDENCE_SOURCE_SHA)",) $(if $(VALIDATION_EVIDENCE_SOURCE_ARTIFACT),--source-artifact "$(VALIDATION_EVIDENCE_SOURCE_ARTIFACT)",) $(if $(VALIDATION_EVIDENCE_RELEASE_SUMMARY),--release-summary "$(VALIDATION_EVIDENCE_RELEASE_SUMMARY)",) $(if $(VALIDATION_EVIDENCE_RELEASE_CHECKLIST),--release-checklist "$(VALIDATION_EVIDENCE_RELEASE_CHECKLIST)",) $(if $(VALIDATION_EVIDENCE_OUTPUT),--output "$(VALIDATION_EVIDENCE_OUTPUT)",) $(if $(filter 1 true yes,$(VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL)),--include-probe-local,)
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
 	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)

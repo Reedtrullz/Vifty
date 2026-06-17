@@ -13,25 +13,27 @@ For `v1.1.1`, record whether the app came from a source build from the tag or th
 For release candidates and contributor reports, the easiest read-only collection path is:
 
 ```sh
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
+make validation-evidence
 ```
+
+This defaults to `/Applications/Vifty.app`, `local-ad-hoc-build`, `source-ref main`, and the current `git rev-parse HEAD` source SHA. Use `VALIDATION_EVIDENCE_APP=<path>`, `VALIDATION_EVIDENCE_OUTPUT=<dir>`, `VALIDATION_EVIDENCE_INSTALL_SOURCE=<source>`, `VALIDATION_EVIDENCE_SOURCE_REF=<ref>`, `VALIDATION_EVIDENCE_SOURCE_SHA=<sha>`, `VALIDATION_EVIDENCE_SOURCE_ARTIFACT=<path>`, `VALIDATION_EVIDENCE_RELEASE_SUMMARY=<path>`, or `VALIDATION_EVIDENCE_RELEASE_CHECKLIST=<path>` when the installed app came from a different source or release artifact.
 
 For a `v1.1.1` source-first report, record the install source explicitly:
 
 ```sh
 # Source build from the immutable release tag.
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --install-source source-build-tag \
-  --source-ref v1.1.1 \
-  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972
+make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=source-build-tag \
+  VALIDATION_EVIDENCE_SOURCE_REF=v1.1.1 \
+  VALIDATION_EVIDENCE_SOURCE_SHA=a82f2237ff39c24a6b366dca8f95a17ee54fd972
 
 # Optional unsigned tester zip. Include the artifact path when it is available
 # so install-provenance.tsv records the zip SHA-256 alongside the source tag.
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --install-source source-first-unsigned-dev-zip \
-  --source-ref v1.1.1 \
-  --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 \
-  --source-artifact ./Vifty-v1.1.1-unsigned-dev.zip
+make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=source-first-unsigned-dev-zip \
+  VALIDATION_EVIDENCE_SOURCE_REF=v1.1.1 \
+  VALIDATION_EVIDENCE_SOURCE_SHA=a82f2237ff39c24a6b366dca8f95a17ee54fd972 \
+  VALIDATION_EVIDENCE_SOURCE_ARTIFACT=./Vifty-v1.1.1-unsigned-dev.zip
 ```
 
 For `source-build-tag`, `source-first-unsigned-dev-zip`, and `local-ad-hoc-build` reports, `--source-sha` is required and must be the immutable 40-character source commit SHA. `source-build-tag` and `source-first-unsigned-dev-zip` also require `--source-ref` to be the version tag used for the source build. A mutable ref such as `main` is valid only with `local-ad-hoc-build`; it is not tag evidence.
@@ -39,9 +41,9 @@ For `source-build-tag`, `source-first-unsigned-dev-zip`, and `local-ad-hoc-build
 When validating a published release, include the verifier summary too:
 
 ```sh
-scripts/collect-validation-evidence.sh --app /Applications/Vifty.app \
-  --release-summary ./Vifty-v<version>-artifact-summary.json \
-  --release-checklist ./Vifty-v<version>-release-checklist.md
+make validation-evidence \
+  VALIDATION_EVIDENCE_RELEASE_SUMMARY=./Vifty-v<version>-artifact-summary.json \
+  VALIDATION_EVIDENCE_RELEASE_CHECKLIST=./Vifty-v<version>-release-checklist.md
 ```
 
 The script writes a local evidence bundle under `.build/vifty-validation-<timestamp>/` by default. It captures system metadata without the local hostname, bundle Info.plist, install/source provenance, bundled executable hashes, bundled JSON Schema resource hashes, bundled LaunchDaemon plist and TeamID setting, launchctl daemon status, app/CLI/helper/daemon signing checks, notarization/Gatekeeper checks, `viftyctl capabilities --json`, `viftyctl status --json`, `viftyctl diagnose --json`, and `viftyctl audit --limit 20 --json`, then writes `manifest.tsv` with each command's exit status, `install-provenance.tsv` with the declared install source, source ref/SHA, and optional source artifact SHA-256, `bundle-executables.tsv` with installed app/helper/daemon/CLI SHA-256 digests and bundle paths, `schema-resources.tsv` with installed schema SHA-256 digests and bundle paths, `capabilities-schema-resources.tsv` recording whether the CLI advertises those installed schema resource paths, `capabilities-contract.tsv` recording whether the CLI advertises the safe `runLifecycle`, direct prepare/restore lifecycle, `policyStatusAvailable: true`, metadata limits, and `supportsForceRetry` contract used by guarded workload wrappers, `privacy-review.tsv` to flag likely hostnames, `/Users/...` paths, serial-number labels, or hardware UUID labels before sharing, `review-summary.tsv` for reviewers, `review-summary.json` for automation, and `checksums.tsv` with SHA-256 digests and byte counts for the captured files. If `--release-summary` is supplied, the bundle also includes `release-artifact-summary.json` and `release-artifact-summary.tsv`; the collector preserves failed verifier summaries and marks the row nonzero if the verifier did not pass, if the verifier summary omits `schemaID: https://vifty.local/schemas/release-artifact-summary.schema.json`, if any verifier check was skipped or failed, if `expectedSHA` and `actualSHA` differ, if `expectedArtifactName` does not match the cask version, or if the verifier's `bundleVersion` / `caskVersion` does not match the installed app's `CFBundleShortVersionString`. If `--release-checklist` is supplied, the bundle also includes `release-checklist.md` and `release-checklist.tsv`; the collector marks the row nonzero if the checklist title version does not match the installed app or if required workflow/post-publication follow-up sections are missing. Release evidence review enforces the same install-provenance, release-summary, release-checklist, capabilities-contract, privacy-review, manifest, and checksum consistency rules by requiring `manifest.tsv` rows to match summary statuses and bundle-local output files, requiring every captured regular file except reviewer output to appear in `checksums.tsv`, and recomputing those entries. A blocked `diagnose` report exits nonzero but is still captured as useful evidence. The audit report is read-only and should declare `coolingCommandsRun: false`. The script does not call `prepare`, `run`, `restore-auto`, `setFixed`, `auto`, or any other fan-write command.
@@ -49,7 +51,7 @@ The script writes a local evidence bundle under `.build/vifty-validation-<timest
 If a report needs direct helper fan probe output, run the helper probe explicitly through the collector:
 
 ```sh
-sudo scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --include-probe-local
+sudo make validation-evidence VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL=1
 ```
 
 Review the bundle before sharing it publicly, especially any files named by `privacy-review.tsv`, then paste or attach the relevant files to the GitHub **Hardware Validation Report** issue template.

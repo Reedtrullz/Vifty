@@ -5,7 +5,7 @@ AI coding instructions for working in this repository.
 ## Build System
 
 - Swift Package Manager (`Package.swift`, tools-version 6.0).
-- `swift build` / `swift test` / `make verify` / `make app` (see Makefile).
+- `swift build` / `swift test` / `make verify` / `make app` / `make validation-evidence` (see Makefile).
 - macOS 15 minimum deployment target.
 - `.build/` is gitignored.
 
@@ -154,7 +154,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `GitHubMetadataScriptTests` tests `.github/repo-metadata.json` covers planned discovery topics, issue-template labels, and support-triage labels, and that `scripts/check-github-metadata.sh` accepts matching GitHub fixtures while blocking missing topics, missing labels, and label color/description drift.
 - `CommunityStandardsScriptTests` tests `scripts/check-community-standards.sh` accepts the current community/support surface while blocking missing `SUPPORT.md` or drift that would weaken `safeToRequestCooling` guidance.
 - `AgentCoolingEvidenceScriptTests` tests the read-only lightweight agent/helper evidence collector and reviewer, including schema identity, blocked diagnose exit `75`, privacy findings, checksum coverage, and no cooling-command evidence.
-- `MakefileTrustGateTests` tests `make verify` remains wired to shell syntax checks for project scripts and agent-facing workload wrappers, community/support surface checks, release metadata validation, Swift tests, warnings-as-errors build, release app bundling including schema resources, plist lint, codesign verification, and the `viftyctl` identifier check. It also pins the source-first release notes, unsigned-dev artifact, source-first readiness, read-only agent evidence, and supervised agent-run smoke Makefile targets.
+- `MakefileTrustGateTests` tests `make verify` remains wired to shell syntax checks for project scripts and agent-facing workload wrappers, community/support surface checks, release metadata validation, Swift tests, warnings-as-errors build, release app bundling including schema resources, plist lint, codesign verification, and the `viftyctl` identifier check. It also pins the source-first release notes, unsigned-dev artifact, source-first readiness, read-only release/hardware validation evidence, read-only agent evidence, and supervised agent-run smoke Makefile targets.
 - `AppModelTests` tests duplicate-profile overwrite, append behavior, per-fan override fan-ID normalization and clamping, developer workload presets, profile persistence failure surfacing, curve-defaults sync flag, menu power summaries, menu-bar display modes, injected power-reader polling, timed manual-mode expiry/restores, fan-control ownership summaries, agent-lease summary/warning text, agent-lease clear failure surfacing, telemetry-history append, and helper-health/recovery summaries.
 - Tests must pass before committing. Run from repo root.
 
