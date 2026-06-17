@@ -17,7 +17,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 ## Highlights
 
 - **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, and power state at a glance.
-- **Three fan modes** — Auto, Fixed RPM with optional per-fan targets, and a 3-point Temperature Curve.
+- **Three fan modes** — Auto, Fixed RPM with optional percentage-aware per-fan targets, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
 - **Developer presets** — conservative curve presets for tests, builds, and local model runs.
 - **Hardware fan state** — shows actual SMC Auto/Forced/System mode and target RPM when available.
@@ -306,7 +306,7 @@ For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.
 - Use direct `viftyctl run --json -- <command>` only when the caller already performs the same readiness and child-command preflight.
 - If readiness is `blocked`, repair the helper, restore Auto, back off the workload, or collect read-only evidence according to the JSON recovery fields instead of retrying cooling.
 - Use `viftyctl audit --limit 20 --json` after blocked readiness or restore failures to inspect what happened locally.
-- Use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly accepts running without Vifty cooling after seeing the structured readiness result. Do not fall back to `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or direct helper writes.
+- Use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly accepts running without Vifty cooling after seeing the structured readiness result. The guarded wrapper still refuses helper-repair, restore-first, backoff, and daemon-control-unavailable states. Do not fall back to `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or direct helper writes.
 
 For commands with `--json`, daemon/transport failures return a structured error object with `command`, `errorCode`, `message`, `safeToProceed: false`, and `recommendedRecoveryAction` instead of plain stderr text. Unknown, duplicate, missing-value, or unexpected wrapper arguments fail with `INVALID_ARGUMENTS` instead of being ignored, silently choosing one value, or generating a default value. `PREPARE_RATE_LIMITED` command errors include `retryAfterSeconds` when Vifty can report a retry wait. For `viftyctl run --json`, wrapper failures before the child starts, such as child-command resolution, prepare denial, or launch failure after a prepared lease, use the same structured error shape. Child command resolution/launch failures use `CHILD_COMMAND_FAILED` so agents do not confuse workload command problems with Vifty helper failures. If launch fails after cooling was prepared, the JSON also reports `coolingLeasePrepared`, `autoRestoreAttempted`, and `autoRestoreSucceeded` so agents can tell whether cleanup ran. Agents should use `recommendedRecoveryAction` for the next safe step instead of parsing human `message` text. Child output and post-child restore errors keep the normal wrapper exit/stderr behavior. Human-readable invocations keep the normal stderr failure path.
 

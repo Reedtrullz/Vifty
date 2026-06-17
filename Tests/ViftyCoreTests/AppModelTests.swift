@@ -1349,7 +1349,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(generatedDefaults.usePerFanFixedRPM)
         XCTAssertEqual(generatedDefaults.fixedFanTargets, [
             FixedFanTarget(fanID: 0, rpm: 3200),
-            FixedFanTarget(fanID: 1, rpm: 3200)
+            FixedFanTarget(fanID: 1, rpm: 3472)
         ])
 
         let relaunchedBeforeSliderEdit = AppModel(preferencesStore: store)
@@ -2147,8 +2147,10 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.fixedFanTargets, [
             FixedFanTarget(fanID: 0, rpm: 4296),
-            FixedFanTarget(fanID: 1, rpm: 4600)
+            FixedFanTarget(fanID: 1, rpm: 4744)
         ])
+        XCTAssertEqual(model.fixedFanTargetPercent(for: snapshot.fans[0]), 100)
+        XCTAssertEqual(model.fixedFanTargetPercent(for: snapshot.fans[1]), 100)
 
         model.setFixedFanRPM(4900, for: snapshot.fans[1])
         model.setFixedFanRPM(1200, for: snapshot.fans[0])
@@ -2166,7 +2168,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.fixedFanTargets, [
             FixedFanTarget(fanID: 1, rpm: 4744),
-            FixedFanTarget(fanID: 2, rpm: 4600)
+            FixedFanTarget(fanID: 2, rpm: 4849)
         ])
     }
 

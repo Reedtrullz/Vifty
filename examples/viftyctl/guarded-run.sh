@@ -134,11 +134,16 @@ finish_without_cooling_request() {
 
   if [ "$allow_uncooled" -eq 1 ]; then
     case "$recommended_recovery_action" in
-      backOffWorkload|restoreAutoBeforeRetry)
+      repairHelper|backOffWorkload|restoreAutoBeforeRetry)
         echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling." >&2
         exit 75
         ;;
     esac
+
+    if [ "${daemon_control_path_ready:-}" != "true" ]; then
+      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling." >&2
+      exit 75
+    fi
 
     echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling." >&2
     exec "$@"

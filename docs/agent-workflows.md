@@ -279,7 +279,8 @@ explicitly wants the child command to run without Vifty after a structured
 readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The wrapper still
 prints the diagnose JSON, refuses to request cooling, and only then execs the
 child directly; it refuses that fallback when Vifty recommends backing off the
-workload or restoring Auto first.
+workload, repairing the helper, restoring Auto first, or when
+`daemonControlPathReady` is false.
 
 Set `VIFTYCTL` to point at a development bundle:
 

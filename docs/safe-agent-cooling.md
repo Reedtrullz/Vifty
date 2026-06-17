@@ -44,8 +44,9 @@ When the user explicitly wants the child command to run without Vifty after a
 structured readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The
 wrapper still performs read-only capabilities/readiness checks, prints the
 diagnose JSON, refuses to request cooling, and only then execs the child directly.
-It still refuses uncooled execution when Vifty recommends `backOffWorkload` or
-`restoreAutoBeforeRetry`.
+It still refuses uncooled execution when Vifty recommends `repairHelper`,
+`backOffWorkload`, or `restoreAutoBeforeRetry`, or when
+`daemonControlPathReady` is false.
 
 For common workloads, use the audited shortcuts:
 
@@ -79,9 +80,9 @@ Decision table:
 | `state: "ready"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use `guarded-run.sh` with normal conservative limits. |
 | `state: "degraded"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use a shorter duration, lower RPM percent, and surface the warning to the user. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto or wait. |
-| `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
+| `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that and the guarded wrapper allows it; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
 | `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying. |
-| Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes. |
+| Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes or uncooled guarded fallback. |
 | Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto or wait for the active lease to clear before retrying. |
 | Diagnose `recommendedRecoveryAction: "backOffWorkload"` | Pause or reduce the workload; do not fight critical system thermals. |
 | Diagnose `recommendedRecoveryAction: "inspectPolicy"` | Inspect policy/status before retrying; do not assume cooling is available. |

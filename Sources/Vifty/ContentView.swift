@@ -460,13 +460,15 @@ struct ContentView: View {
 
             if model.usePerFanFixedRPM, controllableFans.count > 1 {
                 ForEach(controllableFans) { fan in
+                    let targetRPM = model.fixedFanTargetRPM(for: fan)
+                    let targetPercent = model.fixedFanTargetPercent(for: fan)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(fan.name)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) RPM")
+                            Text("\(targetRPM) RPM · \(targetPercent)%")
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
@@ -484,9 +486,9 @@ struct ContentView: View {
                             in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
                             step: 50
                         )
-                        .help("\(fan.name) fixed target. Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM.")
+                        .help("\(fan.name) fixed target. Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM; currently \(targetPercent)% of that fan's range.")
                         .accessibilityLabel("\(fan.name) fixed RPM target")
-                        .accessibilityValue("\(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) RPM")
+                        .accessibilityValue("\(targetRPM) RPM, \(targetPercent)%")
                         .accessibilityHint("\(fan.name) target is clamped to \(fan.minimumRPM)-\(fan.maximumRPM) RPM.")
                     }
                     .padding(.vertical, 2)

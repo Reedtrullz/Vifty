@@ -516,6 +516,52 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunDoesNotRunUncooledWhenViftyRecommendsHelperRepair() throws {
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "repairHelper",
+            daemonControlPathReady: false
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-helper-repair.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenDaemonControlPathIsNotReady() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            safeToRequestCooling: true,
+            daemonControlPathReady: false
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-daemon-control.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon control path is not ready"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("daemonControlPathReady is false; not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunBlocksBeforeRunWhenDaemonControlPathIsNotReady() throws {
         let harness = try ScriptHarness(
             state: "ready",

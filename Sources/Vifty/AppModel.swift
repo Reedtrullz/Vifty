@@ -523,8 +523,8 @@ final class AppModel: ObservableObject {
         case .auto:
             return nil
         case .fixed:
-            if perFanFixedRPMApplies, let target = fixedFanTarget(for: fan.id)?.rpm {
-                return FanCurve.clamp(target, fan.minimumRPM, fan.maximumRPM)
+            if perFanFixedRPMApplies {
+                return fixedFanTargetRPM(for: fan)
             }
             return FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
         case .curve:
@@ -564,6 +564,7 @@ final class AppModel: ObservableObject {
     }
 
     func ensureFixedFanTargets(for fans: [Fan]) {
+        let baseRatio = fixedRPMBaseRangeRatio(for: fixedRPMBaseBounds(for: fans))
         let existingByFanID = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
             targetsByID[target.fanID] = target
         }
@@ -574,7 +575,7 @@ final class AppModel: ObservableObject {
                     rpm: FanCurve.clamp(existing.rpm, fan.minimumRPM, fan.maximumRPM)
                 )
             }
-            return defaultFixedFanTarget(for: fan)
+            return defaultFixedFanTarget(for: fan, baseRatio: baseRatio)
         }
         guard nextTargets != fixedFanTargets else { return }
         fixedFanTargets = nextTargets
@@ -583,6 +584,14 @@ final class AppModel: ObservableObject {
 
     func fixedFanTarget(for fanID: Int) -> FixedFanTarget? {
         fixedFanTargets.first { $0.fanID == fanID }
+    }
+
+    func fixedFanTargetRPM(for fan: Fan) -> Int {
+        fixedFanTarget(for: fan.id)?.rpm ?? defaultFixedFanTargetRPM(for: fan)
+    }
+
+    func fixedFanTargetPercent(for fan: Fan) -> Int {
+        rpmPercent(fixedFanTargetRPM(for: fan), for: fan)
     }
 
     func setFixedFanRPM(_ rpm: Int, for fan: Fan) {
@@ -1337,21 +1346,15 @@ final class AppModel: ObservableObject {
     }
 
     var fanRange: ClosedRange<Double> {
-        guard let fan = snapshot?.fans.first else { return 1200...6500 }
-        return Double(fan.minimumRPM)...Double(fan.maximumRPM)
+        let bounds = fixedRPMBaseBounds
+        return Double(bounds.minimumRPM)...Double(bounds.maximumRPM)
     }
 
     private func rpm(forPercent percent: Int) -> Int {
-        guard let fan = snapshot?.fans.first else {
-            let lower = Int(fanRange.lowerBound.rounded())
-            let upper = Int(fanRange.upperBound.rounded())
-            let span = upper - lower
-            return FanCurve.clamp(lower + Int((Double(span) * Double(percent) / 100.0).rounded()), lower, upper)
-        }
-
-        let span = fan.maximumRPM - fan.minimumRPM
-        let rpm = fan.minimumRPM + Int((Double(span) * Double(percent) / 100.0).rounded())
-        return FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        let bounds = fixedRPMBaseBounds
+        let span = bounds.maximumRPM - bounds.minimumRPM
+        let rpm = bounds.minimumRPM + Int((Double(span) * Double(percent) / 100.0).rounded())
+        return FanCurve.clamp(rpm, bounds.minimumRPM, bounds.maximumRPM)
     }
 
     private func currentCurve() -> FanCurve {
@@ -1515,8 +1518,55 @@ final class AppModel: ObservableObject {
     private func defaultFixedFanTarget(for fan: Fan) -> FixedFanTarget {
         FixedFanTarget(
             fanID: fan.id,
-            rpm: FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+            rpm: defaultFixedFanTargetRPM(for: fan)
         )
+    }
+
+    private var fixedRPMBaseBounds: (minimumRPM: Int, maximumRPM: Int) {
+        fixedRPMBaseBounds(for: snapshot?.fans ?? [])
+    }
+
+    private func fixedRPMBaseBounds(for fans: [Fan]) -> (minimumRPM: Int, maximumRPM: Int) {
+        let fan = fans.first(where: \.controllable) ?? fans.first
+        return (
+            minimumRPM: fan?.minimumRPM ?? 1200,
+            maximumRPM: fan?.maximumRPM ?? 6500
+        )
+    }
+
+    private var fixedRPMBaseRangeRatio: Double {
+        fixedRPMBaseRangeRatio(for: fixedRPMBaseBounds)
+    }
+
+    private func fixedRPMBaseRangeRatio(for bounds: (minimumRPM: Int, maximumRPM: Int)) -> Double {
+        guard bounds.maximumRPM > bounds.minimumRPM else { return 0 }
+        let clamped = FanCurve.clamp(Int(fixedRPM.rounded()), bounds.minimumRPM, bounds.maximumRPM)
+        return Double(clamped - bounds.minimumRPM) / Double(bounds.maximumRPM - bounds.minimumRPM)
+    }
+
+    private func defaultFixedFanTargetRPM(for fan: Fan) -> Int {
+        defaultFixedFanTarget(for: fan, baseRatio: fixedRPMBaseRangeRatio).rpm
+    }
+
+    private func defaultFixedFanTarget(for fan: Fan, baseRatio: Double) -> FixedFanTarget {
+        guard fan.maximumRPM > fan.minimumRPM else {
+            return FixedFanTarget(
+                fanID: fan.id,
+                rpm: FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+            )
+        }
+        let rpm = Double(fan.minimumRPM) + Double(fan.maximumRPM - fan.minimumRPM) * baseRatio
+        return FixedFanTarget(
+            fanID: fan.id,
+            rpm: FanCurve.clamp(Int(rpm.rounded()), fan.minimumRPM, fan.maximumRPM)
+        )
+    }
+
+    private func rpmPercent(_ rpm: Int, for fan: Fan) -> Int {
+        guard fan.maximumRPM > fan.minimumRPM else { return 0 }
+        let clamped = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
+        let ratio = Double(clamped - fan.minimumRPM) / Double(fan.maximumRPM - fan.minimumRPM)
+        return min(100, max(0, Int((ratio * 100).rounded())))
     }
 
     private func updateFixedFanTarget(for fan: Fan, mutate: (inout FixedFanTarget) -> Void) {
