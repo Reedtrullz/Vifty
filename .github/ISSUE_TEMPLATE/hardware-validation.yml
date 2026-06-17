@@ -181,10 +181,11 @@ body:
     id: agent-run-smoke
     attributes:
       label: Supervised viftyctl run smoke test
-      description: Optional for supported hardware. Prefer `scripts/collect-agent-run-smoke-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl`, then paste or attach `agent-run-smoke-evidence-summary.json`, `manifest.tsv`, `viftyctl-run.json`, and follow-up files. If running manually and readiness was ready or safely degraded, wait for `policy.prepareCooldownSeconds` after any manual smoke test, then paste the `viftyctl run --json -- /bin/sleep 5` command from docs/hardware-validation.md, stdout/stderr, child exit code, restore result, any `PREPARE_RATE_LIMITED` / `retryAfterSeconds` JSON from the first cooldown response, and follow-up `capabilities --json`, `status --json`, `audit --limit 20 --json`, and `diagnose --json` output. Skip this when readiness is blocked.
+      description: Optional for supported hardware. From a source checkout, prefer `make agent-run-smoke-evidence VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl`; installed testers can use `/Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl`. The raw `scripts/collect-agent-run-smoke-evidence.sh` path is for advanced local review. Then paste or attach `agent-run-smoke-evidence-summary.json`, `manifest.tsv`, `viftyctl-run.json`, and follow-up files. If running manually and readiness was ready or safely degraded, wait for `policy.prepareCooldownSeconds` after any manual smoke test, then paste the `viftyctl run --json -- /bin/sleep 5` command from docs/hardware-validation.md, stdout/stderr, child exit code, restore result, any `PREPARE_RATE_LIMITED` / `retryAfterSeconds` JSON from the first cooldown response, and follow-up `capabilities --json`, `status --json`, `audit --limit 20 --json`, and `diagnose --json` output. Skip this when readiness is blocked.
       render: text
       placeholder: |
-        script: scripts/collect-agent-run-smoke-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
+        source checkout: make agent-run-smoke-evidence VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+        installed app resource: /Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
         agent-run-smoke-evidence-summary.json: ...
         manifest.tsv: ...
         cooldown wait: waited policy.prepareCooldownSeconds=30 after manual smoke

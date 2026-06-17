@@ -111,12 +111,21 @@ scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestam
 
 ### 1.5 Optional Agent-Run Smoke
 
-After the manual smoke test, wait for `policy.prepareCooldownSeconds`, then collect one supervised developer-workload smoke:
+After the manual smoke test, wait for `policy.prepareCooldownSeconds`, then collect one supervised developer-workload smoke from the source checkout:
 
 ```sh
-scripts/collect-agent-run-smoke-evidence.sh \
+make agent-run-smoke-evidence \
+  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+Installed testers can run the bundled collector directly when they do not have a source checkout:
+
+```sh
+/Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
+
+The raw `scripts/collect-agent-run-smoke-evidence.sh` path remains available for advanced local review, but public report instructions should prefer the Make target or installed app resource so the bounded defaults are obvious.
 
 Review it by adding:
 
