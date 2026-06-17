@@ -141,11 +141,11 @@ body:
     id: validation-review
     attributes:
       label: Validation evidence review
-      description: Paste `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json` output or attach `review-result.json` / `review-summary.tsv` when available.
+      description: Paste `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json` output or attach `review-result.json` / `review-summary.tsv` when available.
       render: text
       placeholder: |
         scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json --release-checklist ./Vifty-v<version>-release-checklist.md
-        scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> --mode release --summary .build/vifty-validation-<timestamp>/review-result.json
+        make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
     validations:
       required: false
 

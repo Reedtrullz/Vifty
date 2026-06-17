@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence validation-evidence-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -20,6 +20,14 @@ VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
 VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
 CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
+VALIDATION_EVIDENCE_BUNDLE ?=
+VALIDATION_EVIDENCE_REVIEW_MODE ?= supported-hardware
+VALIDATION_EVIDENCE_REVIEW_SUMMARY ?=
+VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT ?= not-recorded
+VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE ?=
+VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT ?= not-recorded
+VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE ?=
+VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY ?=
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_BUNDLE ?=
 AGENT_EVIDENCE_REVIEW_SUMMARY ?=
@@ -75,6 +83,10 @@ validation-evidence-current-build: ## Build current app and collect read-only lo
 	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "validation-evidence-current-build requires a clean git worktree so source ref/SHA match the built app; commit or stash changes first, or use make validation-evidence with installSource=not-recorded for exploratory local evidence." >&2; exit 65; fi
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
 	$(MAKE) validation-evidence VALIDATION_EVIDENCE_APP="$(APP_DIR)" VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build VALIDATION_EVIDENCE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" VALIDATION_EVIDENCE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)"
+
+validation-evidence-review: ## Review a captured validation evidence bundle
+	@if [ -z "$(VALIDATION_EVIDENCE_BUNDLE)" ]; then echo "VALIDATION_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
+	./scripts/review-validation-evidence.sh --bundle "$(VALIDATION_EVIDENCE_BUNDLE)" --mode "$(VALIDATION_EVIDENCE_REVIEW_MODE)" $(if $(VALIDATION_EVIDENCE_REVIEW_SUMMARY),--summary "$(VALIDATION_EVIDENCE_REVIEW_SUMMARY)",) --manual-smoke-result "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE),--manual-smoke-source "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE)",) --agent-run-smoke-result "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE),--agent-run-smoke-source "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE)",) $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY),--agent-run-smoke-summary "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY)",)
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
 	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)

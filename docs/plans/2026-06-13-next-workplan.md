@@ -90,9 +90,10 @@ sudo make validation-evidence \
 Review captured output without rerunning diagnostics:
 
 ```sh
-scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
-  --mode supported-hardware \
-  --summary .build/vifty-validation-<timestamp>/review-result.json
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
 Before sharing or indexing, check `privacy-review.tsv` and any file it flags.
@@ -112,11 +113,12 @@ Then follow [hardware-validation.md](../hardware-validation.md): baseline probe,
 After manual smoke passes and Auto restore is confirmed, rerun review with:
 
 ```sh
-scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
-  --mode supported-hardware \
-  --manual-smoke-result passed-auto-restored \
-  --manual-smoke-source "local M1 Pro validation, 2026-06-13" \
-  --summary .build/vifty-validation-<timestamp>/review-result.json
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE="local M1 Pro validation, 2026-06-13" \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
 ### 1.5 Optional Agent-Run Smoke
@@ -140,7 +142,7 @@ The raw `scripts/collect-agent-run-smoke-evidence.sh` path remains available for
 Review it by adding:
 
 ```sh
---agent-run-smoke-summary .build/vifty-agent-run-smoke-<timestamp>/agent-run-smoke-evidence-summary.json
+VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY=.build/vifty-agent-run-smoke-<timestamp>/agent-run-smoke-evidence-summary.json
 ```
 
 The agent-run smoke proves the bounded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for hardware support.

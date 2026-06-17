@@ -895,7 +895,7 @@ capture_release_checklist() {
         "hasFollowUpSection" => text.include?("## Required Post-Publication Follow-Up"),
         "hasCaskChecksumFollowUp" => text.include?("scripts/update-cask-checksum.sh"),
         "hasPublicVerifierFollowUp" => text.include?("scripts/verify-release-artifact.sh"),
-        "hasEvidenceReviewFollowUp" => text.include?("scripts/review-validation-evidence.sh"),
+        "hasEvidenceReviewFollowUp" => text.include?("make validation-evidence-review") && text.include?("VALIDATION_EVIDENCE_REVIEW_MODE=release"),
         "hasCompatibilityGate" => text.include?("manualSmokeTestResult: \"passed-auto-restored\""),
         "hasTrustedHomebrewWarning" => text.include?("do not describe the Homebrew path as a fully trusted public binary install")
       }

@@ -1624,7 +1624,7 @@ private final class ValidationEvidenceReviewHarness {
 
             - [ ] Update `Casks/vifty.rb` with the published checksum using `scripts/update-cask-checksum.sh`.
             - [ ] Run `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"`.
-            - [ ] Review evidence with `scripts/review-validation-evidence.sh --mode release`.
+            - [ ] Review evidence with `make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=release`.
             - [ ] Keep compatibility claims gated on `manualSmokeTestResult: "passed-auto-restored"`.
             - [ ] Do not describe the Homebrew path as a fully trusted public binary install until checks pass.
             """

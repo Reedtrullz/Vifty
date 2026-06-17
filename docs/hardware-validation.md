@@ -78,21 +78,23 @@ Source-first and unsigned-dev `v1.1.1` hardware reports may leave release-artifa
 Maintainers can review a captured bundle without rerunning any diagnostics:
 
 ```sh
-scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
-  --mode supported-hardware \
-  --summary .build/vifty-validation-<timestamp>/review-result.json
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
-Use `--mode release` for installed public-release trust evidence and `--mode unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `--summary` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, explicit manual smoke-test evidence, optional supervised agent-run smoke evidence, and any failures or warnings.
+`make validation-evidence-review` wraps `scripts/review-validation-evidence.sh`; use `VALIDATION_EVIDENCE_REVIEW_MODE=release` for installed public-release trust evidence and `VALIDATION_EVIDENCE_REVIEW_MODE=unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `VALIDATION_EVIDENCE_REVIEW_SUMMARY` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, explicit manual smoke-test evidence, optional supervised agent-run smoke evidence, and any failures or warnings.
 
-For a supported-hardware report, leave the default `--manual-smoke-result not-recorded` until the GitHub issue template says **Passed and Auto restore confirmed**. After that, rerun the review with the issue URL or note:
+For a supported-hardware report, leave the default `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=not-recorded` until the GitHub issue template says **Passed and Auto restore confirmed**. After that, rerun the review with the issue URL or note:
 
 ```sh
-scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
-  --mode supported-hardware \
-  --manual-smoke-result passed-auto-restored \
-  --manual-smoke-source <hardware-validation-issue-url> \
-  --summary .build/vifty-validation-<timestamp>/review-result.json
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE=<hardware-validation-issue-url> \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
 The supported-hardware smoke-test result values are `not-recorded`, `passed-auto-restored`, `skipped-blocked`, `skipped-unsupported`, and `failed`. Only `passed-auto-restored` can make a supported Apple Silicon MacBook Pro report count as validated hardware evidence; `failed`, `skipped-blocked`, or `skipped-unsupported` fail the supported-hardware review instead of being silently indexed as support.
@@ -100,15 +102,16 @@ The supported-hardware smoke-test result values are `not-recorded`, `passed-auto
 If the supervised **viftyctl run smoke test** bundle is available, prefer the captured summary in the machine-readable review:
 
 ```sh
-scripts/review-validation-evidence.sh --bundle .build/vifty-validation-<timestamp> \
-  --mode supported-hardware \
-  --manual-smoke-result passed-auto-restored \
-  --manual-smoke-source <hardware-validation-issue-url> \
-  --agent-run-smoke-summary .build/vifty-agent-run-smoke-<timestamp>/agent-run-smoke-evidence-summary.json \
-  --summary .build/vifty-validation-<timestamp>/review-result.json
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE=<hardware-validation-issue-url> \
+  VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY=.build/vifty-agent-run-smoke-<timestamp>/agent-run-smoke-evidence-summary.json \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
-The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file only after checking the adjacent smoke bundle: `manifest.tsv` must match the summary `commands[]`, each command's stdout/stderr/status file must exist and match its recorded status, and `checksums.tsv` must cover and recompute the summary, manifest, command stdout/stderr, and status files. When `rateLimitRetry.attempted=true`, the reviewer also requires the initial `viftyctl-run` JSON to be structured `PREPARE_RATE_LIMITED` cooldown evidence with `safeToProceed=false`, matching `retryAfterSeconds`, no lease prepared, no Auto restore attempted, and a nonzero exit status that matches the recorded `rateLimitRetry.initialExitStatus`; the final `run` proof must reference the `viftyctl-run-retry` stdout/stderr/status files. A passed captured summary must also report `coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, and `childExitCode=0` in its `run` object, so developer-workload proof includes the bounded lease and Auto-restore outcome rather than only the wrapper exit status. If only issue-template text is available, keep using `--agent-run-smoke-result passed-auto-restored --agent-run-smoke-source <hardware-validation-issue-url>#agent-run-smoke`.
+The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file only after checking the adjacent smoke bundle: `manifest.tsv` must match the summary `commands[]`, each command's stdout/stderr/status file must exist and match its recorded status, and `checksums.tsv` must cover and recompute the summary, manifest, command stdout/stderr, and status files. When `rateLimitRetry.attempted=true`, the reviewer also requires the initial `viftyctl-run` JSON to be structured `PREPARE_RATE_LIMITED` cooldown evidence with `safeToProceed=false`, matching `retryAfterSeconds`, no lease prepared, no Auto restore attempted, and a nonzero exit status that matches the recorded `rateLimitRetry.initialExitStatus`; the final `run` proof must reference the `viftyctl-run-retry` stdout/stderr/status files. A passed captured summary must also report `coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, and `childExitCode=0` in its `run` object, so developer-workload proof includes the bounded lease and Auto-restore outcome rather than only the wrapper exit status. If only issue-template text is available, use `VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT=passed-auto-restored VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE=<hardware-validation-issue-url>#agent-run-smoke`.
 
 The agent-run smoke result uses the same values as the manual smoke test and is preserved as developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
 
@@ -202,7 +205,7 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
 
 4. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
 
-5. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `--manual-smoke-result passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
+5. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
 
 ## Manual Fan Write Smoke Test
 

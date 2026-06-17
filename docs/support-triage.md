@@ -79,7 +79,7 @@ For release-trust reports, use the dedicated **Release Trust Report** issue temp
 git fetch origin main --tags
 scripts/check-release-readiness.sh --mode source-first --version <version> --repo Reedtrullz/Vifty --json
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
-scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode release --summary <evidence-dir>/review-result.json
+make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json
 ```
 
 For `v1.1.1`, source-first release issues should focus on source tag/CI readiness, release-note warnings, unsigned-dev artifact naming/checksum, and the explicit source-first trust boundary. Do not ask users to verify Developer ID signing, notarization, stapling, or Homebrew trust for `v1.1.1`; those checks apply only to a future `--mode developer-id` release.
@@ -155,4 +155,4 @@ Only update [compatibility.md](compatibility.md) from reviewed `review-result.js
 "manualSmokeTestResult": "passed-auto-restored"
 ```
 
-Until then, keep the report as candidate evidence that still needs manual smoke confirmation. Prefer `--agent-run-smoke-summary <smoke-dir>/agent-run-smoke-evidence-summary.json` when the supervised smoke bundle is available; the reviewer validates `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json` before deriving `agentRunSmokeResult`. `agentRunSmokeResult: "passed-auto-restored"` is useful developer-workload proof for guarded `viftyctl run`, but it does not promote a row to validated hardware evidence without the manual smoke result above. When reviewing many reports, use the index `countsByRecommendedAgentAction`, `countsByRecommendedRecoveryAction`, `countsBySafeToRequestCooling`, and `countsByDaemonControlPathReady` fields to find stop-before-cooling, helper-repair, and unsafe-readiness clusters before updating compatibility claims.
+Until then, keep the report as candidate evidence that still needs manual smoke confirmation. Prefer `VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY=<smoke-dir>/agent-run-smoke-evidence-summary.json` when the supervised smoke bundle is available; the reviewer validates `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json` before deriving `agentRunSmokeResult`. `agentRunSmokeResult: "passed-auto-restored"` is useful developer-workload proof for guarded `viftyctl run`, but it does not promote a row to validated hardware evidence without the manual smoke result above. When reviewing many reports, use the index `countsByRecommendedAgentAction`, `countsByRecommendedRecoveryAction`, `countsBySafeToRequestCooling`, and `countsByDaemonControlPathReady` fields to find stop-before-cooling, helper-repair, and unsafe-readiness clusters before updating compatibility claims.

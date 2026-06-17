@@ -1044,7 +1044,7 @@ private final class ValidationEvidenceHarness {
             - [ ] Update `Casks/vifty.rb` with the published `Vifty-v\(version).zip.sha256` using `scripts/update-cask-checksum.sh --version \(version)`.
             - [ ] Run `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` against the public cask artifact after the checksum update.
             - [ ] Collect a release-mode evidence bundle with `scripts/collect-validation-evidence.sh --release-summary ./Vifty-v\(version)-artifact-summary.json --release-checklist ./Vifty-v\(version)-release-checklist.md`.
-            - [ ] Review that bundle with `scripts/review-validation-evidence.sh --mode release --summary <evidence-dir>/review-result.json`.
+            - [ ] Review that bundle with `make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json`.
             - [ ] Keep compatibility claims gated on reviewed hardware reports with `manualSmokeTestResult: "passed-auto-restored"`.
 
             Until the post-publication checks pass, do not describe the Homebrew path as a fully trusted public binary install.

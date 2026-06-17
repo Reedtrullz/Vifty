@@ -101,6 +101,6 @@ All of these must be true before calling a future public binary release trusted:
    - `Vifty-v<version>-release-checklist.md`
 5. `Casks/vifty.rb` is re-enabled and updated with the checksum from the published release artifact using `scripts/update-cask-checksum.sh`.
 6. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
-7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `scripts/review-validation-evidence.sh --mode release`.
+7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release`.
 
 Until those future checks pass, prefer source builds and keep Homebrew disabled rather than describing the Homebrew path as a trusted public binary install.

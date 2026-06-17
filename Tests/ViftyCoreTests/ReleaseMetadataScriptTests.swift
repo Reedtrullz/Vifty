@@ -1104,6 +1104,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checklist.contains("Required Post-Publication Follow-Up"))
         XCTAssertTrue(checklist.contains("Vifty-v1.2.3.zip"))
         XCTAssertTrue(checklist.contains("scripts/update-cask-checksum.sh --version 1.2.3"))
+        XCTAssertTrue(checklist.contains("make validation-evidence-review"))
+        XCTAssertTrue(checklist.contains("VALIDATION_EVIDENCE_REVIEW_MODE=release"))
         XCTAssertTrue(checklist.contains("manualSmokeTestResult: \"passed-auto-restored\""))
         XCTAssertTrue(checklist.contains("do not describe the Homebrew path as a fully trusted public binary install"))
         XCTAssertFalse(checklist.contains("Source Provenance"))

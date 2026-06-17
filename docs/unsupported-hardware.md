@@ -45,7 +45,7 @@ If the reporter is validating an installed app or public release, they can also 
 
 ```sh
 scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
-scripts/review-validation-evidence.sh --bundle <evidence-dir> --mode unsupported-hardware --summary <evidence-dir>/review-result.json
+make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=unsupported-hardware VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json
 ```
 
 The resulting `review-result.json` can be indexed as unsupported-hardware safe-block evidence. It must not be used as proof that fan control is supported on that machine.
