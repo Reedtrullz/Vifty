@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -97,6 +97,11 @@ agent-cooling-evidence-review: ## Review a read-only agent/helper support eviden
 
 agent-run-smoke-evidence: ## Collect supervised supported-hardware viftyctl run smoke evidence
 	./scripts/collect-agent-run-smoke-evidence.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" --audit-limit "$(AGENT_RUN_SMOKE_AUDIT_LIMIT)" $(if $(AGENT_RUN_SMOKE_OUTPUT),--output "$(AGENT_RUN_SMOKE_OUTPUT)",)
+
+agent-run-smoke-evidence-current-build: ## Build current app and collect supervised local viftyctl run smoke evidence
+	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "agent-run-smoke-evidence-current-build requires a clean git worktree so the smoke test uses the built app from the current source ref; commit or stash changes first, or use make agent-run-smoke-evidence with an explicit VIFTYCTL for exploratory local smoke evidence." >&2; exit 65; fi
+	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
+	$(MAKE) agent-run-smoke-evidence VIFTYCTL="$(MACOS)/viftyctl"
 
 source-first-release-notes: ## Write source-first release notes for the current version
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)" $(if $(SOURCE_FIRST_SOURCE_REF),--source-ref "$(SOURCE_FIRST_SOURCE_REF)",)

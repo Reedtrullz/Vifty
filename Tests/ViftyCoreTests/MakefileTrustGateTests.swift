@@ -12,6 +12,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
         XCTAssertTrue(makefile.contains("agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle"))
         XCTAssertTrue(makefile.contains("agent-run-smoke-evidence: ## Collect supervised supported-hardware viftyctl run smoke evidence"))
+        XCTAssertTrue(makefile.contains("agent-run-smoke-evidence-current-build: ## Build current app and collect supervised local viftyctl run smoke evidence"))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))
@@ -71,7 +72,7 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
         XCTAssertTrue(makefile.contains("validation-evidence: ## Collect read-only release/hardware validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence"))
@@ -108,6 +109,10 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("--reason \"$(AGENT_RUN_SMOKE_REASON)\""))
         XCTAssertTrue(makefile.contains("--audit-limit \"$(AGENT_RUN_SMOKE_AUDIT_LIMIT)\""))
         XCTAssertTrue(makefile.contains("$(if $(AGENT_RUN_SMOKE_OUTPUT),--output \"$(AGENT_RUN_SMOKE_OUTPUT)\",)"))
+        XCTAssertTrue(makefile.contains("agent-run-smoke-evidence-current-build: ## Build current app and collect supervised local viftyctl run smoke evidence"))
+        XCTAssertTrue(makefile.contains("agent-run-smoke-evidence-current-build requires a clean git worktree so the smoke test uses the built app from the current source ref"))
+        XCTAssertTrue(makefile.contains("$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY=\"$(SIGNING_IDENTITY)\" VIFTY_XPC_ALLOWED_TEAM_ID=\"$(VIFTY_XPC_ALLOWED_TEAM_ID)\""))
+        XCTAssertTrue(makefile.contains("$(MAKE) agent-run-smoke-evidence VIFTYCTL=\"$(MACOS)/viftyctl\""))
         XCTAssertTrue(makefile.contains("source-first-release-notes: ## Write source-first release notes for the current version"))
         XCTAssertTrue(makefile.contains("unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum"))
         XCTAssertTrue(makefile.contains("source-first-readiness: ## Check published source-first release readiness"))

@@ -123,7 +123,13 @@ make validation-evidence-review \
 
 ### 1.5 Optional Agent-Run Smoke
 
-After the manual smoke test, wait for `policy.prepareCooldownSeconds`, then collect one supervised developer-workload smoke from the source checkout:
+After the manual smoke test, wait for `policy.prepareCooldownSeconds`, then collect one supervised developer-workload smoke from a clean source checkout:
+
+```sh
+make agent-run-smoke-evidence-current-build
+```
+
+This requires a clean git worktree, builds `.build/Vifty.app`, and runs the smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so current development evidence does not accidentally exercise an older installed app. If you are intentionally testing an already installed app from a source checkout, pass the installed CLI explicitly:
 
 ```sh
 make agent-run-smoke-evidence \

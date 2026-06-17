@@ -115,7 +115,16 @@ When readiness is degraded, reduce one or both numbers. A good degraded default 
 
 After supported hardware has safe readiness and a human is supervising the
 machine, maintainers can capture a standard developer-workload proof from a
-source checkout:
+clean source checkout with the freshly built app:
+
+```sh
+make agent-run-smoke-evidence-current-build
+```
+
+This target refuses dirty worktrees, builds `.build/Vifty.app`, and then runs
+the smoke through `.build/Vifty.app/Contents/MacOS/viftyctl`. If you are
+testing an already installed app instead, point the generic Make target at that
+installed CLI:
 
 ```sh
 make agent-run-smoke-evidence \

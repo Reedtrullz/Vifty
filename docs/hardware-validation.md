@@ -251,15 +251,25 @@ The manual smoke test proves direct prepare/restore behavior. For developer-work
 
 If this follows the manual smoke test above, wait for the advertised prepare cooldown before starting the run smoke. Use `capabilities --json` or `status --json` to read `policy.prepareCooldownSeconds`; the default policy is 30 seconds. If the first run attempt returns `PREPARE_RATE_LIMITED`, keep that JSON as evidence, wait for `retryAfterSeconds`, and retry once. Do not treat the first cooldown response as a failed agent-run smoke test, and do not busy-loop retries. The collector below handles exactly one structured cooldown retry automatically: it records the initial response in `viftyctl-run.json`, records retry metadata in `rateLimitRetry`, waits once, and stores the final proof in `viftyctl-run-retry.json`.
 
-The preferred captured path is:
+The preferred captured path for installed testers is:
 
 ```sh
 /Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
-When validating directly from a source checkout before installing an app bundle, use
-the supervised Make target with the same `--viftyctl` path:
+When validating directly from a clean source checkout before installing an app
+bundle, use the current-build Make target:
+
+```sh
+make agent-run-smoke-evidence-current-build
+```
+
+This requires a clean git worktree, builds `.build/Vifty.app`, and runs the
+smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so the evidence follows
+the current source checkout. If you are intentionally validating an already
+installed app from a source checkout, use the generic supervised Make target
+with an explicit installed `viftyctl` path:
 
 ```sh
 make agent-run-smoke-evidence \
