@@ -60,7 +60,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.isEmpty)
         let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
-        XCTAssertTrue(tsv.contains("source\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult\tmanualSmokeTestSource\tmanualSmokeValidated\tagentRunSmokeResult"))
+        XCTAssertTrue(tsv.contains("source\treviewGeneratedAtUTC\tstatus\tmode\tclaim\tinstallSource\tsourceRef\tsourceSHA\tsourceArtifactName\tsourceArtifactSHA256\tmanualSmokeTestResult\tmanualSmokeTestSource\tmanualSmokeValidated\tagentRunSmokeResult"))
+        XCTAssertTrue(tsv.contains("supported/review-result.json\t2026-06-11T00:00:00Z\tpassed"))
         XCTAssertTrue(tsv.contains("modelIdentifier\tmodelFamily\tisAppleSilicon\tisMacBookPro"))
         XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
@@ -91,6 +92,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let sources = reports.compactMap { $0["source"] as? String }
         XCTAssertTrue(sources.contains("supported/review-result.json"))
         XCTAssertFalse(sources.contains { $0.contains(FileManager.default.temporaryDirectory.path) })
+        XCTAssertTrue(reports.allSatisfy { ($0["reviewGeneratedAtUTC"] as? String) == "2026-06-11T00:00:00Z" })
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
         XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
@@ -128,8 +130,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(markdown.contains("Generated from reviewed validation report summaries."))
         XCTAssertTrue(markdown.contains("source-first and unsigned-dev reports as compatibility evidence only"))
         XCTAssertTrue(markdown.contains("| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |"))
-        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | source: v1.1.0@aaaaaaa |"))
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | source: v1.1.0@aaaaaaa<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11 |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
         XCTAssertFalse(markdown.contains("release-trust-evidence"))
     }
 
@@ -198,7 +200,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(validatedByModelFamily.isEmpty)
 
         let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | source: v1.1.0@aaaaaaa<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
     }
 
     func testSummarizerRejectsValidatedManualSmokeWithoutSource() throws {
@@ -242,6 +244,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         for field in [
             "schemaVersion",
             "schemaID",
+            "generatedAtUTC",
             "readOnly",
             "coolingCommandsRun",
             "totalReports",
@@ -269,6 +272,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(claimValues.contains("safe-block-evidence"))
         let report = try XCTUnwrap(defs["report"] as? [String: Any])
         let reportRequired = try XCTUnwrap(report["required"] as? [String])
+        XCTAssertTrue(reportRequired.contains("reviewGeneratedAtUTC"))
         XCTAssertTrue(reportRequired.contains("modelFamily"))
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
         XCTAssertTrue(reportRequired.contains("recommendedAgentAction"))
@@ -285,6 +289,11 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertNotNil(defs["requiredGitSHA"] as? [String: Any])
         let requiredNonEmptyString = try XCTUnwrap(defs["requiredNonEmptyString"] as? [String: Any])
         XCTAssertEqual(requiredNonEmptyString["pattern"] as? String, "\\S")
+        let utcTimestamp = try XCTUnwrap(defs["utcTimestamp"] as? [String: Any])
+        XCTAssertEqual(utcTimestamp["pattern"] as? String, "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")
+        let reportProperties = try XCTUnwrap(report["properties"] as? [String: Any])
+        let reportGeneratedAt = try XCTUnwrap(reportProperties["reviewGeneratedAtUTC"] as? [String: Any])
+        XCTAssertEqual(reportGeneratedAt["$ref"] as? String, "#/$defs/utcTimestamp")
         XCTAssertNotNil(defs["versionTag"] as? [String: Any])
         let reportAllOf = try XCTUnwrap(report["allOf"] as? [[String: Any]])
         XCTAssertTrue(reportAllOf.contains { condition in
@@ -373,7 +382,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let result = try harness.runSummarizer(["--input", reviewURL.path])
 
         XCTAssertEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stdout.contains("source\tstatus\tmode\tclaim"))
+        XCTAssertTrue(result.stdout.contains("source\treviewGeneratedAtUTC\tstatus\tmode\tclaim"))
         XCTAssertTrue(result.stdout.contains("release-trust-evidence"))
     }
 
@@ -421,6 +430,40 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("schemaID must be https://vifty.local/schemas/validation-review-result.schema.json"))
+    }
+
+    func testSummarizerRejectsReviewResultWithoutGeneratedAtUTC() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "missing-generated-at-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            includeGeneratedAtUTC: false
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("generatedAtUTC must be an ISO-8601 UTC timestamp"))
+    }
+
+    func testSummarizerRejectsReviewResultWithMalformedGeneratedAtUTC() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "bad-generated-at-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            generatedAtUTC: "2026-06-11 00:00:00"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("generatedAtUTC must be an ISO-8601 UTC timestamp"))
     }
 
     func testSummarizerRejectsReviewResultWithSchemaIDDrift() throws {
@@ -696,6 +739,8 @@ private final class ValidationReportSummaryHarness {
         coolingCommandsRun: Bool = false,
         includeSchemaID: Bool = true,
         schemaID: String = "https://vifty.local/schemas/validation-review-result.schema.json",
+        generatedAtUTC: String = "2026-06-11T00:00:00Z",
+        includeGeneratedAtUTC: Bool = true,
         sourceArtifactBytes: String = "",
         sourceRef: String = "v1.1.0",
         sourceSHA: String = String(repeating: "a", count: 40)
@@ -707,7 +752,6 @@ private final class ValidationReportSummaryHarness {
         )
         var json: [String: Any] = [
             "schemaVersion": 1,
-            "generatedAtUTC": "2026-06-11T00:00:00Z",
             "status": status,
             "mode": mode,
             "bundlePath": url.deletingLastPathComponent().path,
@@ -736,6 +780,9 @@ private final class ValidationReportSummaryHarness {
             "failures": failures,
             "warnings": warnings
         ]
+        if includeGeneratedAtUTC {
+            json["generatedAtUTC"] = generatedAtUTC
+        }
         if includeSchemaID {
             json["schemaID"] = schemaID
         }

@@ -86,7 +86,7 @@ if [[ "${#INPUTS[@]}" -eq 0 ]]; then
   exit 64
 fi
 
-ruby -rjson -rcsv -rfileutils -rpathname -e '
+ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
   schema_id = ARGV.shift.to_s
   review_result_schema_id = ARGV.shift.to_s
   output_json = ARGV.shift.to_s
@@ -160,6 +160,11 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
 
     unless result["schemaID"] == review_result_schema_id
       failures << "#{path} schemaID must be #{review_result_schema_id}"
+      valid = false
+    end
+
+    unless iso8601_utc_timestamp?(result["generatedAtUTC"])
+      failures << "#{path} generatedAtUTC must be an ISO-8601 UTC timestamp"
       valid = false
     end
 
@@ -299,6 +304,22 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
     valid
   end
 
+  def iso8601_utc_timestamp?(value)
+    timestamp = value.to_s
+    return false unless timestamp.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/)
+
+    Time.iso8601(timestamp)
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def reviewed_date_for(timestamp)
+    Time.iso8601(timestamp.to_s).utc.strftime("%Y-%m-%d")
+  rescue ArgumentError
+    ""
+  end
+
   def claim_for(result)
     return "rejected" unless result["status"].to_s == "passed"
 
@@ -426,11 +447,13 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
 
       evidence = []
       source_joined = join_unique(group.map { |row| source_evidence_for(row) })
+      reviewed_joined = join_unique(group.map { |row| reviewed_date_for(row["reviewGeneratedAtUTC"]) })
       manual_sources = group.select { |row| row["manualSmokeValidated"] == "true" }.map { |row| row["manualSmokeTestSource"] }
       agent_sources = group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| row["agentRunSmokeSource"] }
       manual_joined = join_unique(manual_sources)
       agent_joined = join_unique(agent_sources)
       evidence << "source: #{source_joined}" unless source_joined.empty?
+      evidence << "reviewed: #{reviewed_joined}" unless reviewed_joined.empty?
       evidence << "manual: #{manual_joined}" unless manual_joined.empty?
       evidence << "manual: not recorded" if candidate_count.positive? && validated_count.zero?
       evidence << "agent-run: #{agent_joined}" unless agent_joined.empty?
@@ -485,6 +508,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
 
     rows << {
       "source" => display_source_for(path, input_roots),
+      "reviewGeneratedAtUTC" => result["generatedAtUTC"].to_s,
       "status" => result["status"].to_s,
       "mode" => result["mode"].to_s,
       "claim" => claim,
@@ -573,6 +597,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -e '
 
   headers = %w[
     source
+    reviewGeneratedAtUTC
     status
     mode
     claim
