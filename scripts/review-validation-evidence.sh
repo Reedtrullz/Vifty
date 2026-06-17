@@ -929,12 +929,39 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def validate_agent_run_smoke_provenance(summary, failures)
+    install_source = summary["installSource"].to_s
+    unless SUPPORTED_INSTALL_SOURCES.include?(install_source)
+      failures << "agent-run-smoke summary installSource #{install_source.inspect} is not supported"
+    end
+
+    require_git_sha(summary["sourceSHA"], "agent-run-smoke summary sourceSHA", failures)
+    unless summary["sourceArtifactSHA256"].to_s.empty?
+      require_sha256(summary["sourceArtifactSHA256"], "agent-run-smoke summary sourceArtifactSHA256", failures)
+    end
+    unless summary["sourceArtifactBytes"].to_s.empty?
+      require_positive_integer(summary["sourceArtifactBytes"], "agent-run-smoke summary sourceArtifactBytes", failures)
+    end
+
+    if SOURCE_SHA_REQUIRED_INSTALL_SOURCES.include?(install_source) && summary["sourceSHA"].to_s.empty?
+      failures << "agent-run-smoke summary #{install_source} evidence requires sourceSHA to pin the immutable source commit"
+    end
+    if %w[source-build-tag source-first-unsigned-dev-zip].include?(install_source) &&
+        !summary["sourceRef"].to_s.match?(/\Av[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?\z/)
+      failures << "agent-run-smoke summary #{install_source} evidence requires sourceRef to be the version tag used for the source build"
+    end
+    if !summary["sourceArtifactName"].to_s.empty? && summary["sourceArtifactSHA256"].to_s.empty?
+      failures << "agent-run-smoke summary sourceArtifactName requires sourceArtifactSHA256"
+    end
+  end
+
   def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
 
     validate_agent_run_smoke_bundle(path, summary, failures)
     validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
+    validate_agent_run_smoke_provenance(summary, failures)
 
     unless summary["schemaVersion"] == 1
       failures << "agent-run-smoke summary schemaVersion must be 1"

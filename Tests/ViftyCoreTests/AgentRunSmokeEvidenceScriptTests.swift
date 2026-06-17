@@ -35,6 +35,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=false"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=true"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("installSource=not-recorded"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceRef="))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceSHA="))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceArtifactName="))
 
         let manifest = try harness.read("manifest.tsv")
         XCTAssertTrue(manifest.contains("name\tstatus\tstdout\tstderr"))
@@ -57,6 +61,12 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["readOnly"] as? Bool, false)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, true)
+        XCTAssertEqual(summary["installSource"] as? String, "not-recorded")
+        XCTAssertEqual(summary["sourceRef"] as? String, "")
+        XCTAssertEqual(summary["sourceSHA"] as? String, "")
+        XCTAssertEqual(summary["sourceArtifactName"] as? String, "")
+        XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, "")
+        XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "")
         XCTAssertEqual(summary["workload"] as? String, "test")
         XCTAssertEqual(summary["duration"] as? String, "2m")
         XCTAssertEqual(summary["maxRPMPercent"] as? Int, 55)
@@ -96,6 +106,49 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tviftyctl-run.json"))
         XCTAssertTrue(checksums.contains("\tpost-audit.json"))
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))
+    }
+
+    func testSmokeCollectorRecordsSourceProvenanceForLocalAdHocBuilds() throws {
+        let harness = try AgentRunSmokeEvidenceHarness()
+        let sourceSHA = String(repeating: "A", count: 40)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--install-source", "local-ad-hoc-build",
+            "--source-ref", "main",
+            "--source-sha", sourceSHA
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let metadata = try harness.read("metadata.txt")
+        XCTAssertTrue(metadata.contains("installSource=local-ad-hoc-build"))
+        XCTAssertTrue(metadata.contains("sourceRef=main"))
+        XCTAssertTrue(metadata.contains("sourceSHA=\(String(repeating: "a", count: 40))"))
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["installSource"] as? String, "local-ad-hoc-build")
+        XCTAssertEqual(summary["sourceRef"] as? String, "main")
+        XCTAssertEqual(summary["sourceSHA"] as? String, String(repeating: "a", count: 40))
+        XCTAssertEqual(summary["sourceArtifactName"] as? String, "")
+        XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, "")
+        XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "")
+    }
+
+    func testSmokeCollectorRejectsLocalAdHocProvenanceWithoutSourceSHA() throws {
+        let harness = try AgentRunSmokeEvidenceHarness()
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--install-source", "local-ad-hoc-build",
+            "--source-ref", "main"
+        ])
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("local-ad-hoc-build evidence requires --source-sha"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.outputURL.path))
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenDiagnoseIsBlocked() throws {
@@ -379,6 +432,12 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "status",
             "readOnly",
             "coolingCommandsRun",
+            "installSource",
+            "sourceRef",
+            "sourceSHA",
+            "sourceArtifactName",
+            "sourceArtifactSHA256",
+            "sourceArtifactBytes",
             "preflight",
             "run",
             "commands"

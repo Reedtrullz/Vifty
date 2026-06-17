@@ -670,6 +670,29 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("agent-run-smoke summary schemaID must be https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"))
     }
 
+    func testReviewRejectsAgentRunSmokeLocalAdHocProvenanceWithoutSourceSHA() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: ""
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary local-ad-hoc-build evidence requires sourceSHA"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsFailedCapturedAgentRunSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "failed", runExitStatus: 70)
@@ -1078,7 +1101,13 @@ private final class ValidationEvidenceReviewHarness {
         childExitCode: Int = 0,
         daemonStatusAvailable: Bool = true,
         policySource: String = "daemonStatus",
-        policyStatusAvailable: Bool = true
+        policyStatusAvailable: Bool = true,
+        installSource: String = "not-recorded",
+        sourceRef: String = "",
+        sourceSHA: String = "",
+        sourceArtifactName: String = "",
+        sourceArtifactSHA256: String = "",
+        sourceArtifactBytes: String = ""
     ) throws -> URL {
         try writeAgentRunSmokeBundleSummary(
             status: status,
@@ -1090,7 +1119,13 @@ private final class ValidationEvidenceReviewHarness {
             childExitCode: childExitCode,
             daemonStatusAvailable: daemonStatusAvailable,
             policySource: policySource,
-            policyStatusAvailable: policyStatusAvailable
+            policyStatusAvailable: policyStatusAvailable,
+            installSource: installSource,
+            sourceRef: sourceRef,
+            sourceSHA: sourceSHA,
+            sourceArtifactName: sourceArtifactName,
+            sourceArtifactSHA256: sourceArtifactSHA256,
+            sourceArtifactBytes: sourceArtifactBytes
         )
     }
 
@@ -1112,7 +1147,13 @@ private final class ValidationEvidenceReviewHarness {
         rateLimitInitialStdoutContents: String? = nil,
         runStdoutOverride: String? = nil,
         runStderrOverride: String? = nil,
-        includeRateLimitRetryCommand: Bool = true
+        includeRateLimitRetryCommand: Bool = true,
+        installSource: String = "not-recorded",
+        sourceRef: String = "",
+        sourceSHA: String = "",
+        sourceArtifactName: String = "",
+        sourceArtifactSHA256: String = "",
+        sourceArtifactBytes: String = ""
     ) throws -> URL {
         let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
@@ -1231,6 +1272,12 @@ private final class ValidationEvidenceReviewHarness {
             "readOnly": status == "blocked",
             "coolingCommandsRun": status != "blocked",
             "viftyctl": "/Applications/Vifty.app/Contents/MacOS/viftyctl",
+            "installSource": installSource,
+            "sourceRef": sourceRef,
+            "sourceSHA": sourceSHA,
+            "sourceArtifactName": sourceArtifactName,
+            "sourceArtifactSHA256": sourceArtifactSHA256,
+            "sourceArtifactBytes": sourceArtifactBytes,
             "workload": "test",
             "duration": "2m",
             "maxRPMPercent": 55,

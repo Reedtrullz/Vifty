@@ -36,6 +36,10 @@ AGENT_RUN_SMOKE_DURATION ?= 2m
 AGENT_RUN_SMOKE_MAX_RPM_PERCENT ?= 55
 AGENT_RUN_SMOKE_REASON ?= agent run smoke test
 AGENT_RUN_SMOKE_AUDIT_LIMIT ?= 20
+AGENT_RUN_SMOKE_INSTALL_SOURCE ?= not-recorded
+AGENT_RUN_SMOKE_SOURCE_REF ?=
+AGENT_RUN_SMOKE_SOURCE_SHA ?=
+AGENT_RUN_SMOKE_SOURCE_ARTIFACT ?=
 APP_NAME := Vifty
 APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -96,12 +100,12 @@ agent-cooling-evidence-review: ## Review a read-only agent/helper support eviden
 	./scripts/review-agent-cooling-evidence.sh --bundle "$(AGENT_EVIDENCE_BUNDLE)" $(if $(AGENT_EVIDENCE_REVIEW_SUMMARY),--summary "$(AGENT_EVIDENCE_REVIEW_SUMMARY)",)
 
 agent-run-smoke-evidence: ## Collect supervised supported-hardware viftyctl run smoke evidence
-	./scripts/collect-agent-run-smoke-evidence.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" --audit-limit "$(AGENT_RUN_SMOKE_AUDIT_LIMIT)" $(if $(AGENT_RUN_SMOKE_OUTPUT),--output "$(AGENT_RUN_SMOKE_OUTPUT)",)
+	./scripts/collect-agent-run-smoke-evidence.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" --audit-limit "$(AGENT_RUN_SMOKE_AUDIT_LIMIT)" --install-source "$(AGENT_RUN_SMOKE_INSTALL_SOURCE)" $(if $(AGENT_RUN_SMOKE_SOURCE_REF),--source-ref "$(AGENT_RUN_SMOKE_SOURCE_REF)",) $(if $(AGENT_RUN_SMOKE_SOURCE_SHA),--source-sha "$(AGENT_RUN_SMOKE_SOURCE_SHA)",) $(if $(AGENT_RUN_SMOKE_SOURCE_ARTIFACT),--source-artifact "$(AGENT_RUN_SMOKE_SOURCE_ARTIFACT)",) $(if $(AGENT_RUN_SMOKE_OUTPUT),--output "$(AGENT_RUN_SMOKE_OUTPUT)",)
 
 agent-run-smoke-evidence-current-build: ## Build current app and collect supervised local viftyctl run smoke evidence
 	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "agent-run-smoke-evidence-current-build requires a clean git worktree so the smoke test uses the built app from the current source ref; commit or stash changes first, or use make agent-run-smoke-evidence with an explicit VIFTYCTL for exploratory local smoke evidence." >&2; exit 65; fi
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
-	$(MAKE) agent-run-smoke-evidence VIFTYCTL="$(MACOS)/viftyctl"
+	$(MAKE) agent-run-smoke-evidence VIFTYCTL="$(MACOS)/viftyctl" AGENT_RUN_SMOKE_INSTALL_SOURCE=local-ad-hoc-build AGENT_RUN_SMOKE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" AGENT_RUN_SMOKE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)"
 
 source-first-release-notes: ## Write source-first release notes for the current version
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)" $(if $(SOURCE_FIRST_SOURCE_REF),--source-ref "$(SOURCE_FIRST_SOURCE_REF)",)

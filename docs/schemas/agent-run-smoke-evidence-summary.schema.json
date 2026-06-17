@@ -13,6 +13,12 @@
     "readOnly",
     "coolingCommandsRun",
     "viftyctl",
+    "installSource",
+    "sourceRef",
+    "sourceSHA",
+    "sourceArtifactName",
+    "sourceArtifactSHA256",
+    "sourceArtifactBytes",
     "workload",
     "duration",
     "maxRPMPercent",
@@ -51,6 +57,27 @@
     },
     "viftyctl": {
       "type": "string"
+    },
+    "installSource": {
+      "$ref": "#/$defs/installSource"
+    },
+    "sourceRef": {
+      "type": "string"
+    },
+    "sourceSHA": {
+      "type": "string",
+      "pattern": "^$|^[0-9a-f]{40}$"
+    },
+    "sourceArtifactName": {
+      "type": "string"
+    },
+    "sourceArtifactSHA256": {
+      "type": "string",
+      "pattern": "^$|^[0-9a-f]{64}$"
+    },
+    "sourceArtifactBytes": {
+      "type": "string",
+      "pattern": "^$|^[1-9][0-9]*$"
     },
     "workload": {
       "type": "string"
@@ -96,6 +123,18 @@
     }
   },
   "$defs": {
+    "installSource": {
+      "enum": [
+        "not-recorded",
+        "source-build-tag",
+        "source-first-unsigned-dev-zip",
+        "notarized-github-release",
+        "homebrew-cask",
+        "local-developer-id-build",
+        "local-ad-hoc-build",
+        "other"
+      ]
+    },
     "preflight": {
       "type": "object",
       "required": [

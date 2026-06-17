@@ -121,14 +121,17 @@ clean source checkout with the freshly built app:
 make agent-run-smoke-evidence-current-build
 ```
 
-This target refuses dirty worktrees, builds `.build/Vifty.app`, and then runs
-the smoke through `.build/Vifty.app/Contents/MacOS/viftyctl`. If you are
-testing an already installed app instead, point the generic Make target at that
-installed CLI:
+This target refuses dirty worktrees, builds `.build/Vifty.app`, records `installSource=local-ad-hoc-build`, the current git ref, and the current 40-character source SHA, and then runs the smoke through
+`.build/Vifty.app/Contents/MacOS/viftyctl`. If you are testing an already
+installed app instead, point the generic Make target at that installed CLI and
+set source provenance when you know it:
 
 ```sh
 make agent-run-smoke-evidence \
-  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
+  AGENT_RUN_SMOKE_INSTALL_SOURCE=local-ad-hoc-build \
+  AGENT_RUN_SMOKE_SOURCE_REF=<ref> \
+  AGENT_RUN_SMOKE_SOURCE_SHA=<40-char-sha>
 ```
 
 This is intentionally different from the read-only support bundle below. It

@@ -267,21 +267,27 @@ make agent-run-smoke-evidence-current-build
 
 This requires a clean git worktree, builds `.build/Vifty.app`, and runs the
 smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so the evidence follows
-the current source checkout. If you are intentionally validating an already
-installed app from a source checkout, use the generic supervised Make target
-with an explicit installed `viftyctl` path:
+the current source checkout. The smoke summary records `installSource`, `sourceRef`, `sourceSHA`, and optional source artifact fields; this target sets
+`installSource=local-ad-hoc-build`, the current git ref, and the current
+40-character source SHA automatically. If you are intentionally validating an
+already installed app from a source checkout, use the generic supervised Make
+target with explicit provenance and the installed `viftyctl` path:
 
 ```sh
 make agent-run-smoke-evidence \
-  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
+  AGENT_RUN_SMOKE_INSTALL_SOURCE=local-ad-hoc-build \
+  AGENT_RUN_SMOKE_SOURCE_REF=<ref> \
+  AGENT_RUN_SMOKE_SOURCE_SHA=<40-char-sha>
 ```
 
 The Make target keeps the default `/bin/sleep 5`, `2m`, `55%`, and
 `agent run smoke test` reason used by the collector. Set
 `AGENT_RUN_SMOKE_OUTPUT=<dir>`, `AGENT_RUN_SMOKE_DURATION=<duration>`,
 `AGENT_RUN_SMOKE_MAX_RPM_PERCENT=<percent>`, `AGENT_RUN_SMOKE_REASON=<text>`,
-or `AGENT_RUN_SMOKE_AUDIT_LIMIT=<count>` only for a supervised validation
-scenario that needs different bounded values. The raw
+`AGENT_RUN_SMOKE_AUDIT_LIMIT=<count>`, or
+`AGENT_RUN_SMOKE_SOURCE_ARTIFACT=<zip-or-artifact>` only for a supervised validation
+scenario that needs different bounded values or stronger source provenance. The raw
 `scripts/collect-agent-run-smoke-evidence.sh` path remains available for
 advanced/manual runs.
 
