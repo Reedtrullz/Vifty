@@ -27,8 +27,8 @@ Options:
 
 By default this is a public-release trust gate: it verifies the cask SHA-256,
 bundle version, required executables, bundled schema validity, plist validity,
-Developer ID TeamID, daemon TeamID allowlist, stapled notarization ticket, and
-Gatekeeper assessment.
+bundled evidence collector scripts, Developer ID TeamID, daemon TeamID allowlist,
+stapled notarization ticket, and Gatekeeper assessment.
 USAGE
 }
 
@@ -343,12 +343,19 @@ fi
 
 MACOS_DIR="${APP_PATH}/Contents/MacOS"
 SCHEMA_DIR="${APP_PATH}/Contents/Resources/schemas"
+RESOURCES_DIR="${APP_PATH}/Contents/Resources"
 INFO_PLIST="${APP_PATH}/Contents/Info.plist"
 DAEMON_PLIST="${APP_PATH}/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
 
 for executable in Vifty ViftyHelper ViftyDaemon viftyctl; do
   if [[ ! -x "${MACOS_DIR}/${executable}" ]]; then
     fail_check "required-executables" "missing executable ${MACOS_DIR}/${executable}"
+  fi
+done
+
+for support_script in collect-agent-cooling-evidence.sh collect-agent-run-smoke-evidence.sh; do
+  if [[ ! -x "${RESOURCES_DIR}/${support_script}" ]]; then
+    fail_check "support-scripts" "missing executable support script ${RESOURCES_DIR}/${support_script}"
   fi
 done
 
@@ -449,6 +456,7 @@ write_summary() {
   write_check 1 "artifact-sha" "passed" "release-trust" "Artifact SHA-256 matched ${EXPECTED_SHA_SOURCE}."
   write_check 0 "app-bundle-present" "passed" "release-trust" "Zip contained Vifty.app at the root."
   write_check 0 "required-executables" "passed" "release-trust" "App bundle contained Vifty, ViftyHelper, ViftyDaemon, and viftyctl executables."
+  write_check 0 "support-scripts" "passed" "release-trust" "App bundle contained executable read-only agent/helper and supervised agent-run smoke evidence collectors."
   write_check 0 "schema-resources" "passed" "release-trust" "App bundle contained valid support, release, validation, and viftyctl JSON Schemas with expected IDs in Contents/Resources/schemas."
   write_check 0 "plist-lint" "passed" "release-trust" "Info.plist and bundled LaunchDaemon plist were valid."
   write_check 0 "bundle-version" "passed" "release-trust" "Bundle version matched the cask version."

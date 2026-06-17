@@ -58,6 +58,8 @@ jobs:
           test -x .build/Vifty.app/Contents/MacOS/ViftyHelper
           test -x .build/Vifty.app/Contents/MacOS/ViftyDaemon
           test -x .build/Vifty.app/Contents/MacOS/viftyctl
+          test -x .build/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh
+          test -x .build/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh
           test -f .build/Vifty.app/Contents/Info.plist
           test -f .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
           plutil -lint .build/Vifty.app/Contents/Info.plist
@@ -75,6 +77,8 @@ jobs:
           codesign --verify --deep --strict "${VIFTY_INSTALL_DIR}/Vifty.app"
           cmp .build/Vifty.app/Contents/MacOS/Vifty "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/Vifty"
           cmp .build/Vifty.app/Contents/MacOS/viftyctl "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/viftyctl"
+          cmp .build/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh"
+          cmp .build/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh"
 
       - name: Archive app bundle
         run: ditto -c -k --keepParent .build/Vifty.app "${RUNNER_TEMP}/Vifty.app.zip"

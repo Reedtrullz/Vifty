@@ -35,6 +35,7 @@ app: ## Build the release app bundle
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
 	install -m 755 scripts/collect-agent-cooling-evidence.sh "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
+	install -m 755 scripts/collect-agent-run-smoke-evidence.sh "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	cp "$(APP_ICON)" "$(CONTENTS)/Resources/ViftyIcon.icns"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
@@ -80,6 +81,7 @@ verify: ## Run local trust gates without installing
 	plutil -lint "$(CONTENTS)/Info.plist"
 	plutil -lint "$(DAEMON_PLIST)"
 	test -x "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
+	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	codesign --verify --deep --strict "$(APP_DIR)"
 	codesign -dvvv "$(MACOS)/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
 	codesign -dvvv "$(MACOS)/ViftyDaemon" 2>&1 | grep 'Identifier=tech.reidar.vifty.daemon'

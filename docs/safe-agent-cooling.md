@@ -120,6 +120,10 @@ scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+Installed app bundles include this read-only collector at
+`/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`
+for users who do not have a source checkout.
+
 This read-only support bundle captures capabilities, diagnose, status, audit,
 command exit statuses, launchd/helper install evidence, a manifest,
 schema-backed `agent-cooling-evidence-summary.json` with

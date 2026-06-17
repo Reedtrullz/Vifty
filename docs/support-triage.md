@@ -15,6 +15,14 @@ scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+Installed app bundles include the same read-only collector at
+`/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`
+for reporters who do not have a source checkout. For supervised
+supported-hardware workload proof, use the bundled
+`/Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh`
+only after readiness is safe; it may request one bounded `viftyctl run` cooling
+lease and is not the first-response path for helper failures.
+
 It captures `capabilities --json`, `diagnose --json`, `status --json`, and
 `audit --limit 20 --json` plus exit statuses, launchd/helper install evidence,
 a manifest, `privacy-review.tsv`, and checksums. It does not request cooling,

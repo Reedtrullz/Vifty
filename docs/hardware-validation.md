@@ -234,9 +234,12 @@ If this follows the manual smoke test above, wait for the advertised prepare coo
 The preferred captured path is:
 
 ```sh
-scripts/collect-agent-run-smoke-evidence.sh \
+/Applications/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
+
+When validating directly from a source checkout before installing an app bundle, use
+`scripts/collect-agent-run-smoke-evidence.sh` with the same `--viftyctl` path.
 
 This writes an agent-run smoke bundle with `manifest.tsv`,
 `agent-run-smoke-evidence-summary.json`, the `viftyctl run` stdout/stderr/status

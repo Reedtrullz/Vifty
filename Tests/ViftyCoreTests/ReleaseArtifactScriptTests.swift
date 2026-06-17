@@ -49,6 +49,10 @@ final class ReleaseArtifactScriptTests: XCTestCase {
                 && check["status"] as? String == "passed"
         })
         XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "support-scripts"
+                && check["status"] as? String == "passed"
+        })
+        XCTAssertTrue(checks.contains { check in
             check["name"] as? String == "codesign-teamid"
                 && check["status"] as? String == "skipped"
         })
@@ -119,6 +123,19 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 65)
         XCTAssertTrue(result.stderr.contains("missing bundled schema"))
         XCTAssertTrue(result.stderr.contains("Contents/Resources/schemas"))
+    }
+
+    func testVerifierRejectsMissingSupportScripts() throws {
+        let harness = try ReleaseArtifactHarness(includeSupportScripts: false)
+
+        let result = try harness.runVerifier([
+            "--skip-signature-checks",
+            "--skip-notarization-checks"
+        ])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("missing executable support script"))
+        XCTAssertTrue(result.stderr.contains("Contents/Resources/collect-agent-cooling-evidence.sh"))
     }
 
     func testVerifierRejectsInvalidBundledSchemaJSON() throws {
@@ -287,6 +304,7 @@ private final class ReleaseArtifactHarness {
         bundleVersion: String = "1.2.3",
         caskSHA: String? = nil,
         includeSchemaResources: Bool = true,
+        includeSupportScripts: Bool = true,
         schemaResourceOverrides: [String: String] = [:]
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -304,6 +322,7 @@ private final class ReleaseArtifactHarness {
             at: payloadURL.appendingPathComponent("Vifty.app", isDirectory: true),
             version: bundleVersion,
             includeSchemaResources: includeSchemaResources,
+            includeSupportScripts: includeSupportScripts,
             schemaResourceOverrides: schemaResourceOverrides
         )
         try Self.run(
@@ -359,11 +378,15 @@ private final class ReleaseArtifactHarness {
         at appURL: URL,
         version: String,
         includeSchemaResources: Bool,
+        includeSupportScripts: Bool,
         schemaResourceOverrides: [String: String]
     ) throws {
         let macOSURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("MacOS", isDirectory: true)
+        let resourcesURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
         let schemasURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Resources", isDirectory: true)
@@ -374,6 +397,7 @@ private final class ReleaseArtifactHarness {
             .appendingPathComponent("LaunchDaemons", isDirectory: true)
 
         try FileManager.default.createDirectory(at: macOSURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
         if includeSchemaResources {
             try FileManager.default.createDirectory(at: schemasURL, withIntermediateDirectories: true)
             try writeSchemaResources(at: schemasURL, overrides: schemaResourceOverrides)
@@ -388,6 +412,11 @@ private final class ReleaseArtifactHarness {
         )
         for executable in ["Vifty", "ViftyHelper", "ViftyDaemon", "viftyctl"] {
             try writeExecutable(macOSURL.appendingPathComponent(executable))
+        }
+        if includeSupportScripts {
+            for script in ["collect-agent-cooling-evidence.sh", "collect-agent-run-smoke-evidence.sh"] {
+                try writeExecutable(resourcesURL.appendingPathComponent(script))
+            }
         }
     }
 
