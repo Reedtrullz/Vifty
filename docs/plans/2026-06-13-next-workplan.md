@@ -47,7 +47,15 @@ For public compatibility, prefer `v1.1.1` source or unsigned-dev evidence. For c
 
 ### 1.2 Read-Only Evidence Collection
 
-Run the read-only collector before any fan write. If the installed app was built from the current checkout, record that exact source provenance:
+Run the read-only collector before any fan write. For current source-checkout validation, build the app and collect provenance-backed evidence in one step:
+
+```sh
+make validation-evidence-current-build
+```
+
+Requires a clean git worktree, builds `.build/Vifty.app` before collection, and records the current git ref/SHA as `local-ad-hoc-build`.
+
+If the worktree is dirty, commit or stash first; otherwise keep exploratory evidence at the default `installSource=not-recorded`. If the app was already installed from the current checkout, record that exact source provenance:
 
 ```sh
 make validation-evidence \

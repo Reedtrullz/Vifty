@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence validation-evidence-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -18,6 +18,8 @@ VALIDATION_EVIDENCE_SOURCE_ARTIFACT ?=
 VALIDATION_EVIDENCE_RELEASE_SUMMARY ?=
 VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
 VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
+CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
+CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_BUNDLE ?=
 AGENT_EVIDENCE_REVIEW_SUMMARY ?=
@@ -68,6 +70,11 @@ pkg: ## Build an unsigned installer .pkg
 
 validation-evidence: ## Collect read-only release/hardware validation evidence
 	./scripts/collect-validation-evidence.sh --app "$(VALIDATION_EVIDENCE_APP)" --install-source "$(VALIDATION_EVIDENCE_INSTALL_SOURCE)" $(if $(VALIDATION_EVIDENCE_SOURCE_REF),--source-ref "$(VALIDATION_EVIDENCE_SOURCE_REF)",) $(if $(VALIDATION_EVIDENCE_SOURCE_SHA),--source-sha "$(VALIDATION_EVIDENCE_SOURCE_SHA)",) $(if $(VALIDATION_EVIDENCE_SOURCE_ARTIFACT),--source-artifact "$(VALIDATION_EVIDENCE_SOURCE_ARTIFACT)",) $(if $(VALIDATION_EVIDENCE_RELEASE_SUMMARY),--release-summary "$(VALIDATION_EVIDENCE_RELEASE_SUMMARY)",) $(if $(VALIDATION_EVIDENCE_RELEASE_CHECKLIST),--release-checklist "$(VALIDATION_EVIDENCE_RELEASE_CHECKLIST)",) $(if $(VALIDATION_EVIDENCE_OUTPUT),--output "$(VALIDATION_EVIDENCE_OUTPUT)",) $(if $(filter 1 true yes,$(VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL)),--include-probe-local,)
+
+validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence
+	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "validation-evidence-current-build requires a clean git worktree so source ref/SHA match the built app; commit or stash changes first, or use make validation-evidence with installSource=not-recorded for exploratory local evidence." >&2; exit 65; fi
+	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
+	$(MAKE) validation-evidence VALIDATION_EVIDENCE_APP="$(APP_DIR)" VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build VALIDATION_EVIDENCE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" VALIDATION_EVIDENCE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)"
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
 	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)
