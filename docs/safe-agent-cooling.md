@@ -24,7 +24,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract, `policyStatusAvailable: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract, `policyStatusAvailable: true`, `policy.enabled: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
@@ -184,7 +184,7 @@ omit `daemonControlPathReady` may pass only when the reviewer can infer it from
 structured readiness/recovery fields. The `capabilitiesDecision` summary
 records whether the bundle advertised `viftyctl run`, force-retry discovery,
 safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
-policy status availability, daemon status, and the unavailable-exit contract before the report is treated
+policy enabled status, policy status availability, daemon status, and the unavailable-exit contract before the report is treated
 as agent-safe evidence; absent legacy `metadataLimits` is a warning, not proof
 that automation should skip local argument limits. The `appInfo` summary records
 the captured app plist command exit status, bundle identifier, short version,

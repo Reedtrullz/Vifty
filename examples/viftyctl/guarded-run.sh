@@ -284,6 +284,7 @@ capabilities_unavailable_exit="$(printf '%s\n' "$capabilities_json" | /usr/bin/p
 daemon_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract daemonStatusAvailable raw -o - - 2>/dev/null || printf '')"
 policy_source="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policySource raw -o - - 2>/dev/null || printf '')"
 policy_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policyStatusAvailable raw -o - - 2>/dev/null || printf '')"
+policy_enabled="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.enabled raw -o - - 2>/dev/null || printf '')"
 run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
@@ -305,6 +306,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$daemon_status_available" = "null" ] && daemon_status_available=""
 [ "$policy_source" = "null" ] && policy_source=""
 [ "$policy_status_available" = "null" ] && policy_status_available=""
+[ "$policy_enabled" = "null" ] && policy_enabled=""
 [ "$minimum_agent_rpm_percent" = "null" ] && minimum_agent_rpm_percent=""
 [ "$maximum_allowed_rpm_percent" = "null" ] && maximum_allowed_rpm_percent=""
 [ "$max_duration_seconds" = "null" ] && max_duration_seconds=""
@@ -325,6 +327,14 @@ if [ "$capabilities_status" -ne 0 ] || [ "$daemon_status_available" != "true" ] 
   if [ "$capabilities_status" -ne 0 ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$policy_enabled" != "true" ]; then
+  echo "guarded-run: viftyctl capabilities does not advertise enabled agent policy; refusing to request cooling." >&2
   if [ -n "$capabilities_json" ]; then
     printf '%s\n' "$capabilities_json" >&2
   fi

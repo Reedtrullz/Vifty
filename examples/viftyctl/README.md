@@ -5,7 +5,7 @@ common developer workloads on Vifty's safe path:
 
 1. preflight that the child command is a regular executable path or resolves to one on `PATH`;
 2. reject malformed wrapper arguments before contacting Vifty, including empty or blank reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
-3. read-only `viftyctl capabilities --json`, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, require the safe `runLifecycle` contract used by `viftyctl run`, require `policyStatusAvailable: true` before trusting policy duration/RPM limits, require `metadataLimits`, reject durations or RPM percentages outside the advertised policy range, and reject reasons longer than the advertised maximum before readiness or cooling;
+3. read-only `viftyctl capabilities --json`, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, require the safe `runLifecycle` contract used by `viftyctl run`, require `policyStatusAvailable: true` before trusting policy duration/RPM limits, require `policy.enabled: true` before requesting cooling, require `metadataLimits`, reject durations or RPM percentages outside the advertised policy range, and reject reasons longer than the advertised maximum before readiness or cooling;
 4. read-only `viftyctl diagnose --json`;
 5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady` so wrappers do not infer safety from prose or fallback telemetry;
 6. fail closed when readiness is blocked, `safeToRequestCooling` is false, or `daemonControlPathReady` is false, and print recovery guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up;
@@ -13,7 +13,7 @@ common developer workloads on Vifty's safe path:
 8. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
 If a capabilities payload does not advertise `runLifecycle`, `policyStatusAvailable: true`,
-policy duration/RPM limits, or `metadataLimits`, treat those guarantees as unavailable and refuse cooling.
+`policy.enabled: true`, policy duration/RPM limits, or `metadataLimits`, treat those guarantees as unavailable and refuse cooling.
 
 Agents should also read `metadataLimits` from capabilities before generating
 custom direct-prepare reasons or idempotency keys; legacy payloads without those

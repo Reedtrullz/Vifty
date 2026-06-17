@@ -278,7 +278,7 @@ final class GuardedRunScriptTests: XCTestCase {
     func testGuardedRunRequiresAdvertisedRPMPolicyLimits() throws {
         let harness = try ScriptHarness(
             state: "ready",
-            policyOverride: #""policy":null"#
+            policyOverride: #""policy":{"enabled":true,"maxDurationSeconds":1800,"prepareCooldownSeconds":30}"#
         )
 
         let result = try harness.runGuardedRun([
@@ -287,6 +287,21 @@ final class GuardedRunScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("does not advertise usable RPM policy limits"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsDisabledAdvertisedAgentPolicyBeforeDiagnose() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            policyOverride: #""policy":{"enabled":false,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise enabled agent policy"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 

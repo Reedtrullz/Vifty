@@ -1662,6 +1662,8 @@ private final class ReleaseMetadataHarness {
         _ = try runGit(["init"])
         _ = try runGit(["config", "user.email", "vifty-release-tests@example.invalid"])
         _ = try runGit(["config", "user.name", "Vifty Release Tests"])
+        _ = try runGit(["config", "commit.gpgsign", "false"])
+        _ = try runGit(["config", "tag.gpgSign", "false"])
         try "source boundary\n".write(
             to: rootURL.appendingPathComponent("release-source.txt"),
             atomically: true,
