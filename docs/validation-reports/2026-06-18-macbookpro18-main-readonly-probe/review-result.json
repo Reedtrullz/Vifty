@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "schemaID": "https://vifty.local/schemas/validation-review-result.schema.json",
+  "generatedAtUTC": "2026-06-17T22:35:23Z",
+  "status": "passed",
+  "mode": "supported-hardware",
+  "bundlePath": "2026-06-18-main-readonly-probe",
+  "readOnly": true,
+  "coolingCommandsRun": false,
+  "appPath": ".build/Vifty.app",
+  "releaseArtifactSummaryPath": "",
+  "releaseChecklistPath": "",
+  "installSource": "local-ad-hoc-build",
+  "sourceRef": "main",
+  "sourceSHA": "24154ae8cda35915f5c4fd37ae02383dafc78745",
+  "sourceArtifactName": "",
+  "sourceArtifactSHA256": "",
+  "sourceArtifactBytes": "",
+  "diagnoseState": "ready",
+  "recommendedAgentAction": "requestCooling",
+  "recommendedRecoveryAction": "none",
+  "safeToRequestCooling": true,
+  "daemonControlPathReady": true,
+  "modelIdentifier": "MacBookPro18,1",
+  "isAppleSilicon": true,
+  "isMacBookPro": true,
+  "fanCount": 2,
+  "controllableFanCount": 2,
+  "temperatureSensorCount": 6,
+  "thermalPressure": "nominal",
+  "manualSmokeTestResult": "not-recorded",
+  "manualSmokeTestSource": "",
+  "agentRunSmokeResult": "not-recorded",
+  "agentRunSmokeSource": "",
+  "failures": [
+
+  ],
+  "warnings": [
+    "manual fan-write smoke-test result is not recorded; keep this report as candidate evidence"
+  ]
+}
