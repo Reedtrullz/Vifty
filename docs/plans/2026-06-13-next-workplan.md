@@ -47,13 +47,16 @@ For public compatibility, prefer `v1.1.1` source or unsigned-dev evidence. For c
 
 ### 1.2 Read-Only Evidence Collection
 
-Run the read-only collector before any fan write:
+Run the read-only collector before any fan write. If the installed app was built from the current checkout, record that exact source provenance:
 
 ```sh
-make validation-evidence
+make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build \
+  VALIDATION_EVIDENCE_SOURCE_REF=main \
+  VALIDATION_EVIDENCE_SOURCE_SHA="$(git rev-parse HEAD)"
 ```
 
-The target is read-only and defaults to `/Applications/Vifty.app`, `local-ad-hoc-build`, `source-ref main`, and the current `git rev-parse HEAD` source SHA. Override `VALIDATION_EVIDENCE_APP`, `VALIDATION_EVIDENCE_OUTPUT`, `VALIDATION_EVIDENCE_INSTALL_SOURCE`, `VALIDATION_EVIDENCE_SOURCE_REF`, `VALIDATION_EVIDENCE_SOURCE_SHA`, or `VALIDATION_EVIDENCE_SOURCE_ARTIFACT` when the installed app came from a different source.
+The target is read-only and defaults to `/Applications/Vifty.app` with `installSource=not-recorded`, so it does not pretend an older installed app came from the current checkout. Override `VALIDATION_EVIDENCE_APP`, `VALIDATION_EVIDENCE_OUTPUT`, `VALIDATION_EVIDENCE_INSTALL_SOURCE`, `VALIDATION_EVIDENCE_SOURCE_REF`, `VALIDATION_EVIDENCE_SOURCE_SHA`, or `VALIDATION_EVIDENCE_SOURCE_ARTIFACT` only when the installed app came from a known source.
 
 If validating the published source-first release instead, use:
 

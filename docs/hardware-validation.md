@@ -16,7 +16,16 @@ For release candidates and contributor reports, the easiest read-only collection
 make validation-evidence
 ```
 
-This defaults to `/Applications/Vifty.app`, `local-ad-hoc-build`, `source-ref main`, and the current `git rev-parse HEAD` source SHA. Use `VALIDATION_EVIDENCE_APP=<path>`, `VALIDATION_EVIDENCE_OUTPUT=<dir>`, `VALIDATION_EVIDENCE_INSTALL_SOURCE=<source>`, `VALIDATION_EVIDENCE_SOURCE_REF=<ref>`, `VALIDATION_EVIDENCE_SOURCE_SHA=<sha>`, `VALIDATION_EVIDENCE_SOURCE_ARTIFACT=<path>`, `VALIDATION_EVIDENCE_RELEASE_SUMMARY=<path>`, or `VALIDATION_EVIDENCE_RELEASE_CHECKLIST=<path>` when the installed app came from a different source or release artifact.
+This defaults to `/Applications/Vifty.app` with `installSource=not-recorded` so a local report never pretends the installed app came from the current checkout. Use `VALIDATION_EVIDENCE_APP=<path>`, `VALIDATION_EVIDENCE_OUTPUT=<dir>`, `VALIDATION_EVIDENCE_INSTALL_SOURCE=<source>`, `VALIDATION_EVIDENCE_SOURCE_REF=<ref>`, `VALIDATION_EVIDENCE_SOURCE_SHA=<sha>`, `VALIDATION_EVIDENCE_SOURCE_ARTIFACT=<path>`, `VALIDATION_EVIDENCE_RELEASE_SUMMARY=<path>`, or `VALIDATION_EVIDENCE_RELEASE_CHECKLIST=<path>` when the installed app came from a known source or release artifact.
+
+For a current `main` or other local ad-hoc build, set source provenance only after the installed app was actually built from that exact ref/SHA:
+
+```sh
+make validation-evidence \
+  VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build \
+  VALIDATION_EVIDENCE_SOURCE_REF=main \
+  VALIDATION_EVIDENCE_SOURCE_SHA="$(git rev-parse HEAD)"
+```
 
 For a `v1.1.1` source-first report, record the install source explicitly:
 
