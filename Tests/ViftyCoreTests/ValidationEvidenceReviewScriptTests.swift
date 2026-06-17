@@ -532,6 +532,103 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewDerivesValidatedAgentRunSmokeFromCapturedSummaryWithStructuredRateLimitRetry() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            rateLimitRetryAttempted: true,
+            rateLimitRetryAfterSeconds: 2
+        )
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/captured-agent-run-retry-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+        XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewRejectsAgentRunSmokeRateLimitRetryWithoutStructuredCooldownJSON() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            rateLimitRetryAttempted: true,
+            rateLimitInitialStdoutContents: #"{"coolingLeasePrepared":false,"autoRestoreAttempted":false,"retryAfterSeconds":2}"#
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke initial viftyctl-run JSON must be PREPARE_RATE_LIMITED cooldown evidence matching rateLimitRetry"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsAgentRunSmokeRateLimitRetryWhenRunDoesNotReferenceRetryCommand() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            rateLimitRetryAttempted: true,
+            runStdoutOverride: "viftyctl-run.json",
+            runStderrOverride: "viftyctl-run.stderr"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary run.stdout must reference viftyctl-run-retry stdout after rate-limit retry"),
+            result.stderr
+        )
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary run.stderr must reference viftyctl-run-retry stderr after rate-limit retry"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsAgentRunSmokeRateLimitRetryWhenInitialStatusMismatchesCommand() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            rateLimitRetryAttempted: true,
+            rateLimitInitialExitStatus: 75,
+            rateLimitInitialMetadataExitStatus: 1
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary rateLimitRetry.initialExitStatus must match viftyctl-run command status"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeSummaryWhenBundleChecksumDrifts() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(status: "passed")
@@ -1007,13 +1104,21 @@ private final class ValidationEvidenceReviewHarness {
         childExitCode: Int = 0,
         daemonStatusAvailable: Bool = true,
         policySource: String = "daemonStatus",
-        policyStatusAvailable: Bool = true
+        policyStatusAvailable: Bool = true,
+        rateLimitRetryAttempted: Bool = false,
+        rateLimitRetryAfterSeconds: Int = 2,
+        rateLimitInitialExitStatus: Int = 75,
+        rateLimitInitialMetadataExitStatus: Int? = nil,
+        rateLimitInitialStdoutContents: String? = nil,
+        runStdoutOverride: String? = nil,
+        runStderrOverride: String? = nil,
+        includeRateLimitRetryCommand: Bool = true
     ) throws -> URL {
         let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
         let summaryURL = smokeBundleURL.appendingPathComponent("agent-run-smoke-evidence-summary.json")
         let run: [String: Any]
-        let commands: [[String: Any]]
+        var commands: [[String: Any]]
         if status == "blocked" {
             run = [
                 "exitStatus": NSNull(),
@@ -1046,10 +1151,12 @@ private final class ValidationEvidenceReviewHarness {
                 stdoutContents: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false}"#
             )
         } else {
+            let finalRunStdout = rateLimitRetryAttempted ? (runStdoutOverride ?? "viftyctl-run-retry.json") : "viftyctl-run.json"
+            let finalRunStderr = rateLimitRetryAttempted ? (runStderrOverride ?? "viftyctl-run-retry.stderr") : "viftyctl-run.stderr"
             run = [
                 "exitStatus": runExitStatus,
-                "stdout": "viftyctl-run.json",
-                "stderr": "viftyctl-run.stderr",
+                "stdout": finalRunStdout,
+                "stderr": finalRunStderr,
                 "skippedReason": NSNull(),
                 "coolingLeasePrepared": coolingLeasePrepared,
                 "autoRestoreAttempted": autoRestoreAttempted,
@@ -1059,8 +1166,23 @@ private final class ValidationEvidenceReviewHarness {
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
                 ["name": "pre-diagnose", "status": 0, "stdout": "pre-diagnose.json", "stderr": "pre-diagnose.stderr", "statusFile": "pre-diagnose.status"],
-                ["name": "viftyctl-run", "status": runExitStatus, "stdout": "viftyctl-run.json", "stderr": "viftyctl-run.stderr", "statusFile": "viftyctl-run.status"]
+                [
+                    "name": "viftyctl-run",
+                    "status": rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus,
+                    "stdout": "viftyctl-run.json",
+                    "stderr": "viftyctl-run.stderr",
+                    "statusFile": "viftyctl-run.status"
+                ]
             ]
+            if rateLimitRetryAttempted && includeRateLimitRetryCommand {
+                commands.append([
+                    "name": "viftyctl-run-retry",
+                    "status": runExitStatus,
+                    "stdout": "viftyctl-run-retry.json",
+                    "stderr": "viftyctl-run-retry.stderr",
+                    "statusFile": "viftyctl-run-retry.status"
+                ])
+            }
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "pre-capabilities",
@@ -1077,16 +1199,30 @@ private final class ValidationEvidenceReviewHarness {
                 stderr: "pre-diagnose.stderr",
                 stdoutContents: #"{"state":"ready","safeToRequestCooling":true,"daemonControlPathReady":true}"#
             )
+            let initialRunStatus = rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus
+            let initialRunStdoutContents = rateLimitRetryAttempted
+                ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
+                : #"{"coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
-                status: runExitStatus,
+                status: initialRunStatus,
                 stdout: "viftyctl-run.json",
                 stderr: "viftyctl-run.stderr",
-                stdoutContents: #"{"coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
+                stdoutContents: initialRunStdoutContents
             )
+            if rateLimitRetryAttempted && includeRateLimitRetryCommand {
+                try writeAgentRunSmokeCommandFiles(
+                    in: smokeBundleURL,
+                    name: "viftyctl-run-retry",
+                    status: runExitStatus,
+                    stdout: "viftyctl-run-retry.json",
+                    stderr: "viftyctl-run-retry.stderr",
+                    stdoutContents: #"{"coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode)}"#
+                )
+            }
         }
-        let json: [String: Any] = [
+        var json: [String: Any] = [
             "schemaVersion": 1,
             "schemaID": schemaID,
             "kind": "vifty-agent-run-smoke",
@@ -1116,6 +1252,21 @@ private final class ValidationEvidenceReviewHarness {
             "run": run,
             "commands": commands
         ]
+        json["rateLimitRetry"] = rateLimitRetryAttempted
+            ? [
+                "attempted": true,
+                "retryAfterSeconds": rateLimitRetryAfterSeconds,
+                "initialExitStatus": rateLimitInitialMetadataExitStatus ?? rateLimitInitialExitStatus,
+                "stdout": "viftyctl-run.json",
+                "stderr": "viftyctl-run.stderr"
+            ]
+            : [
+                "attempted": false,
+                "retryAfterSeconds": NSNull(),
+                "initialExitStatus": NSNull(),
+                "stdout": NSNull(),
+                "stderr": NSNull()
+            ]
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: summaryURL)
         let manifestLines = ([

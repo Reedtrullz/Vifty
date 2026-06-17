@@ -57,7 +57,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (744 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (748 tests)."))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -457,6 +457,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(compatibility.contains("verifies the adjacent manifest/status/checksum files"))
         XCTAssertTrue(compatibility.contains("wait for `policy.prepareCooldownSeconds`"))
         XCTAssertTrue(compatibility.contains("`PREPARE_RATE_LIMITED` response with `retryAfterSeconds`"))
+        XCTAssertTrue(compatibility.contains("The reviewer requires `rateLimitRetry` to match the initial `PREPARE_RATE_LIMITED` JSON"))
+        XCTAssertTrue(compatibility.contains("requires the final `run` proof to reference the `viftyctl-run-retry` command files"))
         XCTAssertTrue(compatibility.contains("viftyctl diagnose --json"))
         XCTAssertTrue(compatibility.contains("ViftyHelper probeLocal"))
         XCTAssertTrue(compatibility.contains("| M1 Pro/Max MacBook Pro | Needs manual smoke |"))
@@ -837,6 +839,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("with at most one cooldown retry when the daemon tells"))
         XCTAssertTrue(hardwareValidation.contains("records retry metadata in `rateLimitRetry`"))
         XCTAssertTrue(hardwareValidation.contains("stores the final proof in `viftyctl-run-retry.json`"))
+        XCTAssertTrue(hardwareValidation.contains("When `rateLimitRetry.attempted=true`"))
+        XCTAssertTrue(hardwareValidation.contains("the reviewer also requires the initial `viftyctl-run` JSON to be structured `PREPARE_RATE_LIMITED` cooldown evidence"))
+        XCTAssertTrue(hardwareValidation.contains("the final `run` proof must reference the `viftyctl-run-retry` stdout/stderr/status files"))
         XCTAssertTrue(hardwareValidation.contains("does not advertise"))
         XCTAssertTrue(hardwareValidation.contains("`policyStatusAvailable: true`"))
         XCTAssertTrue(hardwareValidation.contains("`run`"))

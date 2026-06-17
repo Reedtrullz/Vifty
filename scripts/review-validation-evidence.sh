@@ -844,11 +844,97 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     parse_external_json(File.join(File.dirname(summary_path), relative_path), failures, "agent-run-smoke #{command_name} JSON")
   end
 
+  def validate_agent_run_smoke_rate_limit_retry(summary_path, summary, failures)
+    commands = summary["commands"].is_a?(Array) ? summary["commands"] : []
+    commands_by_name = commands
+      .select { |entry| entry.is_a?(Hash) }
+      .each_with_object({}) { |entry, by_name| by_name[entry["name"].to_s] = entry }
+    retry_command = commands_by_name["viftyctl-run-retry"]
+    retry_metadata = summary["rateLimitRetry"]
+
+    if retry_metadata.nil?
+      if retry_command
+        failures << "agent-run-smoke summary rateLimitRetry is required when viftyctl-run-retry is captured"
+      end
+      return
+    end
+
+    unless retry_metadata.is_a?(Hash)
+      failures << "agent-run-smoke summary rateLimitRetry must be an object"
+      return
+    end
+
+    if retry_metadata["attempted"] != true
+      if retry_metadata["attempted"] != false
+        failures << "agent-run-smoke summary rateLimitRetry.attempted must be true or false"
+      end
+      if retry_command
+        failures << "agent-run-smoke summary must not capture viftyctl-run-retry when rateLimitRetry.attempted=false"
+      end
+      %w[retryAfterSeconds initialExitStatus stdout stderr].each do |field|
+        unless retry_metadata[field].nil?
+          failures << "agent-run-smoke summary rateLimitRetry.#{field} must be null when attempted=false"
+        end
+      end
+      return
+    end
+
+    run = summary["run"].is_a?(Hash) ? summary["run"] : {}
+    initial_command = commands_by_name["viftyctl-run"]
+    if initial_command.nil?
+      failures << "agent-run-smoke summary rateLimitRetry requires initial viftyctl-run command evidence"
+      return
+    end
+    if retry_command.nil?
+      failures << "agent-run-smoke summary rateLimitRetry requires viftyctl-run-retry command evidence"
+      return
+    end
+
+    retry_after = retry_metadata["retryAfterSeconds"]
+    unless retry_after.is_a?(Integer) && retry_after >= 1 && retry_after <= 300
+      failures << "agent-run-smoke summary rateLimitRetry.retryAfterSeconds must be an integer from 1 through 300"
+    end
+    initial_exit_status = retry_metadata["initialExitStatus"]
+    unless initial_exit_status.is_a?(Integer) && initial_exit_status != 0
+      failures << "agent-run-smoke summary rateLimitRetry.initialExitStatus must be a nonzero integer"
+    end
+    if initial_command["status"] != initial_exit_status
+      failures << "agent-run-smoke summary rateLimitRetry.initialExitStatus must match viftyctl-run command status"
+    end
+    if retry_metadata["stdout"] != initial_command["stdout"]
+      failures << "agent-run-smoke summary rateLimitRetry.stdout must match viftyctl-run stdout"
+    end
+    if retry_metadata["stderr"] != initial_command["stderr"]
+      failures << "agent-run-smoke summary rateLimitRetry.stderr must match viftyctl-run stderr"
+    end
+    if run["stdout"] != retry_command["stdout"]
+      failures << "agent-run-smoke summary run.stdout must reference viftyctl-run-retry stdout after rate-limit retry"
+    end
+    if run["stderr"] != retry_command["stderr"]
+      failures << "agent-run-smoke summary run.stderr must reference viftyctl-run-retry stderr after rate-limit retry"
+    end
+    if run["exitStatus"] != retry_command["status"]
+      failures << "agent-run-smoke summary run.exitStatus must match viftyctl-run-retry command status after rate-limit retry"
+    end
+
+    initial_json = agent_run_smoke_command_json(summary_path, summary, "viftyctl-run", failures)
+    return if initial_json.nil?
+
+    unless initial_json["errorCode"] == "PREPARE_RATE_LIMITED" &&
+        initial_json["safeToProceed"] == false &&
+        initial_json["coolingLeasePrepared"] == false &&
+        initial_json["autoRestoreAttempted"] == false &&
+        initial_json["retryAfterSeconds"] == retry_after
+      failures << "agent-run-smoke initial viftyctl-run JSON must be PREPARE_RATE_LIMITED cooldown evidence matching rateLimitRetry"
+    end
+  end
+
   def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
 
     validate_agent_run_smoke_bundle(path, summary, failures)
+    validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
 
     unless summary["schemaVersion"] == 1
       failures << "agent-run-smoke summary schemaVersion must be 1"
