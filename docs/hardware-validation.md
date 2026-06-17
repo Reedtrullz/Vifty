@@ -229,7 +229,7 @@ If any step reports critical thermal pressure, missing sensors, missing controll
 
 The manual smoke test proves direct prepare/restore behavior. For developer-workload evidence, also run one supervised `viftyctl run` smoke test on supported Apple Silicon MacBook Pro hardware after readiness is `ready` or safely `degraded`.
 
-If this follows the manual smoke test above, wait for the advertised prepare cooldown before starting the run smoke. Use `capabilities --json` or `status --json` to read `policy.prepareCooldownSeconds`; the default policy is 30 seconds. If the first run attempt returns `PREPARE_RATE_LIMITED`, keep that JSON as evidence, wait for `retryAfterSeconds`, and retry once. Do not treat the first cooldown response as a failed agent-run smoke test, and do not busy-loop retries.
+If this follows the manual smoke test above, wait for the advertised prepare cooldown before starting the run smoke. Use `capabilities --json` or `status --json` to read `policy.prepareCooldownSeconds`; the default policy is 30 seconds. If the first run attempt returns `PREPARE_RATE_LIMITED`, keep that JSON as evidence, wait for `retryAfterSeconds`, and retry once. Do not treat the first cooldown response as a failed agent-run smoke test, and do not busy-loop retries. The collector below handles exactly one structured cooldown retry automatically: it records the initial response in `viftyctl-run.json`, records retry metadata in `rateLimitRetry`, waits once, and stores the final proof in `viftyctl-run-retry.json`.
 
 The preferred captured path is:
 
@@ -240,14 +240,17 @@ scripts/collect-agent-run-smoke-evidence.sh \
 
 This writes an agent-run smoke bundle with `manifest.tsv`,
 `agent-run-smoke-evidence-summary.json`, the `viftyctl run` stdout/stderr/status
-when the run is attempted, and follow-up capabilities/status/audit/diagnose
-files. It is not read-only when readiness is safe because it requests one
-bounded `viftyctl run --json` cooling lease for `/bin/sleep 5` by default. It
-records the run proof fields `coolingLeasePrepared`, `autoRestoreAttempted`,
-`autoRestoreSucceeded`, and `childExitCode` in the summary; on successful child
-runs these are derived from `viftyctl run` exit semantics and the advertised
-safe `runLifecycle` contract when child stdout is not JSON. It stops before
-`viftyctl run` when `pre-capabilities.json` does not advertise
+when the run is attempted, optional `viftyctl-run-retry.*` files after a
+structured `PREPARE_RATE_LIMITED` cooldown, and follow-up
+capabilities/status/audit/diagnose files. It is not read-only when readiness is
+safe because it requests one bounded `viftyctl run --json` cooling lease for
+`/bin/sleep 5` by default, with at most one cooldown retry when the daemon tells
+it exactly how long to wait. It records the run proof fields
+`coolingLeasePrepared`, `autoRestoreAttempted`, `autoRestoreSucceeded`, and
+`childExitCode` in the summary; on successful child runs these are derived from
+`viftyctl run` exit semantics and the advertised safe `runLifecycle` contract
+when child stdout is not JSON. It stops before `viftyctl run` when
+`pre-capabilities.json` does not advertise
 `policyStatusAvailable: true`, the `run` command, `test` workload, and safe `runLifecycle` contract, or when readiness is
 blocked. In those cases it writes a blocked summary, captures read-only
 status/audit follow-up, and exits `75`.
@@ -273,7 +276,7 @@ Then collect the read-only follow-up:
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
-Paste the run stdout/stderr, child exit code, restore result, any `PREPARE_RATE_LIMITED` / `retryAfterSeconds` JSON from the first cooldown response, and the follow-up capabilities/status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path advertises the safe `runLifecycle` contract, `policyStatusAvailable: true`, and policy/metadata limits, validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
+Paste the run stdout/stderr, child exit code, restore result, any `PREPARE_RATE_LIMITED` / `retryAfterSeconds` JSON from the first cooldown response or the collector's `rateLimitRetry` object, and the follow-up capabilities/status/audit/diagnose output into the hardware report. This proves the supervised agent/build/test path advertises the safe `runLifecycle` contract, `policyStatusAvailable: true`, and policy/metadata limits, validates the child command before cooling, creates one bounded lease, restores Auto after the child exits, and leaves read-only audit evidence. Do not run this smoke test when readiness is `blocked`; use the blocked diagnose JSON as evidence instead.
 
 ## Signing Validation
 

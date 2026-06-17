@@ -78,6 +78,12 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
+        let rateLimitRetry = try XCTUnwrap(summary["rateLimitRetry"] as? [String: Any])
+        XCTAssertEqual(rateLimitRetry["attempted"] as? Bool, false)
+        XCTAssertTrue(rateLimitRetry["retryAfterSeconds"] is NSNull)
+        XCTAssertTrue(rateLimitRetry["initialExitStatus"] is NSNull)
+        XCTAssertTrue(rateLimitRetry["stdout"] is NSNull)
+        XCTAssertTrue(rateLimitRetry["stderr"] is NSNull)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
         XCTAssertEqual(commands.count, 7)
 
@@ -126,6 +132,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "blocked")
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let rateLimitRetry = try XCTUnwrap(summary["rateLimitRetry"] as? [String: Any])
+        XCTAssertEqual(rateLimitRetry["attempted"] as? Bool, false)
         let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
         XCTAssertEqual(preflight["state"] as? String, "blocked")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, false)
@@ -273,6 +281,70 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCoolingWithCaution")
     }
 
+    func testSmokeCollectorWaitsOnceAndRetriesWhenRunIsPrepareRateLimited() throws {
+        let rateLimitedJSON = """
+        {"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":2}
+        """
+        let harness = try AgentRunSmokeEvidenceHarness(
+            runJSONs: [
+                rateLimitedJSON,
+                #"{"schemaVersion":1,"command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
+            ],
+            runExitCodes: [1, 0]
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stderr.contains("rate-limited"), result.stderr)
+        XCTAssertEqual(
+            try harness.loggedArguments(),
+            [
+                "capabilities --json",
+                "diagnose --json",
+                "run --workload test --duration 2m --max-rpm-percent 55 --reason agent run smoke test --json -- /bin/sleep 5",
+                "run --workload test --duration 2m --max-rpm-percent 55 --reason agent run smoke test --json -- /bin/sleep 5",
+                "capabilities --json",
+                "status --json",
+                "audit --limit 20 --json",
+                "diagnose --json"
+            ]
+        )
+
+        let manifest = try harness.read("manifest.tsv")
+        XCTAssertTrue(manifest.contains("viftyctl-run\t1\tviftyctl-run.json\tviftyctl-run.stderr"))
+        XCTAssertTrue(manifest.contains("viftyctl-run-retry\t0\tviftyctl-run-retry.json\tviftyctl-run-retry.stderr"))
+        XCTAssertEqual(try harness.read("viftyctl-run.status").trimmingCharacters(in: .whitespacesAndNewlines), "1")
+        XCTAssertEqual(try harness.read("viftyctl-run-retry.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, true)
+        let rateLimitRetry = try XCTUnwrap(summary["rateLimitRetry"] as? [String: Any])
+        XCTAssertEqual(rateLimitRetry["attempted"] as? Bool, true)
+        XCTAssertEqual(rateLimitRetry["retryAfterSeconds"] as? Int, 2)
+        XCTAssertEqual(rateLimitRetry["initialExitStatus"] as? Int, 1)
+        XCTAssertEqual(rateLimitRetry["stdout"] as? String, "viftyctl-run.json")
+        XCTAssertEqual(rateLimitRetry["stderr"] as? String, "viftyctl-run.stderr")
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["exitStatus"] as? Int, 0)
+        XCTAssertEqual(run["stdout"] as? String, "viftyctl-run-retry.json")
+        XCTAssertEqual(run["stderr"] as? String, "viftyctl-run-retry.stderr")
+        XCTAssertEqual(run["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(run["childExitCode"] as? Int, 0)
+        let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
+        XCTAssertEqual(commands.count, 8)
+
+        let checksums = try harness.read("checksums.tsv")
+        XCTAssertTrue(checksums.contains("\tviftyctl-run.json"))
+        XCTAssertTrue(checksums.contains("\tviftyctl-run-retry.json"))
+    }
+
     func testSmokeCollectorRejectsEmptyCustomChildBeforeCallingViftyCtl() throws {
         let harness = try AgentRunSmokeEvidenceHarness()
 
@@ -325,6 +397,17 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
         }
+        let rateLimitRetry = try XCTUnwrap(defs["rateLimitRetry"] as? [String: Any])
+        let rateLimitRetryRequired = try XCTUnwrap(rateLimitRetry["required"] as? [String])
+        for field in [
+            "attempted",
+            "retryAfterSeconds",
+            "initialExitStatus",
+            "stdout",
+            "stderr"
+        ] {
+            XCTAssertTrue(rateLimitRetryRequired.contains(field), "rateLimitRetry should require \(field)")
+        }
         let preflight = try XCTUnwrap(defs["preflight"] as? [String: Any])
         let preflightRequired = try XCTUnwrap(preflight["required"] as? [String])
         for field in [
@@ -355,8 +438,8 @@ private final class AgentRunSmokeEvidenceHarness {
     private let diagnoseExitCode: Int
     private let statusJSON: String
     private let auditJSON: String
-    private let runJSON: String
-    private let runExitCode: Int
+    private let runJSONs: [String]
+    private let runExitCodes: [Int]
 
     init(
         capabilitiesJSON: String = AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON,
@@ -365,7 +448,9 @@ private final class AgentRunSmokeEvidenceHarness {
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         auditJSON: String = #"{"readOnly":true,"coolingCommandsRun":false,"events":[]}"#,
         runJSON: String = #"{"schemaVersion":1,"command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#,
-        runExitCode: Int = 0
+        runExitCode: Int = 0,
+        runJSONs: [String]? = nil,
+        runExitCodes: [Int]? = nil
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
@@ -378,8 +463,8 @@ private final class AgentRunSmokeEvidenceHarness {
         self.diagnoseExitCode = diagnoseExitCode
         self.statusJSON = statusJSON
         self.auditJSON = auditJSON
-        self.runJSON = runJSON
-        self.runExitCode = runExitCode
+        self.runJSONs = runJSONs ?? [runJSON]
+        self.runExitCodes = runExitCodes ?? [runExitCode]
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         try writeFakeViftyCtl()
@@ -395,16 +480,24 @@ private final class AgentRunSmokeEvidenceHarness {
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.currentDirectoryURL = repositoryRoot
         process.arguments = [script.path] + arguments
-        process.environment = ProcessInfo.processInfo.environment.merging([
+        var environment = ProcessInfo.processInfo.environment.merging([
             "VIFTY_FAKE_LOG": logURL.path,
             "VIFTY_FAKE_CAPABILITIES_JSON": capabilitiesJSON,
             "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
             "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
             "VIFTY_FAKE_STATUS_JSON": statusJSON,
             "VIFTY_FAKE_AUDIT_JSON": auditJSON,
-            "VIFTY_FAKE_RUN_JSON": runJSON,
-            "VIFTY_FAKE_RUN_EXIT": "\(runExitCode)"
+            "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"command":"run"}"#,
+            "VIFTY_FAKE_RUN_EXIT": "\(self.runExitCodes.last ?? 0)",
+            "VIFTY_AGENT_RUN_SMOKE_SKIP_RETRY_SLEEP": "1"
         ]) { _, new in new }
+        for (index, json) in self.runJSONs.enumerated() {
+            environment["VIFTY_FAKE_RUN_JSON_\(index + 1)"] = json
+        }
+        for (index, exitCode) in self.runExitCodes.enumerated() {
+            environment["VIFTY_FAKE_RUN_EXIT_\(index + 1)"] = "\(exitCode)"
+        }
+        process.environment = environment
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -473,8 +566,23 @@ private final class AgentRunSmokeEvidenceHarness {
             printf '%s\\n' "${VIFTY_FAKE_AUDIT_JSON}"
             ;;
           run)
-            printf '%s\\n' "${VIFTY_FAKE_RUN_JSON}"
-            exit "${VIFTY_FAKE_RUN_EXIT}"
+            count_file="${VIFTY_FAKE_LOG}.run-count"
+            count=0
+            if [ -f "${count_file}" ]; then
+              count="$(cat "${count_file}")"
+            fi
+            count=$((count + 1))
+            printf '%s\\n' "${count}" > "${count_file}"
+            json="$(printenv "VIFTY_FAKE_RUN_JSON_${count}" || true)"
+            exit_code="$(printenv "VIFTY_FAKE_RUN_EXIT_${count}" || true)"
+            if [ -z "${json}" ]; then
+              json="${VIFTY_FAKE_RUN_JSON}"
+            fi
+            if [ -z "${exit_code}" ]; then
+              exit_code="${VIFTY_FAKE_RUN_EXIT}"
+            fi
+            printf '%s\\n' "${json}"
+            exit "${exit_code}"
             ;;
           *)
             echo "unexpected command: $*" >&2
