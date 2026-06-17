@@ -223,6 +223,22 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRejectsForceRetryCombinedWithUncooledFallbackBeforeDiagnose() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            forceRetry: "1",
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_FORCE_RETRY"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("mutually exclusive"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsInvalidDurationBeforeViftyCtl() throws {
         let harness = try ScriptHarness(state: "ready")
 

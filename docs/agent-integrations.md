@@ -44,12 +44,12 @@ examples/viftyctl/pytest.sh
 
 Use shorter durations and lower RPM percentages for degraded readiness. Never call raw SMC commands, `sudo ViftyHelper`, or arbitrary fan RPM writes. If Vifty reports `restoreAutoBeforeRequestingCooling`, ask the user before restoring Auto or retrying.
 
-Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once. The wrapper still checks `supportsForceRetry` before passing `--force`.
+Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once. The wrapper still checks `supportsForceRetry` before passing `--force`, and refuses to combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED`.
 
 Leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset by default. Only set it to `1`
 after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
-read-only checks, print the diagnose JSON, refuse to request cooling, and avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, or when the daemon control path is unavailable.
+read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
 
 The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `policyStatusAvailable` is missing or not true, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 ````
@@ -133,7 +133,7 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto before requesting another lease.
 - `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
 - `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
-- Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry.
-- Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block; the wrapper still refuses helper-repair, restore-first, backoff, and daemon-control-unavailable states.
+- Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry, and do not combine it with uncooled fallback.
+- Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block; the wrapper still refuses helper-repair, restore-first, backoff, daemon-control-unavailable states, and force-retry combinations.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

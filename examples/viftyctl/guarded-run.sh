@@ -268,6 +268,11 @@ case "$allow_uncooled" in
     ;;
 esac
 
+if [ "$force_retry" -eq 1 ] && [ "$allow_uncooled" -eq 1 ]; then
+  echo "guarded-run: VIFTY_GUARDED_RUN_FORCE_RETRY and VIFTY_GUARDED_RUN_ALLOW_UNCOOLED are mutually exclusive; choose either a supervised cooling retry or an uncooled fallback." >&2
+  exit 64
+fi
+
 set +e
 capabilities_json="$("$viftyctl" capabilities --json)"
 capabilities_status=$?

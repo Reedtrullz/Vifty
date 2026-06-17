@@ -36,7 +36,9 @@ The wrappers do not pass `--force` by default. For a supervised human workflow
 that should wait once for Vifty's `retryAfterSeconds` value and retry a
 rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. The guarded
 wrapper still checks `supportsForceRetry` before passing `--force`. Leave it
-unset for local agents unless the user explicitly approved retrying.
+unset for local agents unless the user explicitly approved retrying. Do not
+combine this with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper refuses
+that ambiguous mix.
 
 When the user explicitly approves running the workload without Vifty cooling
 after seeing the structured readiness block, set
@@ -44,7 +46,8 @@ after seeing the structured readiness block, set
 capabilities and diagnose checks, still refuses to request cooling, prints the
 diagnose JSON, and then execs the child directly. It will not use this fallback
 when Vifty recommends `repairHelper`, `backOffWorkload`, or
-`restoreAutoBeforeRetry`, or when `daemonControlPathReady` is false.
+`restoreAutoBeforeRetry`, when `daemonControlPathReady` is false, or when
+`VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
 
 ## Scripts
 
