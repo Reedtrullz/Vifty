@@ -239,7 +239,21 @@ The preferred captured path is:
 ```
 
 When validating directly from a source checkout before installing an app bundle, use
-`scripts/collect-agent-run-smoke-evidence.sh` with the same `--viftyctl` path.
+the supervised Make target with the same `--viftyctl` path:
+
+```sh
+make agent-run-smoke-evidence \
+  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+The Make target keeps the default `/bin/sleep 5`, `2m`, `55%`, and
+`agent run smoke test` reason used by the collector. Set
+`AGENT_RUN_SMOKE_OUTPUT=<dir>`, `AGENT_RUN_SMOKE_DURATION=<duration>`,
+`AGENT_RUN_SMOKE_MAX_RPM_PERCENT=<percent>`, `AGENT_RUN_SMOKE_REASON=<text>`,
+or `AGENT_RUN_SMOKE_AUDIT_LIMIT=<count>` only for a supervised validation
+scenario that needs different bounded values. The raw
+`scripts/collect-agent-run-smoke-evidence.sh` path remains available for
+advanced/manual runs.
 
 This writes an agent-run smoke bundle with `manifest.tsv`,
 `agent-run-smoke-evidence-summary.json`, the `viftyctl run` stdout/stderr/status

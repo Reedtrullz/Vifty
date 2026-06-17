@@ -111,6 +111,25 @@ These are starting points, not rights to exceed daemon policy:
 
 When readiness is degraded, reduce one or both numbers. A good degraded default is `10m` and `60`.
 
+## Supervised Run Smoke Evidence
+
+After supported hardware has safe readiness and a human is supervising the
+machine, maintainers can capture a standard developer-workload proof from a
+source checkout:
+
+```sh
+make agent-run-smoke-evidence \
+  VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl
+```
+
+This is intentionally different from the read-only support bundle below. It
+first performs read-only capabilities/diagnose checks, but when readiness is
+safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
+with exactly one structured cooldown retry if the daemon returns
+`PREPARE_RATE_LIMITED`. Use it for supported-hardware validation and
+developer-workload proof, not as the first response to helper-unreachable or
+blocked readiness states.
+
 ## Failure Handling
 
 If readiness is blocked:
