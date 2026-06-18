@@ -2,8 +2,15 @@ import SwiftUI
 
 @main
 struct ViftyApp: App {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
+
+    @MainActor
+    init() {
+        let model = AppModel()
+        _model = StateObject(wrappedValue: model)
+        model.start()
+    }
 
     var body: some Scene {
         MenuBarExtra {
