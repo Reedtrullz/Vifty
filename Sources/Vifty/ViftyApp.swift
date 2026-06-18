@@ -14,7 +14,7 @@ struct ViftyApp: App {
         appDelegate.model = model
         model.start()
         Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry()
+            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
         }
     }
 
@@ -24,6 +24,7 @@ struct ViftyApp: App {
                 .environmentObject(model)
         } label: {
             MenuBarExtraLabel(model: model)
+                .id(model.menuBarStatusItemRevision)
         }
         .menuBarExtraStyle(.window)
 
@@ -45,7 +46,7 @@ struct MenuBarExtraLabel: View {
                 refreshMenuBarStatusItemTelemetry()
             }
             .task(id: model.menuBarDisplayMode) {
-                await model.primeMenuBarStatusItemTelemetry()
+                await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
             }
     }
 
@@ -64,7 +65,7 @@ struct MenuBarExtraLabel: View {
     private func refreshMenuBarStatusItemTelemetry() {
         model.start()
         Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry()
+            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
         }
     }
 }
@@ -77,7 +78,7 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
         guard let model else { return }
         model.start()
         Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry()
+            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
         }
     }
 }

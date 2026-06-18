@@ -1436,6 +1436,37 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testPrimeMenuBarStatusItemTelemetryRetriesUntilSelectedDisplayHasData() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 67.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        await hardware.failNextSnapshot(ViftyError.smcUnavailable)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        await model.primeMenuBarStatusItemTelemetry(maxAttempts: 2, retryDelay: .milliseconds(1))
+
+        let snapshotReads = await hardware.snapshotReadCount()
+        XCTAssertTrue(model.hasCompletedHardwarePoll)
+        XCTAssertGreaterThanOrEqual(snapshotReads, 2)
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
+    }
+
     func testFirstResolvedMenuBarTelemetryAdvancesStatusItemRevision() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
@@ -3311,6 +3342,7 @@ private actor AppModelFakeHardware: HardwareService {
     var snapshotValue: HardwareSnapshot
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
+    private var snapshotFailures: [Error] = []
     private var applyFailures: [Error] = []
     private var snapshotDelayNanoseconds: UInt64?
     private var snapshotReads = 0
@@ -3321,6 +3353,9 @@ private actor AppModelFakeHardware: HardwareService {
 
     func snapshot() async throws -> HardwareSnapshot {
         snapshotReads += 1
+        if !snapshotFailures.isEmpty {
+            throw snapshotFailures.removeFirst()
+        }
         if let snapshotDelayNanoseconds {
             try? await Task.sleep(nanoseconds: snapshotDelayNanoseconds)
         }
@@ -3337,6 +3372,10 @@ private actor AppModelFakeHardware: HardwareService {
 
     func snapshotReadCount() -> Int {
         snapshotReads
+    }
+
+    func failNextSnapshot(_ error: Error) {
+        snapshotFailures.append(error)
     }
 
     func failNextApply(_ error: Error) {

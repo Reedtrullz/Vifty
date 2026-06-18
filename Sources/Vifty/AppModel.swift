@@ -294,10 +294,20 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func primeMenuBarStatusItemTelemetry() async {
+    func primeMenuBarStatusItemTelemetry(
+        maxAttempts: Int = 1,
+        retryDelay: Duration = .milliseconds(250)
+    ) async {
         start()
-        guard !hasCompletedHardwarePoll || menuBarLabelText.contains("--") else { return }
-        await pollOnce()
+        let attempts = max(1, maxAttempts)
+        for attempt in 1...attempts {
+            guard menuBarLabelNeedsTelemetryPrime else { return }
+            await pollOnce()
+            guard menuBarLabelNeedsTelemetryPrime else { return }
+            if attempt < attempts {
+                try? await Task.sleep(for: retryDelay)
+            }
+        }
     }
 
     func applyStartupModePreferenceIfNeeded() async {
@@ -813,6 +823,10 @@ final class AppModel: ObservableObject {
         case .compactSummary:
             return menuTitle
         }
+    }
+
+    var menuBarLabelNeedsTelemetryPrime: Bool {
+        !hasCompletedHardwarePoll || menuBarLabelText.contains("--")
     }
 
     var menuBarFanOwnerText: String {
