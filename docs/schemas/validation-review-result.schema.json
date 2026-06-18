@@ -145,7 +145,8 @@
       "$ref": "#/$defs/manualSmokeTestResult"
     },
     "agentRunSmokeSource": {
-      "type": "string"
+      "type": "string",
+      "description": "Share-safe source reference for supervised agent-run smoke evidence, such as an issue URL or bundle-local summary path; auto-derived local filesystem paths should not be absolute."
     },
     "failures": {
       "$ref": "#/$defs/stringArray"

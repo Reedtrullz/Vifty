@@ -663,6 +663,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     relative_path
   end
 
+  def agent_run_smoke_share_safe_source(summary_path)
+    "#{File.basename(File.dirname(summary_path))}/#{File.basename(summary_path)}"
+  end
+
   def validate_agent_run_smoke_bundle(summary_path, summary, failures)
     smoke_bundle = File.dirname(summary_path)
     manifest_path = File.join(smoke_bundle, "manifest.tsv")
@@ -1274,7 +1278,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       elsif agent_run_smoke_result != derived_agent_run_smoke_result
         failures << "agent-run-smoke summary result #{derived_agent_run_smoke_result.inspect} conflicts with --agent-run-smoke-result #{agent_run_smoke_result.inspect}"
       end
-      agent_run_smoke_source = File.expand_path(agent_run_smoke_summary_path) if agent_run_smoke_source.to_s.empty?
+      if agent_run_smoke_source.to_s.empty?
+        agent_run_smoke_source = agent_run_smoke_share_safe_source(File.expand_path(agent_run_smoke_summary_path))
+      end
     end
   end
 

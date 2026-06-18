@@ -3,6 +3,10 @@ import CryptoKit
 import XCTest
 
 final class ValidationEvidenceReviewScriptTests: XCTestCase {
+    private func smokeSummarySource(_ url: URL) -> String {
+        "\(url.deletingLastPathComponent().lastPathComponent)/\(url.lastPathComponent)"
+    }
+
     func testReviewAcceptsSupportedHardwareEvidenceBundle() throws {
         let harness = try ValidationEvidenceReviewHarness()
 
@@ -543,7 +547,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let summary = try harness.readJSON(summaryURL)
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
-        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
@@ -568,7 +572,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let summary = try harness.readJSON(summaryURL)
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
-        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
@@ -726,7 +730,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let summary = try harness.readJSON(summaryURL)
         XCTAssertEqual(summary["status"] as? String, "failed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "failed")
-        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummaryURL.path)
+        XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
     }
 
     func testReviewRejectsPassedAgentRunSmokeWithoutSuccessfulAutoRestoreEvidence() throws {
