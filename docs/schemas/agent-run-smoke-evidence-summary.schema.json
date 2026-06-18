@@ -141,6 +141,8 @@
         "capabilitiesExitStatus",
         "capabilitiesSchemaVersion",
         "capabilitiesSchemaID",
+        "diagnoseSchemaID",
+        "commandErrorSchemaID",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -163,6 +165,18 @@
           ]
         },
         "capabilitiesSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnoseSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commandErrorSchemaID": {
           "type": [
             "string",
             "null"

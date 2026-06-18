@@ -352,6 +352,8 @@ capabilities_run_contract_safe() {
       signals = lifecycle["signalsForwardedToChild"].is_a?(Array) ? lifecycle["signalsForwardedToChild"].map(&:to_s) : []
       safe = data["schemaVersion"] == 1 &&
         schema_ids["capabilities"] == "https://vifty.local/schemas/viftyctl-capabilities.schema.json" &&
+        schema_ids["diagnose"] == "https://vifty.local/schemas/viftyctl-diagnose.schema.json" &&
+        schema_ids["commandError"] == "https://vifty.local/schemas/viftyctl-command-error.schema.json" &&
         data["daemonStatusAvailable"] == true &&
         data["policySource"] == "daemonStatus" &&
         data["policyStatusAvailable"] == true &&
@@ -386,7 +388,7 @@ The bundle records source provenance in \`metadata.txt\` and
 \`installSource=local-ad-hoc-build\`, the current git ref, and the immutable
 40-character source SHA for the freshly built \`viftyctl\`.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, \`schemaIDs.capabilities=https://vifty.local/schemas/viftyctl-capabilities.schema.json\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
 Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep
@@ -556,6 +558,8 @@ write_summary_json() {
         "capabilitiesExitStatus" => commands.find { |command| command["name"] == "pre-capabilities" }&.fetch("status"),
         "capabilitiesSchemaVersion" => capabilities["schemaVersion"],
         "capabilitiesSchemaID" => capabilities.dig("schemaIDs", "capabilities"),
+        "diagnoseSchemaID" => capabilities.dig("schemaIDs", "diagnose"),
+        "commandErrorSchemaID" => capabilities.dig("schemaIDs", "commandError"),
         "daemonStatusAvailable" => capabilities["daemonStatusAvailable"],
         "policySource" => capabilities["policySource"],
         "policyStatusAvailable" => capabilities["policyStatusAvailable"],

@@ -139,9 +139,9 @@ first performs read-only capabilities/diagnose checks, but when readiness is
 safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
 with exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless
-`capabilities --json` reports schema version `1`, the stable capabilities schema
-ID, daemon-backed policy status, `policy.enabled: true`, advertised `run`
-support, and the safe run lifecycle used by guarded wrappers. Use it for
+`capabilities --json` reports schema version `1`, the stable capabilities,
+diagnose, and command-error schema IDs, daemon-backed policy status,
+`policy.enabled: true`, advertised `run` support, and the safe run lifecycle used by guarded wrappers. Use it for
 supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
 
 ## Failure Handling
@@ -184,7 +184,8 @@ state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 blocked readiness without parsing human text. Legacy `v1.1.x` bundles that
 omit `daemonControlPathReady` may pass only when the reviewer can infer it from
 structured readiness/recovery fields. The `capabilitiesDecision` summary
-records the captured capabilities schema version and `schemaIDs.capabilities`,
+records the captured capabilities schema version plus stable
+`schemaIDs.capabilities`, `schemaIDs.diagnose`, and `schemaIDs.commandError`,
 then records whether the bundle advertised `viftyctl run`, force-retry discovery,
 safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
 policy enabled status, policy status availability, daemon status, and the unavailable-exit contract before the report is treated

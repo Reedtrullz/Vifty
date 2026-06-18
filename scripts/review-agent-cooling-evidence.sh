@@ -70,6 +70,7 @@ summary_path = summary_path.empty? ? nil : File.expand_path(summary_path)
 EXPECTED_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
 REVIEW_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
 CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+DIAGNOSE_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
 COMMAND_ERROR_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-command-error.schema.json"
 DIAGNOSE_STATES = %w[ready degraded blocked].freeze
 DIAGNOSE_AGENT_ACTIONS = %w[
@@ -118,6 +119,8 @@ capabilities_decision = {
   "exitStatus" => nil,
   "schemaVersion" => nil,
   "capabilitiesSchemaID" => nil,
+  "diagnoseSchemaID" => nil,
+  "commandErrorSchemaID" => nil,
   "daemonStatusAvailable" => nil,
   "policySource" => nil,
   "policyStatusAvailable" => nil,
@@ -409,6 +412,8 @@ if File.file?(capabilities_path)
     else
       schema_version = capabilities["schemaVersion"]
       capabilities_schema_id = capabilities.dig("schemaIDs", "capabilities")
+      diagnose_schema_id = capabilities.dig("schemaIDs", "diagnose")
+      command_error_schema_id = capabilities.dig("schemaIDs", "commandError")
       capabilities_commands = capabilities["commands"]
       workloads = capabilities["workloads"]
       daemon_status_available = capabilities["daemonStatusAvailable"]
@@ -424,6 +429,8 @@ if File.file?(capabilities_path)
 
       capabilities_decision["schemaVersion"] = schema_version if schema_version.is_a?(Integer)
       capabilities_decision["capabilitiesSchemaID"] = capabilities_schema_id if capabilities_schema_id.is_a?(String)
+      capabilities_decision["diagnoseSchemaID"] = diagnose_schema_id if diagnose_schema_id.is_a?(String)
+      capabilities_decision["commandErrorSchemaID"] = command_error_schema_id if command_error_schema_id.is_a?(String)
       capabilities_decision["daemonStatusAvailable"] = daemon_status_available if boolean?(daemon_status_available)
       capabilities_decision["policySource"] = policy_source if %w[daemonStatus fallbackUnavailable].include?(policy_source)
       capabilities_decision["policyStatusAvailable"] = policy_status_available if boolean?(policy_status_available)
@@ -434,6 +441,8 @@ if File.file?(capabilities_path)
 
       failures << "viftyctl-capabilities.json schemaVersion must be 1" unless schema_version == 1
       failures << "viftyctl-capabilities.json schemaIDs.capabilities must be #{CAPABILITIES_SCHEMA_ID}" unless capabilities_schema_id == CAPABILITIES_SCHEMA_ID
+      failures << "viftyctl-capabilities.json schemaIDs.diagnose must be #{DIAGNOSE_SCHEMA_ID}" unless diagnose_schema_id == DIAGNOSE_SCHEMA_ID
+      failures << "viftyctl-capabilities.json schemaIDs.commandError must be #{COMMAND_ERROR_SCHEMA_ID}" unless command_error_schema_id == COMMAND_ERROR_SCHEMA_ID
       failures << "viftyctl-capabilities.json commands must include run" unless capabilities_decision["supportsRunCommand"]
       failures << "viftyctl-capabilities.json commands must include core read-only and cooling commands" unless includes_all?(capabilities_commands, %w[capabilities diagnose status audit prepare restore-auto run])
       failures << "viftyctl-capabilities.json workloads must include build, test, and custom" unless includes_all?(workloads, %w[build test custom])

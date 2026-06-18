@@ -185,6 +185,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
   AGENT_RUN_SMOKE_SUMMARY_SCHEMA_ID = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
   CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+  DIAGNOSE_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+  COMMAND_ERROR_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-command-error.schema.json"
 
   EXPECTED_EXECUTABLES = {
     "Vifty" => "Contents/MacOS/Vifty",
@@ -1001,6 +1003,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless preflight["capabilitiesExitStatus"] == 0 &&
           preflight["capabilitiesSchemaVersion"] == 1 &&
           preflight["capabilitiesSchemaID"] == CAPABILITIES_SCHEMA_ID &&
+          preflight["diagnoseSchemaID"] == DIAGNOSE_SCHEMA_ID &&
+          preflight["commandErrorSchemaID"] == COMMAND_ERROR_SCHEMA_ID &&
           preflight["daemonStatusAvailable"] == true &&
           preflight["policySource"] == "daemonStatus" &&
           preflight["policyStatusAvailable"] == true &&
@@ -1013,6 +1017,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless preflight["capabilitiesSchemaID"] == CAPABILITIES_SCHEMA_ID
         failures << "passed agent-run-smoke summary must have capabilitiesSchemaID=#{CAPABILITIES_SCHEMA_ID}"
       end
+      unless preflight["diagnoseSchemaID"] == DIAGNOSE_SCHEMA_ID
+        failures << "passed agent-run-smoke summary must have diagnoseSchemaID=#{DIAGNOSE_SCHEMA_ID}"
+      end
+      unless preflight["commandErrorSchemaID"] == COMMAND_ERROR_SCHEMA_ID
+        failures << "passed agent-run-smoke summary must have commandErrorSchemaID=#{COMMAND_ERROR_SCHEMA_ID}"
+      end
       unless preflight["policyEnabled"] == true
         failures << "passed agent-run-smoke summary must have policyEnabled=true"
       end
@@ -1020,6 +1030,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       if pre_capabilities
         unless pre_capabilities["schemaVersion"] == 1 &&
             pre_capabilities.dig("schemaIDs", "capabilities") == CAPABILITIES_SCHEMA_ID &&
+            pre_capabilities.dig("schemaIDs", "diagnose") == DIAGNOSE_SCHEMA_ID &&
+            pre_capabilities.dig("schemaIDs", "commandError") == COMMAND_ERROR_SCHEMA_ID &&
             pre_capabilities["daemonStatusAvailable"] == true &&
             pre_capabilities["policySource"] == "daemonStatus" &&
             pre_capabilities["policyStatusAvailable"] == true &&

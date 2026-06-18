@@ -115,6 +115,8 @@
         "exitStatus",
         "schemaVersion",
         "capabilitiesSchemaID",
+        "diagnoseSchemaID",
+        "commandErrorSchemaID",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -150,6 +152,26 @@
           ],
           "enum": [
             "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+            null
+          ]
+        },
+        "diagnoseSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+            null
+          ]
+        },
+        "commandErrorSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "https://vifty.local/schemas/viftyctl-command-error.schema.json",
             null
           ]
         },

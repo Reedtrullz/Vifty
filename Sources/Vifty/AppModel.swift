@@ -119,6 +119,7 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
     case averageFanRPM
     case adapterWattage
     case temperatureAndRPM
+    case ownerTemperatureAndRPM
     case compactSummary
 
     var id: String { rawValue }
@@ -137,6 +138,8 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
             return "Adapter wattage"
         case .temperatureAndRPM:
             return "Temperature + RPM"
+        case .ownerTemperatureAndRPM:
+            return "Owner + Temp/RPM"
         case .compactSummary:
             return "Compact summary"
         }
@@ -738,9 +741,49 @@ final class AppModel: ObservableObject {
                 return menuBarLabelWithAttention("\(temperature) | \(fan)")
             }
             return menuTitle
+        case .ownerTemperatureAndRPM:
+            let metricParts = menuBarTemperatureAndFanParts
+            guard !metricParts.isEmpty else {
+                return menuBarOwnerShouldAppearWithoutMetrics
+                    ? menuBarLabelWithAttention("\(menuBarFanOwnerText) | \(menuTitle)")
+                    : menuTitle
+            }
+            return menuBarLabelWithAttention(([menuBarFanOwnerText] + metricParts).joined(separator: " | "))
         case .compactSummary:
             return menuTitle
         }
+    }
+
+    var menuBarFanOwnerText: String {
+        if let lease = agentControlStatus?.activeLease {
+            let needsAttention = agentControlStatusError != nil || !lease.isActive(at: now())
+            return needsAttention ? "Agent?" : "Agent"
+        }
+
+        switch controlState.mode {
+        case .fixedRPM, .temperatureCurve:
+            return controlOwnershipNeedsAttention ? "Me?" : "Me"
+        case .auto:
+            if agentControlStatusError != nil {
+                return shouldPreferHelperRecoveryOverAgentStatusError ? "Mac?" : "Owner?"
+            }
+            if !autoForcedModeFans.isEmpty || !autoUnknownModeFans.isEmpty || !autoMissingModeFans.isEmpty {
+                return "Owner?"
+            }
+            if helperWritePathBlockedSummary != nil {
+                return "Mac?"
+            }
+            guard let fans = snapshot?.fans, !fans.isEmpty else {
+                return hasCompletedHardwarePoll || daemonReachable ? "Owner?" : "Mac"
+            }
+            return "Mac"
+        }
+    }
+
+    private var menuBarOwnerShouldAppearWithoutMetrics: Bool {
+        agentControlStatus?.activeLease != nil
+            || controlState.mode != .auto
+            || controlOwnershipNeedsAttention
     }
 
     private func menuBarLabelWithAttention(_ label: String) -> String {
@@ -777,6 +820,10 @@ final class AppModel: ObservableObject {
 
     private var menuBarFanText: String? {
         snapshot?.fans.first.map { "\($0.currentRPM) RPM" }
+    }
+
+    private var menuBarTemperatureAndFanParts: [String] {
+        [menuBarTemperatureText, menuBarFanText].compactMap { $0 }
     }
 
     private var menuBarAverageFanText: String? {

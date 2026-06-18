@@ -757,6 +757,7 @@ final class AppModelTests: XCTestCase {
     func testControlOwnershipSummaryWarnsWhenAutoSelectedButHardwareIsForced() {
         let model = AppModel()
         model.daemonReachable = true
+        model.daemonResponding = true
         model.controlState = ControlState(mode: .auto)
         model.snapshot = HardwareSnapshot(
             fans: [
@@ -1156,6 +1157,64 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarOwnerTemperatureAndFanModeShowsMacMeAndAgentOwners() {
+        let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        XCTAssertEqual(model.menuBarFanOwnerText, "Mac")
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 69 C | 1528 RPM")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3200, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 3200)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.controlState = ControlState(mode: .fixedRPM(3200), manualControlActive: true)
+
+        XCTAssertEqual(model.menuBarFanOwnerText, "Me")
+        XCTAssertEqual(model.menuBarLabelText, "Me | 69 C | 3200 RPM")
+
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: agentLease(),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        XCTAssertEqual(model.menuBarFanOwnerText, "Agent")
+        XCTAssertEqual(model.menuBarLabelText, "Agent | 69 C | 3200 RPM")
+    }
+
+    func testMenuBarOwnerTemperatureAndFanModeMarksUncertainOwnership() {
+        let model = AppModel()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.controlState = ControlState(mode: .auto)
+        model.snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .forced, targetRPM: 3200)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        XCTAssertEqual(model.menuBarFanOwnerText, "Owner?")
+        XCTAssertEqual(model.menuBarLabelText, "Owner? | 69 C | 1528 RPM")
+    }
+
     func testMenuBarFanRPMModeUsesFirstFanRPM() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
@@ -1202,7 +1261,7 @@ final class AppModelTests: XCTestCase {
     func testMenuBarDisplayModesUseSafeFallbackWhenTelemetryIsMissing() {
         let model = AppModel()
 
-        for mode in [MenuBarDisplayMode.temperature, .fanRPM, .adapterWattage, .temperatureAndRPM] {
+        for mode in [MenuBarDisplayMode.temperature, .fanRPM, .adapterWattage, .temperatureAndRPM, .ownerTemperatureAndRPM] {
             model.menuBarDisplayMode = mode
             XCTAssertEqual(model.menuBarLabelText, "Vifty", mode.label)
             XCTAssertTrue(model.menuBarLabelUsesFanIcon, mode.label)

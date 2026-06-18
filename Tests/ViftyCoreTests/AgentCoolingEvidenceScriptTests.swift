@@ -289,6 +289,14 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             capabilitiesDecision["capabilitiesSchemaID"] as? String,
             "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
         )
+        XCTAssertEqual(
+            capabilitiesDecision["diagnoseSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+        )
+        XCTAssertEqual(
+            capabilitiesDecision["commandErrorSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        )
         XCTAssertEqual(capabilitiesDecision["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["policySource"] as? String, "daemonStatus")
         XCTAssertEqual(capabilitiesDecision["policyStatusAvailable"] as? Bool, true)
@@ -418,7 +426,17 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             with: "\"https://example.invalid/viftyctl-capabilities.schema.json\"",
             in: driftedVersion
         )
-        let harness = try AgentCoolingEvidenceHarness(capabilitiesJSON: driftedSchemaID)
+        let driftedDiagnoseSchemaID = try AgentCoolingEvidenceHarness.jsonString(
+            replacing: "\"https://vifty.local/schemas/viftyctl-diagnose.schema.json\"",
+            with: "\"https://example.invalid/viftyctl-diagnose.schema.json\"",
+            in: driftedSchemaID
+        )
+        let driftedCommandErrorSchemaID = try AgentCoolingEvidenceHarness.jsonString(
+            replacing: "\"https://vifty.local/schemas/viftyctl-command-error.schema.json\"",
+            with: "\"https://example.invalid/viftyctl-command-error.schema.json\"",
+            in: driftedDiagnoseSchemaID
+        )
+        let harness = try AgentCoolingEvidenceHarness(capabilitiesJSON: driftedCommandErrorSchemaID)
 
         let collectResult = try harness.runCollector([
             "--viftyctl", harness.viftyctlURL.path,
@@ -435,6 +453,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewResult.exitCode, 65)
         XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaVersion must be 1"), reviewResult.stderr)
         XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaIDs.capabilities"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaIDs.diagnose"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaIDs.commandError"), reviewResult.stderr)
 
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         XCTAssertEqual(reviewSummary["status"] as? String, "failed")
@@ -443,6 +463,14 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(
             capabilitiesDecision["capabilitiesSchemaID"] as? String,
             "https://example.invalid/viftyctl-capabilities.schema.json"
+        )
+        XCTAssertEqual(
+            capabilitiesDecision["diagnoseSchemaID"] as? String,
+            "https://example.invalid/viftyctl-diagnose.schema.json"
+        )
+        XCTAssertEqual(
+            capabilitiesDecision["commandErrorSchemaID"] as? String,
+            "https://example.invalid/viftyctl-command-error.schema.json"
         )
     }
 
@@ -889,6 +917,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "exitStatus",
             "schemaVersion",
             "capabilitiesSchemaID",
+            "diagnoseSchemaID",
+            "commandErrorSchemaID",
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",

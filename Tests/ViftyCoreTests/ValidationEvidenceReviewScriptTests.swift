@@ -820,6 +820,32 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithDiagnoseOrCommandErrorSchemaDrift() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            diagnoseSchemaID: "https://example.invalid/viftyctl-diagnose.schema.json",
+            commandErrorSchemaID: "https://example.invalid/viftyctl-command-error.schema.json"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have diagnoseSchemaID=https://vifty.local/schemas/viftyctl-diagnose.schema.json"),
+            result.stderr
+        )
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have commandErrorSchemaID=https://vifty.local/schemas/viftyctl-command-error.schema.json"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -1167,6 +1193,8 @@ private final class ValidationEvidenceReviewHarness {
         policyEnabled: Bool = true,
         capabilitiesSchemaVersion: Int = 1,
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+        diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+        commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         installSource: String = "not-recorded",
         sourceRef: String = "",
         sourceSHA: String = "",
@@ -1188,6 +1216,8 @@ private final class ValidationEvidenceReviewHarness {
             policyEnabled: policyEnabled,
             capabilitiesSchemaVersion: capabilitiesSchemaVersion,
             capabilitiesSchemaID: capabilitiesSchemaID,
+            diagnoseSchemaID: diagnoseSchemaID,
+            commandErrorSchemaID: commandErrorSchemaID,
             installSource: installSource,
             sourceRef: sourceRef,
             sourceSHA: sourceSHA,
@@ -1211,6 +1241,8 @@ private final class ValidationEvidenceReviewHarness {
         policyEnabled: Bool = true,
         capabilitiesSchemaVersion: Int = 1,
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+        diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+        commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         rateLimitRetryAttempted: Bool = false,
         rateLimitRetryAfterSeconds: Int = 2,
         rateLimitInitialExitStatus: Int = 75,
@@ -1252,7 +1284,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)"},"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true,"policy":{"enabled":\#(policyEnabled)}}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)"},"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true,"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1301,7 +1333,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1365,6 +1397,8 @@ private final class ValidationEvidenceReviewHarness {
                 "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
                 "capabilitiesSchemaVersion": capabilitiesSchemaVersion,
                 "capabilitiesSchemaID": capabilitiesSchemaID,
+                "diagnoseSchemaID": diagnoseSchemaID,
+                "commandErrorSchemaID": commandErrorSchemaID,
                 "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
                 "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
                 "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,

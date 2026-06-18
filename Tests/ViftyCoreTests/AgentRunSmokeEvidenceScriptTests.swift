@@ -86,6 +86,14 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             preflight["capabilitiesSchemaID"] as? String,
             "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
         )
+        XCTAssertEqual(
+            preflight["diagnoseSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+        )
+        XCTAssertEqual(
+            preflight["commandErrorSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        )
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCooling")
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
@@ -299,6 +307,14 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             preflight["capabilitiesSchemaID"] as? String,
             "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
         )
+        XCTAssertEqual(
+            preflight["diagnoseSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+        )
+        XCTAssertEqual(
+            preflight["commandErrorSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        )
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
@@ -333,6 +349,47 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(
             preflight["capabilitiesSchemaID"] as? String,
             "https://example.invalid/viftyctl-capabilities.schema.json"
+        )
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertTrue(run["exitStatus"] is NSNull)
+        XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenAdvertisedDiagnoseOrCommandErrorSchemaIDsDrift() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            capabilitiesJSON: AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON
+                .replacingOccurrences(
+                    of: #"https://vifty.local/schemas/viftyctl-diagnose.schema.json"#,
+                    with: #"https://example.invalid/viftyctl-diagnose.schema.json"#
+                )
+                .replacingOccurrences(
+                    of: #"https://vifty.local/schemas/viftyctl-command-error.schema.json"#,
+                    with: #"https://example.invalid/viftyctl-command-error.schema.json"#
+                )
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(
+            preflight["diagnoseSchemaID"] as? String,
+            "https://example.invalid/viftyctl-diagnose.schema.json"
+        )
+        XCTAssertEqual(
+            preflight["commandErrorSchemaID"] as? String,
+            "https://example.invalid/viftyctl-command-error.schema.json"
         )
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
@@ -546,6 +603,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "capabilitiesExitStatus",
             "capabilitiesSchemaVersion",
             "capabilitiesSchemaID",
+            "diagnoseSchemaID",
+            "commandErrorSchemaID",
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",
