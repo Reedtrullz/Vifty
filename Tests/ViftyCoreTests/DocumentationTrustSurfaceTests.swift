@@ -1052,6 +1052,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentWorkflows.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1"))
         XCTAssertTrue(agentWorkflows.contains("the wrapper refuses that ambiguous mix"))
         XCTAssertTrue(agentWorkflows.contains("The wrapper also does not silently rerun workloads without cooling"))
+        XCTAssertTrue(agentWorkflows.contains("refuses that fallback for `repairHelper`, `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, `collectHardwareEvidence`, `manualControlActive: true`, `daemonControlPathReady: false`, and force-retry combinations"))
         XCTAssertTrue(agentWorkflows.contains("missing option values"))
         XCTAssertTrue(agentWorkflows.contains("missing-value wrapper options"))
         XCTAssertTrue(integrations.contains("[safe-agent-cooling.md](safe-agent-cooling.md)"))

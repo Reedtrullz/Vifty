@@ -282,10 +282,7 @@ The wrapper also does not silently rerun workloads without cooling. If the user
 explicitly wants the child command to run without Vifty after a structured
 readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The wrapper still
 prints the diagnose JSON, refuses to request cooling, and only then execs the
-child directly; it refuses that fallback when Vifty recommends backing off the
-workload, repairing the helper, restoring Auto first, or when
-`daemonControlPathReady` is false. The uncooled fallback is mutually exclusive
-with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
+child directly; it refuses that fallback for `repairHelper`, `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, `collectHardwareEvidence`, `manualControlActive: true`, `daemonControlPathReady: false`, and force-retry combinations.
 
 Set `VIFTYCTL` to point at a development bundle:
 
