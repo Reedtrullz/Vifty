@@ -295,14 +295,14 @@ viftyctl run --workload test --duration 20m --max-rpm-percent 70 --reason "swift
 
 `audit --json` is a read-only local audit export for recent agent lease events. It returns `readOnly: true`, `coolingCommandsRun: false`, the requested `limit`, `eventCount`, and timestamped events with action, optional lease ID, and message. Use it after blocked readiness or restore failures to show what Vifty actually did without requesting cooling.
 
-For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local model workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
+For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, cargo, pytest, local-model, and custom workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
 
 ### Agent readiness checklist
 
 - Run `viftyctl capabilities --json` and require schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, `policyStatusAvailable: true`, `policy.enabled: true`, policy limits, and unavailable exit code before using guarded workloads.
 - Run `viftyctl diagnose --json` before cooling; require diagnose readiness schema version `1`, `safeToRequestCooling: true`, `daemonControlPathReady: true`, and `manualControlActive: false`. If diagnose exits nonzero with a command-error payload, require the command-error schema identity advertised by capabilities before trusting recovery fields.
 - Follow `recommendedAgentAction` and `recommendedRecoveryAction` instead of parsing UI text or human warning strings.
-- Prefer `examples/viftyctl/guarded-run.sh ... -- <command>` or the workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local-model runs. They keep child validation, cooling, signal handling, and Auto restore in one lifecycle.
+- Prefer `examples/viftyctl/guarded-run.sh ... -- <command>` or the workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, local-model, and custom runs. They keep child validation, cooling, signal handling, and Auto restore in one lifecycle.
 - Use direct `viftyctl run --json -- <command>` only when the caller already performs the same readiness and child-command preflight.
 - If readiness is `blocked` or `manualControlActive: true`, repair the helper, restore Auto, back off the workload, or collect read-only evidence according to the JSON recovery fields instead of retrying cooling.
 - Use `viftyctl audit --limit 20 --json` after blocked readiness or restore failures to inspect what happened locally.

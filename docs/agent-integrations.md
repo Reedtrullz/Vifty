@@ -33,6 +33,7 @@ For common local workloads, the shortcut scripts in `examples/viftyctl/` are equ
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
 examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh
@@ -40,6 +41,8 @@ examples/viftyctl/npm-test.sh
 examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh
+examples/viftyctl/local-model.sh -- ./run-local-model.sh
+examples/viftyctl/custom-workload.sh 10m 65 "project smoke test" -- ./scripts/smoke-test.sh
 ```
 
 Use shorter durations and lower RPM percentages for degraded readiness. Never call raw SMC commands, `sudo ViftyHelper`, or arbitrary fan RPM writes. If Vifty reports `restoreAutoBeforeRequestingCooling`, ask the user before restoring Auto or retrying.
@@ -52,7 +55,6 @@ cooling after seeing the structured readiness block. The wrapper will still run
 read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, hardware evidence collection, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
 
 The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, and command-error schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
-````
 
 ## Codex
 
