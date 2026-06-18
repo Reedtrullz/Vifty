@@ -1014,6 +1014,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentWorkflows.contains("advertised command-error schema identity"))
         XCTAssertTrue(agentWorkflows.contains("capabilities.schemaIDs.commandError"))
         XCTAssertTrue(agentWorkflows.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
+        XCTAssertTrue(agentWorkflows.contains("- `daemonControlPathReady`\n- `manualControlActive`\n- `fanCount`"))
+        XCTAssertTrue(agentWorkflows.contains("- `manualControlClear`"))
         XCTAssertTrue(guide.contains("structured `HELPER_UNREACHABLE`"))
         XCTAssertTrue(guide.contains("schemaID: https://vifty.local/schemas/viftyctl-command-error.schema.json"))
         XCTAssertTrue(guide.contains("known v1.1.0 helper-unreachable issue"))

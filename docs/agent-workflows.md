@@ -99,6 +99,7 @@ Important fields:
 - `recommendedRecoveryAction`
 - `safeToRequestCooling`
 - `daemonControlPathReady`
+- `manualControlActive`
 - `fanCount`
 - `controllableFanCount`
 - `temperatureSensorCount`
@@ -124,6 +125,7 @@ Important readiness check IDs:
 - `fanRangesValid`
 - `thermalPressureSafe`
 - `activeLeaseClear`
+- `manualControlClear`
 - `fanModeTelemetry`
 
 ### `capabilities --json`
