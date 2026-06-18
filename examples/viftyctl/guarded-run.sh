@@ -236,6 +236,7 @@ preflight_child_command "$1"
 viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"
 allow_uncooled="${VIFTY_GUARDED_RUN_ALLOW_UNCOOLED:-0}"
+expected_capabilities_schema_id="https://vifty.local/schemas/viftyctl-capabilities.schema.json"
 
 if [ ! -x "$viftyctl" ]; then
   echo "guarded-run: viftyctl is not executable at $viftyctl" >&2
@@ -280,6 +281,8 @@ set -e
 
 capability_commands="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract commands json -o - - 2>/dev/null || printf '')"
 capability_workloads="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract workloads json -o - - 2>/dev/null || printf '')"
+capabilities_schema_version="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaVersion raw -o - - 2>/dev/null || printf '')"
+capabilities_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.capabilities raw -o - - 2>/dev/null || printf '')"
 capabilities_unavailable_exit="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract exitCodes.unavailable raw -o - - 2>/dev/null || printf '')"
 daemon_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract daemonStatusAvailable raw -o - - 2>/dev/null || printf '')"
 policy_source="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policySource raw -o - - 2>/dev/null || printf '')"
@@ -302,6 +305,8 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
+[ "$capabilities_schema_version" = "null" ] && capabilities_schema_version=""
+[ "$capabilities_schema_id" = "null" ] && capabilities_schema_id=""
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
 [ "$daemon_status_available" = "null" ] && daemon_status_available=""
 [ "$policy_source" = "null" ] && policy_source=""
@@ -315,6 +320,16 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 
 if [ "$capabilities_status" -ne 0 ] && [ "$capabilities_status" != "$capabilities_unavailable_exit" ]; then
   echo "guarded-run: viftyctl capabilities exited $capabilities_status instead of advertised unavailable exit ${capabilities_unavailable_exit:-unknown}; refusing to request cooling." >&2
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$capabilities_schema_version" != "1" ] ||
+   [ "$capabilities_schema_id" != "$expected_capabilities_schema_id" ]; then
+  echo "guarded-run: viftyctl capabilities schema identity is not recognized; refusing to request cooling." >&2
+  echo "guarded-run: expected schemaVersion=1 and schemaIDs.capabilities=$expected_capabilities_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
     printf '%s\n' "$capabilities_json" >&2
   fi

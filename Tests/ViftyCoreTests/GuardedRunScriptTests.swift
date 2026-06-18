@@ -41,7 +41,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let harness = try ScriptHarness(
             state: "ready",
             capabilitiesExitCode: 69,
-            capabilitiesOutputOverride: #"{"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
         )
 
         let result = try harness.runGuardedRun([
@@ -56,7 +56,7 @@ final class GuardedRunScriptTests: XCTestCase {
     func testGuardedRunRejectsFallbackPolicySourceEvenWithSuccessfulCapabilitiesExit() throws {
         let harness = try ScriptHarness(
             state: "ready",
-            capabilitiesOutputOverride: #"{"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
         )
 
         let result = try harness.runGuardedRun([
@@ -65,6 +65,38 @@ final class GuardedRunScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("daemon-backed policy status"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsCapabilitiesWithDriftedSchemaVersion() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilitiesSchemaVersion: 2
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("capabilities schema identity is not recognized"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("expected schemaVersion=1"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsCapabilitiesWithDriftedSchemaID() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilitiesSchemaID: "https://vifty.local/schemas/experimental-capabilities.schema.json"
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("capabilities schema identity is not recognized"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("viftyctl-capabilities.schema.json"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -844,6 +876,8 @@ private final class ScriptHarness {
         runLifecycleOverride: String? = nil,
         policyOverride: String? = nil,
         metadataLimitsOverride: String? = nil,
+        capabilitiesSchemaVersion: Int = 1,
+        capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
     ) throws {
@@ -881,6 +915,8 @@ private final class ScriptHarness {
                 runLifecycleOverride: runLifecycleOverride,
                 policyOverride: policyOverride,
                 metadataLimitsOverride: metadataLimitsOverride,
+                capabilitiesSchemaVersion: capabilitiesSchemaVersion,
+                capabilitiesSchemaID: capabilitiesSchemaID,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
         }
@@ -989,6 +1025,8 @@ private final class ScriptHarness {
         runLifecycleOverride: String?,
         policyOverride: String?,
         metadataLimitsOverride: String?,
+        capabilitiesSchemaVersion: Int,
+        capabilitiesSchemaID: String,
         capabilitiesOutputOverride: String?
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
@@ -1008,9 +1046,10 @@ private final class ScriptHarness {
             ?? #""policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30}"#
         let metadataLimits = metadataLimitsOverride
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
+        let schemaIdentity = #""schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)"}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(exitCodes)}"#
-            : #"{"schemaVersion":1,"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(exitCodes)}"#)
+            ? #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(exitCodes)}"#
+            : #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu

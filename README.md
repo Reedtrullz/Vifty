@@ -299,7 +299,7 @@ For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.
 
 ### Agent readiness checklist
 
-- Run `viftyctl capabilities --json` and require the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, `policyStatusAvailable: true`, `policy.enabled: true`, policy limits, and unavailable exit code before using guarded workloads.
+- Run `viftyctl capabilities --json` and require schema version `1`, the stable capabilities schema ID, the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, `policyStatusAvailable: true`, `policy.enabled: true`, policy limits, and unavailable exit code before using guarded workloads.
 - Run `viftyctl diagnose --json` before cooling; require `safeToRequestCooling: true` and `daemonControlPathReady: true`.
 - Follow `recommendedAgentAction` and `recommendedRecoveryAction` instead of parsing UI text or human warning strings.
 - Prefer `examples/viftyctl/guarded-run.sh ... -- <command>` or the workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local-model runs. They keep child validation, cooling, signal handling, and Auto restore in one lifecycle.
