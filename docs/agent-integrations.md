@@ -34,6 +34,7 @@ examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
 examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-build.sh
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh
@@ -64,6 +65,7 @@ For a repository-level `AGENTS.md`, add the shared rule and then use workload-sp
 examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
 examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-build.sh
 examples/viftyctl/make-verify.sh
 ```
 

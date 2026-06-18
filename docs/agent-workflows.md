@@ -298,6 +298,7 @@ examples/viftyctl/swift-test.sh --filter ViftyCoreTests
 examples/viftyctl/swift-release-build.sh --product Vifty
 examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-build.sh
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh -- --mode=production
@@ -339,6 +340,12 @@ Make test:
 
 ```sh
 examples/viftyctl/make-test.sh
+```
+
+Make build:
+
+```sh
+examples/viftyctl/make-build.sh
 ```
 
 Make verify:

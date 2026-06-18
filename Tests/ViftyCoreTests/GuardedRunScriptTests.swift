@@ -907,6 +907,11 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "test", "--duration", "30m", "--max-rpm-percent", "75", "--reason", "xcodebuild test", "--", "xcodebuild", "test", "-scheme", "MyApp", "-destination", "platform=macOS"]
             ),
             (
+                "examples/viftyctl/make-build.sh",
+                ["PROJECT=Vifty"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "make build", "--", "make", "build", "PROJECT=Vifty"]
+            ),
+            (
                 "examples/viftyctl/make-test.sh",
                 ["TEST_FILTER=AgentTests"],
                 ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "make test", "--", "make", "test", "TEST_FILTER=AgentTests"]
@@ -969,7 +974,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let scripts = try FileManager.default.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "sh" }
 
-        XCTAssertGreaterThanOrEqual(scripts.count, 14)
+        XCTAssertGreaterThanOrEqual(scripts.count, 15)
 
         for script in scripts {
             XCTAssertTrue(FileManager.default.isExecutableFile(atPath: script.path), script.lastPathComponent)

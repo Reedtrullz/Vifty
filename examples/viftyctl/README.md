@@ -60,6 +60,7 @@ when Vifty recommends `repairHelper`, `backOffWorkload`, or
 | `swift-release-build.sh [swift-build-args...]` | `guarded-run.sh build 25m 75 "swift release build" -- swift build -c release ...` |
 | `xcode-build.sh [xcodebuild-args...]` | `guarded-run.sh build 30m 75 "xcodebuild build" -- xcodebuild build ...` |
 | `xcode-test.sh [xcodebuild-args...]` | `guarded-run.sh test 30m 75 "xcodebuild test" -- xcodebuild test ...` |
+| `make-build.sh [make-args...]` | `guarded-run.sh build 25m 75 "make build" -- make build ...` |
 | `make-test.sh [make-args...]` | `guarded-run.sh test 20m 70 "make test" -- make test ...` |
 | `make-verify.sh [make-args...]` | `guarded-run.sh test 30m 75 "make verify" -- make verify ...` |
 | `npm-build.sh [npm-build-args...]` | `guarded-run.sh build 25m 75 "npm run build" -- npm run build ...` |

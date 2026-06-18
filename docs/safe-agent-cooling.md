@@ -57,6 +57,7 @@ examples/viftyctl/swift-test.sh
 examples/viftyctl/swift-release-build.sh
 examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+examples/viftyctl/make-build.sh
 examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh
@@ -105,7 +106,7 @@ These are starting points, not rights to exceed daemon policy:
 | Swift/package tests | `20m` | `70` | `swift test` |
 | Release build | `25m` | `75` | `swift build -c release` |
 | Xcode build/test | `30m` | `75` | `xcodebuild build ...`, `xcodebuild test ...` |
-| Make test/verify | `20m`/`30m` | `70`/`75` | `make test`, `make verify` |
+| Make build/test/verify | `25m`/`20m`/`30m` | `75`/`70`/`75` | `make build`, `make test`, `make verify` |
 | npm/cargo builds | `25m` | `75` | `npm run build`, `cargo build --release` |
 | npm/cargo/pytest tests | `20m` | `70` | `npm test`, `cargo test`, `python3 -m pytest` |
 | Local model run | `20m` | `75` | local inference or eval command |
