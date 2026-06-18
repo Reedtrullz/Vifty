@@ -172,6 +172,15 @@ struct MenuBarView: View {
                 }
             }
 
+            Picker("Default mode", selection: $model.startupMode) {
+                ForEach(ModeSelection.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .help("Mode Vifty selects when the app starts")
+
             Picker("Menu bar", selection: $model.menuBarDisplayMode) {
                 ForEach(MenuBarDisplayMode.allCases) { mode in
                     Text(mode.label).tag(mode)

@@ -184,6 +184,11 @@ final class AppModel: ObservableObject {
             persistAppPreferences()
         }
     }
+    @Published var startupMode: ModeSelection {
+        didSet {
+            persistAppPreferences()
+        }
+    }
     @Published var notificationSettings: LocalNotificationSettings {
         didSet {
             persistAppPreferences()
@@ -226,6 +231,7 @@ final class AppModel: ObservableObject {
     private let profileStore: CurveProfileStore
     private let preferencesStore: AppPreferencesStore
     private var pollingTask: Task<Void, Never>?
+    private var startupModeApplied = false
     private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
     private var previousHelperNeedsAttention = false
     private var previousPluggedInDrain = false
@@ -263,6 +269,7 @@ final class AppModel: ObservableObject {
         self.preferencesStore = preferencesStore
         let appPreferences = self.preferencesStore.load()
         menuBarDisplayMode = appPreferences.menuBarDisplayMode
+        startupMode = appPreferences.startupMode
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
         fixedFanTargets = appPreferences.fixedFanTargets
@@ -276,12 +283,25 @@ final class AppModel: ObservableObject {
         pollingTask = Task { [weak self] in
             guard let self else { return }
             await coordinator.recoverIfNeeded()
+            await applyStartupModePreferenceIfNeeded()
 
             while !Task.isCancelled {
                 await pollOnce()
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    func applyStartupModePreferenceIfNeeded() async {
+        guard !startupModeApplied else { return }
+        startupModeApplied = true
+        selectedMode = startupMode
+        guard startupMode != .auto else { return }
+        if snapshot == nil {
+            await pollOnce()
+            selectedMode = startupMode
+        }
+        await applyCurrentModeSelection()
     }
 
     func stop() {
@@ -741,27 +761,21 @@ final class AppModel: ObservableObject {
         case .fanIcon:
             return menuTitle
         case .temperature:
-            return menuBarLabelWithAttention(menuBarTemperatureText ?? menuTitle)
+            return menuBarLabelWithAttention(menuBarTemperatureText ?? "-- C")
         case .fanRPM:
-            return menuBarLabelWithAttention(menuBarFanText ?? menuTitle)
+            return menuBarLabelWithAttention(menuBarFanText ?? "-- RPM")
         case .averageFanRPM:
-            return menuBarLabelWithAttention(menuBarAverageFanText ?? menuTitle)
+            return menuBarLabelWithAttention(menuBarAverageFanText ?? "-- RPM avg")
         case .adapterWattage:
-            return menuBarLabelWithAttention(menuBarPowerText ?? menuTitle)
+            return menuBarLabelWithAttention(menuBarPowerText ?? "-- W")
         case .temperatureAndRPM:
-            if let temperature = menuBarTemperatureText,
-               let fan = menuBarFanText {
-                return menuBarLabelWithAttention("\(temperature) | \(fan)")
-            }
-            return menuTitle
+            return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
         case .ownerTemperatureAndRPM:
-            let metricParts = menuBarTemperatureAndFanParts
-            guard !metricParts.isEmpty else {
-                return menuBarOwnerShouldAppearWithoutMetrics
-                    ? menuBarLabelWithAttention("\(menuBarFanOwnerText) | \(menuTitle)")
-                    : menuTitle
-            }
-            return menuBarLabelWithAttention(([menuBarFanOwnerText] + metricParts).joined(separator: " | "))
+            return menuBarLabelWithAttention([
+                menuBarFanOwnerText,
+                menuBarTemperatureText ?? "-- C",
+                menuBarFanText ?? "-- RPM"
+            ].joined(separator: " | "))
         case .compactSummary:
             return menuTitle
         }
@@ -793,12 +807,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private var menuBarOwnerShouldAppearWithoutMetrics: Bool {
-        agentControlStatus?.activeLease != nil
-            || controlState.mode != .auto
-            || controlOwnershipNeedsAttention
-    }
-
     private func menuBarLabelWithAttention(_ label: String) -> String {
         guard let attention = menuBarMetricAttentionSummary,
               !label.contains(attention)
@@ -824,7 +832,7 @@ final class AppModel: ObservableObject {
     }
 
     var menuBarLabelUsesFanIcon: Bool {
-        menuBarDisplayMode == .fanIcon || menuBarLabelText == "Vifty"
+        menuBarDisplayMode == .fanIcon
     }
 
     private var menuBarTemperatureText: String? {
@@ -833,10 +841,6 @@ final class AppModel: ObservableObject {
 
     private var menuBarFanText: String? {
         snapshot?.fans.first.map { "\($0.currentRPM) RPM" }
-    }
-
-    private var menuBarTemperatureAndFanParts: [String] {
-        [menuBarTemperatureText, menuBarFanText].compactMap { $0 }
     }
 
     private var menuBarAverageFanText: String? {
@@ -855,6 +859,7 @@ final class AppModel: ObservableObject {
     private func persistAppPreferences() {
         preferencesStore.save(AppPreferences(
             menuBarDisplayMode: menuBarDisplayMode,
+            startupMode: startupMode,
             notificationSettings: notificationSettings,
             usePerFanFixedRPM: usePerFanFixedRPM,
             fixedFanTargets: fixedFanTargets
@@ -1789,7 +1794,7 @@ final class AppModel: ObservableObject {
     }
 }
 
-enum ModeSelection: String, CaseIterable, Identifiable {
+enum ModeSelection: String, Codable, CaseIterable, Identifiable {
     case auto = "Auto"
     case curve = "Curve"
     case fixed = "Fixed"

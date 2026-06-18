@@ -151,6 +151,7 @@ struct ContentView: View {
     private var fanControlPane: some View {
         VStack(alignment: .leading, spacing: 18) {
             modePicker
+            startupModeSettings
             menuBarDisplaySettings
 
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
@@ -412,6 +413,26 @@ struct ContentView: View {
             .disabled(model.modeSelectionActionDisabled)
             .help(model.modeSelectionActionHelp)
         }
+    }
+
+    private var startupModeSettings: some View {
+        HStack(spacing: 8) {
+            Label("Default mode", systemImage: "poweron")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Default mode", selection: $model.startupMode) {
+                ForEach(ModeSelection.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .help("Mode Vifty selects when the app starts")
+            Spacer()
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var menuBarDisplaySettings: some View {

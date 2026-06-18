@@ -1380,25 +1380,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
-    func testMenuBarAverageFanRPMModeFallsBackWhenFansAreMissing() {
+    func testMenuBarAverageFanRPMModeShowsSelectedModeBeforeFansArrive() {
         let model = AppModel()
         model.menuBarDisplayMode = .averageFanRPM
 
-        XCTAssertEqual(model.menuBarLabelText, "Vifty")
-        XCTAssertTrue(model.menuBarLabelUsesFanIcon)
+        XCTAssertEqual(model.menuBarLabelText, "-- RPM avg")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
-    func testMenuBarDisplayModesUseSafeFallbackWhenTelemetryIsMissing() {
+    func testMenuBarDisplayModesUseSelectedModePlaceholdersWhenTelemetryIsMissing() {
         let model = AppModel()
 
-        for mode in [MenuBarDisplayMode.temperature, .fanRPM, .adapterWattage, .temperatureAndRPM, .ownerTemperatureAndRPM] {
+        let expectations: [(MenuBarDisplayMode, String)] = [
+            (.temperature, "-- C"),
+            (.fanRPM, "-- RPM"),
+            (.averageFanRPM, "-- RPM avg"),
+            (.adapterWattage, "-- W"),
+            (.temperatureAndRPM, "-- C | -- RPM"),
+            (.ownerTemperatureAndRPM, "Mac | -- C | -- RPM")
+        ]
+
+        for (mode, label) in expectations {
             model.menuBarDisplayMode = mode
-            XCTAssertEqual(model.menuBarLabelText, "Vifty", mode.label)
-            XCTAssertTrue(model.menuBarLabelUsesFanIcon, mode.label)
+            XCTAssertEqual(model.menuBarLabelText, label, mode.label)
+            XCTAssertFalse(model.menuBarLabelUsesFanIcon, mode.label)
         }
     }
 
-    func testMenuBarCombinedModeFallsBackToCompactSummaryWhenOnlyTemperatureIsAvailable() {
+    func testMenuBarCombinedModeKeepsRPMPlaceholderWhenOnlyTemperatureIsAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
             fans: [],
@@ -1410,7 +1419,7 @@ final class AppModelTests: XCTestCase {
 
         model.menuBarDisplayMode = .temperatureAndRPM
 
-        XCTAssertEqual(model.menuBarLabelText, "69 C")
+        XCTAssertEqual(model.menuBarLabelText, "69 C | -- RPM")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
@@ -1487,6 +1496,23 @@ final class AppModelTests: XCTestCase {
             MenuBarDisplayMode.temperature.rawValue,
             "New preference writes should go to Vifty's private JSON store, not legacy UserDefaults."
         )
+    }
+
+    func testStartupModePreferencePersistsPrivately() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let model = AppModel(preferencesStore: store)
+
+        XCTAssertEqual(model.startupMode, .auto)
+
+        model.startupMode = .curve
+
+        XCTAssertEqual(store.load().startupMode, .curve)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+
+        let relaunched = AppModel(preferencesStore: store)
+        XCTAssertEqual(relaunched.startupMode, .curve)
     }
 
     func testNotificationSettingsMigrateLegacyDefaultsAndPersistPrivately() throws {
@@ -1586,10 +1612,43 @@ final class AppModelTests: XCTestCase {
         let loaded = store.load()
 
         XCTAssertEqual(loaded.menuBarDisplayMode, .temperature)
+        XCTAssertEqual(loaded.startupMode, .auto)
         XCTAssertTrue(loaded.notificationSettings.helperFailure)
         XCTAssertTrue(loaded.notificationSettings.autoRestoreFailure)
         XCTAssertFalse(loaded.usePerFanFixedRPM)
         XCTAssertTrue(loaded.fixedFanTargets.isEmpty)
+    }
+
+    func testStartupFixedModeAppliesOnceThroughManualPreflight() async throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        try store.saveThrowing(AppPreferences(
+            menuBarDisplayMode: .fanIcon,
+            startupMode: .fixed,
+            notificationSettings: .disabled
+        ))
+        let snapshot = agentHardwareSnapshot()
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil) },
+            preferencesStore: store
+        )
+        model.fixedRPM = 3600
+
+        await model.applyStartupModePreferenceIfNeeded()
+        await model.applyStartupModePreferenceIfNeeded()
+
+        XCTAssertEqual(model.selectedMode, .fixed)
+        XCTAssertEqual(model.controlState.mode, .fixedRPM(3600))
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [FanCommand(fanID: 0, mode: .fixedRPM(3600))])
     }
 
     func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
