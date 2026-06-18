@@ -103,7 +103,7 @@ After installation, start Vifty from Spotlight, Launchpad, Finder, or Terminal:
 open /Applications/Vifty.app
 ```
 
-`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
+`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
 
 ### Unsigned tester zip
 

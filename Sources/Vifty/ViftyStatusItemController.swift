@@ -4,6 +4,9 @@ import SwiftUI
 
 @MainActor
 final class ViftyStatusItemController: NSObject {
+    private static let launchPrimeAttempts = 20
+    private static let launchPrimeRetryDelay: Duration = .milliseconds(750)
+
     var openMainWindow: () -> Void
 
     private let model: AppModel
@@ -23,9 +26,10 @@ final class ViftyStatusItemController: NSObject {
         updateStatusItem()
         primeTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            model.start()
-            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
-            updateStatusItem()
+            await primeStatusItemUntilTelemetryResolved(
+                maxAttempts: Self.launchPrimeAttempts,
+                retryDelay: Self.launchPrimeRetryDelay
+            )
         }
     }
 
@@ -50,6 +54,7 @@ final class ViftyStatusItemController: NSObject {
         model.objectWillChange
             .sink { [weak self] _ in
                 Task { @MainActor in
+                    await Task.yield()
                     self?.updateStatusItem()
                 }
             }
@@ -88,11 +93,26 @@ final class ViftyStatusItemController: NSObject {
         model.start()
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 3)
-            updateStatusItem()
+            await primeStatusItemUntilTelemetryResolved(maxAttempts: 3, retryDelay: .milliseconds(250))
         }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func primeStatusItemUntilTelemetryResolved(
+        maxAttempts: Int,
+        retryDelay: Duration
+    ) async {
+        model.start()
+        let attempts = max(1, maxAttempts)
+        for attempt in 1...attempts {
+            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 1)
+            updateStatusItem()
+            guard model.menuBarLabelNeedsTelemetryPrime else { return }
+            if attempt < attempts {
+                try? await Task.sleep(for: retryDelay)
+            }
+        }
     }
 
     private func performOpenMainWindow() {

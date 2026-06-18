@@ -5,6 +5,8 @@ APP_NAME="Vifty"
 CONFIGURATION="${CONFIGURATION:-release}"
 INSTALL_DIR="${VIFTY_INSTALL_DIR:-/Applications}"
 OPEN_AFTER_INSTALL="${OPEN_AFTER_INSTALL:-0}"
+QUIT_RUNNING_APP="${QUIT_RUNNING_APP:-1}"
+WAS_RUNNING=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -30,6 +32,46 @@ copy_app_bundle() {
   COPYFILE_DISABLE=1 /usr/bin/ditto --norsrc --noextattr --noqtn "${source_app}" "${dest_app}"
 }
 
+running_app_pids() {
+  /usr/bin/pgrep -x "${APP_NAME}" 2>/dev/null || true
+}
+
+wait_for_app_exit() {
+  local attempts="${1:-50}"
+  while [[ "${attempts}" -gt 0 ]]; do
+    if [[ -z "$(running_app_pids)" ]]; then
+      return 0
+    fi
+    sleep 0.2
+    attempts=$((attempts - 1))
+  done
+  return 1
+}
+
+quit_running_app_if_needed() {
+  if [[ "${QUIT_RUNNING_APP}" != "1" ]]; then
+    return 0
+  fi
+
+  local pids
+  pids="$(running_app_pids)"
+  if [[ -z "${pids}" ]]; then
+    return 0
+  fi
+
+  WAS_RUNNING=1
+  echo "==> Quitting running ${APP_NAME} before install"
+  /usr/bin/osascript -e 'tell application id "tech.reidar.vifty" to quit' >/dev/null 2>&1 \
+    || /usr/bin/osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 \
+    || true
+
+  if ! wait_for_app_exit 50; then
+    echo "==> ${APP_NAME} did not quit; terminating stale process"
+    /usr/bin/pkill -x "${APP_NAME}" >/dev/null 2>&1 || true
+    wait_for_app_exit 25 || true
+  fi
+}
+
 echo "==> Building ${APP_NAME}.app (${CONFIGURATION})"
 cd "${ROOT_DIR}"
 make app CONFIGURATION="${CONFIGURATION}"
@@ -48,6 +90,8 @@ if ! mkdir -p "${INSTALL_DIR}" 2>/dev/null; then
   echo "==> ${INSTALL_DIR} is not writable; installing to ~/Applications instead"
   fallback_to_user_applications
 fi
+
+quit_running_app_if_needed
 
 echo "==> Installing to ${DEST_APP}"
 if ! copy_app_bundle "${APP_DIR}" "${DEST_APP}" 2>"${ERR_LOG}"; then
@@ -79,7 +123,7 @@ echo ""
 echo "Start it from Spotlight/Launchpad/Finder, or run:"
 echo "  open \"${DEST_APP}\""
 
-if [[ "${OPEN_AFTER_INSTALL}" == "1" ]]; then
+if [[ "${OPEN_AFTER_INSTALL}" == "1" || "${WAS_RUNNING}" == "1" ]]; then
   echo "==> Launching ${APP_NAME}"
   /usr/bin/open "${DEST_APP}"
 fi

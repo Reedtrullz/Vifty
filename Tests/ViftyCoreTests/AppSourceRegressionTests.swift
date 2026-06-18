@@ -210,7 +210,12 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(statusItemController.contains("NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)"))
         XCTAssertTrue(statusItemController.contains("model.objectWillChange"))
         XCTAssertTrue(statusItemController.contains("updateStatusItem()"))
-        XCTAssertTrue(statusItemController.contains("await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)"))
+        XCTAssertTrue(statusItemController.contains("private static let launchPrimeAttempts = 20"))
+        XCTAssertTrue(statusItemController.contains("private static let launchPrimeRetryDelay: Duration = .milliseconds(750)"))
+        XCTAssertTrue(statusItemController.contains("primeStatusItemUntilTelemetryResolved("))
+        XCTAssertTrue(statusItemController.contains("await model.primeMenuBarStatusItemTelemetry(maxAttempts: 1)"))
+        XCTAssertTrue(statusItemController.contains("guard model.menuBarLabelNeedsTelemetryPrime else { return }"))
+        XCTAssertTrue(statusItemController.contains("await Task.yield()"))
         XCTAssertTrue(statusItemController.contains("MenuBarView(openMainWindow: { [weak self] in"))
         XCTAssertTrue(statusItemController.contains("button.title = model.menuBarLabelText"))
         XCTAssertTrue(statusItemController.contains("NSImage(systemSymbolName: \"fan\""))
@@ -231,6 +236,20 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(appPreferencesStore.contains(".posixPermissions: NSNumber(value: 0o700)"))
         XCTAssertTrue(appPreferencesStore.contains(".posixPermissions: NSNumber(value: 0o600)"))
         XCTAssertFalse(appModel.contains("preferences.set("))
+    }
+
+    func testLocalInstallerRestartsRunningAppBeforeCopyingBundle() throws {
+        let installScript = try read("scripts/install-vifty.sh")
+        let readme = try read("README.md")
+
+        XCTAssertTrue(installScript.contains("QUIT_RUNNING_APP=\"${QUIT_RUNNING_APP:-1}\""))
+        XCTAssertTrue(installScript.contains("WAS_RUNNING=0"))
+        XCTAssertTrue(installScript.contains("/usr/bin/pgrep -x \"${APP_NAME}\""))
+        XCTAssertTrue(installScript.contains("tell application id \"tech.reidar.vifty\" to quit"))
+        XCTAssertTrue(installScript.contains("/usr/bin/pkill -x \"${APP_NAME}\""))
+        XCTAssertTrue(installScript.contains("quit_running_app_if_needed"))
+        XCTAssertTrue(installScript.contains("\"${OPEN_AFTER_INSTALL}\" == \"1\" || \"${WAS_RUNNING}\" == \"1\""))
+        XCTAssertTrue(readme.contains("the installer quits and relaunches it from the newly installed bundle"))
     }
 
     func testMenuBarCurveProfileSelectorUsesSavedProfiles() throws {
