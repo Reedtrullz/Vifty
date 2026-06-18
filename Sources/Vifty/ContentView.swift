@@ -477,7 +477,7 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                         Slider(
                             value: Binding(
-                                get: { Double(model.fixedFanTarget(for: fan.id)?.rpm ?? Int(model.fixedRPM.rounded())) },
+                                get: { Double(model.fixedFanSliderRPM(for: fan)) },
                                 set: { value in
                                     model.setFixedFanRPM(Int(value.rounded()), for: fan)
                                     model.applyModeSelection()

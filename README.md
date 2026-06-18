@@ -299,8 +299,8 @@ For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.
 
 ### Agent readiness checklist
 
-- Run `viftyctl capabilities --json` and require schema version `1`, the stable capabilities schema ID, the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, `policyStatusAvailable: true`, `policy.enabled: true`, policy limits, and unavailable exit code before using guarded workloads.
-- Run `viftyctl diagnose --json` before cooling; require `safeToRequestCooling: true` and `daemonControlPathReady: true`.
+- Run `viftyctl capabilities --json` and require schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, the advertised `run` lifecycle, `supportsForceRetry`, supported workload names, metadata limits, `policyStatusAvailable: true`, `policy.enabled: true`, policy limits, and unavailable exit code before using guarded workloads.
+- Run `viftyctl diagnose --json` before cooling; require diagnose readiness schema version `1`, `safeToRequestCooling: true`, and `daemonControlPathReady: true`. If diagnose exits nonzero with a command-error payload, require the command-error schema identity advertised by capabilities before trusting recovery fields.
 - Follow `recommendedAgentAction` and `recommendedRecoveryAction` instead of parsing UI text or human warning strings.
 - Prefer `examples/viftyctl/guarded-run.sh ... -- <command>` or the workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, and local-model runs. They keep child validation, cooling, signal handling, and Auto restore in one lifecycle.
 - Use direct `viftyctl run --json -- <command>` only when the caller already performs the same readiness and child-command preflight.

@@ -2172,6 +2172,38 @@ final class AppModelTests: XCTestCase {
         ])
     }
 
+    func testFixedPerFanDefaultsUseEachFanRangeBeforeTargetsAreStored() {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: AppModelFakeHardware(snapshot: snapshot), uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.selectedMode = .fixed
+        model.fixedRPM = 3200
+        model.usePerFanFixedRPM = true
+
+        XCTAssertTrue(model.fixedFanTargets.isEmpty)
+        XCTAssertEqual(model.fixedFanSliderRPM(for: snapshot.fans[0]), 3200)
+        XCTAssertEqual(model.fixedFanSliderRPM(for: snapshot.fans[1]), 3472)
+        XCTAssertEqual(model.fixedFanTargetPercent(for: snapshot.fans[0]), 61)
+        XCTAssertEqual(model.fixedFanTargetPercent(for: snapshot.fans[1]), 61)
+        XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[0]), 3200)
+        XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[1]), 3472)
+    }
+
     func testFixedPerFanModeAppliesDistinctTargetsThroughCoordinator() async {
         let snapshot = HardwareSnapshot(
             fans: [

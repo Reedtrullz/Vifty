@@ -256,12 +256,12 @@ examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 
 The wrapper:
 
-- runs `capabilities --json` and requires schema version `1`, the stable capabilities schema ID, and the safe `runLifecycle` contract,
+- runs `capabilities --json` and requires schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, and the safe `runLifecycle` contract,
 - requires `policyStatusAvailable: true`, `policy.enabled: true`, and advertised policy duration/RPM limits, then rejects durations or RPM percentages outside the daemon's advertised policy range before readiness or cooling,
 - requires `metadataLimits` and rejects reasons longer than the advertised maximum before readiness or cooling,
-- runs `diagnose --json`,
+- runs `diagnose --json` and requires diagnose readiness schema version `1`,
 - treats nonzero blocked diagnose reports as readiness blocks,
-- fails closed and prints any structured diagnose failure before requesting cooling,
+- fails closed and prints any structured diagnose failure before requesting cooling only when a nonzero diagnose command-error payload matches the advertised command-error schema identity,
 - refuses to continue on `blocked`,
 - requires `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady` to be present,
 - treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease case,

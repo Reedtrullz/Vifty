@@ -237,6 +237,8 @@ viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"
 allow_uncooled="${VIFTY_GUARDED_RUN_ALLOW_UNCOOLED:-0}"
 expected_capabilities_schema_id="https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+expected_diagnose_schema_id="https://vifty.local/schemas/viftyctl-diagnose.schema.json"
+expected_command_error_schema_id="https://vifty.local/schemas/viftyctl-command-error.schema.json"
 
 if [ ! -x "$viftyctl" ]; then
   echo "guarded-run: viftyctl is not executable at $viftyctl" >&2
@@ -283,6 +285,8 @@ capability_commands="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -ext
 capability_workloads="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract workloads json -o - - 2>/dev/null || printf '')"
 capabilities_schema_version="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaVersion raw -o - - 2>/dev/null || printf '')"
 capabilities_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.capabilities raw -o - - 2>/dev/null || printf '')"
+capabilities_diagnose_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.diagnose raw -o - - 2>/dev/null || printf '')"
+capabilities_command_error_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.commandError raw -o - - 2>/dev/null || printf '')"
 capabilities_unavailable_exit="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract exitCodes.unavailable raw -o - - 2>/dev/null || printf '')"
 daemon_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract daemonStatusAvailable raw -o - - 2>/dev/null || printf '')"
 policy_source="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policySource raw -o - - 2>/dev/null || printf '')"
@@ -307,6 +311,8 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
 [ "$capabilities_schema_version" = "null" ] && capabilities_schema_version=""
 [ "$capabilities_schema_id" = "null" ] && capabilities_schema_id=""
+[ "$capabilities_diagnose_schema_id" = "null" ] && capabilities_diagnose_schema_id=""
+[ "$capabilities_command_error_schema_id" = "null" ] && capabilities_command_error_schema_id=""
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
 [ "$daemon_status_available" = "null" ] && daemon_status_available=""
 [ "$policy_source" = "null" ] && policy_source=""
@@ -330,6 +336,24 @@ if [ "$capabilities_schema_version" != "1" ] ||
    [ "$capabilities_schema_id" != "$expected_capabilities_schema_id" ]; then
   echo "guarded-run: viftyctl capabilities schema identity is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaVersion=1 and schemaIDs.capabilities=$expected_capabilities_schema_id." >&2
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$capabilities_diagnose_schema_id" != "$expected_diagnose_schema_id" ]; then
+  echo "guarded-run: viftyctl capabilities diagnose schema identity is not recognized; refusing to request cooling." >&2
+  echo "guarded-run: expected schemaIDs.diagnose=$expected_diagnose_schema_id." >&2
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$capabilities_command_error_schema_id" != "$expected_command_error_schema_id" ]; then
+  echo "guarded-run: viftyctl capabilities command-error schema identity is not recognized; refusing to request cooling." >&2
+  echo "guarded-run: expected schemaIDs.commandError=$expected_command_error_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
     printf '%s\n' "$capabilities_json" >&2
   fi
@@ -482,19 +506,42 @@ diagnose_status=$?
 set -e
 
 state="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract state raw -o - - 2>/dev/null || printf '')"
+diagnose_schema_version="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract schemaVersion raw -o - - 2>/dev/null || printf '')"
+diagnose_schema_id="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract schemaID raw -o - - 2>/dev/null || printf '')"
 recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedAgentAction raw -o - - 2>/dev/null || printf '')"
 recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedRecoveryAction raw -o - - 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
+[ "$diagnose_schema_version" = "null" ] && diagnose_schema_version=""
+[ "$diagnose_schema_id" = "null" ] && diagnose_schema_id=""
 [ "$recommended_action" = "null" ] && recommended_action=""
 [ "$recommended_recovery_action" = "null" ] && recommended_recovery_action=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 [ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
+  if [ "$diagnose_schema_version" != "1" ] ||
+     [ "$diagnose_schema_id" != "$capabilities_command_error_schema_id" ]; then
+    echo "guarded-run: Vifty diagnose command-error schema identity is not recognized; refusing to request cooling." >&2
+    echo "guarded-run: expected schemaVersion=1 and schemaID=$capabilities_command_error_schema_id." >&2
+    if [ -n "$diagnose_json" ]; then
+      printf '%s\n' "$diagnose_json" >&2
+    fi
+    exit 75
+  fi
+
   echo "guarded-run: Vifty diagnose failed; refusing to request cooling." >&2
+  if [ -n "$diagnose_json" ]; then
+    printf '%s\n' "$diagnose_json" >&2
+  fi
+  exit 75
+fi
+
+if [ "$diagnose_schema_version" != "1" ]; then
+  echo "guarded-run: Vifty diagnose readiness schema version is not recognized; refusing to request cooling." >&2
+  echo "guarded-run: expected schemaVersion=1." >&2
   if [ -n "$diagnose_json" ]; then
     printf '%s\n' "$diagnose_json" >&2
   fi

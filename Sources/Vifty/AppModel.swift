@@ -590,6 +590,10 @@ final class AppModel: ObservableObject {
         fixedFanTarget(for: fan.id)?.rpm ?? defaultFixedFanTargetRPM(for: fan)
     }
 
+    func fixedFanSliderRPM(for fan: Fan) -> Int {
+        fixedFanTargetRPM(for: fan)
+    }
+
     func fixedFanTargetPercent(for fan: Fan) -> Int {
         rpmPercent(fixedFanTargetRPM(for: fan), for: fan)
     }
