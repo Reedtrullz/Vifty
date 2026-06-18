@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 @main
 struct ViftyApp: App {
+    @NSApplicationDelegateAdaptor(ViftyAppDelegate.self) private var appDelegate
     @StateObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
 
@@ -9,6 +11,7 @@ struct ViftyApp: App {
     init() {
         let model = AppModel()
         _model = StateObject(wrappedValue: model)
+        appDelegate.model = model
         model.start()
         Task { @MainActor in
             await model.primeMenuBarStatusItemTelemetry()
@@ -54,10 +57,24 @@ struct MenuBarExtraLabel: View {
         } else {
             Text(model.menuBarLabelText)
                 .monospacedDigit()
+                .id(model.menuBarStatusItemRevision)
         }
     }
 
     private func refreshMenuBarStatusItemTelemetry() {
+        model.start()
+        Task { @MainActor in
+            await model.primeMenuBarStatusItemTelemetry()
+        }
+    }
+}
+
+@MainActor
+final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: AppModel?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard let model else { return }
         model.start()
         Task { @MainActor in
             await model.primeMenuBarStatusItemTelemetry()

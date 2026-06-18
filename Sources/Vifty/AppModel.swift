@@ -204,6 +204,7 @@ final class AppModel: ObservableObject {
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
     @Published var hasCompletedHardwarePoll = false
+    @Published private(set) var menuBarStatusItemRevision = 0
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
     private var isSettingSelectedSensorProgrammatically = false
@@ -239,6 +240,7 @@ final class AppModel: ObservableObject {
     private var previousAgentCoolingNeedsAttention = false
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var elevatedThermalPressureStartedAt: Date?
+    private var didPublishFirstMenuBarTelemetryRefresh = false
     private let notificationMinimumInterval: TimeInterval = 10 * 60
     private let sustainedThermalPressureInterval: TimeInterval = 60
 
@@ -344,7 +346,11 @@ final class AppModel: ObservableObject {
     }
 
     private func performPollOnce() async {
-        defer { hasCompletedHardwarePoll = true }
+        let previousMenuBarLabel = menuBarLabelText
+        defer {
+            hasCompletedHardwarePoll = true
+            refreshMenuBarStatusItemIfNeeded(previousLabel: previousMenuBarLabel)
+        }
         let currentPower = powerReader()
         let currentThermalPressure = thermalReader()
         powerSnapshot = currentPower
@@ -384,6 +390,14 @@ final class AppModel: ObservableObject {
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
+    }
+
+    private func refreshMenuBarStatusItemIfNeeded(previousLabel: String) {
+        let nextLabel = menuBarLabelText
+        guard previousLabel != nextLabel else { return }
+        guard !didPublishFirstMenuBarTelemetryRefresh || previousLabel.contains("--") || nextLabel.contains("--") else { return }
+        didPublishFirstMenuBarTelemetryRefresh = true
+        menuBarStatusItemRevision &+= 1
     }
 
     private func recordHardwareSnapshot(
