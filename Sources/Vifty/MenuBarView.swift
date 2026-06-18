@@ -2,6 +2,8 @@ import SwiftUI
 import ViftyCore
 
 struct MenuBarView: View {
+    var openMainWindow: (() -> Void)?
+
     @EnvironmentObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @StateObject private var daemonInstaller = DaemonInstaller()
@@ -205,7 +207,11 @@ struct MenuBarView: View {
 
             HStack {
                 Button("Open Vifty") {
-                    openWindow(id: "main")
+                    if let openMainWindow {
+                        openMainWindow()
+                    } else {
+                        openWindow(id: "main")
+                    }
                 }
                 Button(model.autoRestoreActionTitle) {
                     model.restoreAuto()

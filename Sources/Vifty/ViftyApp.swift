@@ -19,66 +19,54 @@ struct ViftyApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView()
-                .environmentObject(model)
-        } label: {
-            MenuBarExtraLabel(model: model)
-                .id(model.menuBarStatusItemRevision)
-        }
-        .menuBarExtraStyle(.window)
-
         Window("Vifty", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 780, minHeight: 480)
+                .onAppear {
+                    appDelegate.openMainWindowHandler = { openWindow(id: "main") }
+                }
         }
         .windowResizability(.contentMinSize)
-    }
-}
-
-struct MenuBarExtraLabel: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        label
-            .onAppear {
-                refreshMenuBarStatusItemTelemetry()
-            }
-            .task(id: model.menuBarDisplayMode) {
-                await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
-            }
-    }
-
-    @ViewBuilder
-    private var label: some View {
-        if model.menuBarLabelUsesFanIcon {
-            Image(systemName: "fan")
-                .accessibilityLabel(model.menuBarLabelText)
-        } else {
-            Text(model.menuBarLabelText)
-                .monospacedDigit()
-                .id(model.menuBarStatusItemRevision)
-        }
-    }
-
-    private func refreshMenuBarStatusItemTelemetry() {
-        model.start()
-        Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
-        }
     }
 }
 
 @MainActor
 final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
+    var openMainWindowHandler: (() -> Void)? {
+        didSet {
+            statusItemController?.openMainWindow = { [weak self] in
+                self?.openMainWindow()
+            }
+        }
+    }
+
+    private var statusItemController: ViftyStatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let model else { return }
+        statusItemController = ViftyStatusItemController(
+            model: model,
+            openMainWindow: { [weak self] in
+                self?.openMainWindow()
+            }
+        )
+        statusItemController?.openMainWindow = { [weak self] in
+            self?.openMainWindow()
+        }
         model.start()
         Task { @MainActor in
             await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
         }
+    }
+
+    private func openMainWindow() {
+        if let openMainWindowHandler {
+            openMainWindowHandler()
+        } else if let window = NSApplication.shared.windows.first(where: { $0.title == "Vifty" }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }
