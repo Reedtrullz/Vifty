@@ -27,7 +27,7 @@ Options:
 
 By default this is a public-release trust gate: it verifies the cask SHA-256,
 bundle version, required executables, bundled schema validity, plist validity,
-bundled evidence collector scripts, Developer ID TeamID, daemon TeamID allowlist,
+bundled evidence collector scripts, guarded workload wrappers, Developer ID TeamID, daemon TeamID allowlist,
 stapled notarization ticket, and Gatekeeper assessment.
 USAGE
 }
@@ -344,6 +344,7 @@ fi
 MACOS_DIR="${APP_PATH}/Contents/MacOS"
 SCHEMA_DIR="${APP_PATH}/Contents/Resources/schemas"
 RESOURCES_DIR="${APP_PATH}/Contents/Resources"
+WRAPPERS_DIR="${RESOURCES_DIR}/viftyctl-wrappers"
 INFO_PLIST="${APP_PATH}/Contents/Info.plist"
 DAEMON_PLIST="${APP_PATH}/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
 
@@ -358,6 +359,31 @@ for support_script in collect-agent-cooling-evidence.sh collect-agent-run-smoke-
     fail_check "support-scripts" "missing executable support script ${RESOURCES_DIR}/${support_script}"
   fi
 done
+
+for workload_wrapper in \
+  guarded-run.sh \
+  swift-test.sh \
+  swift-release-build.sh \
+  xcode-build.sh \
+  xcode-test.sh \
+  make-build.sh \
+  make-test.sh \
+  make-verify.sh \
+  npm-build.sh \
+  npm-test.sh \
+  cargo-build.sh \
+  cargo-test.sh \
+  pytest.sh \
+  local-model.sh \
+  custom-workload.sh
+do
+  if [[ ! -x "${WRAPPERS_DIR}/${workload_wrapper}" ]]; then
+    fail_check "workload-wrappers" "missing executable workload wrapper ${WRAPPERS_DIR}/${workload_wrapper}"
+  fi
+done
+if [[ ! -s "${WRAPPERS_DIR}/README.md" ]]; then
+  fail_check "workload-wrappers" "missing bundled workload wrapper README ${WRAPPERS_DIR}/README.md"
+fi
 
 for schema_reference in \
   "agent-cooling-evidence-summary.schema.json|https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json" \
@@ -457,6 +483,7 @@ write_summary() {
   write_check 0 "app-bundle-present" "passed" "release-trust" "Zip contained Vifty.app at the root."
   write_check 0 "required-executables" "passed" "release-trust" "App bundle contained Vifty, ViftyHelper, ViftyDaemon, and viftyctl executables."
   write_check 0 "support-scripts" "passed" "release-trust" "App bundle contained executable read-only agent/helper and supervised agent-run smoke evidence collectors."
+  write_check 0 "workload-wrappers" "passed" "release-trust" "App bundle contained executable guarded viftyctl workload wrappers in Contents/Resources/viftyctl-wrappers."
   write_check 0 "schema-resources" "passed" "release-trust" "App bundle contained valid support, release, validation, and viftyctl JSON Schemas with expected IDs in Contents/Resources/schemas."
   write_check 0 "plist-lint" "passed" "release-trust" "Info.plist and bundled LaunchDaemon plist were valid."
   write_check 0 "bundle-version" "passed" "release-trust" "Bundle version matched the cask version."

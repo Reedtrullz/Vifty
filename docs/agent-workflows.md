@@ -16,6 +16,12 @@ Development bundle path:
 .build/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+Installed app bundles include the same wrappers under `Contents/Resources/viftyctl-wrappers/`. From an installed app, prefer:
+
+```sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
+```
+
 ## Contract
 
 Agents should treat `viftyctl` as a local safety contract:

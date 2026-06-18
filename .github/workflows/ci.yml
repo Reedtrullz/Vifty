@@ -60,6 +60,26 @@ jobs:
           test -x .build/Vifty.app/Contents/MacOS/viftyctl
           test -x .build/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh
           test -x .build/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh
+          for script in \
+            guarded-run.sh \
+            swift-test.sh \
+            swift-release-build.sh \
+            xcode-build.sh \
+            xcode-test.sh \
+            make-build.sh \
+            make-test.sh \
+            make-verify.sh \
+            npm-build.sh \
+            npm-test.sh \
+            cargo-build.sh \
+            cargo-test.sh \
+            pytest.sh \
+            local-model.sh \
+            custom-workload.sh
+          do
+            test -x ".build/Vifty.app/Contents/Resources/viftyctl-wrappers/${script}"
+          done
+          test -f .build/Vifty.app/Contents/Resources/viftyctl-wrappers/README.md
           test -f .build/Vifty.app/Contents/Info.plist
           test -f .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
           plutil -lint .build/Vifty.app/Contents/Info.plist
@@ -79,6 +99,10 @@ jobs:
           cmp .build/Vifty.app/Contents/MacOS/viftyctl "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/MacOS/viftyctl"
           cmp .build/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh"
           cmp .build/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh"
+          for script in guarded-run.sh swift-test.sh make-build.sh custom-workload.sh; do
+            cmp ".build/Vifty.app/Contents/Resources/viftyctl-wrappers/${script}" "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/viftyctl-wrappers/${script}"
+          done
+          cmp .build/Vifty.app/Contents/Resources/viftyctl-wrappers/README.md "${VIFTY_INSTALL_DIR}/Vifty.app/Contents/Resources/viftyctl-wrappers/README.md"
 
       - name: Archive app bundle
         run: ditto -c -k --keepParent .build/Vifty.app "${RUNNER_TEMP}/Vifty.app.zip"

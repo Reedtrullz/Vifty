@@ -45,6 +45,7 @@ APP_DIR := .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
 MACOS := $(CONTENTS)/MacOS
 SCHEMAS := $(CONTENTS)/Resources/schemas
+WRAPPERS := $(CONTENTS)/Resources/viftyctl-wrappers
 APP_ICON := Resources/ViftyIcon.icns
 DAEMON_PLIST := $(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
 
@@ -56,6 +57,7 @@ app: ## Build the release app bundle
 	rm -rf "$(APP_DIR)"
 	mkdir -p "$(MACOS)"
 	mkdir -p "$(SCHEMAS)"
+	mkdir -p "$(WRAPPERS)"
 	mkdir -p "$(CONTENTS)/Library/LaunchDaemons"
 	cp ".build/$(CONFIGURATION)/Vifty" "$(MACOS)/Vifty"
 	cp ".build/$(CONFIGURATION)/ViftyHelper" "$(MACOS)/ViftyHelper"
@@ -64,6 +66,8 @@ app: ## Build the release app bundle
 	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
 	install -m 755 scripts/collect-agent-cooling-evidence.sh "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
 	install -m 755 scripts/collect-agent-run-smoke-evidence.sh "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
+	install -m 755 examples/viftyctl/*.sh "$(WRAPPERS)/"
+	install -m 644 examples/viftyctl/README.md "$(WRAPPERS)/README.md"
 	cp "$(APP_ICON)" "$(CONTENTS)/Resources/ViftyIcon.icns"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
@@ -130,6 +134,11 @@ verify: ## Run local trust gates without installing
 	plutil -lint "$(DAEMON_PLIST)"
 	test -x "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
+	test -x "$(WRAPPERS)/guarded-run.sh"
+	test -x "$(WRAPPERS)/swift-test.sh"
+	test -x "$(WRAPPERS)/make-build.sh"
+	test -x "$(WRAPPERS)/custom-workload.sh"
+	test -f "$(WRAPPERS)/README.md"
 	codesign --verify --deep --strict "$(APP_DIR)"
 	codesign -dvvv "$(MACOS)/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
 	codesign -dvvv "$(MACOS)/ViftyDaemon" 2>&1 | grep 'Identifier=tech.reidar.vifty.daemon'

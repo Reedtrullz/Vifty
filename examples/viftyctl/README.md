@@ -21,6 +21,13 @@ Agents should also read `metadataLimits` from capabilities before generating
 custom direct-prepare reasons or idempotency keys; legacy payloads without those
 limits should be treated as missing an agent-safety guarantee.
 
+The app bundle installs this directory to `Contents/Resources/viftyctl-wrappers/`.
+Installed users can run the same audited shortcuts directly, for example:
+
+```sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-test.sh
+```
+
 For exceptional supervised multi-step workflows that use direct `prepare` and
 `restore-auto` instead of these wrappers, inspect `directControlLifecycle` first.
 It should advertise that prepare uses idempotency keys, `restore-auto` rejects

@@ -9,7 +9,7 @@ This guide is for supported Apple Silicon MacBook Pro hardware only. Unsupported
 Agents and scripts may:
 
 - run `viftyctl diagnose --json`, `status --json`, `capabilities --json`, and `audit --json`;
-- run workloads through `examples/viftyctl/guarded-run.sh` or the convenience wrappers in `examples/viftyctl/`;
+- run workloads through `/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh`, `examples/viftyctl/guarded-run.sh`, or their convenience wrappers;
 - use direct `prepare` / `restore-auto` only when a human is supervising a lifecycle that cannot be represented by `viftyctl run`.
 
 Agents and scripts must not:
@@ -28,6 +28,13 @@ Prefer the guarded wrapper. It checks that the child command is a regular execut
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
+```
+
+Installed app bundles include the same wrapper directory, so installed users can
+prefer:
+
+```sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
 Use the installed CLI explicitly when running outside the Vifty repository:
@@ -67,6 +74,9 @@ examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh
 examples/viftyctl/local-model.sh -- ./run-local-model.sh
 ```
+
+The installed equivalents live under
+`/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/`.
 
 ## Readiness Decisions
 

@@ -1,10 +1,14 @@
 # Agent Integration Snippets
 
-Use these snippets when a local coding agent can run shell commands on a supported Mac. They all point at the same safe path: read-only capabilities and readiness first, then `examples/viftyctl/guarded-run.sh`, which delegates to `viftyctl run --json` only when Vifty says cooling is safe to request.
+Use these snippets when a local coding agent can run shell commands on a supported Mac. They all point at the same safe path: read-only capabilities and readiness first, then `examples/viftyctl/guarded-run.sh` or the installed app's bundled wrapper, which delegates to `viftyctl run --json` only when Vifty says cooling is safe to request.
 
 For the short operational runbook and failure-handling table, see [safe-agent-cooling.md](safe-agent-cooling.md).
 
 Do not give agents permission to call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, or `viftyctl prepare` unless a human is supervising a workflow that cannot be represented by `viftyctl run`.
+
+If the Vifty app is installed, prefer the bundled wrappers at
+`/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/`. Source
+checkouts can use the same scripts from `examples/viftyctl/`.
 
 ## Shared Rule
 
@@ -24,10 +28,31 @@ If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathRead
 Prefer the guarded wrapper:
 
 ```sh
-examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
-For common local workloads, the shortcut scripts in `examples/viftyctl/` are equivalent safe wrappers around `guarded-run.sh`:
+For common local workloads, the shortcut scripts in the installed
+`viftyctl-wrappers/` directory or source-tree `examples/viftyctl/` directory are
+equivalent safe wrappers around `guarded-run.sh`:
+
+```sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-release-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-verify.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/npm-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/npm-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/cargo-build.sh --release
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/cargo-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/pytest.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/local-model.sh -- ./run-local-model.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/custom-workload.sh 10m 65 "project smoke test" -- ./scripts/smoke-test.sh
+```
+
+In a source checkout, the equivalent wrapper paths are:
 
 ```sh
 examples/viftyctl/swift-test.sh
@@ -62,14 +87,16 @@ The guarded wrapper rejects malformed duration/RPM/reason arguments before conta
 For a repository-level `AGENTS.md`, add the shared rule and then use workload-specific commands:
 
 ```sh
-examples/viftyctl/swift-test.sh
-examples/viftyctl/swift-release-build.sh
-examples/viftyctl/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
-examples/viftyctl/make-build.sh
-examples/viftyctl/make-verify.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-release-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/xcode-build.sh -scheme MyApp -destination 'platform=macOS'
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-verify.sh
 ```
 
-If the repository is not Vifty itself, copy `examples/viftyctl/guarded-run.sh` into that project or call it from a known path. Set `VIFTYCTL` when testing a development bundle:
+If the repository is not Vifty itself, call the installed wrapper path above,
+copy `examples/viftyctl/guarded-run.sh` into that project, or call the source
+wrapper from a known checkout. Set `VIFTYCTL` when testing a development bundle:
 
 ```sh
 VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \

@@ -138,6 +138,19 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("Contents/Resources/collect-agent-cooling-evidence.sh"))
     }
 
+    func testVerifierRejectsMissingWorkloadWrappers() throws {
+        let harness = try ReleaseArtifactHarness(includeWorkloadWrappers: false)
+
+        let result = try harness.runVerifier([
+            "--skip-signature-checks",
+            "--skip-notarization-checks"
+        ])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("missing executable workload wrapper"))
+        XCTAssertTrue(result.stderr.contains("Contents/Resources/viftyctl-wrappers/guarded-run.sh"))
+    }
+
     func testVerifierRejectsInvalidBundledSchemaJSON() throws {
         let harness = try ReleaseArtifactHarness(
             schemaResourceOverrides: [
@@ -305,6 +318,7 @@ private final class ReleaseArtifactHarness {
         caskSHA: String? = nil,
         includeSchemaResources: Bool = true,
         includeSupportScripts: Bool = true,
+        includeWorkloadWrappers: Bool = true,
         schemaResourceOverrides: [String: String] = [:]
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -323,6 +337,7 @@ private final class ReleaseArtifactHarness {
             version: bundleVersion,
             includeSchemaResources: includeSchemaResources,
             includeSupportScripts: includeSupportScripts,
+            includeWorkloadWrappers: includeWorkloadWrappers,
             schemaResourceOverrides: schemaResourceOverrides
         )
         try Self.run(
@@ -379,6 +394,7 @@ private final class ReleaseArtifactHarness {
         version: String,
         includeSchemaResources: Bool,
         includeSupportScripts: Bool,
+        includeWorkloadWrappers: Bool,
         schemaResourceOverrides: [String: String]
     ) throws {
         let macOSURL = appURL
@@ -391,6 +407,10 @@ private final class ReleaseArtifactHarness {
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Resources", isDirectory: true)
             .appendingPathComponent("schemas", isDirectory: true)
+        let wrappersURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("viftyctl-wrappers", isDirectory: true)
         let launchDaemonsURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Library", isDirectory: true)
@@ -418,7 +438,36 @@ private final class ReleaseArtifactHarness {
                 try writeExecutable(resourcesURL.appendingPathComponent(script))
             }
         }
+        if includeWorkloadWrappers {
+            try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
+            for script in Self.workloadWrapperScripts {
+                try writeExecutable(wrappersURL.appendingPathComponent(script))
+            }
+            try "Bundled workload wrappers\n".write(
+                to: wrappersURL.appendingPathComponent("README.md"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
     }
+
+    private static let workloadWrapperScripts = [
+        "guarded-run.sh",
+        "swift-test.sh",
+        "swift-release-build.sh",
+        "xcode-build.sh",
+        "xcode-test.sh",
+        "make-build.sh",
+        "make-test.sh",
+        "make-verify.sh",
+        "npm-build.sh",
+        "npm-test.sh",
+        "cargo-build.sh",
+        "cargo-test.sh",
+        "pytest.sh",
+        "local-model.sh",
+        "custom-workload.sh"
+    ]
 
     private static func writeSchemaResources(at schemasURL: URL, overrides: [String: String]) throws {
         let schemaIDs = [
