@@ -49,7 +49,7 @@ Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a
 Leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset by default. Only set it to `1`
 after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
-read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
+read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, hardware evidence collection, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
 
 The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, and command-error schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 ````
@@ -125,8 +125,8 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
 - Diagnose `recommendedRecoveryAction: "repairHelper"`: ask the user to open Vifty and use Repair/Reinstall Helper or approve Login Items.
 - Diagnose `recommendedRecoveryAction: "backOffWorkload"`: pause or reduce the workload; do not fight critical system thermals.
-- Diagnose `recommendedRecoveryAction: "inspectPolicy"`: inspect local policy/status before retrying.
-- Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"`: collect read-only validation evidence before considering hardware support.
+- Diagnose `recommendedRecoveryAction: "inspectPolicy"`: inspect local policy/status before retrying; do not use the guarded uncooled fallback.
+- Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"`: collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback.
 - Command-error `recommendedRecoveryAction: "repairHelper"`: recover daemon/transport failures through the Vifty helper repair path; do not attempt direct SMC writes.
 - `recommendedRecoveryAction: "fixChildCommand"`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
 - `recommendedRecoveryAction: "waitBeforeRetry"`: wait for `retryAfterSeconds`; do not busy-loop retries.
@@ -134,6 +134,6 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
 - `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry, and do not combine it with uncooled fallback.
-- Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block; the wrapper still refuses helper-repair, restore-first, backoff, daemon-control-unavailable states, and force-retry combinations.
+- Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block; the wrapper still refuses helper-repair, restore-first, backoff, policy-inspection, hardware-evidence, daemon-control-unavailable states, and force-retry combinations.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

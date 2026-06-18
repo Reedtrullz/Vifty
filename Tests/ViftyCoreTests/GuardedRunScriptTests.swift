@@ -587,8 +587,10 @@ final class GuardedRunScriptTests: XCTestCase {
 
     func testGuardedRunCanRunChildWithoutViftyCoolingWhenUserAllowsUncooledFallback() throws {
         let harness = try ScriptHarness(
-            state: "blocked",
-            recommendedRecoveryAction: "collectHardwareEvidence"
+            state: "degraded",
+            recommendedAction: "doNotRequestCooling",
+            recommendedRecoveryAction: "none",
+            safeToRequestCooling: false
         )
         let markerURL = harness.rootURL.appendingPathComponent("uncooled-child-ran.txt")
 
@@ -601,9 +603,53 @@ final class GuardedRunScriptTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stderr.contains("readiness is blocked"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("Vifty recommends not requesting cooling"), result.stderr)
         XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling"), result.stderr)
         XCTAssertEqual(try String(contentsOf: markerURL, encoding: .utf8), "child-ran")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenViftyRecommendsHardwareEvidence() throws {
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "collectHardwareEvidence"
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-hardware-evidence.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("recovery action is collectHardwareEvidence"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenViftyRecommendsPolicyInspection() throws {
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "inspectPolicy"
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-policy-inspection.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("recovery action is inspectPolicy"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 

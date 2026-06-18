@@ -45,9 +45,9 @@ structured readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The
 wrapper still performs read-only capabilities/readiness checks, prints the
 diagnose JSON, refuses to request cooling, and only then execs the child directly.
 It still refuses uncooled execution when Vifty recommends `repairHelper`,
-`backOffWorkload`, or `restoreAutoBeforeRetry`, or when
-`daemonControlPathReady` is false. The uncooled fallback is mutually exclusive
-with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
+`backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, or
+`collectHardwareEvidence`, or when `daemonControlPathReady` is false. The
+uncooled fallback is mutually exclusive with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
 
 For common workloads, use the audited shortcuts:
 
@@ -86,8 +86,8 @@ Decision table:
 | Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes or uncooled guarded fallback. |
 | Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto or wait for the active lease to clear before retrying. |
 | Diagnose `recommendedRecoveryAction: "backOffWorkload"` | Pause or reduce the workload; do not fight critical system thermals. |
-| Diagnose `recommendedRecoveryAction: "inspectPolicy"` | Inspect policy/status before retrying; do not assume cooling is available. |
-| Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"` | Collect read-only validation evidence before considering hardware support. |
+| Diagnose `recommendedRecoveryAction: "inspectPolicy"` | Inspect policy/status before retrying; do not assume cooling is available and do not use the guarded uncooled fallback. |
+| Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"` | Collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback. |
 | Command-error `recommendedRecoveryAction: "repairHelper"` | Recover daemon/transport failures through the Vifty helper repair path. Do not attempt direct SMC writes. |
 | `recommendedRecoveryAction: "waitBeforeRetry"` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
 | `recommendedRecoveryAction: "fixChildCommand"` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |

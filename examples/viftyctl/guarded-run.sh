@@ -134,7 +134,7 @@ finish_without_cooling_request() {
 
   if [ "$allow_uncooled" -eq 1 ]; then
     case "$recommended_recovery_action" in
-      repairHelper|backOffWorkload|restoreAutoBeforeRetry)
+      repairHelper|backOffWorkload|restoreAutoBeforeRetry|inspectPolicy|collectHardwareEvidence)
         echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling." >&2
         exit 75
         ;;

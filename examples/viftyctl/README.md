@@ -48,8 +48,9 @@ after seeing the structured readiness block, set
 capabilities and diagnose checks, still refuses to request cooling, prints the
 diagnose JSON, and then execs the child directly. It will not use this fallback
 when Vifty recommends `repairHelper`, `backOffWorkload`, or
-`restoreAutoBeforeRetry`, when `daemonControlPathReady` is false, or when
-`VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
+`restoreAutoBeforeRetry`, `inspectPolicy`, or `collectHardwareEvidence`, when
+`daemonControlPathReady` is false, or when `VIFTY_GUARDED_RUN_FORCE_RETRY=1`
+is also set.
 
 ## Scripts
 
