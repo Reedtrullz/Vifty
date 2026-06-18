@@ -492,6 +492,17 @@ final class AppModel: ObservableObject {
         applyModeSelection()
     }
 
+    @discardableResult
+    func selectCurveProfile(id profileID: CurveProfile.ID?) -> Bool {
+        guard let profileID,
+              let profile = savedProfiles.first(where: { $0.id == profileID }) else {
+            return false
+        }
+        selectedMode = .curve
+        loadProfile(profile)
+        return true
+    }
+
     func loadDeveloperPreset(_ preset: DeveloperFanPreset) {
         selectedMode = .curve
         curveStartTemp = preset.startTemperatureCelsius

@@ -7,6 +7,7 @@ struct MenuBarView: View {
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
+    @State private var selectedMenuCurveProfileID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -154,6 +155,20 @@ struct MenuBarView: View {
                     Text(HelperDiagnosticsSupport.copiedMessage)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            if !model.savedProfiles.isEmpty {
+                Picker("Curve profile", selection: $selectedMenuCurveProfileID) {
+                    Text("Choose profile").tag(Optional<UUID>.none)
+                    ForEach(model.savedProfiles) { profile in
+                        Text(profile.name).tag(Optional(profile.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .onChange(of: selectedMenuCurveProfileID) { _, newID in
+                    _ = model.selectCurveProfile(id: newID)
                 }
             }
 

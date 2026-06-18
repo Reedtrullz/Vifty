@@ -184,6 +184,19 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(appModel.contains("preferences.set("))
     }
 
+    func testMenuBarCurveProfileSelectorUsesSavedProfiles() throws {
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+
+        XCTAssertTrue(menuBarView.contains("@State private var selectedMenuCurveProfileID: UUID?"))
+        XCTAssertTrue(menuBarView.contains("if !model.savedProfiles.isEmpty"))
+        XCTAssertTrue(menuBarView.contains("Picker(\"Curve profile\", selection: $selectedMenuCurveProfileID)"))
+        XCTAssertTrue(menuBarView.contains("ForEach(model.savedProfiles)"))
+        XCTAssertTrue(menuBarView.contains("_ = model.selectCurveProfile(id: newID)"))
+        XCTAssertTrue(appModel.contains("func selectCurveProfile(id profileID: CurveProfile.ID?) -> Bool"))
+        XCTAssertTrue(appModel.contains("selectedMode = .curve\n        loadProfile(profile)"))
+    }
+
     func testMenuBarHighTemperatureAttentionIsWired() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let appModel = try read("Sources/Vifty/AppModel.swift")

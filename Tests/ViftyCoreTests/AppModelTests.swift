@@ -102,6 +102,76 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.curveDefaultsSynced)
     }
 
+    func testSelectCurveProfileSwitchesToCurveAndLoadsProfile() {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1400, maximumRPM: 6000, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1500, maximumRPM: 6200, controllable: true)
+            ],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 64, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: snapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        let profileID = UUID()
+        model.snapshot = snapshot
+        model.daemonResponding = true
+        model.daemonReachable = true
+        model.selectedMode = .auto
+        model.savedProfiles = [
+            CurveProfile(
+                id: profileID,
+                name: "Build",
+                sensorID: "Tp09",
+                startTemp: 54,
+                startRPM: 2600,
+                midTemp: 70,
+                midRPM: 3800,
+                maxTemp: 86,
+                maxRPM: 5200,
+                fanOverrides: [
+                    FanCurveOverride(fanID: 1, startRPM: 2800, midRPM: 4100, maxRPM: 5600)
+                ]
+            )
+        ]
+
+        XCTAssertTrue(model.selectCurveProfile(id: profileID))
+
+        XCTAssertEqual(model.selectedMode, .curve)
+        XCTAssertEqual(model.selectedSensorID, "Tp09")
+        XCTAssertEqual(model.curveStartTemp, 54)
+        XCTAssertEqual(model.curveStartRPM, 2600)
+        XCTAssertEqual(model.curveMidTemp, 70)
+        XCTAssertEqual(model.curveMidRPM, 3800)
+        XCTAssertEqual(model.curveMaxTemp, 86)
+        XCTAssertEqual(model.curveMaxRPM, 5200)
+        XCTAssertTrue(model.usePerFanOverrides)
+        XCTAssertEqual(model.fanOverrides.map(\.fanID), [0, 1])
+        XCTAssertEqual(model.fanOverride(for: 1)?.maxRPM, 5600)
+    }
+
+    func testSelectCurveProfileIgnoresMissingProfile() {
+        let model = AppModel()
+        model.savedProfiles = []
+        model.selectedMode = .auto
+        model.curveStartTemp = 55
+
+        XCTAssertFalse(model.selectCurveProfile(id: UUID()))
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.curveStartTemp, 55)
+    }
+
     func testDeveloperPresetRPMCapsStayWithinDefaultAgentPolicyCeiling() {
         let policy = AgentControlPolicy()
 
