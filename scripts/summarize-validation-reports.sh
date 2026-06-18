@@ -280,6 +280,11 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       valid = false
     end
 
+    unless result["manualControlActive"].nil? || [true, false].include?(result["manualControlActive"])
+      failures << "#{path} manualControlActive must be true, false, or null"
+      valid = false
+    end
+
     unless result["warnings"].is_a?(Array)
       failures << "#{path} warnings must be an array"
       valid = false
@@ -532,6 +537,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "recommendedRecoveryAction" => result["recommendedRecoveryAction"].to_s,
       "safeToRequestCooling" => boolean_string(result["safeToRequestCooling"]),
       "daemonControlPathReady" => boolean_string(result["daemonControlPathReady"]),
+      "manualControlActive" => boolean_string(result["manualControlActive"]),
       "manualSmokeRequired" => boolean_string(manual_smoke_required),
       "warningCount" => warnings.count.to_s,
       "failureCount" => failures_list.count.to_s
@@ -554,6 +560,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
   counts_by_recovery_action = Hash.new(0)
   counts_by_safe_to_request = Hash.new(0)
   counts_by_daemon_control_path = Hash.new(0)
+  counts_by_manual_control_active = Hash.new(0)
   rows.each do |row|
     counts_by_mode[row["mode"]] += 1
     counts_by_claim[row["claim"]] += 1
@@ -567,6 +574,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     counts_by_recovery_action[row["recommendedRecoveryAction"]] += 1 unless row["recommendedRecoveryAction"].empty?
     counts_by_safe_to_request[row["safeToRequestCooling"]] += 1 unless row["safeToRequestCooling"].empty?
     counts_by_daemon_control_path[row["daemonControlPathReady"]] += 1 unless row["daemonControlPathReady"].empty?
+    counts_by_manual_control_active[row["manualControlActive"]] += 1 unless row["manualControlActive"].empty?
   end
 
   summary = {
@@ -592,6 +600,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     "countsByRecommendedRecoveryAction" => counts_by_recovery_action.sort.to_h,
     "countsBySafeToRequestCooling" => counts_by_safe_to_request.sort.to_h,
     "countsByDaemonControlPathReady" => counts_by_daemon_control_path.sort.to_h,
+    "countsByManualControlActive" => counts_by_manual_control_active.sort.to_h,
     "reports" => rows
   }
 
@@ -621,6 +630,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     recommendedRecoveryAction
     safeToRequestCooling
     daemonControlPathReady
+    manualControlActive
     manualSmokeRequired
     warningCount
     failureCount

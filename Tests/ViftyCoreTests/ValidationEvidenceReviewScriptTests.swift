@@ -26,6 +26,15 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("supported hardware reports must have daemonControlPathReady=true"))
     }
 
+    func testReviewRejectsSupportedHardwareWhenManualControlIsActive() throws {
+        let harness = try ValidationEvidenceReviewHarness(manualControlActive: true)
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("supported hardware reports must have manualControlActive=false"))
+    }
+
     func testReviewRejectsDiagnoseWithoutRecommendedRecoveryAction() throws {
         let harness = try ValidationEvidenceReviewHarness(includeRecommendedRecoveryAction: false)
 
@@ -454,6 +463,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["recommendedRecoveryAction"] as? String, "none")
         XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(summary["manualControlActive"] as? Bool, false)
         XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(summary["isAppleSilicon"] as? Bool, true)
         XCTAssertEqual(summary["isMacBookPro"] as? Bool, true)
@@ -1024,6 +1034,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaResourcesText: String? = nil,
         capabilitiesContractText: String? = nil,
         daemonControlPathReady: Bool? = nil,
+        manualControlActive: Bool = false,
         includeRecommendedRecoveryAction: Bool = true,
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
@@ -1105,6 +1116,7 @@ private final class ValidationEvidenceReviewHarness {
         try writeDiagnose(
             diagnose,
             daemonControlPathReady: daemonControlPathReady ?? diagnose.daemonControlPathReady,
+            manualControlActive: manualControlActive,
             includeRecommendedRecoveryAction: includeRecommendedRecoveryAction
         )
         try writeJSON(
@@ -1647,6 +1659,7 @@ private final class ValidationEvidenceReviewHarness {
     private func writeDiagnose(
         _ fixture: ValidationEvidenceDiagnoseFixture,
         daemonControlPathReady: Bool,
+        manualControlActive: Bool,
         includeRecommendedRecoveryAction: Bool
     ) throws {
         let supportedPasses = fixture.supportedHardwareCheckPasses
@@ -1657,7 +1670,7 @@ private final class ValidationEvidenceReviewHarness {
             "recommendedAgentAction": fixture.recommendedAgentAction,
             "safeToRequestCooling": fixture.safeToRequestCooling,
             "daemonControlPathReady": daemonControlPathReady,
-            "manualControlActive": false,
+            "manualControlActive": manualControlActive,
             "modelIdentifier": supportedPasses ? "MacBookPro18,3" : "Mac14,2",
             "isAppleSilicon": fixture.isAppleSilicon,
             "isMacBookPro": fixture.isMacBookPro,

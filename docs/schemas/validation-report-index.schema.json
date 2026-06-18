@@ -27,6 +27,7 @@
     "countsByRecommendedRecoveryAction",
     "countsBySafeToRequestCooling",
     "countsByDaemonControlPathReady",
+    "countsByManualControlActive",
     "reports"
   ],
   "properties": {
@@ -101,6 +102,9 @@
       "$ref": "#/$defs/countMap"
     },
     "countsByDaemonControlPathReady": {
+      "$ref": "#/$defs/countMap"
+    },
+    "countsByManualControlActive": {
       "$ref": "#/$defs/countMap"
     },
     "reports": {
@@ -240,6 +244,7 @@
         "recommendedRecoveryAction",
         "safeToRequestCooling",
         "daemonControlPathReady",
+        "manualControlActive",
         "manualSmokeRequired",
         "warningCount",
         "failureCount"
@@ -323,6 +328,9 @@
           "$ref": "#/$defs/booleanString"
         },
         "daemonControlPathReady": {
+          "$ref": "#/$defs/booleanString"
+        },
+        "manualControlActive": {
           "$ref": "#/$defs/booleanString"
         },
         "manualSmokeRequired": {

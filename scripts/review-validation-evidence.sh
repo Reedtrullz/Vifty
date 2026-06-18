@@ -1120,6 +1120,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "recommendedRecoveryAction" => diagnose["recommendedRecoveryAction"],
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
       "daemonControlPathReady" => diagnose["daemonControlPathReady"],
+      "manualControlActive" => diagnose.key?("manualControlActive") ? diagnose["manualControlActive"] : nil,
       "modelIdentifier" => diagnose["modelIdentifier"],
       "isAppleSilicon" => diagnose["isAppleSilicon"],
       "isMacBookPro" => diagnose["isMacBookPro"],
@@ -1300,6 +1301,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     unless diagnose["daemonControlPathReady"] == true
       failures << "supported hardware reports must have daemonControlPathReady=true"
+    end
+    unless diagnose["manualControlActive"] == false
+      failures << "supported hardware reports must have manualControlActive=false"
     end
     unless %w[requestCooling requestCoolingWithCaution].include?(diagnose["recommendedAgentAction"].to_s)
       failures << "supported hardware reports must recommend requestCooling or requestCoolingWithCaution"

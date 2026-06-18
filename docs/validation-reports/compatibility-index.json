@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaID": "https://vifty.local/schemas/validation-report-index.schema.json",
-  "generatedAtUTC": "2026-06-18T08:47:36Z",
+  "generatedAtUTC": "2026-06-18T13:15:19Z",
   "readOnly": true,
   "coolingCommandsRun": false,
   "totalReports": 4,
@@ -41,6 +41,8 @@
   "countsByDaemonControlPathReady": {
     "true": 4
   },
+  "countsByManualControlActive": {
+  },
   "reports": [
     {
       "source": "docs/validation-reports/2026-06-14-macbookpro18-local-readonly/review-result.json",
@@ -68,6 +70,7 @@
       "recommendedRecoveryAction": "none",
       "safeToRequestCooling": "true",
       "daemonControlPathReady": "true",
+      "manualControlActive": "",
       "manualSmokeRequired": "true",
       "warningCount": "1",
       "failureCount": "0"
@@ -98,6 +101,7 @@
       "recommendedRecoveryAction": "none",
       "safeToRequestCooling": "true",
       "daemonControlPathReady": "true",
+      "manualControlActive": "",
       "manualSmokeRequired": "true",
       "warningCount": "1",
       "failureCount": "0"
@@ -128,6 +132,7 @@
       "recommendedRecoveryAction": "none",
       "safeToRequestCooling": "true",
       "daemonControlPathReady": "true",
+      "manualControlActive": "",
       "manualSmokeRequired": "true",
       "warningCount": "2",
       "failureCount": "0"
@@ -158,6 +163,7 @@
       "recommendedRecoveryAction": "none",
       "safeToRequestCooling": "true",
       "daemonControlPathReady": "true",
+      "manualControlActive": "",
       "manualSmokeRequired": "true",
       "warningCount": "1",
       "failureCount": "0"

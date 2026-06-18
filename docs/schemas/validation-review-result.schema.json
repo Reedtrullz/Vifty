@@ -28,6 +28,7 @@
     "recommendedRecoveryAction",
     "safeToRequestCooling",
     "daemonControlPathReady",
+    "manualControlActive",
     "modelIdentifier",
     "isAppleSilicon",
     "isMacBookPro",
@@ -113,6 +114,10 @@
     },
     "daemonControlPathReady": {
       "$ref": "#/$defs/nullableBoolean"
+    },
+    "manualControlActive": {
+      "$ref": "#/$defs/nullableBoolean",
+      "description": "Whether viftyctl diagnose observed an active local/manual control marker at review time. Supported-hardware evidence should be false; null is reserved for legacy or failed summaries that did not capture the field."
     },
     "modelIdentifier": {
       "$ref": "#/$defs/nullableString"

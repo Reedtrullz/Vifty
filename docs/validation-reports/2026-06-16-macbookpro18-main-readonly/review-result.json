@@ -21,6 +21,7 @@
   "recommendedRecoveryAction": "none",
   "safeToRequestCooling": true,
   "daemonControlPathReady": true,
+  "manualControlActive": null,
   "modelIdentifier": "MacBookPro18,1",
   "isAppleSilicon": true,
   "isMacBookPro": true,

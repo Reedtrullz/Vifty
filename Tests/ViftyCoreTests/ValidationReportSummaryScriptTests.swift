@@ -94,6 +94,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertFalse(sources.contains { $0.contains(FileManager.default.temporaryDirectory.path) })
         XCTAssertTrue(reports.allSatisfy { ($0["reviewGeneratedAtUTC"] as? String) == "2026-06-11T00:00:00Z" })
         XCTAssertTrue(reports.allSatisfy { ($0["daemonControlPathReady"] as? String) == "true" })
+        XCTAssertTrue(reports.allSatisfy { ($0["manualControlActive"] as? String) == "false" })
         XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
         XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "MacBookPro18,3" && ($0["modelFamily"] as? String) == "MacBookPro18" })
@@ -124,6 +125,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(countsBySafeToRequestCooling["false"], 1)
         let countsByDaemonControlPathReady = try XCTUnwrap(json["countsByDaemonControlPathReady"] as? [String: Int])
         XCTAssertEqual(countsByDaemonControlPathReady["true"], 5)
+        let countsByManualControlActive = try XCTUnwrap(json["countsByManualControlActive"] as? [String: Int])
+        XCTAssertEqual(countsByManualControlActive["false"], 5)
 
         let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
         XCTAssertTrue(markdown.contains("# Vifty Compatibility Matrix Draft"))
@@ -258,6 +261,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "countsByRecommendedRecoveryAction",
             "countsBySafeToRequestCooling",
             "countsByDaemonControlPathReady",
+            "countsByManualControlActive",
             "reports"
         ] {
             XCTAssertTrue(required.contains(field), "schema should require \(field)")
@@ -275,6 +279,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reportRequired.contains("reviewGeneratedAtUTC"))
         XCTAssertTrue(reportRequired.contains("modelFamily"))
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
+        XCTAssertTrue(reportRequired.contains("manualControlActive"))
         XCTAssertTrue(reportRequired.contains("recommendedAgentAction"))
         XCTAssertTrue(reportRequired.contains("recommendedRecoveryAction"))
         let agentAction = try XCTUnwrap(defs["readinessAgentAction"] as? [String: Any])
@@ -336,6 +341,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "recommendedAgentAction",
             "recommendedRecoveryAction",
             "daemonControlPathReady",
+            "manualControlActive",
             "manualSmokeTestResult",
             "agentRunSmokeResult",
             "failures",
@@ -726,6 +732,7 @@ private final class ValidationReportSummaryHarness {
         safeToRequestCooling: Bool,
         installSource: String = "source-build-tag",
         daemonControlPathReady: Bool = true,
+        manualControlActive: Bool = false,
         includeDaemonControlPathReady: Bool = true,
         includeRecommendedAgentAction: Bool = true,
         includeRecommendedRecoveryAction: Bool = true,
@@ -789,6 +796,7 @@ private final class ValidationReportSummaryHarness {
         if includeDaemonControlPathReady {
             json["daemonControlPathReady"] = daemonControlPathReady
         }
+        json["manualControlActive"] = manualControlActive
         if includeRecommendedAgentAction {
             json["recommendedAgentAction"] = mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling"
         }

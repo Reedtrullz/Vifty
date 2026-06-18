@@ -17,7 +17,7 @@ The work should land in small, reviewable slices. Keep source-first and unsigned
 - The available real hardware for immediate validation is the user's M1 Pro MacBook Pro.
 - Other M1 Max, M2, M3, M4, and newer MacBook Pro rows must remain "needs report" until contributor evidence exists.
 - Development-build evidence is useful for product confidence, but public release compatibility evidence should clearly record whether the installed app came from `v1.1.1` source, `Vifty-v1.1.1-unsigned-dev.zip`, a local ad-hoc build, or a future trusted binary.
-- No fan-write smoke test should run until read-only readiness says the machine is `ready` or safely `degraded`, with `daemonControlPathReady=true`.
+- No fan-write smoke test should run until read-only readiness says the machine is `ready` or safely `degraded`, with `daemonControlPathReady=true` and `manualControlActive=false`.
 - No updater, Homebrew, Developer ID, notarization, Gatekeeper, or trusted-binary claim is allowed for source-first or unsigned-dev artifacts.
 - Telemetry stays local and in-memory unless a separate privacy plan approves persistence.
 
@@ -104,6 +104,7 @@ Run the manual fan-write smoke only when:
 
 - `viftyctl diagnose --json` is `ready` or safely `degraded`;
 - `daemonControlPathReady` is true;
+- `manualControlActive` is false;
 - fans, sensors, fan IDs, and RPM ranges are valid;
 - thermal pressure is not critical;
 - helper state is healthy or repair guidance has been completed.
