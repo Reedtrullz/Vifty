@@ -21,12 +21,6 @@ struct ViftyApp: App {
                 .environmentObject(model)
         } label: {
             MenuBarExtraLabel(model: model)
-                .onAppear {
-                    model.start()
-                }
-                .task(id: model.menuBarDisplayMode) {
-                    await model.primeMenuBarStatusItemTelemetry()
-                }
         }
         .menuBarExtraStyle(.window)
 
@@ -43,12 +37,30 @@ struct MenuBarExtraLabel: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
+        label
+            .onAppear {
+                refreshMenuBarStatusItemTelemetry()
+            }
+            .task(id: model.menuBarDisplayMode) {
+                await model.primeMenuBarStatusItemTelemetry()
+            }
+    }
+
+    @ViewBuilder
+    private var label: some View {
         if model.menuBarLabelUsesFanIcon {
             Image(systemName: "fan")
                 .accessibilityLabel(model.menuBarLabelText)
         } else {
             Text(model.menuBarLabelText)
                 .monospacedDigit()
+        }
+    }
+
+    private func refreshMenuBarStatusItemTelemetry() {
+        model.start()
+        Task { @MainActor in
+            await model.primeMenuBarStatusItemTelemetry()
         }
     }
 }

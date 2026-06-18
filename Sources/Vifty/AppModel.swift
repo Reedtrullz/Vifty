@@ -231,6 +231,7 @@ final class AppModel: ObservableObject {
     private let profileStore: CurveProfileStore
     private let preferencesStore: AppPreferencesStore
     private var pollingTask: Task<Void, Never>?
+    private var activePollTask: Task<Void, Never>?
     private var startupModeApplied = false
     private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
     private var previousHelperNeedsAttention = false
@@ -329,6 +330,20 @@ final class AppModel: ObservableObject {
     }
 
     func pollOnce() async {
+        if let activePollTask {
+            await activePollTask.value
+            return
+        }
+
+        let task = Task { @MainActor in
+            await performPollOnce()
+        }
+        activePollTask = task
+        await task.value
+        activePollTask = nil
+    }
+
+    private func performPollOnce() async {
         defer { hasCompletedHardwarePoll = true }
         let currentPower = powerReader()
         let currentThermalPressure = thermalReader()

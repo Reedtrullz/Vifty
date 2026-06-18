@@ -1436,6 +1436,40 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testOverlappingStartupMenuBarPrimesShareOneHardwarePoll() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 67.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        await hardware.setSnapshotDelayNanoseconds(50_000_000)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await model.pollOnce() }
+            group.addTask { await model.pollOnce() }
+            await group.waitForAll()
+        }
+
+        let snapshotReadCount = await hardware.snapshotReadCount()
+        XCTAssertEqual(snapshotReadCount, 1)
+        XCTAssertTrue(model.hasCompletedHardwarePoll)
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+    }
+
     func testMenuBarCombinedModeKeepsRPMPlaceholderWhenOnlyTemperatureIsAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(
@@ -3245,17 +3279,31 @@ private actor AppModelFakeHardware: HardwareService {
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
     private var applyFailures: [Error] = []
+    private var snapshotDelayNanoseconds: UInt64?
+    private var snapshotReads = 0
 
     init(snapshot: HardwareSnapshot) {
         self.snapshotValue = snapshot
     }
 
     func snapshot() async throws -> HardwareSnapshot {
-        snapshotValue
+        snapshotReads += 1
+        if let snapshotDelayNanoseconds {
+            try? await Task.sleep(nanoseconds: snapshotDelayNanoseconds)
+        }
+        return snapshotValue
     }
 
     func setSnapshot(_ snapshot: HardwareSnapshot) {
         snapshotValue = snapshot
+    }
+
+    func setSnapshotDelayNanoseconds(_ nanoseconds: UInt64?) {
+        snapshotDelayNanoseconds = nanoseconds
+    }
+
+    func snapshotReadCount() -> Int {
+        snapshotReads
     }
 
     func failNextApply(_ error: Error) {
