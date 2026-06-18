@@ -635,6 +635,12 @@ capture_capabilities_contract() {
       metadata_limits = {}
     end
 
+    wrapper_resources = data["wrapperResources"]
+    unless wrapper_resources.is_a?(Hash)
+      warn "viftyctl capabilities JSON did not include wrapperResources"
+      wrapper_resources = {}
+    end
+
     ok = true
     expected_booleans = {
       "policyStatusAvailable" => data["policyStatusAvailable"],
@@ -690,6 +696,48 @@ capture_capabilities_contract() {
       next if actual == expected
 
       warn "#{field} #{actual.inspect} did not match #{expected}"
+      ok = false
+    end
+
+    expected_wrapper_strings = {
+      "wrapperResources.sourceDirectory" => [wrapper_resources["sourceDirectory"], "examples/viftyctl"],
+      "wrapperResources.bundleDirectory" => [wrapper_resources["bundleDirectory"], "Contents/Resources/viftyctl-wrappers"],
+      "wrapperResources.guardedRunScript" => [wrapper_resources["guardedRunScript"], "guarded-run.sh"]
+    }
+
+    expected_wrapper_strings.each do |field, (actual, expected)|
+      puts "#{field}\t#{actual}\t#{expected}"
+      next if actual == expected
+
+      warn "#{field} #{actual.inspect} did not match #{expected}"
+      ok = false
+    end
+
+    expected_workload_scripts = %w[
+      cargo-build.sh
+      cargo-test.sh
+      custom-workload.sh
+      local-model.sh
+      make-build.sh
+      make-test.sh
+      make-verify.sh
+      npm-build.sh
+      npm-test.sh
+      pytest.sh
+      swift-release-build.sh
+      swift-test.sh
+      xcode-build.sh
+      xcode-test.sh
+    ]
+    workload_scripts = wrapper_resources["workloadScripts"]
+    workload_scripts = [] unless workload_scripts.is_a?(Array)
+    actual_workload_scripts = workload_scripts.map(&:to_s).join(",")
+    expected_workload_scripts_value = expected_workload_scripts.join(",")
+    puts "wrapperResources.workloadScripts\t#{actual_workload_scripts}\t#{expected_workload_scripts_value}"
+    missing_workload_scripts = expected_workload_scripts - workload_scripts.map(&:to_s)
+    unless missing_workload_scripts.empty? && workload_scripts.map(&:to_s) == expected_workload_scripts
+      warn "wrapperResources.workloadScripts did not match expected scripts"
+      warn "wrapperResources.workloadScripts missing #{missing_workload_scripts.join(",")}" unless missing_workload_scripts.empty?
       ok = false
     end
 

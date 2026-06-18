@@ -39,6 +39,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaResources.diagnose, "Contents/Resources/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemaResources.status, "Contents/Resources/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaResources.commandError, "Contents/Resources/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(capabilities.wrapperResources.sourceDirectory, "examples/viftyctl")
+        XCTAssertEqual(capabilities.wrapperResources.bundleDirectory, "Contents/Resources/viftyctl-wrappers")
+        XCTAssertEqual(capabilities.wrapperResources.guardedRunScript, "guarded-run.sh")
+        XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("swift-test.sh"))
+        XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("make-build.sh"))
+        XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("custom-workload.sh"))
         XCTAssertEqual(capabilities.schemaIDs.capabilities, "https://vifty.local/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.audit, "https://vifty.local/schemas/viftyctl-audit.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.diagnose, "https://vifty.local/schemas/viftyctl-diagnose.schema.json")
@@ -53,6 +59,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "directControlLifecycle")
         payload.removeValue(forKey: "metadataLimits")
         payload.removeValue(forKey: "policyStatusAvailable")
+        payload.removeValue(forKey: "wrapperResources")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
@@ -62,6 +69,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.directControlLifecycle, .unsupported)
         XCTAssertEqual(capabilities.metadataLimits, .unsupported)
         XCTAssertFalse(capabilities.policyStatusAvailable)
+        XCTAssertEqual(capabilities.wrapperResources, .unsupported)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -412,6 +420,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let capabilitiesExample = try readJSON(fixtureURL("capabilities.json"))
         let capabilitiesRequired = try XCTUnwrap(capabilitiesSchema["required"] as? [String])
         XCTAssertTrue(capabilitiesRequired.contains("policyStatusAvailable"))
+        XCTAssertTrue(capabilitiesRequired.contains("wrapperResources"))
         XCTAssertEqual(capabilitiesExample["policyStatusAvailable"] as? Bool, true)
         let capabilitiesProperties = try XCTUnwrap(capabilitiesSchema["properties"] as? [String: Any])
         let policyStatusAvailable = try XCTUnwrap(capabilitiesProperties["policyStatusAvailable"] as? [String: Any])
@@ -450,6 +459,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             in: capabilitiesDefinitions,
             arePresentIn: capabilitiesExample["metadataLimits"] as? [String: Any],
             context: "capabilities metadataLimits"
+        )
+        try assertRequiredFields(
+            definition: "wrapperResources",
+            in: capabilitiesDefinitions,
+            arePresentIn: capabilitiesExample["wrapperResources"] as? [String: Any],
+            context: "capabilities wrapperResources"
         )
         try assertRequiredFields(
             definition: "schemaPathReferences",

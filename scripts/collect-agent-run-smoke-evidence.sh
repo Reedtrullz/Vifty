@@ -350,7 +350,25 @@ capabilities_run_contract_safe() {
       schema_ids = data["schemaIDs"].is_a?(Hash) ? data["schemaIDs"] : {}
       policy = data["policy"].is_a?(Hash) ? data["policy"] : {}
       lifecycle = data["runLifecycle"].is_a?(Hash) ? data["runLifecycle"] : {}
+      wrapper_resources = data["wrapperResources"].is_a?(Hash) ? data["wrapperResources"] : {}
       signals = lifecycle["signalsForwardedToChild"].is_a?(Array) ? lifecycle["signalsForwardedToChild"].map(&:to_s) : []
+      workload_scripts = wrapper_resources["workloadScripts"].is_a?(Array) ? wrapper_resources["workloadScripts"].map(&:to_s) : []
+      expected_workload_scripts = %w[
+        cargo-build.sh
+        cargo-test.sh
+        custom-workload.sh
+        local-model.sh
+        make-build.sh
+        make-test.sh
+        make-verify.sh
+        npm-build.sh
+        npm-test.sh
+        pytest.sh
+        swift-release-build.sh
+        swift-test.sh
+        xcode-build.sh
+        xcode-test.sh
+      ]
       safe = data["schemaVersion"] == 1 &&
         schema_ids["capabilities"] == "https://vifty.local/schemas/viftyctl-capabilities.schema.json" &&
         schema_ids["diagnose"] == "https://vifty.local/schemas/viftyctl-diagnose.schema.json" &&
@@ -365,7 +383,11 @@ capabilities_run_contract_safe() {
         lifecycle["autoRestoreAfterChildExit"] == true &&
         lifecycle["structuredPreChildFailures"] == true &&
         lifecycle["cleanupStateReportedOnLaunchFailure"] == true &&
-        %w[INT TERM HUP].all? { |signal| signals.include?(signal) }
+        %w[INT TERM HUP].all? { |signal| signals.include?(signal) } &&
+        wrapper_resources["sourceDirectory"] == "examples/viftyctl" &&
+        wrapper_resources["bundleDirectory"] == "Contents/Resources/viftyctl-wrappers" &&
+        wrapper_resources["guardedRunScript"] == "guarded-run.sh" &&
+        (expected_workload_scripts - workload_scripts).empty?
       puts safe ? "true" : "false"
     rescue StandardError
       puts "false"
@@ -389,7 +411,7 @@ The bundle records source provenance in \`metadata.txt\` and
 \`installSource=local-ad-hoc-build\`, the current git ref, and the immutable
 40-character source SHA for the freshly built \`viftyctl\`.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
 Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, manualControlActive is true, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep

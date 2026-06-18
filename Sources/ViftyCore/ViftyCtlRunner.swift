@@ -86,6 +86,49 @@ public struct ViftyCtlMetadataLimits: Codable, Equatable, Sendable {
     )
 }
 
+public struct ViftyCtlWrapperResources: Codable, Equatable, Sendable {
+    public static let workloadScriptNames = [
+        "cargo-build.sh",
+        "cargo-test.sh",
+        "custom-workload.sh",
+        "local-model.sh",
+        "make-build.sh",
+        "make-test.sh",
+        "make-verify.sh",
+        "npm-build.sh",
+        "npm-test.sh",
+        "pytest.sh",
+        "swift-release-build.sh",
+        "swift-test.sh",
+        "xcode-build.sh",
+        "xcode-test.sh"
+    ]
+
+    public var sourceDirectory: String
+    public var bundleDirectory: String
+    public var guardedRunScript: String
+    public var workloadScripts: [String]
+
+    public init(
+        sourceDirectory: String = "examples/viftyctl",
+        bundleDirectory: String = "Contents/Resources/viftyctl-wrappers",
+        guardedRunScript: String = "guarded-run.sh",
+        workloadScripts: [String] = Self.workloadScriptNames
+    ) {
+        self.sourceDirectory = sourceDirectory
+        self.bundleDirectory = bundleDirectory
+        self.guardedRunScript = guardedRunScript
+        self.workloadScripts = workloadScripts
+    }
+
+    public static let unsupported = ViftyCtlWrapperResources(
+        sourceDirectory: "",
+        bundleDirectory: "",
+        guardedRunScript: "",
+        workloadScripts: []
+    )
+}
+
 public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var commands: [String]
@@ -102,6 +145,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var runLifecycle: ViftyCtlRunLifecycleCapabilities
     public var directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities
     public var metadataLimits: ViftyCtlMetadataLimits
+    public var wrapperResources: ViftyCtlWrapperResources
     public var exitCodes: ViftyCtlExitCodes
 
     public init(
@@ -120,6 +164,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         runLifecycle: ViftyCtlRunLifecycleCapabilities = ViftyCtlRunLifecycleCapabilities(),
         directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities = ViftyCtlDirectControlLifecycleCapabilities(),
         metadataLimits: ViftyCtlMetadataLimits = ViftyCtlMetadataLimits(),
+        wrapperResources: ViftyCtlWrapperResources = ViftyCtlWrapperResources(),
         exitCodes: ViftyCtlExitCodes = ViftyCtlExitCodes()
     ) {
         self.schemaVersion = schemaVersion
@@ -137,6 +182,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.runLifecycle = runLifecycle
         self.directControlLifecycle = directControlLifecycle
         self.metadataLimits = metadataLimits
+        self.wrapperResources = wrapperResources
         self.exitCodes = exitCodes
     }
 
@@ -156,6 +202,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         case runLifecycle
         case directControlLifecycle
         case metadataLimits
+        case wrapperResources
         case exitCodes
     }
 
@@ -185,6 +232,10 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
             ViftyCtlMetadataLimits.self,
             forKey: .metadataLimits
         ) ?? .unsupported
+        wrapperResources = try container.decodeIfPresent(
+            ViftyCtlWrapperResources.self,
+            forKey: .wrapperResources
+        ) ?? .unsupported
         exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
     }
 
@@ -209,6 +260,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         try container.encode(runLifecycle, forKey: .runLifecycle)
         try container.encode(directControlLifecycle, forKey: .directControlLifecycle)
         try container.encode(metadataLimits, forKey: .metadataLimits)
+        try container.encode(wrapperResources, forKey: .wrapperResources)
         try container.encode(exitCodes, forKey: .exitCodes)
     }
 }

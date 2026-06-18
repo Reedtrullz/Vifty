@@ -10,6 +10,13 @@ If the Vifty app is installed, prefer the bundled wrappers at
 `/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/`. Source
 checkouts can use the same scripts from `examples/viftyctl/`.
 
+Agents that want machine-readable discovery should read
+`viftyctl capabilities --json` first and use `wrapperResources.bundleDirectory`,
+`wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, and
+`wrapperResources.workloadScripts` instead of hardcoding wrapper script names.
+Those paths are intentionally relative to the app bundle or source checkout so
+support evidence does not expose user-specific absolute paths.
+
 ## Shared Rule
 
 Paste this into an agent instruction file such as `AGENTS.md`, `CLAUDE.md`, or a Cursor rule:
@@ -80,7 +87,7 @@ after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
 read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, hardware evidence collection, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
 
-The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, and command-error schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
+The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, and command-error schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `wrapperResources` discovery metadata is missing or stale, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 
 ## Codex
 

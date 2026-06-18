@@ -47,6 +47,27 @@
     "maximumIdempotencyKeyLength": 256,
     "maximumReasonLength": 512
   },
+  "wrapperResources": {
+    "bundleDirectory": "Contents/Resources/viftyctl-wrappers",
+    "guardedRunScript": "guarded-run.sh",
+    "sourceDirectory": "examples/viftyctl",
+    "workloadScripts": [
+      "cargo-build.sh",
+      "cargo-test.sh",
+      "custom-workload.sh",
+      "local-model.sh",
+      "make-build.sh",
+      "make-test.sh",
+      "make-verify.sh",
+      "npm-build.sh",
+      "npm-test.sh",
+      "pytest.sh",
+      "swift-release-build.sh",
+      "swift-test.sh",
+      "xcode-build.sh",
+      "xcode-test.sh"
+    ]
+  },
   "schemaVersion": 1,
   "schemaIDs": {
     "audit": "https://vifty.local/schemas/viftyctl-audit.schema.json",

@@ -1930,5 +1930,9 @@ private final class ValidationEvidenceReviewHarness {
     directControlLifecycle.preferRunForSingleChildWorkloads\ttrue\ttrue
     metadataLimits.maximumReasonLength\t512\t512
     metadataLimits.maximumIdempotencyKeyLength\t256\t256
+    wrapperResources.sourceDirectory\texamples/viftyctl\texamples/viftyctl
+    wrapperResources.bundleDirectory\tContents/Resources/viftyctl-wrappers\tContents/Resources/viftyctl-wrappers
+    wrapperResources.guardedRunScript\tguarded-run.sh\tguarded-run.sh
+    wrapperResources.workloadScripts\tcargo-build.sh,cargo-test.sh,custom-workload.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh\tcargo-build.sh,cargo-test.sh,custom-workload.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh
     """
 }

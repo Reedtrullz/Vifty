@@ -5,7 +5,7 @@ common developer workloads on Vifty's safe path:
 
 1. preflight that the child command is a regular executable path or resolves to one on `PATH`;
 2. reject malformed wrapper arguments before contacting Vifty, including empty or blank reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
-3. read-only `viftyctl capabilities --json`, require schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, require the safe `runLifecycle` contract used by `viftyctl run`, require `policyStatusAvailable: true` before trusting policy duration/RPM limits, require `policy.enabled: true` before requesting cooling, and require `metadataLimits`, then reject durations or RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling;
+3. read-only `viftyctl capabilities --json`, require schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, require the safe `runLifecycle` contract used by `viftyctl run`, require `wrapperResources` for machine-readable source/app-bundle wrapper discovery, require `policyStatusAvailable: true` before trusting policy duration/RPM limits, require `policy.enabled: true` before requesting cooling, and require `metadataLimits`, then reject durations or RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling;
 4. read-only `viftyctl diagnose --json`, require diagnose readiness schema version `1`, and require recognized command-error schema identity when diagnose exits nonzero with a command-error payload;
 5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` so wrappers do not infer safety from prose or fallback telemetry;
 6. fail closed when readiness is blocked, `safeToRequestCooling` is false, `daemonControlPathReady` is false, or `manualControlActive` is true, and print recovery guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up;
@@ -13,9 +13,15 @@ common developer workloads on Vifty's safe path:
 8. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
 If a capabilities payload does not advertise schema version `1`, the stable
-capabilities, diagnose, and command-error schema IDs, `runLifecycle`, `policyStatusAvailable: true`,
-`policy.enabled: true`, policy duration/RPM limits, or `metadataLimits`, treat
-those guarantees as unavailable and refuse cooling.
+capabilities, diagnose, and command-error schema IDs, `runLifecycle`,
+`wrapperResources`, `policyStatusAvailable: true`, `policy.enabled: true`,
+policy duration/RPM limits, or `metadataLimits`, treat those guarantees as
+unavailable and refuse cooling.
+
+`wrapperResources` intentionally uses app-bundle/source-checkout relative paths
+and script names. Agents can combine those values with a known installed app or
+checkout location without copying user-specific absolute paths into support
+evidence.
 
 Agents should also read `metadataLimits` from capabilities before generating
 custom direct-prepare reasons or idempotency keys; legacy payloads without those

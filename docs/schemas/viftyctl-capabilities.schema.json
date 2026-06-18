@@ -20,6 +20,7 @@
     "runLifecycle",
     "directControlLifecycle",
     "metadataLimits",
+    "wrapperResources",
     "exitCodes"
   ],
   "properties": {
@@ -89,6 +90,9 @@
     },
     "metadataLimits": {
       "$ref": "#/$defs/metadataLimits"
+    },
+    "wrapperResources": {
+      "$ref": "#/$defs/wrapperResources"
     },
     "exitCodes": {
       "$ref": "#/$defs/exitCodes"
@@ -331,6 +335,53 @@
           "type": "integer",
           "const": 256,
           "description": "Maximum number of characters accepted for prepare/run idempotency-key metadata after trimming."
+        }
+      }
+    },
+    "wrapperResources": {
+      "type": "object",
+      "description": "Relative source-tree and app-bundle locations for the audited guarded workload wrappers. Agents should use these paths and script names instead of hardcoding wrapper discovery. Paths are intentionally relative so evidence bundles do not leak user-specific install locations.",
+      "required": [
+        "sourceDirectory",
+        "bundleDirectory",
+        "guardedRunScript",
+        "workloadScripts"
+      ],
+      "properties": {
+        "sourceDirectory": {
+          "const": "examples/viftyctl",
+          "description": "Source-checkout directory containing guarded-run.sh and workload shortcut wrappers."
+        },
+        "bundleDirectory": {
+          "const": "Contents/Resources/viftyctl-wrappers",
+          "description": "App-bundle-relative directory containing the installed wrapper copies."
+        },
+        "guardedRunScript": {
+          "const": "guarded-run.sh",
+          "description": "Primary guarded wrapper that performs read-only capabilities/readiness checks before delegating to viftyctl run --json."
+        },
+        "workloadScripts": {
+          "type": "array",
+          "description": "Audited convenience wrapper names available in source checkouts and installed app bundles.",
+          "items": {
+            "enum": [
+              "cargo-build.sh",
+              "cargo-test.sh",
+              "custom-workload.sh",
+              "local-model.sh",
+              "make-build.sh",
+              "make-test.sh",
+              "make-verify.sh",
+              "npm-build.sh",
+              "npm-test.sh",
+              "pytest.sh",
+              "swift-release-build.sh",
+              "swift-test.sh",
+              "xcode-build.sh",
+              "xcode-test.sh"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     }

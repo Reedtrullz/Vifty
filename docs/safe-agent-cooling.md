@@ -24,7 +24,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract, `policyStatusAvailable: true`, `policy.enabled: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, requires diagnose readiness schema version `1` or a recognized command-error schema identity when diagnose fails, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract, `wrapperResources` discovery metadata, `policyStatusAvailable: true`, `policy.enabled: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, requires diagnose readiness schema version `1` or a recognized command-error schema identity when diagnose fails, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
@@ -36,6 +36,13 @@ prefer:
 ```sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
+
+For machine-readable discovery, `viftyctl capabilities --json` advertises
+`wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`,
+`wrapperResources.guardedRunScript`, and `wrapperResources.workloadScripts`.
+Those paths are app-bundle/source-checkout relative rather than absolute, so
+agents can combine them with a known installed app or checkout location without
+recording user-specific paths in support evidence.
 
 Use the installed CLI explicitly when running outside the Vifty repository:
 
@@ -154,7 +161,7 @@ with exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless
 `capabilities --json` reports schema version `1`, the stable capabilities,
 diagnose, and command-error schema IDs, daemon-backed policy status,
-`policy.enabled: true`, advertised `run` support, and the safe run lifecycle used by guarded wrappers. Use it for
+`policy.enabled: true`, advertised `run` support, wrapper resource discovery, and the safe run lifecycle used by guarded wrappers. Use it for
 supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
 If Vifty/manual ownership is still active, the blocked summary's `run.skippedReason` is `manual control active before smoke run`; restore Auto before collecting supervised run evidence.
 
@@ -203,7 +210,7 @@ structured readiness/recovery fields. The `capabilitiesDecision` summary
 records the captured capabilities schema version plus stable
 `schemaIDs.capabilities`, `schemaIDs.diagnose`, and `schemaIDs.commandError`,
 then records whether the bundle advertised `viftyctl run`, force-retry discovery,
-safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
+safe `runLifecycle`, safe direct prepare/restore lifecycle, wrapper resource discovery, metadata limits,
 policy enabled status, policy status availability, daemon status, and the unavailable-exit contract before the report is treated
 as agent-safe evidence; absent legacy `metadataLimits` is a warning, not proof
 that automation should skip local argument limits. The `appInfo` summary records

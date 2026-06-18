@@ -297,6 +297,10 @@ daemon_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil 
 policy_source="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policySource raw -o - - 2>/dev/null || printf '')"
 policy_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policyStatusAvailable raw -o - - 2>/dev/null || printf '')"
 policy_enabled="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.enabled raw -o - - 2>/dev/null || printf '')"
+wrapper_source_directory="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.sourceDirectory raw -o - - 2>/dev/null || printf '')"
+wrapper_bundle_directory="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.bundleDirectory raw -o - - 2>/dev/null || printf '')"
+wrapper_guarded_run_script="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.guardedRunScript raw -o - - 2>/dev/null || printf '')"
+wrapper_workload_scripts="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.workloadScripts json -o - - 2>/dev/null || printf '')"
 run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
@@ -323,6 +327,10 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$policy_source" = "null" ] && policy_source=""
 [ "$policy_status_available" = "null" ] && policy_status_available=""
 [ "$policy_enabled" = "null" ] && policy_enabled=""
+[ "$wrapper_source_directory" = "null" ] && wrapper_source_directory=""
+[ "$wrapper_bundle_directory" = "null" ] && wrapper_bundle_directory=""
+[ "$wrapper_guarded_run_script" = "null" ] && wrapper_guarded_run_script=""
+[ "$wrapper_workload_scripts" = "null" ] && wrapper_workload_scripts=""
 [ "$minimum_agent_rpm_percent" = "null" ] && minimum_agent_rpm_percent=""
 [ "$maximum_allowed_rpm_percent" = "null" ] && maximum_allowed_rpm_percent=""
 [ "$max_duration_seconds" = "null" ] && max_duration_seconds=""
@@ -398,6 +406,43 @@ fi
 
 if ! printf '%s\n' "$capability_workloads" | /usr/bin/grep -F "\"$workload\"" >/dev/null 2>&1; then
   echo "guarded-run: viftyctl capabilities does not advertise workload '$workload'; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    printf '%s\n' "$capabilities_json" >&2
+  fi
+  exit 75
+fi
+
+missing_wrapper_script=0
+for expected_wrapper_script in \
+  cargo-build.sh \
+  cargo-test.sh \
+  custom-workload.sh \
+  local-model.sh \
+  make-build.sh \
+  make-test.sh \
+  make-verify.sh \
+  npm-build.sh \
+  npm-test.sh \
+  pytest.sh \
+  swift-release-build.sh \
+  swift-test.sh \
+  xcode-build.sh \
+  xcode-test.sh
+do
+  case "$wrapper_workload_scripts" in
+    *"\"$expected_wrapper_script\""*) ;;
+    *) missing_wrapper_script=1 ;;
+  esac
+done
+
+if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
+   [ "$wrapper_bundle_directory" != "Contents/Resources/viftyctl-wrappers" ] ||
+   [ "$wrapper_guarded_run_script" != "guarded-run.sh" ] ||
+   [ "$missing_wrapper_script" -ne 0 ]; then
+  echo "guarded-run: viftyctl capabilities does not advertise wrapper resource discovery; refusing to request cooling." >&2
   if [ "$capabilities_status" -ne 0 ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
