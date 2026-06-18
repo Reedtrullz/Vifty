@@ -9,5 +9,6 @@
   "recommendedRecoveryAction": "waitBeforeRetry",
   "retryAfterSeconds": 20,
   "safeToProceed": false,
+  "schemaID": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
   "schemaVersion": 1
 }

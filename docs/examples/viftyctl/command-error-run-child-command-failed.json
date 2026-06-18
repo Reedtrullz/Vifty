@@ -8,5 +8,6 @@
   "message": "Child command was not found on PATH: missing-tool",
   "recommendedRecoveryAction": "fixChildCommand",
   "safeToProceed": false,
+  "schemaID": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
   "schemaVersion": 1
 }

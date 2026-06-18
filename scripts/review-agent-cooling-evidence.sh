@@ -70,6 +70,7 @@ summary_path = summary_path.empty? ? nil : File.expand_path(summary_path)
 EXPECTED_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"
 REVIEW_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"
 CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+COMMAND_ERROR_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-command-error.schema.json"
 DIAGNOSE_STATES = %w[ready degraded blocked].freeze
 DIAGNOSE_AGENT_ACTIONS = %w[
   requestCooling
@@ -211,6 +212,7 @@ def command_error_report?(bundle, command_name, failures, expected_command:, exp
   ok = true
   checks = {
     "schemaVersion" => 1,
+    "schemaID" => COMMAND_ERROR_SCHEMA_ID,
     "command" => expected_command,
     "errorCode" => expected_error_code,
     "safeToProceed" => false,

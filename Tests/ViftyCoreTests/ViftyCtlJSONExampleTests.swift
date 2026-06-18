@@ -178,6 +178,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let report = try decode(ViftyCtlCommandErrorReport.self, from: "command-error.json")
 
         XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.schemaID, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(report.command, "prepare")
         XCTAssertEqual(report.errorCode, .prepareRateLimited)
         XCTAssertFalse(report.safeToProceed)
@@ -204,6 +205,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let report = try JSONDecoder().decode(ViftyCtlCommandErrorReport.self, from: data)
 
         XCTAssertEqual(report.command, "prepare")
+        XCTAssertEqual(report.schemaID, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(report.errorCode, .helperUnreachable)
         XCTAssertFalse(report.safeToProceed)
         XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
@@ -215,6 +217,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
 
     func testRunCommandErrorExamplesDecodeAgainstCurrentModel() throws {
         let preflight = try decode(ViftyCtlCommandErrorReport.self, from: "command-error-run-child-command-failed.json")
+        XCTAssertEqual(preflight.schemaID, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(preflight.command, "run")
         XCTAssertEqual(preflight.errorCode, .childCommandFailed)
         XCTAssertFalse(preflight.safeToProceed)

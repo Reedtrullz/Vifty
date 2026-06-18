@@ -316,6 +316,7 @@ public enum ViftyCtlCommandErrorRecoveryAction: String, Codable, Equatable, Send
 
 public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var schemaVersion: Int
+    public var schemaID: String
     public var command: String
     public var errorCode: AgentControlErrorCode?
     public var message: String
@@ -329,6 +330,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
 
     public init(
         schemaVersion: Int = 1,
+        schemaID: String = ViftyCtlSchemaReferences.schemaIDs.commandError,
         command: String,
         errorCode: AgentControlErrorCode?,
         message: String,
@@ -341,6 +343,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
+        self.schemaID = schemaID
         self.command = command
         self.errorCode = errorCode
         self.message = message
@@ -355,6 +358,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
+        case schemaID
         case command
         case errorCode
         case message
@@ -370,6 +374,8 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        schemaID = try container.decodeIfPresent(String.self, forKey: .schemaID)
+            ?? ViftyCtlSchemaReferences.schemaIDs.commandError
         command = try container.decode(String.self, forKey: .command)
         errorCode = try container.decodeIfPresent(AgentControlErrorCode.self, forKey: .errorCode)
         message = try container.decode(String.self, forKey: .message)
@@ -388,6 +394,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(schemaID, forKey: .schemaID)
         try container.encode(command, forKey: .command)
         try container.encode(errorCode, forKey: .errorCode)
         try container.encode(message, forKey: .message)

@@ -53,6 +53,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let data = try XCTUnwrap(result.stdout.data(using: .utf8))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(json["command"] as? String, "status")
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)

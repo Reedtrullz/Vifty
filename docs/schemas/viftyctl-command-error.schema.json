@@ -6,6 +6,7 @@
   "type": "object",
   "required": [
     "schemaVersion",
+    "schemaID",
     "command",
     "errorCode",
     "message",
@@ -19,6 +20,10 @@
   "properties": {
     "schemaVersion": {
       "const": 1
+    },
+    "schemaID": {
+      "description": "Stable schema identity for this command-error payload. Agents can compare this with capabilities.schemaIDs.commandError before trusting command-error fields.",
+      "const": "https://vifty.local/schemas/viftyctl-command-error.schema.json"
     },
     "command": {
       "type": "string"

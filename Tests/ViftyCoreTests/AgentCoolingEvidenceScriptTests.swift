@@ -491,6 +491,46 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, true)
     }
 
+    func testReviewerRejectsHelperUnreachableCommandErrorSchemaIdentityDrift() throws {
+        let driftedStatusJSON = try AgentCoolingEvidenceHarness.jsonString(
+            replacing: "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+            with: "https://example.invalid/viftyctl-command-error.schema.json",
+            in: AgentCoolingEvidenceHarness.commandErrorJSON(command: "status")
+        )
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesJSON: AgentCoolingEvidenceHarness.defaultUnavailableCapabilitiesJSON,
+            capabilitiesExitCode: 69,
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
+            diagnoseExitCode: 75,
+            statusJSON: driftedStatusJSON,
+            statusExitCode: 1,
+            auditJSON: AgentCoolingEvidenceHarness.commandErrorJSON(command: "audit"),
+            auditExitCode: 1
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-status.json command-error schemaID"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-command-error.schema.json"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let acceptedCommandErrors = try XCTUnwrap(reviewSummary["acceptedCommandErrors"] as? [String])
+        XCTAssertFalse(acceptedCommandErrors.contains("viftyctl-status"))
+        XCTAssertTrue(acceptedCommandErrors.contains("viftyctl-audit"))
+    }
+
     func testReviewerWarnsWhenKnownV110HelperIssueEvidenceIsCaptured() throws {
         let harness = try AgentCoolingEvidenceHarness(
             capabilitiesJSON: AgentCoolingEvidenceHarness.defaultUnavailableCapabilitiesJSON,
@@ -1138,7 +1178,7 @@ private final class AgentCoolingEvidenceHarness {
 
     fileprivate static func commandErrorJSON(command: String) -> String {
         """
-        {"schemaVersion":1,"command":"\(command)","errorCode":"HELPER_UNREACHABLE","message":"daemon unavailable","safeToProceed":false,"recommendedRecoveryAction":"repairHelper","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"generatedAt":700000000}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-command-error.schema.json","command":"\(command)","errorCode":"HELPER_UNREACHABLE","message":"daemon unavailable","safeToProceed":false,"recommendedRecoveryAction":"repairHelper","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"generatedAt":700000000}
         """
     }
 }

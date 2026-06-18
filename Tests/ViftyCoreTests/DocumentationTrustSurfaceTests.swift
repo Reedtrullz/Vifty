@@ -110,6 +110,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(support.contains("appInfo"))
         XCTAssertTrue(support.contains("acceptedCommandErrors"))
         XCTAssertTrue(support.contains("structured `HELPER_UNREACHABLE` command error"))
+        XCTAssertTrue(support.contains("schemaID: https://vifty.local/schemas/viftyctl-command-error.schema.json"))
         XCTAssertTrue(support.contains("known v1.1.0 helper-unreachable issue"))
         XCTAssertTrue(support.contains("v1.1.1 source-first hotfix"))
         XCTAssertTrue(support.contains("do not retag v1.1.0 or replace its unsigned-dev assets"))
@@ -988,7 +989,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentWorkflows.contains("- `policyStatusAvailable`"))
         XCTAssertTrue(agentWorkflows.contains("If `policyStatusAvailable` is absent or false"))
         XCTAssertTrue(agentWorkflows.contains("If `policy.enabled` is absent or false"))
+        XCTAssertTrue(agentWorkflows.contains("capabilities.schemaIDs.commandError"))
+        XCTAssertTrue(agentWorkflows.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
         XCTAssertTrue(guide.contains("structured `HELPER_UNREACHABLE`"))
+        XCTAssertTrue(guide.contains("schemaID: https://vifty.local/schemas/viftyctl-command-error.schema.json"))
         XCTAssertTrue(guide.contains("known v1.1.0 helper-unreachable issue"))
         XCTAssertTrue(guide.contains("v1.1.1 source-first hotfix"))
         XCTAssertTrue(guide.contains("missing or"))
@@ -1095,6 +1099,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("cargo-build.sh"))
         XCTAssertTrue(exampleReadme.contains("custom-workload.sh"))
         XCTAssertTrue(exampleReadme.contains("Do not edit these wrappers to call `sudo`, `ViftyHelper`, raw SMC tools"))
+
+        let jsonExampleReadme = try read("docs/examples/viftyctl/README.md")
+        XCTAssertTrue(jsonExampleReadme.contains("stable command-error schema ID"))
+        XCTAssertTrue(jsonExampleReadme.contains("capabilities.schemaIDs.commandError"))
+        XCTAssertTrue(jsonExampleReadme.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
     }
 
     func testStrategyWorkplanReflectsCurrentSourceFirstState() throws {

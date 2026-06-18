@@ -6,6 +6,11 @@ The XCTest suite decodes these files against the current Swift models so the exa
 
 `capabilities.json` includes source-tree `schemas`, installed app-bundle `schemaResources`, and stable `schemaIDs` so agents can validate payloads from either a checkout or an installed `Vifty.app`.
 
+Command-error examples include the stable command-error schema ID,
+`https://vifty.local/schemas/viftyctl-command-error.schema.json`, matching
+`capabilities.schemaIDs.commandError` before agents trust recovery, retry, or
+cleanup fields.
+
 Files:
 
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`
