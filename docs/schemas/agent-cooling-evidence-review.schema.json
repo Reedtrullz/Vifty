@@ -116,6 +116,7 @@
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
+        "policyEnabled",
         "supportsRunCommand",
         "supportsForceRetry",
         "runLifecycleSafe",
@@ -148,6 +149,12 @@
           ]
         },
         "policyStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policyEnabled": {
           "type": [
             "boolean",
             "null"

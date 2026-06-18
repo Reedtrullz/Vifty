@@ -72,6 +72,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         let capabilitiesContract = try harness.read("capabilities-contract.tsv")
         XCTAssertTrue(capabilitiesContract.contains("field\tactual\texpected"))
         XCTAssertTrue(capabilitiesContract.contains("policyStatusAvailable\ttrue\ttrue"))
+        XCTAssertTrue(capabilitiesContract.contains("policy.enabled\ttrue\ttrue"))
         XCTAssertTrue(capabilitiesContract.contains("supportsForceRetry\ttrue\ttrue"))
         XCTAssertTrue(capabilitiesContract.contains("runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue"))
         XCTAssertTrue(capabilitiesContract.contains("runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP"))
@@ -559,6 +560,29 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(invocations, expectedReadOnlyViftyCtlInvocations)
     }
 
+    func testCollectorRecordsPolicyEnabledDriftWithoutRunningCoolingCommands() throws {
+        let harness = try ValidationEvidenceHarness(policyEnabled: false)
+
+        let result = try harness.runCollector([
+            "--app", harness.appURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("capabilities-contract\t1\tcapabilities-contract.tsv"))
+        XCTAssertTrue(try harness.read("capabilities-contract.tsv").contains("policy.enabled\tfalse\ttrue"))
+        XCTAssertTrue(try harness.read("capabilities-contract.stderr").contains("policy.enabled false did not match true"))
+        let summary = try harness.readJSON("review-summary.json")
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            check["name"] as? String == "capabilities-contract"
+                && check["status"] as? String == "1"
+                && check["expected"] as? String == "0"
+        })
+        let invocations = try harness.loggedViftyCtlInvocations()
+        XCTAssertEqual(invocations, expectedReadOnlyViftyCtlInvocations)
+    }
+
     func testCollectorCopiesPassingReleaseArtifactSummary() throws {
         let harness = try ValidationEvidenceHarness()
         let summaryURL = try harness.writeReleaseArtifactSummary(status: "passed")
@@ -844,6 +868,7 @@ private final class ValidationEvidenceHarness {
     private let statusSchemaResourcePath: String
     private let runLifecycleAutoRestore: Bool
     private let policyStatusAvailable: Bool
+    private let policyEnabled: Bool
     private let includePrivacyLeak: Bool
     private let includeCurrentHomePathLeak: Bool
 
@@ -854,6 +879,7 @@ private final class ValidationEvidenceHarness {
         statusSchemaResourcePath: String = "Contents/Resources/schemas/viftyctl-status.schema.json",
         runLifecycleAutoRestore: Bool = true,
         policyStatusAvailable: Bool = true,
+        policyEnabled: Bool = true,
         diagnoseState: String = "ready",
         diagnoseExitCode: Int = 0,
         includePrivacyLeak: Bool = false,
@@ -875,6 +901,7 @@ private final class ValidationEvidenceHarness {
         self.statusSchemaResourcePath = statusSchemaResourcePath
         self.runLifecycleAutoRestore = runLifecycleAutoRestore
         self.policyStatusAvailable = policyStatusAvailable
+        self.policyEnabled = policyEnabled
         self.includePrivacyLeak = includePrivacyLeak
         self.includeCurrentHomePathLeak = includeCurrentHomePathLeak
 
@@ -1184,7 +1211,7 @@ private final class ValidationEvidenceHarness {
         printf '%s\\n' "$*" >> "${FAKE_VIFTYCTL_LOG:?}"
 
         if [ "$#" -eq 2 ] && [ "$1" = "capabilities" ] && [ "$2" = "--json" ]; then
-          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":true},"policyStatusAvailable":\(policyStatusAvailable ? "true" : "false"),"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}\\n'
+          printf '{"schemaVersion":1,"commands":["status","capabilities","diagnose","audit"],"workloads":["test"],"schemaResources":{"audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"\(statusSchemaResourcePath)"},"policy":{"enabled":\(policyEnabled ? "true" : "false")},"policyStatusAvailable":\(policyStatusAvailable ? "true" : "false"),"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":\(runLifecycleAutoRestore ? "true" : "false"),"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}\\n'
           exit 0
         fi
 

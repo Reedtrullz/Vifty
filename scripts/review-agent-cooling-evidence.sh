@@ -117,6 +117,7 @@ capabilities_decision = {
   "daemonStatusAvailable" => nil,
   "policySource" => nil,
   "policyStatusAvailable" => nil,
+  "policyEnabled" => nil,
   "supportsRunCommand" => false,
   "supportsForceRetry" => nil,
   "runLifecycleSafe" => false,
@@ -406,6 +407,7 @@ if File.file?(capabilities_path)
       daemon_status_available = capabilities["daemonStatusAvailable"]
       policy_source = capabilities["policySource"]
       policy_status_available = capabilities["policyStatusAvailable"]
+      policy_enabled = capabilities.dig("policy", "enabled")
       supports_force_retry = capabilities["supportsForceRetry"]
       unavailable_exit_code = integer_value(capabilities.dig("exitCodes", "unavailable"))
       run_lifecycle = capabilities["runLifecycle"]
@@ -416,6 +418,7 @@ if File.file?(capabilities_path)
       capabilities_decision["daemonStatusAvailable"] = daemon_status_available if boolean?(daemon_status_available)
       capabilities_decision["policySource"] = policy_source if %w[daemonStatus fallbackUnavailable].include?(policy_source)
       capabilities_decision["policyStatusAvailable"] = policy_status_available if boolean?(policy_status_available)
+      capabilities_decision["policyEnabled"] = policy_enabled if boolean?(policy_enabled)
       capabilities_decision["supportsRunCommand"] = includes_all?(capabilities_commands, %w[run])
       capabilities_decision["supportsForceRetry"] = supports_force_retry if boolean?(supports_force_retry)
       capabilities_decision["unavailableExitCode"] = unavailable_exit_code
@@ -426,6 +429,7 @@ if File.file?(capabilities_path)
       failures << "viftyctl-capabilities.json daemonStatusAvailable must be boolean" unless boolean?(daemon_status_available)
       failures << "viftyctl-capabilities.json policySource is missing or unsupported" unless %w[daemonStatus fallbackUnavailable].include?(policy_source)
       failures << "viftyctl-capabilities.json policyStatusAvailable must be boolean" unless boolean?(policy_status_available)
+      failures << "viftyctl-capabilities.json policy.enabled must be boolean" unless boolean?(policy_enabled)
       failures << "viftyctl-capabilities.json supportsForceRetry must be boolean" unless boolean?(supports_force_retry)
       failures << "viftyctl-capabilities.json exitCodes.unavailable must be an integer" unless unavailable_exit_code
 
@@ -437,6 +441,9 @@ if File.file?(capabilities_path)
       end
       if capabilities_status == 0 && policy_status_available != true
         failures << "successful capabilities review requires policyStatusAvailable true"
+      end
+      if capabilities_status == 0 && policy_enabled != true
+        failures << "successful capabilities review requires policy.enabled true"
       end
       if capabilities_status && capabilities_status != 0 && unavailable_exit_code && capabilities_status != unavailable_exit_code
         failures << "nonzero capabilities exit must match exitCodes.unavailable"

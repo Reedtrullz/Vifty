@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
   "title": "viftyctl capabilities --json report",
-  "description": "Machine-readable capabilities report emitted by viftyctl capabilities --json. Agents should use this payload to discover supported commands, workloads, policy data, and exit-code meanings instead of hardcoding them; policy limits are trusted for cooling only when policyStatusAvailable is true.",
+  "description": "Machine-readable capabilities report emitted by viftyctl capabilities --json. Agents should use this payload to discover supported commands, workloads, policy data, and exit-code meanings instead of hardcoding them; policy limits are trusted for cooling only when policyStatusAvailable is true, and cooling may be requested only when policy.enabled is true.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -196,7 +196,8 @@
       ],
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "True only when local agent cooling policy is enabled. Agents must refuse cooling when this field is false or absent."
         },
         "minimumAgentRPMPercent": {
           "type": "integer",

@@ -136,6 +136,21 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv policyStatusAvailable actual"))
     }
 
+    func testReviewRejectsCapabilitiesPolicyEnabledDriftEvenWhenSummaryStatusPasses() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            capabilitiesContractText: ValidationEvidenceReviewHarness.defaultCapabilitiesContractTSV
+                .replacingOccurrences(
+                    of: "policy.enabled\ttrue\ttrue",
+                    with: "policy.enabled\tfalse\ttrue"
+                )
+        )
+
+        let result = try harness.runReview(mode: "supported-hardware")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("capabilities-contract.tsv policy.enabled actual"))
+    }
+
     func testReviewRejectsReviewSummaryTSVStatusDrift() throws {
         let harness = try ValidationEvidenceReviewHarness(
             reviewSummaryTSVStatusOverrides: ["capabilities-contract": "1"]
@@ -1766,6 +1781,7 @@ private final class ValidationEvidenceReviewHarness {
     static let defaultCapabilitiesContractTSV = """
     field\tactual\texpected
     policyStatusAvailable\ttrue\ttrue
+    policy.enabled\ttrue\ttrue
     supportsForceRetry\ttrue\ttrue
     runLifecycle.childCommandPreflightBeforeCooling\ttrue\ttrue
     runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue

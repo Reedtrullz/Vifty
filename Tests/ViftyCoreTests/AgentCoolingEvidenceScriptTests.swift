@@ -287,6 +287,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["policySource"] as? String, "daemonStatus")
         XCTAssertEqual(capabilitiesDecision["policyStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(capabilitiesDecision["policyEnabled"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["supportsRunCommand"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["supportsForceRetry"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["runLifecycleSafe"] as? Bool, true)
@@ -611,6 +612,36 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, false)
     }
 
+    func testReviewerRejectsDisabledPolicyForSuccessfulCapabilities() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            capabilitiesJSON: try AgentCoolingEvidenceHarness.jsonString(
+                replacing: "\"enabled\":true",
+                with: "\"enabled\":false",
+                in: AgentCoolingEvidenceHarness.defaultCapabilitiesJSON
+            )
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("successful capabilities review requires policy.enabled true"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
+        XCTAssertEqual(capabilitiesDecision["policyEnabled"] as? Bool, false)
+    }
+
     func testReviewerRejectsNonzeroCapabilitiesWithoutFallbackUnavailablePolicy() throws {
         let harness = try AgentCoolingEvidenceHarness(
             capabilitiesExitCode: 69
@@ -775,6 +806,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",
+            "policyEnabled",
             "supportsRunCommand",
             "supportsForceRetry",
             "runLifecycleSafe",
@@ -949,6 +981,11 @@ private final class AgentCoolingEvidenceHarness {
         }
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         return try XCTUnwrap(String(data: data, encoding: .utf8))
+    }
+
+    static func jsonString(replacing needle: String, with replacement: String, in json: String) throws -> String {
+        XCTAssertTrue(json.contains(needle))
+        return json.replacingOccurrences(of: needle, with: replacement)
     }
 
     func loggedArguments() throws -> [String] {

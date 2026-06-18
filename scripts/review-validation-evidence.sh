@@ -217,6 +217,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
   EXPECTED_CAPABILITIES_CONTRACT = {
     "policyStatusAvailable" => "true",
+    "policy.enabled" => "true",
     "supportsForceRetry" => "true",
     "runLifecycle.childCommandPreflightBeforeCooling" => "true",
     "runLifecycle.autoRestoreAfterChildExit" => "true",

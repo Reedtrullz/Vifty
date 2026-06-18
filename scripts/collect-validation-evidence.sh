@@ -638,6 +638,7 @@ capture_capabilities_contract() {
     ok = true
     expected_booleans = {
       "policyStatusAvailable" => data["policyStatusAvailable"],
+      "policy.enabled" => data.dig("policy", "enabled"),
       "supportsForceRetry" => data["supportsForceRetry"],
       "runLifecycle.childCommandPreflightBeforeCooling" => run_lifecycle["childCommandPreflightBeforeCooling"],
       "runLifecycle.autoRestoreAfterChildExit" => run_lifecycle["autoRestoreAfterChildExit"],
