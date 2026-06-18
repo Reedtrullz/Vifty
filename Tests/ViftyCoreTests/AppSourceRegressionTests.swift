@@ -129,6 +129,20 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(appModel.contains("UserDefaults.standard.set(telemetryHistory"))
     }
 
+    func testPrivateIOKitBridgeOnlyExportsHIDTemperatureReader() throws {
+        let header = try read("Sources/ViftyPrivateIOKit/include/ViftyPrivateIOKit.h")
+        let implementation = try read("Sources/ViftyPrivateIOKit/ViftyPrivateIOKit.c")
+
+        XCTAssertTrue(header.contains("ViftyHIDTemperature"))
+        XCTAssertTrue(header.contains("ViftyCopyHIDTemperatures"))
+        XCTAssertTrue(implementation.contains("int ViftyCopyHIDTemperatures"))
+        XCTAssertFalse(header.contains("ViftyOpenSMC"))
+        XCTAssertFalse(implementation.contains("ViftyOpenSMC"))
+        XCTAssertFalse(implementation.contains("IOServiceOpen"))
+        XCTAssertFalse(implementation.contains("AppleSMCKeysEndpoint"))
+        XCTAssertFalse(implementation.contains("SMCEndpoint1"))
+    }
+
     func testAppBundleIsDockVisibleAndHasAppIcon() throws {
         let plist = try read("Resources/Info.plist")
         let makefile = try read("Makefile")

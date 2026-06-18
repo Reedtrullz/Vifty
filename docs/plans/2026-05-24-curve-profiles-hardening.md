@@ -657,4 +657,4 @@ cd /Users/reidar/Projectos/Vifty && git push
 
 **Total: 7 tasks, 10 new tests, 28 total tests (was 18)**
 
-**Deferred:** BUG 6 (dead ViftyOpenSMC) and BUG 7 (smcFactory unused for writes) — low priority, separate cleanup.
+**Follow-up:** BUG 6 (dead `ViftyOpenSMC`) was removed in the later private-IOKit cleanup; BUG 7 (write-path factory injection) remains a low-priority separate cleanup.

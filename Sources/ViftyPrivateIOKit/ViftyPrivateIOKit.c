@@ -1,10 +1,10 @@
 #include "ViftyPrivateIOKit.h"
 
 #include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOKitLib.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 #include <IOKit/hidsystem/IOHIDServiceClient.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef const struct __IOHIDEvent *IOHIDEventRef;
@@ -109,112 +109,4 @@ int ViftyCopyHIDTemperatures(ViftyHIDTemperature *buffer, int capacity) {
     CFRelease(services);
     CFRelease(client);
     return written;
-}
-
-static io_service_t vifty_get_service_by_name(const char *name) {
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceNameMatching(name));
-    if (service != IO_OBJECT_NULL) {
-        return service;
-    }
-    return IO_OBJECT_NULL;
-}
-
-static io_service_t vifty_get_service_by_class(const char *class_name) {
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(class_name));
-    if (service != IO_OBJECT_NULL) {
-        return service;
-    }
-    return IO_OBJECT_NULL;
-}
-
-static io_service_t vifty_get_service_by_iterator(void) {
-    io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("AppleSMC"), &iterator);
-    if (result != KERN_SUCCESS || iterator == IO_OBJECT_NULL) {
-        return IO_OBJECT_NULL;
-    }
-    io_service_t service = IOIteratorNext(iterator);
-    IOObjectRelease(iterator);
-    return service;
-}
-
-static io_service_t vifty_get_service_by_registry_walk(void) {
-    io_registry_entry_t root = IORegistryGetRootEntry(kIOMainPortDefault);
-    if (root == IO_OBJECT_NULL) {
-        return IO_OBJECT_NULL;
-    }
-
-    io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t result = IORegistryEntryCreateIterator(
-        root,
-        kIOServicePlane,
-        kIORegistryIterateRecursively,
-        &iterator
-    );
-    IOObjectRelease(root);
-    if (result != KERN_SUCCESS || iterator == IO_OBJECT_NULL) {
-        return IO_OBJECT_NULL;
-    }
-
-    io_object_t entry = IO_OBJECT_NULL;
-    while ((entry = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
-        io_name_t name = {0};
-        io_name_t className = {0};
-        IORegistryEntryGetName(entry, name);
-        IOObjectGetClass(entry, className);
-
-        if (strcmp(name, "AppleSMCKeysEndpoint") == 0 || strcmp(className, "AppleSMCKeysEndpoint") == 0) {
-            IOObjectRelease(iterator);
-            return entry;
-        }
-
-        IOObjectRelease(entry);
-    }
-
-    IOObjectRelease(iterator);
-    return IO_OBJECT_NULL;
-}
-
-static io_service_t vifty_get_service_by_known_paths(void) {
-    const char *paths[] = {
-        "IOService:/AppleARMPE/arm-io/AppleT600xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
-        "IOService:/AppleARMPE/arm-io/AppleT811xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
-        "IOService:/AppleARMPE/arm-io/AppleT812xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
-        "IOService:/AppleARMPE/arm-io/AppleT813xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint",
-        "IOService:/AppleARMPE/arm-io/AppleT814xIO/smc@90400000/AppleASCWrapV4/iop-smc-nub/RTBuddy(SMC)/SMCEndpoint1/AppleSMCKeysEndpoint"
-    };
-
-    for (size_t index = 0; index < sizeof(paths) / sizeof(paths[0]); index++) {
-        io_registry_entry_t entry = IORegistryEntryFromPath(kIOMainPortDefault, paths[index]);
-        if (entry != IO_OBJECT_NULL) {
-            return entry;
-        }
-    }
-
-    return IO_OBJECT_NULL;
-}
-
-int ViftyOpenSMC(io_connect_t *connection) {
-    if (connection == 0) {
-        return KERN_INVALID_ARGUMENT;
-    }
-
-    *connection = IO_OBJECT_NULL;
-    io_service_t service = IO_OBJECT_NULL;
-
-    service = vifty_get_service_by_name("AppleSMCKeysEndpoint");
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_name("SMCEndpoint1");
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_class("AppleSMCKeysEndpoint");
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_class("AppleSMC");
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_iterator();
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_registry_walk();
-    if (service == IO_OBJECT_NULL) service = vifty_get_service_by_known_paths();
-
-    if (service == IO_OBJECT_NULL) {
-        return kIOReturnNoDevice;
-    }
-
-    kern_return_t result = IOServiceOpen(service, mach_task_self(), 0, connection);
-    IOObjectRelease(service);
-    return result;
 }

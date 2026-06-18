@@ -36,12 +36,12 @@ Expected: prints the path without error.
 
 ### Task 1: Add missing SMC known paths to firstSMCService()
 
-**Objective:** Add T811x (M2), T812x (M2 Pro/Max), T813x (M3), T814x (M4) paths to the known-path fallback in SMCClient, matching the paths already in ViftyPrivateIOKit.c.
+**Objective:** Add T811x (M2), T812x (M2 Pro/Max), T813x (M3), T814x (M4) paths to the known-path fallback in SMCClient, matching the SoC paths originally carried by the now-removed C SMC opener.
 
 **Files:**
 - Modify: `Sources/ViftyCore/SMCClient.swift:206-210`
 
-**Context:** `firstSMCService()` in Swift only knows `AppleT600xIO` (M1 Pro/Max). The C function `ViftyOpenSMC()` in `ViftyPrivateIOKit.c:178-195` has all five SoC paths. The name/class-based lookups should still work on newer Macs, but if those fail the known-path fast path won't match. Also, `SMCClient.diagnostics()` only probes name/class lookups, not known paths — so the diagnostic output can't confirm whether a known path would have worked.
+**Context:** `firstSMCService()` in Swift only knew `AppleT600xIO` (M1 Pro/Max). The old C `ViftyOpenSMC()` fallback had all five SoC paths, but that duplicate SMC opener is now removed so the C bridge stays scoped to HID temperature fallback. The name/class-based lookups should still work on newer Macs, but if those fail the Swift known-path fast path must match. Also, `SMCClient.diagnostics()` only probed name/class lookups at the time — so the diagnostic output could not confirm whether a known path would have worked.
 
 **Step 1: Write the test**
 
