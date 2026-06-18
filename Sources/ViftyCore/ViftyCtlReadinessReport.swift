@@ -91,6 +91,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var safeToRequestCooling: Bool?
     public var daemonControlPathReady: Bool
     public var manualControlActive: Bool
+    public var appPreferences: ViftyAppPreferencesDiagnostic
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
     public var isMacBookPro: Bool
@@ -115,6 +116,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case safeToRequestCooling
         case daemonControlPathReady
         case manualControlActive
+        case appPreferences
         case modelIdentifier
         case isAppleSilicon
         case isMacBookPro
@@ -140,6 +142,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         safeToRequestCooling: Bool? = nil,
         daemonControlPathReady: Bool? = nil,
         manualControlActive: Bool = false,
+        appPreferences: ViftyAppPreferencesDiagnostic = .unavailable,
         modelIdentifier: String,
         isAppleSilicon: Bool,
         isMacBookPro: Bool,
@@ -165,6 +168,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
+        self.appPreferences = appPreferences
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
         self.isMacBookPro = isMacBookPro
@@ -200,6 +204,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
             daemonControlPathReady: try container.decodeIfPresent(Bool.self, forKey: .daemonControlPathReady),
             manualControlActive: try container.decodeIfPresent(Bool.self, forKey: .manualControlActive) ?? false,
+            appPreferences: try container.decodeIfPresent(
+                ViftyAppPreferencesDiagnostic.self,
+                forKey: .appPreferences
+            ) ?? .unavailable,
             modelIdentifier: try container.decode(String.self, forKey: .modelIdentifier),
             isAppleSilicon: try container.decode(Bool.self, forKey: .isAppleSilicon),
             isMacBookPro: try container.decode(Bool.self, forKey: .isMacBookPro),
@@ -233,6 +241,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
         try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
         try container.encode(manualControlActive, forKey: .manualControlActive)
+        try container.encode(appPreferences, forKey: .appPreferences)
         try container.encode(modelIdentifier, forKey: .modelIdentifier)
         try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
         try container.encode(isMacBookPro, forKey: .isMacBookPro)
@@ -255,6 +264,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         thermalPressure: ThermalPressure,
         generatedAt: Date = Date(),
         manualControlActive: Bool = false,
+        appPreferences: ViftyAppPreferencesDiagnostic = .unavailable,
         daemonSnapshotError: String? = nil,
         agentControlStatusError: String? = nil
     ) -> ViftyCtlReadinessReport {
@@ -267,6 +277,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             thermalPressure: thermalPressure,
             controllableFans: controllableFans,
             manualControlActive: manualControlActive,
+            appPreferences: appPreferences,
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )
@@ -280,6 +291,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             safeToRequestCooling: safeToRequestCooling(for: recommendedAgentAction),
             daemonControlPathReady: daemonControlPathReady(from: checks),
             manualControlActive: manualControlActive,
+            appPreferences: appPreferences,
             modelIdentifier: snapshot.modelIdentifier,
             isAppleSilicon: snapshot.isAppleSilicon,
             isMacBookPro: snapshot.isMacBookPro,
@@ -303,6 +315,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         thermalPressure: ThermalPressure,
         controllableFans: [Fan],
         manualControlActive: Bool,
+        appPreferences: ViftyAppPreferencesDiagnostic,
         daemonSnapshotError: String?,
         agentControlStatusError: String?
     ) -> [ViftyCtlReadinessCheck] {
@@ -322,7 +335,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             fanRangesValidCheck(controllableFans),
             thermalPressureSafeCheck(thermalPressure),
             activeLeaseClearCheck(agentControl),
-            manualControlClearCheck(manualControlActive),
+            manualControlClearCheck(manualControlActive, appPreferences: appPreferences),
             fanModeTelemetryCheck(snapshot)
         ]
     }
@@ -514,15 +527,35 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         )
     }
 
-    private static func manualControlClearCheck(_ manualControlActive: Bool) -> ViftyCtlReadinessCheck {
+    private static func manualControlClearCheck(
+        _ manualControlActive: Bool,
+        appPreferences: ViftyAppPreferencesDiagnostic
+    ) -> ViftyCtlReadinessCheck {
         ViftyCtlReadinessCheck(
             id: "manualControlClear",
             severity: .warning,
             passed: !manualControlActive,
             message: manualControlActive
-                ? "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose. If manualControlActive stays true, switch Vifty/default mode to Auto before requesting agent cooling."
+                ? manualControlActiveMessage(appPreferences: appPreferences)
                 : "No Vifty/manual fan-control marker is active."
         )
+    }
+
+    private static func manualControlActiveMessage(
+        appPreferences: ViftyAppPreferencesDiagnostic
+    ) -> String {
+        var message = "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose."
+        switch appPreferences.startupMode {
+        case .curve, .fixed:
+            if let startupMode = appPreferences.startupMode {
+                message += " Vifty default startup mode is \(startupMode.rawValue); switch Vifty/default mode to Auto before requesting agent cooling."
+            }
+        case .auto:
+            message += " Vifty default startup mode is Auto; if manualControlActive stays true, restore the current manual run to Auto before requesting agent cooling."
+        case nil:
+            message += " If manualControlActive stays true, switch Vifty/default mode to Auto before requesting agent cooling."
+        }
+        return message
     }
 
     private static func fanModeTelemetryCheck(_ snapshot: HardwareSnapshot) -> ViftyCtlReadinessCheck {

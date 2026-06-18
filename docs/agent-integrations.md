@@ -168,7 +168,7 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - Command-error `recommendedRecoveryAction: "repairHelper"`: recover daemon/transport failures through the Vifty helper repair path; do not attempt direct SMC writes.
 - `recommendedRecoveryAction: "fixChildCommand"`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
 - `recommendedRecoveryAction: "waitBeforeRetry"`: wait for `retryAfterSeconds`; do not busy-loop retries.
-- `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto once before requesting another lease, then re-run diagnose. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, stop and ask the user to switch Vifty/default startup mode to Auto.
+- `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto once before requesting another lease, then re-run diagnose. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto.
 - `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
 - `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry, and do not combine it with uncooled fallback.

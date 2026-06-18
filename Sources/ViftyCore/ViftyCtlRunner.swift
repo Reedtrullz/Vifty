@@ -560,6 +560,7 @@ public struct ViftyCtlRunner: Sendable {
     private let processRunner: any ViftyCtlProcessRunning
     private let thermalReader: @Sendable () -> ThermalPressure
     private let manualControlActiveReader: @Sendable () -> Bool
+    private let appPreferencesReader: @Sendable () -> ViftyAppPreferencesDiagnostic
     private let manualControlClearer: @Sendable () -> Void
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
@@ -569,6 +570,9 @@ public struct ViftyCtlRunner: Sendable {
         processRunner: any ViftyCtlProcessRunning,
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         manualControlActiveReader: @escaping @Sendable () -> Bool = { ManualControlMarker().wasManualControlActive },
+        appPreferencesReader: @escaping @Sendable () -> ViftyAppPreferencesDiagnostic = {
+            ViftyAppPreferencesDiagnosticReader().read()
+        },
         manualControlClearer: @escaping @Sendable () -> Void = { ManualControlMarker().clear() },
         now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
@@ -577,6 +581,7 @@ public struct ViftyCtlRunner: Sendable {
         self.processRunner = processRunner
         self.thermalReader = thermalReader
         self.manualControlActiveReader = manualControlActiveReader
+        self.appPreferencesReader = appPreferencesReader
         self.manualControlClearer = manualControlClearer
         self.now = now
         self.sleep = sleep
@@ -854,6 +859,7 @@ public struct ViftyCtlRunner: Sendable {
             thermalPressure: thermalReader(),
             generatedAt: generatedAt,
             manualControlActive: manualControlActiveReader(),
+            appPreferences: appPreferencesReader(),
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )

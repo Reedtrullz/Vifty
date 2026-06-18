@@ -68,11 +68,11 @@ The readiness report has `schemaVersion: 1` and a top-level `state`:
 - `degraded` - no hard blocker, but one or more warning checks failed.
 - `blocked` - at least one error check failed; do not request cooling.
 
-It also includes `recommendedAgentAction`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` so agents do not need to infer the next step from prose or fallback telemetry:
+It also includes `recommendedAgentAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `appPreferences.startupMode` so agents do not need to infer the next step from prose, fallback telemetry, or Vifty UI state:
 
 - `requestCooling` / `safeToRequestCooling: true` - safe to request a normal bounded lease.
 - `requestCoolingWithCaution` / `safeToRequestCooling: true` - a warning exists; reduce duration/RPM or be ready to back off.
-- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease or manual-control marker is active; restore Auto once or wait before requesting new cooling. A successful CLI `restore-auto` clears the local manual-control marker, but agents should re-run `diagnose --json` and require `manualControlActive: false` before cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, stop and ask the user to switch Vifty/default startup mode to Auto before requesting cooling.
+- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease or manual-control marker is active; restore Auto once or wait before requesting new cooling. A successful CLI `restore-auto` clears the local manual-control marker, but agents should re-run `diagnose --json` and require `manualControlActive: false` before cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto before requesting cooling.
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
 - `daemonControlPathReady: false` - the daemon-backed snapshot or agent-control path is unavailable; repair the helper before requesting cooling, even if other telemetry exists.
 
@@ -83,13 +83,13 @@ Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl).
 - [diagnose-degraded-manual-control.json](examples/viftyctl/diagnose-degraded-manual-control.json) - degraded + `restoreAutoBeforeRequestingCooling` + `manualControlActive: true`.
 - [diagnose-blocked-helper-unreachable.json](examples/viftyctl/diagnose-blocked-helper-unreachable.json) - blocked + `doNotRequestCooling` + `daemonControlPathReady: false`.
 
-Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership. If an agent runs the supervised CLI restore path, the next diagnose must show `manualControlActive: false` before the agent requests cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, stop and ask the user to switch Vifty/default startup mode to Auto.
+Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership. If an agent runs the supervised CLI restore path, the next diagnose must show `manualControlActive: false` before the agent requests cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto.
 
 `recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
 
 - `none` - no recovery is needed before following `recommendedAgentAction`.
 - `repairHelper` - open Vifty and use Repair/Reinstall Helper; do not attempt direct SMC writes.
-- `restoreAutoBeforeRetry` - restore Auto once, re-run diagnose, or wait for the active lease to clear before retrying. If `manualControlActive` stays true, switch Vifty/default startup mode to Auto before another cooling request.
+- `restoreAutoBeforeRetry` - restore Auto once, re-run diagnose, or wait for the active lease to clear before retrying. If `manualControlActive` stays true, inspect `appPreferences.startupMode`, then switch Vifty/default startup mode to Auto before another cooling request.
 - `backOffWorkload` - thermal pressure is critical; pause or reduce the workload instead of fighting system thermals.
 - `inspectPolicy` - agent cooling policy is disabled; inspect local policy/status before retrying.
 - `collectHardwareEvidence` - hardware/fan/sensor evidence is missing or inconsistent; collect read-only validation evidence before considering support.
@@ -107,6 +107,7 @@ Important fields:
 - `safeToRequestCooling`
 - `daemonControlPathReady`
 - `manualControlActive`
+- `appPreferences`
 - `fanCount`
 - `controllableFanCount`
 - `temperatureSensorCount`
@@ -191,7 +192,7 @@ Use this output rather than hardcoding policy limits, metadata limits, wrapper p
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 
-Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
+Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The additive `appPreferences.startupMode` field helps diagnose persistent manual-control markers, but it is not a cooling authorization. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
 
 For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell runners, see [agent-integrations.md](agent-integrations.md).
 

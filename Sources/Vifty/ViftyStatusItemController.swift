@@ -68,7 +68,7 @@ final class ViftyStatusItemController: NSObject {
 
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
-        let statusItemText = model.menuBarStatusItemText
+        let statusItemText = resolvedStatusItemText
         if statusItemText == nil {
             let image = NSImage(systemSymbolName: "fan", accessibilityDescription: model.menuBarLabelText)
             image?.isTemplate = true
@@ -84,6 +84,13 @@ final class ViftyStatusItemController: NSObject {
         }
         button.toolTip = model.menuTitle
         button.setAccessibilityLabel(model.menuBarLabelText)
+    }
+
+    private var resolvedStatusItemText: String? {
+        guard let text = model.menuBarStatusItemText, !text.contains("--") else {
+            return nil
+        }
+        return text
     }
 
     private func scheduleTelemetryPrimeIfNeeded() {

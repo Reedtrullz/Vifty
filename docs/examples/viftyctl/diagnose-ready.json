@@ -13,6 +13,11 @@
     }
   },
   "agentControlStatusError": null,
+  "appPreferences": {
+    "readError": null,
+    "startupMode": "Auto",
+    "startupModeSource": "persisted"
+  },
   "checks": [
     {
       "id": "daemonSnapshotAvailable",

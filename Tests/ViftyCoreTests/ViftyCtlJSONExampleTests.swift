@@ -82,6 +82,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.appPreferences.startupMode, .auto)
+        XCTAssertEqual(report.appPreferences.startupModeSource, .persisted)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertEqual(report.controllableFanCount, 2)
@@ -149,6 +151,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertTrue(report.manualControlActive)
+        XCTAssertEqual(report.appPreferences.startupMode, .curve)
+        XCTAssertEqual(report.appPreferences.startupModeSource, .persisted)
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertEqual(report.controllableFanCount, 2)
         XCTAssertEqual(report.fans.map(\.hardwareMode), ["Forced", "Forced"])
@@ -192,6 +196,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "recommendedRecoveryAction")
         payload.removeValue(forKey: "daemonControlPathReady")
         payload.removeValue(forKey: "manualControlActive")
+        payload.removeValue(forKey: "appPreferences")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let report = try JSONDecoder().decode(ViftyCtlReadinessReport.self, from: data)
@@ -202,6 +207,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.appPreferences, .unavailable)
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
@@ -327,6 +333,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         }
 
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let appPreferencesProperty = try XCTUnwrap(properties["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferencesProperty["$ref"] as? String, "#/$defs/appPreferencesDiagnostic")
         XCTAssertEqual(enumValues(named: "state", in: properties), ["ready", "degraded", "blocked"])
         XCTAssertEqual(enumValues(named: "recommendedAgentAction", in: properties), [
             "requestCooling",
@@ -351,6 +359,21 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         ])
 
         let definitions = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let appPreferences = try XCTUnwrap(definitions["appPreferencesDiagnostic"] as? [String: Any])
+        let appPreferencesRequired = try XCTUnwrap(appPreferences["required"] as? [String])
+        XCTAssertEqual(appPreferencesRequired, ["startupMode", "startupModeSource", "readError"])
+        let appPreferencesProperties = try XCTUnwrap(appPreferences["properties"] as? [String: Any])
+        let startupModeProperty = try XCTUnwrap(appPreferencesProperties["startupMode"] as? [String: Any])
+        let startupModeEnum = try XCTUnwrap(startupModeProperty["enum"] as? [Any])
+        XCTAssertEqual(startupModeEnum.compactMap { $0 as? String }, ["Auto", "Curve", "Fixed"])
+        XCTAssertTrue(startupModeEnum.contains { $0 is NSNull })
+        XCTAssertEqual(enumValues(named: "startupModeSource", in: appPreferencesProperties), [
+            "persisted",
+            "defaultMissingFile",
+            "defaultMissingKey",
+            "unreadable",
+            "unavailable"
+        ])
         let readinessCheck = try XCTUnwrap(definitions["readinessCheck"] as? [String: Any])
         let checkProperties = try XCTUnwrap(readinessCheck["properties"] as? [String: Any])
         XCTAssertEqual(enumValues(named: "severity", in: checkProperties), ["info", "warning", "error"])

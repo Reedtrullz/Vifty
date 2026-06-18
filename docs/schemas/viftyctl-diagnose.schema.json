@@ -70,6 +70,10 @@
       "description": "True when Vifty's local manual-control marker is present. Agents must restore Auto or ask the user to switch Vifty to Auto before requesting cooling.",
       "type": "boolean"
     },
+    "appPreferences": {
+      "description": "Read-only snapshot of local Vifty app preferences useful for diagnosing whether a saved default startup mode may reassert manual control. This is not a cooling authorization.",
+      "$ref": "#/$defs/appPreferencesDiagnostic"
+    },
     "modelIdentifier": {
       "type": "string"
     },
@@ -141,6 +145,43 @@
     }
   },
   "$defs": {
+    "appPreferencesDiagnostic": {
+      "type": "object",
+      "required": [
+        "startupMode",
+        "startupModeSource",
+        "readError"
+      ],
+      "properties": {
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "startupModeSource": {
+          "enum": [
+            "persisted",
+            "defaultMissingFile",
+            "defaultMissingKey",
+            "unreadable",
+            "unavailable"
+          ]
+        },
+        "readError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "fanReport": {
       "type": "object",
       "required": [

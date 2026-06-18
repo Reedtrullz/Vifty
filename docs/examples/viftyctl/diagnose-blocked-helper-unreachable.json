@@ -14,6 +14,11 @@
     "policy": null
   },
   "agentControlStatusError": "Could not create daemon proxy.",
+  "appPreferences": {
+    "readError": null,
+    "startupMode": "Auto",
+    "startupModeSource": "persisted"
+  },
   "checks": [
     {
       "id": "daemonSnapshotAvailable",

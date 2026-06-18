@@ -284,6 +284,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
             manualControlActiveReader: { false },
+            appPreferencesReader: {
+                ViftyAppPreferencesDiagnostic(startupMode: .auto, startupModeSource: .persisted)
+            },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -299,6 +302,10 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["manualControlActive"] as? Bool, false)
+        let appPreferences = try XCTUnwrap(json["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Auto")
+        XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+        XCTAssertTrue(appPreferences["readError"] is NSNull)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(json["thermalPressure"] as? String, "nominal")
         XCTAssertEqual(json["fanCount"] as? Int, 2)
@@ -495,6 +502,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
             manualControlActiveReader: { true },
+            appPreferencesReader: {
+                ViftyAppPreferencesDiagnostic(startupMode: .curve, startupModeSource: .persisted)
+            },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -522,6 +532,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["severity"] as? String) == "warning"
                 && (check["message"] as? String)?.contains("restore Auto") == true
                 && (check["message"] as? String)?.contains("re-run diagnose") == true
+                && (check["message"] as? String)?.contains("default startup mode is Curve") == true
                 && (check["message"] as? String)?.contains("switch Vifty/default mode to Auto") == true
         })
         let prepareRequestCount = await client.prepareRequestCount

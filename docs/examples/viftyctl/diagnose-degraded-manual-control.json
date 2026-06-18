@@ -13,6 +13,11 @@
     }
   },
   "agentControlStatusError": null,
+  "appPreferences": {
+    "readError": null,
+    "startupMode": "Curve",
+    "startupModeSource": "persisted"
+  },
   "checks": [
     {
       "id": "daemonSnapshotAvailable",
@@ -88,7 +93,7 @@
     },
     {
       "id": "manualControlClear",
-      "message": "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose. If manualControlActive stays true, switch Vifty/default mode to Auto before requesting agent cooling.",
+      "message": "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose. Vifty default startup mode is Curve; switch Vifty/default mode to Auto before requesting agent cooling.",
       "passed": false,
       "severity": "warning"
     },
