@@ -997,6 +997,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(guide.contains("one bounded `viftyctl run --json` lease for `/bin/sleep 5`"))
         XCTAssertTrue(guide.contains("not as the first response to helper-unreachable"))
         XCTAssertTrue(guide.contains("blocked readiness states"))
+        XCTAssertTrue(guide.contains("`manual control active before smoke run`"))
         XCTAssertTrue(guide.contains("launchd/helper install evidence"))
         XCTAssertTrue(guide.contains("diagnoseDecision"))
         XCTAssertTrue(guide.contains("capabilitiesDecision"))

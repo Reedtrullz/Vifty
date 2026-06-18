@@ -144,6 +144,7 @@ with exactly one structured cooldown retry if the daemon returns
 diagnose, and command-error schema IDs, daemon-backed policy status,
 `policy.enabled: true`, advertised `run` support, and the safe run lifecycle used by guarded wrappers. Use it for
 supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
+If Vifty/manual ownership is still active, the blocked summary's `run.skippedReason` is `manual control active before smoke run`; restore Auto before collecting supervised run evidence.
 
 ## Failure Handling
 

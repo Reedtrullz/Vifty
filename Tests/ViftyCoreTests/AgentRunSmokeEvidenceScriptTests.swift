@@ -229,6 +229,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75, result.stderr)
         XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("manual control active before smoke run"), result.stdout)
         XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
 
         let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
@@ -239,7 +240,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["manualControlActive"] as? Bool, true)
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
-        XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
+        XCTAssertEqual(run["skippedReason"] as? String, "manual control active before smoke run")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesDoNotAdvertiseSafeRunLifecycle() throws {

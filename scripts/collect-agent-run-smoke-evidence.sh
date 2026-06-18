@@ -622,6 +622,8 @@ IFS=$'\t' read -r readiness_state safe_to_request daemon_ready manual_control_ac
 skip_reason=""
 if [[ "${pre_capabilities_status}" -ne 0 || "${capabilities_safe}" != "true" ]]; then
   skip_reason="capabilities preflight did not advertise safe viftyctl run"
+elif [[ "${manual_control_active}" == "true" ]]; then
+  skip_reason="manual control active before smoke run"
 elif [[ "${pre_diagnose_status}" -ne 0 ||
         "${safe_to_request}" != "true" ||
         "${daemon_ready}" != "true" ||
