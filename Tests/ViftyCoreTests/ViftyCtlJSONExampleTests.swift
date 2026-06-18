@@ -73,6 +73,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertEqual(report.controllableFanCount, 2)
@@ -92,6 +93,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertFalse(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertNil(report.daemonSnapshotError)
@@ -116,6 +118,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertTrue(report.agentControl.enabled)
         XCTAssertEqual(report.agentControl.activeLease?.id, "lease-example-test")
@@ -137,6 +140,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
         XCTAssertEqual(report.thermalPressure, .serious)
         XCTAssertTrue(report.agentControl.enabled)
         XCTAssertNil(report.agentControl.activeLease)
@@ -151,6 +155,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         var payload = try readJSON(fixtureURL("diagnose-ready.json"))
         payload.removeValue(forKey: "recommendedRecoveryAction")
         payload.removeValue(forKey: "daemonControlPathReady")
+        payload.removeValue(forKey: "manualControlActive")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let report = try JSONDecoder().decode(ViftyCtlReadinessReport.self, from: data)
@@ -160,6 +165,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
@@ -269,6 +275,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "recommendedRecoveryAction",
             "safeToRequestCooling",
             "daemonControlPathReady",
+            "manualControlActive",
             "isAppleSilicon",
             "isMacBookPro",
             "thermalPressure",
@@ -324,6 +331,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "fanRangesValid",
             "thermalPressureSafe",
             "activeLeaseClear",
+            "manualControlClear",
             "fanModeTelemetry"
         ])
 

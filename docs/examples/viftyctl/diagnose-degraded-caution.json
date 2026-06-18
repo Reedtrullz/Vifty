@@ -87,6 +87,12 @@
       "severity": "warning"
     },
     {
+      "id": "manualControlClear",
+      "message": "No Vifty/manual fan-control marker is active.",
+      "passed": true,
+      "severity": "warning"
+    },
+    {
       "id": "fanModeTelemetry",
       "message": "Fan hardware mode telemetry is available.",
       "passed": true,
@@ -127,6 +133,7 @@
   "highestTemperatureCelsius": 76.8,
   "isAppleSilicon": true,
   "isMacBookPro": true,
+  "manualControlActive": false,
   "modelIdentifier": "MacBookPro18,3",
   "recommendedAgentAction": "requestCoolingWithCaution",
   "recommendedRecoveryAction": "none",

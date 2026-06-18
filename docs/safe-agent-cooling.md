@@ -80,11 +80,12 @@ Decision table:
 | --- | --- |
 | `state: "ready"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use `guarded-run.sh` with normal conservative limits. |
 | `state: "degraded"`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` | Use a shorter duration, lower RPM percent, and surface the warning to the user. |
+| `manualControlActive: true` or check `manualControlClear` failed | Stop before cooling. Restore Auto in Vifty or ask the user before an agent takes ownership. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto or wait. |
 | `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that and the guarded wrapper allows it; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
 | `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying. |
 | Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes or uncooled guarded fallback. |
-| Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto or wait for the active lease to clear before retrying. |
+| Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto, clear manual/user ownership, or wait for the active lease to clear before retrying. |
 | Diagnose `recommendedRecoveryAction: "backOffWorkload"` | Pause or reduce the workload; do not fight critical system thermals. |
 | Diagnose `recommendedRecoveryAction: "inspectPolicy"` | Inspect policy/status before retrying; do not assume cooling is available and do not use the guarded uncooled fallback. |
 | Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"` | Collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback. |
@@ -92,7 +93,7 @@ Decision table:
 | `recommendedRecoveryAction: "waitBeforeRetry"` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
 | `recommendedRecoveryAction: "fixChildCommand"` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |
 
-Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `checks`, and `agentControl`.
+Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `checks`, and `agentControl`.
 
 ## Conservative Workload Limits
 
@@ -180,7 +181,7 @@ were run. Its JSON summary declares
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`.
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, and `daemonControlPathReady` so maintainers can route
+`safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` so maintainers can route
 blocked readiness without parsing human text. Legacy `v1.1.x` bundles that
 omit `daemonControlPathReady` may pass only when the reviewer can infer it from
 structured readiness/recovery fields. The `capabilitiesDecision` summary

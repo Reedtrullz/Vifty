@@ -239,7 +239,8 @@
         "recommendedAgentAction",
         "recommendedRecoveryAction",
         "safeToRequestCooling",
-        "daemonControlPathReady"
+        "daemonControlPathReady",
+        "manualControlActive"
       ],
       "properties": {
         "exitStatus": {
@@ -295,6 +296,12 @@
           ]
         },
         "daemonControlPathReady": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "manualControlActive": {
           "type": [
             "boolean",
             "null"

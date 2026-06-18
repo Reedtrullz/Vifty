@@ -777,6 +777,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithManualControlActive() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            manualControlActive: true
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have manualControlActive=false"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithDisabledPolicy() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1199,6 +1220,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        manualControlActive: Bool = false,
         installSource: String = "not-recorded",
         sourceRef: String = "",
         sourceSHA: String = "",
@@ -1222,6 +1244,7 @@ private final class ValidationEvidenceReviewHarness {
             capabilitiesSchemaID: capabilitiesSchemaID,
             diagnoseSchemaID: diagnoseSchemaID,
             commandErrorSchemaID: commandErrorSchemaID,
+            manualControlActive: manualControlActive,
             installSource: installSource,
             sourceRef: sourceRef,
             sourceSHA: sourceSHA,
@@ -1247,6 +1270,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        manualControlActive: Bool = false,
         rateLimitRetryAttempted: Bool = false,
         rateLimitRetryAfterSeconds: Int = 2,
         rateLimitInitialExitStatus: Int = 75,
@@ -1398,6 +1422,7 @@ private final class ValidationEvidenceReviewHarness {
                 "recommendedRecoveryAction": status == "blocked" ? "repairHelper" : "none",
                 "safeToRequestCooling": status != "blocked",
                 "daemonControlPathReady": status != "blocked",
+                "manualControlActive": manualControlActive,
                 "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
                 "capabilitiesSchemaVersion": capabilitiesSchemaVersion,
                 "capabilitiesSchemaID": capabilitiesSchemaID,
@@ -1632,6 +1657,7 @@ private final class ValidationEvidenceReviewHarness {
             "recommendedAgentAction": fixture.recommendedAgentAction,
             "safeToRequestCooling": fixture.safeToRequestCooling,
             "daemonControlPathReady": daemonControlPathReady,
+            "manualControlActive": false,
             "modelIdentifier": supportedPasses ? "MacBookPro18,3" : "Mac14,2",
             "isAppleSilicon": fixture.isAppleSilicon,
             "isMacBookPro": fixture.isMacBookPro,

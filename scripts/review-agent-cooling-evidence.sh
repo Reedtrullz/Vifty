@@ -113,7 +113,8 @@ diagnose_decision = {
   "recommendedAgentAction" => nil,
   "recommendedRecoveryAction" => nil,
   "safeToRequestCooling" => nil,
-  "daemonControlPathReady" => nil
+  "daemonControlPathReady" => nil,
+  "manualControlActive" => nil
 }
 capabilities_decision = {
   "exitStatus" => nil,
@@ -536,11 +537,14 @@ if File.file?(diagnose_path)
       safe_to_request = diagnose["safeToRequestCooling"]
       daemon_ready = diagnose["daemonControlPathReady"]
       daemon_ready_present = diagnose.key?("daemonControlPathReady")
+      manual_control_active = diagnose["manualControlActive"]
+      manual_control_active_present = diagnose.key?("manualControlActive")
 
       diagnose_decision["state"] = state if DIAGNOSE_STATES.include?(state)
       diagnose_decision["recommendedAgentAction"] = agent_action if DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
       diagnose_decision["recommendedRecoveryAction"] = recovery_action if DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
       diagnose_decision["safeToRequestCooling"] = safe_to_request if [true, false].include?(safe_to_request)
+      diagnose_decision["manualControlActive"] = manual_control_active if [true, false].include?(manual_control_active)
       if [true, false].include?(daemon_ready)
         diagnose_decision["daemonControlPathReady"] = daemon_ready
       elsif daemon_ready_present
@@ -565,6 +569,11 @@ if File.file?(diagnose_path)
       failures << "viftyctl-diagnose.json recommendedAgentAction is missing or unsupported" unless DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
       failures << "viftyctl-diagnose.json recommendedRecoveryAction is missing or unsupported" unless DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
       failures << "viftyctl-diagnose.json safeToRequestCooling must be boolean" unless [true, false].include?(safe_to_request)
+      if manual_control_active_present && ![true, false].include?(manual_control_active)
+        failures << "viftyctl-diagnose.json manualControlActive must be boolean"
+      elsif !manual_control_active_present
+        warnings << "viftyctl-diagnose.json is missing manualControlActive; legacy reports may not distinguish manual/user fan ownership"
+      end
 
       if diagnose_status == 75 && state != "blocked"
         failures << "viftyctl-diagnose exit 75 must report state blocked"
@@ -584,6 +593,12 @@ if File.file?(diagnose_path)
       end
       if daemon_ready == false && recovery_action != "repairHelper"
         failures << "daemonControlPathReady false must recommend repairHelper"
+      end
+      if manual_control_active == true && safe_to_request != false
+        failures << "manualControlActive true must set safeToRequestCooling false"
+      end
+      if manual_control_active == true && %w[requestCooling requestCoolingWithCaution].include?(agent_action)
+        failures << "manualControlActive true must not recommend agent cooling"
       end
     end
   rescue JSON::ParserError => error

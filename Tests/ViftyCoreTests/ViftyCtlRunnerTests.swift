@@ -273,6 +273,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             client: client,
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
+            manualControlActiveReader: { false },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -287,6 +288,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.none.rawValue)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(json["thermalPressure"] as? String, "nominal")
         XCTAssertEqual(json["fanCount"] as? Int, 2)
@@ -300,6 +302,11 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["passed"] as? Bool) == true
         })
         XCTAssertTrue(checks.contains { $0["id"] as? String == "supportedHardware" && $0["passed"] as? Bool == true })
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "manualControlClear"
+                && (check["passed"] as? Bool) == true
+                && (check["severity"] as? String) == "warning"
+        })
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount
         XCTAssertEqual(prepareRequestCount, 0)
@@ -321,6 +328,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             client: client,
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
+            manualControlActiveReader: { false },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -362,6 +370,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             client: client,
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
+            manualControlActiveReader: { false },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -425,6 +434,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             client: client,
             processRunner: FakeProcessRunner(),
             thermalReader: { .nominal },
+            manualControlActiveReader: { false },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
@@ -459,6 +469,55 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasonCount, 0)
     }
 
+    func testDiagnoseJSONReturnsDegradedUnsafeReportWhenManualControlMarkerIsActive() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { true },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "degraded")
+        XCTAssertEqual(
+            json["recommendedAgentAction"] as? String,
+            ViftyCtlRecommendedAgentAction.restoreAutoBeforeRequestingCooling.rawValue
+        )
+        XCTAssertEqual(
+            json["recommendedRecoveryAction"] as? String,
+            ViftyCtlReadinessRecoveryAction.restoreAutoBeforeRetry.rawValue
+        )
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, true)
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "manualControlClear"
+                && (check["passed"] as? Bool) == false
+                && (check["severity"] as? String) == "warning"
+                && (check["message"] as? String)?.contains("restore Auto") == true
+        })
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
     func testDiagnoseHumanReadableShowsWarnings() async throws {
         let client = FakeAgentControlClient(
             snapshot: Self.readySnapshot(fanMode: .system),
@@ -479,7 +538,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let runner = ViftyCtlRunner(
             client: client,
             processRunner: FakeProcessRunner(),
-            thermalReader: { .serious }
+            thermalReader: { .serious },
+            manualControlActiveReader: { true }
         )
 
         let result = try await runner.run(.diagnose(json: false))
@@ -489,6 +549,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("agentAction=restoreAutoBeforeRequestingCooling safeToRequestCooling=false"))
         XCTAssertTrue(result.stdout.contains("recoveryAction=restoreAutoBeforeRetry"))
         XCTAssertTrue(result.stdout.contains("[warn] activeLeaseClear"))
+        XCTAssertTrue(result.stdout.contains("[warn] manualControlClear"))
         XCTAssertTrue(result.stdout.contains("[warn] fanModeTelemetry"))
         XCTAssertTrue(result.stdout.contains("[warn] thermalPressureSafe"))
     }
@@ -632,6 +693,30 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
+    }
+
+    func testReadinessReportRecommendsRestoreAutoBeforeNewCoolingWhenManualControlMarkerIsActive() {
+        let report = ViftyCtlReadinessReport.make(
+            snapshot: Self.readySnapshot(),
+            agentControl: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            ),
+            thermalPressure: .nominal,
+            generatedAt: Date(timeIntervalSince1970: 1_000),
+            manualControlActive: true
+        )
+
+        XCTAssertEqual(report.state, .degraded)
+        XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertTrue(report.manualControlActive)
+        XCTAssertTrue(report.checks.contains { $0.id == "manualControlClear" && !$0.passed && $0.severity == .warning })
     }
 
     func testReadinessReportRecommendsPolicyInspectionWhenAgentCoolingIsDisabled() {

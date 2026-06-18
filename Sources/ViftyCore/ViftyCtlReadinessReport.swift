@@ -90,6 +90,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction
     public var safeToRequestCooling: Bool?
     public var daemonControlPathReady: Bool
+    public var manualControlActive: Bool
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
     public var isMacBookPro: Bool
@@ -113,6 +114,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case recommendedRecoveryAction
         case safeToRequestCooling
         case daemonControlPathReady
+        case manualControlActive
         case modelIdentifier
         case isAppleSilicon
         case isMacBookPro
@@ -137,6 +139,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction? = nil,
         safeToRequestCooling: Bool? = nil,
         daemonControlPathReady: Bool? = nil,
+        manualControlActive: Bool = false,
         modelIdentifier: String,
         isAppleSilicon: Bool,
         isMacBookPro: Bool,
@@ -161,6 +164,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
+        self.manualControlActive = manualControlActive
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
         self.isMacBookPro = isMacBookPro
@@ -195,6 +199,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             ),
             safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
             daemonControlPathReady: try container.decodeIfPresent(Bool.self, forKey: .daemonControlPathReady),
+            manualControlActive: try container.decodeIfPresent(Bool.self, forKey: .manualControlActive) ?? false,
             modelIdentifier: try container.decode(String.self, forKey: .modelIdentifier),
             isAppleSilicon: try container.decode(Bool.self, forKey: .isAppleSilicon),
             isMacBookPro: try container.decode(Bool.self, forKey: .isMacBookPro),
@@ -227,6 +232,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
         try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
+        try container.encode(manualControlActive, forKey: .manualControlActive)
         try container.encode(modelIdentifier, forKey: .modelIdentifier)
         try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
         try container.encode(isMacBookPro, forKey: .isMacBookPro)
@@ -248,6 +254,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         agentControl: AgentControlStatus,
         thermalPressure: ThermalPressure,
         generatedAt: Date = Date(),
+        manualControlActive: Bool = false,
         daemonSnapshotError: String? = nil,
         agentControlStatusError: String? = nil
     ) -> ViftyCtlReadinessReport {
@@ -259,6 +266,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             agentControl: agentControl,
             thermalPressure: thermalPressure,
             controllableFans: controllableFans,
+            manualControlActive: manualControlActive,
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )
@@ -271,6 +279,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             recommendedAgentAction: recommendedAgentAction,
             safeToRequestCooling: safeToRequestCooling(for: recommendedAgentAction),
             daemonControlPathReady: daemonControlPathReady(from: checks),
+            manualControlActive: manualControlActive,
             modelIdentifier: snapshot.modelIdentifier,
             isAppleSilicon: snapshot.isAppleSilicon,
             isMacBookPro: snapshot.isMacBookPro,
@@ -293,6 +302,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         agentControl: AgentControlStatus,
         thermalPressure: ThermalPressure,
         controllableFans: [Fan],
+        manualControlActive: Bool,
         daemonSnapshotError: String?,
         agentControlStatusError: String?
     ) -> [ViftyCtlReadinessCheck] {
@@ -312,6 +322,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             fanRangesValidCheck(controllableFans),
             thermalPressureSafeCheck(thermalPressure),
             activeLeaseClearCheck(agentControl),
+            manualControlClearCheck(manualControlActive),
             fanModeTelemetryCheck(snapshot)
         ]
     }
@@ -503,6 +514,17 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         )
     }
 
+    private static func manualControlClearCheck(_ manualControlActive: Bool) -> ViftyCtlReadinessCheck {
+        ViftyCtlReadinessCheck(
+            id: "manualControlClear",
+            severity: .warning,
+            passed: !manualControlActive,
+            message: manualControlActive
+                ? "Vifty/manual fan control appears active; restore Auto in Vifty before requesting agent cooling."
+                : "No Vifty/manual fan-control marker is active."
+        )
+    }
+
     private static func fanModeTelemetryCheck(_ snapshot: HardwareSnapshot) -> ViftyCtlReadinessCheck {
         let systemFans = snapshot.fans.filter { $0.hardwareMode == .system }
         if !systemFans.isEmpty {
@@ -550,7 +572,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             return .doNotRequestCooling
         }
 
-        if checks.contains(where: { $0.id == "activeLeaseClear" && !$0.passed }) {
+        if checks.contains(where: { ($0.id == "activeLeaseClear" || $0.id == "manualControlClear") && !$0.passed }) {
             return .restoreAutoBeforeRequestingCooling
         }
 
@@ -573,7 +595,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         }
 
         if agentAction == .restoreAutoBeforeRequestingCooling
-            || failedCheck("activeLeaseClear", in: checks) {
+            || failedCheck("activeLeaseClear", in: checks)
+            || failedCheck("manualControlClear", in: checks) {
             return .restoreAutoBeforeRetry
         }
 

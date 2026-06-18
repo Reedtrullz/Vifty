@@ -507,6 +507,7 @@ public struct ViftyCtlRunner: Sendable {
     private let client: any ViftyCtlAgentControlClient
     private let processRunner: any ViftyCtlProcessRunning
     private let thermalReader: @Sendable () -> ThermalPressure
+    private let manualControlActiveReader: @Sendable () -> Bool
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
 
@@ -514,12 +515,14 @@ public struct ViftyCtlRunner: Sendable {
         client: any ViftyCtlAgentControlClient,
         processRunner: any ViftyCtlProcessRunning,
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
+        manualControlActiveReader: @escaping @Sendable () -> Bool = { ManualControlMarker().wasManualControlActive },
         now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
     ) {
         self.client = client
         self.processRunner = processRunner
         self.thermalReader = thermalReader
+        self.manualControlActiveReader = manualControlActiveReader
         self.now = now
         self.sleep = sleep
     }
@@ -794,6 +797,7 @@ public struct ViftyCtlRunner: Sendable {
             agentControl: status,
             thermalPressure: thermalReader(),
             generatedAt: generatedAt,
+            manualControlActive: manualControlActiveReader(),
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )

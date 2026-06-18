@@ -282,6 +282,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["recommendedRecoveryAction"] as? String, "none")
         XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(diagnoseDecision["manualControlActive"] as? Bool, false)
         let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
         XCTAssertEqual(capabilitiesDecision["exitStatus"] as? Int, 0)
         XCTAssertEqual(capabilitiesDecision["schemaVersion"] as? Int, 1)
@@ -906,7 +907,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "recommendedAgentAction",
             "recommendedRecoveryAction",
             "safeToRequestCooling",
-            "daemonControlPathReady"
+            "daemonControlPathReady",
+            "manualControlActive"
         ] {
             XCTAssertTrue(diagnoseRequired.contains(field), "diagnoseDecision should require \(field)")
         }
@@ -977,7 +979,7 @@ private final class AgentCoolingEvidenceHarness {
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
         capabilitiesExitCode: Int = 0,
-        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
+        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         statusExitCode: Int = 0,

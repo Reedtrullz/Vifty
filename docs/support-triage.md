@@ -42,7 +42,7 @@ Its JSON summary declares
 It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 summarizes the reviewed diagnose contract in `diagnoseDecision`: exit status,
 readiness state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, and `daemonControlPathReady`. If those fields are
+`safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive`. If those fields are
 missing or contradict the diagnose exit code, the review fails, except legacy
 `v1.1.x` reports that omit `daemonControlPathReady` may pass only when the same
 boolean can be inferred from structured readiness/recovery fields. It also

@@ -26,7 +26,7 @@ make verify
 - [ ] `make verify` passes locally, or each skipped gate is explained
 - [ ] New tests added for new functionality or bug fixes
 - [ ] SMC write paths still reject arbitrary keys, invalid fan IDs, invalid RPM ranges, and mismatched fan commands before IOKit access
-- [ ] Agent cooling remains lease-based, bounded, child-command-preflighted, and Auto-restoring; agents still use `safeToRequestCooling`, `daemonControlPathReady`, and `recommendedAgentAction`
+- [ ] Agent cooling remains lease-based, bounded, child-command-preflighted, and Auto-restoring; agents still use `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `recommendedAgentAction`
 - [ ] Unprivileged app paths still fail closed when daemon/helper, hardware, sensor, fan, or thermal-pressure state is uncertain
 - [ ] Release, signing, notarization, TeamID, cask, or schema-resource changes were checked with the release metadata/verifier scripts
 - [ ] Hardware-validation or compatibility changes stay evidence-based and do not ask for manual fan-write smoke tests when readiness is blocked

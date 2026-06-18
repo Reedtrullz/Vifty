@@ -329,12 +329,13 @@ diagnose_field_report() {
         data["state"],
         data["safeToRequestCooling"],
         data["daemonControlPathReady"],
+        data["manualControlActive"],
         data["recommendedAgentAction"],
         data["recommendedRecoveryAction"]
       ]
       puts values.map { |value| value.nil? ? "" : value.to_s }.join("\t")
     rescue StandardError
-      puts ["", "", "", "", ""].join("\t")
+      puts ["", "", "", "", "", ""].join("\t")
     end
   ' "$1"
 }
@@ -388,9 +389,9 @@ The bundle records source provenance in \`metadata.txt\` and
 \`installSource=local-ad-hoc-build\`, the current git ref, and the immutable
 40-character source SHA for the freshly built \`viftyctl\`.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
-Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
+Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, manualControlActive is true, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep
 the read-only preflight files as evidence.
 
@@ -569,7 +570,8 @@ write_summary_json() {
         "recommendedAgentAction" => diagnose["recommendedAgentAction"],
         "recommendedRecoveryAction" => diagnose["recommendedRecoveryAction"],
         "safeToRequestCooling" => diagnose["safeToRequestCooling"],
-        "daemonControlPathReady" => diagnose["daemonControlPathReady"]
+        "daemonControlPathReady" => diagnose["daemonControlPathReady"],
+        "manualControlActive" => diagnose["manualControlActive"]
       },
       "rateLimitRetry" => rate_limit_retry,
       "run" => run,
@@ -613,7 +615,7 @@ run_capture "pre-diagnose" "pre-diagnose.json" \
 pre_capabilities_status="$(command_status "pre-capabilities")"
 pre_diagnose_status="$(command_status "pre-diagnose")"
 capabilities_safe="$(capabilities_run_contract_safe "${OUTPUT_DIR}/pre-capabilities.json")"
-IFS=$'\t' read -r readiness_state safe_to_request daemon_ready agent_action recovery_action < <(
+IFS=$'\t' read -r readiness_state safe_to_request daemon_ready manual_control_active agent_action recovery_action < <(
   diagnose_field_report "${OUTPUT_DIR}/pre-diagnose.json"
 )
 
@@ -623,6 +625,7 @@ if [[ "${pre_capabilities_status}" -ne 0 || "${capabilities_safe}" != "true" ]];
 elif [[ "${pre_diagnose_status}" -ne 0 ||
         "${safe_to_request}" != "true" ||
         "${daemon_ready}" != "true" ||
+        "${manual_control_active}" != "false" ||
         ( "${agent_action}" != "requestCooling" && "${agent_action}" != "requestCoolingWithCaution" ) ]]; then
   skip_reason="readiness blocked before smoke run"
 fi

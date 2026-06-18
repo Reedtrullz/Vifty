@@ -33,6 +33,6 @@ Schema:
 - [../../schemas/viftyctl-diagnose.schema.json](../../schemas/viftyctl-diagnose.schema.json) - agent-facing schema for the readiness report
 - [../../schemas/viftyctl-status.schema.json](../../schemas/viftyctl-status.schema.json) - agent-facing schema for status, prepare, and restore-auto reports
 
-Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop before requesting cooling.
+Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop, and `manualControlActive: true` is always a restore-Auto stop before requesting cooling.
 
 Dates use Swift's current `JSONEncoder` default date representation, matching the CLI output.

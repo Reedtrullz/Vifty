@@ -134,7 +134,7 @@ After installing a release build and approving the helper, run:
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
-The command is read-only. It gathers the daemon hardware snapshot, fan mode/target telemetry, macOS thermal pressure, and agent-control policy/status. It does not prepare a lease, restore Auto, or write SMC keys. If daemon snapshot or agent-control status reads fail, the command still emits JSON with `state: "blocked"`, explicit `daemonSnapshotAvailable` / `agentControlStatusAvailable` / `daemonControlPathReady` failure checks, and `recommendedRecoveryAction: "repairHelper"`. `ready` and `degraded` reports exit `0`; `blocked` reports exit `75` after printing JSON. Agents should use `safeToRequestCooling`, `daemonControlPathReady`, `recommendedAgentAction`, and `recommendedRecoveryAction` as the direct machine-readable decision fields.
+The command is read-only. It gathers the daemon hardware snapshot, fan mode/target telemetry, macOS thermal pressure, local manual-control marker state, and agent-control policy/status. It does not prepare a lease, restore Auto, or write SMC keys. If daemon snapshot or agent-control status reads fail, the command still emits JSON with `state: "blocked"`, explicit `daemonSnapshotAvailable` / `agentControlStatusAvailable` / `daemonControlPathReady` failure checks, and `recommendedRecoveryAction: "repairHelper"`. `ready` and `degraded` reports exit `0`; `blocked` reports exit `75` after printing JSON. Agents should use `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `recommendedAgentAction`, and `recommendedRecoveryAction` as the direct machine-readable decision fields.
 
 Interpret `state` as:
 
@@ -201,7 +201,7 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
      --include-probe-local
    ```
 
-3. Run the daemon-backed manual smoke below only if `diagnose --json` is `ready` or safely `degraded`, `safeToRequestCooling=true`, and `daemonControlPathReady=true`. The `prepare` and `restore-auto` commands write fan state through Vifty's bounded daemon path; the diagnose and probe commands are read-only.
+3. Run the daemon-backed manual smoke below only if `diagnose --json` is `ready` or safely `degraded`, `safeToRequestCooling=true`, `daemonControlPathReady=true`, and `manualControlActive=false`. The `prepare` and `restore-auto` commands write fan state through Vifty's bounded daemon path; the diagnose and probe commands are read-only.
 
 4. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
 

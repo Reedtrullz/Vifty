@@ -512,6 +512,7 @@ recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract 
 recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedRecoveryAction raw -o - - 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
+manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract manualControlActive raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$diagnose_schema_version" = "null" ] && diagnose_schema_version=""
@@ -520,6 +521,7 @@ daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -e
 [ "$recommended_recovery_action" = "null" ] && recommended_recovery_action=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 [ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
+[ "$manual_control_active" = "null" ] && manual_control_active=""
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
   if [ "$diagnose_schema_version" != "1" ] ||
@@ -565,7 +567,8 @@ esac
 if [ -z "$recommended_action" ] ||
    [ -z "$recommended_recovery_action" ] ||
    [ -z "$safe_to_request" ] ||
-   [ -z "$daemon_control_path_ready" ]; then
+   [ -z "$daemon_control_path_ready" ] ||
+   [ -z "$manual_control_active" ]; then
   echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
   printf '%s\n' "$diagnose_json" >&2
   exit 75
@@ -582,6 +585,16 @@ case "$safe_to_request" in
 esac
 
 case "$daemon_control_path_ready" in
+  true|false)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    printf '%s\n' "$diagnose_json" >&2
+    exit 75
+    ;;
+esac
+
+case "$manual_control_active" in
   true|false)
     ;;
   *)
@@ -632,6 +645,10 @@ fi
 
 if [ "$daemon_control_path_ready" != "true" ]; then
   finish_without_cooling_request "Vifty daemon control path is not ready; refusing to request cooling." "$@"
+fi
+
+if [ "$manual_control_active" = "true" ]; then
+  finish_without_cooling_request "Vifty/manual fan control is active; restore Auto before requesting agent cooling." "$@"
 fi
 
 case "$recommended_action" in

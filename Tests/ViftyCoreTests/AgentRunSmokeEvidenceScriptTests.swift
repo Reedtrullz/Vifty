@@ -32,6 +32,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("supported Apple Silicon MacBook Pro hardware"))
         XCTAssertTrue(try harness.read("README.txt").contains("safe `runLifecycle` contract used by guarded wrappers"))
         XCTAssertTrue(try harness.read("README.txt").contains("`recommendedAgentAction` is either `requestCooling` or `requestCoolingWithCaution`"))
+        XCTAssertTrue(try harness.read("README.txt").contains("`manualControlActive=false`"))
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=false"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=true"))
@@ -76,6 +77,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["state"] as? String, "ready")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(preflight["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(preflight["manualControlActive"] as? Bool, false)
         XCTAssertEqual(preflight["capabilitiesExitStatus"] as? Int, 0)
         XCTAssertEqual(preflight["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(preflight["policySource"] as? String, "daemonStatus")
@@ -205,6 +207,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["state"] as? String, "blocked")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(preflight["daemonControlPathReady"] as? Bool, false)
+        XCTAssertTrue(preflight["manualControlActive"] is NSNull)
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
@@ -212,6 +215,31 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
         XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
         XCTAssertTrue(run["childExitCode"] is NSNull)
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenManualControlIsActive() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":true,"recommendedRecoveryAction":"restoreAutoBeforeRetry","checks":[]}"#
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesDoNotAdvertiseSafeRunLifecycle() throws {
@@ -441,7 +469,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
     func testSmokeCollectorRunsWhenReadinessAllowsCoolingWithCaution() throws {
         let harness = try AgentRunSmokeEvidenceHarness(
-            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCoolingWithCaution","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#
+            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCoolingWithCaution","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","checks":[]}"#
         )
 
         let result = try harness.runCollector([
@@ -461,6 +489,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["state"] as? String, "degraded")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(preflight["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(preflight["manualControlActive"] as? Bool, false)
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCoolingWithCaution")
     }
 
@@ -608,7 +637,13 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",
-            "policyEnabled"
+            "policyEnabled",
+            "state",
+            "recommendedAgentAction",
+            "recommendedRecoveryAction",
+            "safeToRequestCooling",
+            "daemonControlPathReady",
+            "manualControlActive"
         ] {
             XCTAssertTrue(preflightRequired.contains(field), "preflight should require \(field)")
         }
@@ -637,7 +672,7 @@ private final class AgentRunSmokeEvidenceHarness {
 
     init(
         capabilitiesJSON: String = AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON,
-        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"recommendedRecoveryAction":"none","checks":[]}"#,
+        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         auditJSON: String = #"{"readOnly":true,"coolingCommandsRun":false,"events":[]}"#,

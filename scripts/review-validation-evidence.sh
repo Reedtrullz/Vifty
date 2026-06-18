@@ -1001,6 +1001,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless preflight["daemonControlPathReady"] == true
         failures << "passed agent-run-smoke summary must have daemonControlPathReady=true"
       end
+      unless preflight["manualControlActive"] == false
+        failures << "passed agent-run-smoke summary must have manualControlActive=false"
+      end
       unless %w[requestCooling requestCoolingWithCaution].include?(preflight["recommendedAgentAction"].to_s)
         failures << "passed agent-run-smoke summary must recommend requestCooling or requestCoolingWithCaution"
       end

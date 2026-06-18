@@ -22,7 +22,7 @@ body:
 
         Maintainers triage reports using docs/support-triage.md so helper, hardware, SMC telemetry, release-trust, and agent-cooling issues get the right evidence.
 
-        If `viftyctl diagnose --json` reports unsupported hardware, `safeToRequestCooling: false`, or `daemonControlPathReady: false`, do not run manual fan-write commands or raw SMC tools. Use the diagnose JSON as the first evidence, and leave helper probe output blank unless a maintainer asks for it.
+        If `viftyctl diagnose --json` reports unsupported hardware, `safeToRequestCooling: false`, `daemonControlPathReady: false`, or `manualControlActive: true`, do not run manual fan-write commands or raw SMC tools. Use the diagnose JSON as the first evidence, and leave helper probe output blank unless a maintainer asks for it.
 
   - type: input
     id: macos-version

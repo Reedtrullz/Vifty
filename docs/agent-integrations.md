@@ -19,7 +19,7 @@ Before requesting cooling, run:
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
-If `state` is `blocked`, `safeToRequestCooling` is false, or `daemonControlPathReady` is false, do not request cooling. Show the JSON to the user and stop or run the workload without Vifty cooling, depending on the user's instruction.
+If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, or `manualControlActive` is true, do not request cooling. Show the JSON to the user and stop or run the workload without Vifty cooling, depending on the user's instruction.
 
 Prefer the guarded wrapper:
 
@@ -98,7 +98,7 @@ examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/make-test.sh
 ```
 
-Do not request Vifty cooling when readiness is blocked, when `safeToRequestCooling` is false, when `daemonControlPathReady` is false, or when the machine is not a supported Apple Silicon MacBook Pro.
+Do not request Vifty cooling when readiness is blocked, when `safeToRequestCooling` is false, when `daemonControlPathReady` is false, when `manualControlActive` is true, or when the machine is not a supported Apple Silicon MacBook Pro.
 ````
 
 ## Shell Runners

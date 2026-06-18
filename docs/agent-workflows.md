@@ -61,7 +61,7 @@ The readiness report has `schemaVersion: 1` and a top-level `state`:
 - `degraded` - no hard blocker, but one or more warning checks failed.
 - `blocked` - at least one error check failed; do not request cooling.
 
-It also includes `recommendedAgentAction`, `safeToRequestCooling`, and `daemonControlPathReady` so agents do not need to infer the next step from prose or fallback telemetry:
+It also includes `recommendedAgentAction`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` so agents do not need to infer the next step from prose or fallback telemetry:
 
 - `requestCooling` / `safeToRequestCooling: true` - safe to request a normal bounded lease.
 - `requestCoolingWithCaution` / `safeToRequestCooling: true` - a warning exists; reduce duration/RPM or be ready to back off.
@@ -75,7 +75,7 @@ Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl).
 - [diagnose-degraded-active-lease.json](examples/viftyctl/diagnose-degraded-active-lease.json) - degraded + `restoreAutoBeforeRequestingCooling` + `safeToRequestCooling: false`.
 - [diagnose-blocked-helper-unreachable.json](examples/viftyctl/diagnose-blocked-helper-unreachable.json) - blocked + `doNotRequestCooling` + `daemonControlPathReady: false`.
 
-Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop.
+Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership.
 
 `recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
 
@@ -177,7 +177,7 @@ Use this output rather than hardcoding policy limits, metadata limits, schema pa
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 
-Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
+Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s required safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The same folder also documents capabilities, audit, status/prepare/restore-auto, and structured command-error payloads.
 
 For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell runners, see [agent-integrations.md](agent-integrations.md).
 
@@ -263,9 +263,10 @@ The wrapper:
 - treats nonzero blocked diagnose reports as readiness blocks,
 - fails closed and prints any structured diagnose failure before requesting cooling only when a nonzero diagnose command-error payload matches the advertised command-error schema identity,
 - refuses to continue on `blocked`,
-- requires `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, and `daemonControlPathReady` to be present,
-- treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease case,
+- requires `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` to be present,
+- treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease or manual-control case,
 - treats `daemonControlPathReady: false` as a hard stop before cooling,
+- treats `manualControlActive: true` as a restore-Auto stop before cooling,
 - prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
