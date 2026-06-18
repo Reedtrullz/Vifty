@@ -9,7 +9,6 @@ struct ViftyApp: App {
     init() {
         let model = AppModel()
         _model = StateObject(wrappedValue: model)
-        model.start()
     }
 
     var body: some Scene {
@@ -18,6 +17,9 @@ struct ViftyApp: App {
                 .environmentObject(model)
         } label: {
             MenuBarExtraLabel(model: model)
+                .task {
+                    model.start()
+                }
         }
         .menuBarExtraStyle(.window)
 

@@ -178,10 +178,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".labelsHidden()"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtra {"))
         XCTAssertTrue(viftyApp.contains("MenuBarExtraLabel(model: model)"))
+        XCTAssertTrue(viftyApp.contains("""
+MenuBarExtraLabel(model: model)
+                .task {
+                    model.start()
+                }
+"""))
         XCTAssertTrue(viftyApp.contains("@StateObject private var model: AppModel"))
         XCTAssertTrue(viftyApp.contains("@MainActor\n    init()"))
         XCTAssertTrue(viftyApp.contains("_model = StateObject(wrappedValue: model)"))
-        XCTAssertTrue(viftyApp.contains("model.start()"))
+        XCTAssertFalse(viftyApp.contains("_model = StateObject(wrappedValue: model)\n        model.start()"))
         XCTAssertTrue(appModel.contains("private let preferencesStore: AppPreferencesStore"))
         XCTAssertTrue(appModel.contains("func applyStartupModePreferenceIfNeeded() async"))
         XCTAssertTrue(appModel.contains("persistAppPreferences()"))
