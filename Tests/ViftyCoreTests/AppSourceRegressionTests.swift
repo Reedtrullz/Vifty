@@ -182,6 +182,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(viftyApp.contains("@MainActor\n    init()"))
         XCTAssertTrue(viftyApp.contains("_model = StateObject(wrappedValue: model)"))
         XCTAssertTrue(viftyApp.contains("_model = StateObject(wrappedValue: model)\n        model.start()"))
+        XCTAssertTrue(viftyApp.contains("Task { @MainActor in\n            await model.primeMenuBarStatusItemTelemetry()\n        }"))
         XCTAssertTrue(viftyApp.contains(".onAppear {\n                    model.start()\n                }"))
         XCTAssertTrue(viftyApp.contains("await model.primeMenuBarStatusItemTelemetry()"))
         XCTAssertTrue(viftyApp.contains(".task(id: model.menuBarDisplayMode)"))

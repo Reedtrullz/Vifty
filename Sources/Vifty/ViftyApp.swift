@@ -10,6 +10,9 @@ struct ViftyApp: App {
         let model = AppModel()
         _model = StateObject(wrappedValue: model)
         model.start()
+        Task { @MainActor in
+            await model.primeMenuBarStatusItemTelemetry()
+        }
     }
 
     var body: some Scene {
