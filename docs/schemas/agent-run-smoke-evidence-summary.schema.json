@@ -139,9 +139,12 @@
       "type": "object",
       "required": [
         "capabilitiesExitStatus",
+        "capabilitiesSchemaVersion",
+        "capabilitiesSchemaID",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
+        "policyEnabled",
         "exitStatus",
         "state",
         "recommendedAgentAction",
@@ -152,6 +155,18 @@
       "properties": {
         "capabilitiesExitStatus": {
           "type": "integer"
+        },
+        "capabilitiesSchemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "capabilitiesSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "daemonStatusAvailable": {
           "type": [
@@ -166,6 +181,12 @@
           ]
         },
         "policyStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policyEnabled": {
           "type": [
             "boolean",
             "null"

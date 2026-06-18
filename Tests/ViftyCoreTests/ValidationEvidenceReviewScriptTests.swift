@@ -773,6 +773,53 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithDisabledPolicy() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            policyEnabled: false
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have policyEnabled=true"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsPassedAgentRunSmokeWithCapabilitiesSchemaDrift() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            capabilitiesSchemaVersion: 2,
+            capabilitiesSchemaID: "https://example.invalid/viftyctl-capabilities.schema.json"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have capabilitiesSchemaVersion=1"),
+            result.stderr
+        )
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must have capabilitiesSchemaID=https://vifty.local/schemas/viftyctl-capabilities.schema.json"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsFailedManualSmokeForSupportedHardware() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let summaryURL = harness.rootURL.appendingPathComponent("failed-smoke-review.json")
@@ -1117,6 +1164,9 @@ private final class ValidationEvidenceReviewHarness {
         daemonStatusAvailable: Bool = true,
         policySource: String = "daemonStatus",
         policyStatusAvailable: Bool = true,
+        policyEnabled: Bool = true,
+        capabilitiesSchemaVersion: Int = 1,
+        capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         installSource: String = "not-recorded",
         sourceRef: String = "",
         sourceSHA: String = "",
@@ -1135,6 +1185,9 @@ private final class ValidationEvidenceReviewHarness {
             daemonStatusAvailable: daemonStatusAvailable,
             policySource: policySource,
             policyStatusAvailable: policyStatusAvailable,
+            policyEnabled: policyEnabled,
+            capabilitiesSchemaVersion: capabilitiesSchemaVersion,
+            capabilitiesSchemaID: capabilitiesSchemaID,
             installSource: installSource,
             sourceRef: sourceRef,
             sourceSHA: sourceSHA,
@@ -1155,6 +1208,9 @@ private final class ValidationEvidenceReviewHarness {
         daemonStatusAvailable: Bool = true,
         policySource: String = "daemonStatus",
         policyStatusAvailable: Bool = true,
+        policyEnabled: Bool = true,
+        capabilitiesSchemaVersion: Int = 1,
+        capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         rateLimitRetryAttempted: Bool = false,
         rateLimitRetryAfterSeconds: Int = 2,
         rateLimitInitialExitStatus: Int = 75,
@@ -1196,7 +1252,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)"},"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true,"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1245,7 +1301,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable)}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1307,9 +1363,12 @@ private final class ValidationEvidenceReviewHarness {
                 "safeToRequestCooling": status != "blocked",
                 "daemonControlPathReady": status != "blocked",
                 "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
+                "capabilitiesSchemaVersion": capabilitiesSchemaVersion,
+                "capabilitiesSchemaID": capabilitiesSchemaID,
                 "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
                 "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
-                "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable
+                "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
+                "policyEnabled": policyEnabled
             ],
             "run": run,
             "commands": commands

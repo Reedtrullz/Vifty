@@ -80,6 +80,12 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(preflight["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(preflight["policySource"] as? String, "daemonStatus")
         XCTAssertEqual(preflight["policyStatusAvailable"] as? Bool, true)
+        XCTAssertEqual(preflight["policyEnabled"] as? Bool, true)
+        XCTAssertEqual(preflight["capabilitiesSchemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            preflight["capabilitiesSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+        )
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCooling")
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
@@ -261,6 +267,73 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "blocked")
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertTrue(run["exitStatus"] is NSNull)
+        XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenPolicyIsDisabled() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            capabilitiesJSON: AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON
+                .replacingOccurrences(of: #""enabled":true"#, with: #""enabled":false"#)
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["policyEnabled"] as? Bool, false)
+        XCTAssertEqual(preflight["capabilitiesSchemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            preflight["capabilitiesSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+        )
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertTrue(run["exitStatus"] is NSNull)
+        XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesSchemaIdentityDrifts() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            capabilitiesJSON: AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON
+                .replacingOccurrences(of: #""schemaVersion":1"#, with: #""schemaVersion":2"#)
+                .replacingOccurrences(
+                    of: #"https://vifty.local/schemas/viftyctl-capabilities.schema.json"#,
+                    with: #"https://example.invalid/viftyctl-capabilities.schema.json"#
+                )
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["capabilitiesSchemaVersion"] as? Int, 2)
+        XCTAssertEqual(
+            preflight["capabilitiesSchemaID"] as? String,
+            "https://example.invalid/viftyctl-capabilities.schema.json"
+        )
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
@@ -471,9 +544,12 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let preflightRequired = try XCTUnwrap(preflight["required"] as? [String])
         for field in [
             "capabilitiesExitStatus",
+            "capabilitiesSchemaVersion",
+            "capabilitiesSchemaID",
             "daemonStatusAvailable",
             "policySource",
-            "policyStatusAvailable"
+            "policyStatusAvailable",
+            "policyEnabled"
         ] {
             XCTAssertTrue(preflightRequired.contains(field), "preflight should require \(field)")
         }
@@ -656,7 +732,7 @@ private final class AgentRunSmokeEvidenceHarness {
         )
     }
 
-    private static let defaultCapabilitiesJSON = """
-    {"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}
+    static let defaultCapabilitiesJSON = """
+    {"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"},"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}}
     """
 }

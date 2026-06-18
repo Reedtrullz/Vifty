@@ -138,9 +138,11 @@ This is intentionally different from the read-only support bundle below. It
 first performs read-only capabilities/diagnose checks, but when readiness is
 safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
 with exactly one structured cooldown retry if the daemon returns
-`PREPARE_RATE_LIMITED`. Use it for supported-hardware validation and
-developer-workload proof, not as the first response to helper-unreachable or
-blocked readiness states.
+`PREPARE_RATE_LIMITED`. The collector stops before cooling unless
+`capabilities --json` reports schema version `1`, the stable capabilities schema
+ID, daemon-backed policy status, `policy.enabled: true`, advertised `run`
+support, and the safe run lifecycle used by guarded wrappers. Use it for
+supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
 
 ## Failure Handling
 

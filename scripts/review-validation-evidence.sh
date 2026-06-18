@@ -184,6 +184,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   warnings = []
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
   AGENT_RUN_SMOKE_SUMMARY_SCHEMA_ID = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
+  CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
 
   EXPECTED_EXECUTABLES = {
     "Vifty" => "Contents/MacOS/Vifty",
@@ -998,16 +999,31 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
         failures << "passed agent-run-smoke summary must recommend requestCooling or requestCoolingWithCaution"
       end
       unless preflight["capabilitiesExitStatus"] == 0 &&
+          preflight["capabilitiesSchemaVersion"] == 1 &&
+          preflight["capabilitiesSchemaID"] == CAPABILITIES_SCHEMA_ID &&
           preflight["daemonStatusAvailable"] == true &&
           preflight["policySource"] == "daemonStatus" &&
-          preflight["policyStatusAvailable"] == true
+          preflight["policyStatusAvailable"] == true &&
+          preflight["policyEnabled"] == true
         failures << "passed agent-run-smoke summary must have daemon-backed capabilities policy status"
+      end
+      unless preflight["capabilitiesSchemaVersion"] == 1
+        failures << "passed agent-run-smoke summary must have capabilitiesSchemaVersion=1"
+      end
+      unless preflight["capabilitiesSchemaID"] == CAPABILITIES_SCHEMA_ID
+        failures << "passed agent-run-smoke summary must have capabilitiesSchemaID=#{CAPABILITIES_SCHEMA_ID}"
+      end
+      unless preflight["policyEnabled"] == true
+        failures << "passed agent-run-smoke summary must have policyEnabled=true"
       end
       pre_capabilities = agent_run_smoke_command_json(path, summary, "pre-capabilities", failures)
       if pre_capabilities
-        unless pre_capabilities["daemonStatusAvailable"] == true &&
+        unless pre_capabilities["schemaVersion"] == 1 &&
+            pre_capabilities.dig("schemaIDs", "capabilities") == CAPABILITIES_SCHEMA_ID &&
+            pre_capabilities["daemonStatusAvailable"] == true &&
             pre_capabilities["policySource"] == "daemonStatus" &&
-            pre_capabilities["policyStatusAvailable"] == true
+            pre_capabilities["policyStatusAvailable"] == true &&
+            pre_capabilities.dig("policy", "enabled") == true
           failures << "passed agent-run-smoke pre-capabilities JSON must have daemon-backed policy status"
         end
       end
