@@ -284,6 +284,11 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
         let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
         XCTAssertEqual(capabilitiesDecision["exitStatus"] as? Int, 0)
+        XCTAssertEqual(capabilitiesDecision["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            capabilitiesDecision["capabilitiesSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
+        )
         XCTAssertEqual(capabilitiesDecision["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(capabilitiesDecision["policySource"] as? String, "daemonStatus")
         XCTAssertEqual(capabilitiesDecision["policyStatusAvailable"] as? Bool, true)
@@ -400,6 +405,45 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, false)
         let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
         XCTAssertEqual(capabilitiesDecision["metadataLimitsPresent"] as? Bool, false)
+    }
+
+    func testReviewerRejectsCapabilitiesSchemaIdentityDrift() throws {
+        let driftedVersion = try AgentCoolingEvidenceHarness.jsonString(
+            replacing: "\"schemaVersion\":1",
+            with: "\"schemaVersion\":2",
+            in: AgentCoolingEvidenceHarness.defaultCapabilitiesJSON
+        )
+        let driftedSchemaID = try AgentCoolingEvidenceHarness.jsonString(
+            replacing: "\"https://vifty.local/schemas/viftyctl-capabilities.schema.json\"",
+            with: "\"https://example.invalid/viftyctl-capabilities.schema.json\"",
+            in: driftedVersion
+        )
+        let harness = try AgentCoolingEvidenceHarness(capabilitiesJSON: driftedSchemaID)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaVersion must be 1"), reviewResult.stderr)
+        XCTAssertTrue(reviewResult.stderr.contains("viftyctl-capabilities.json schemaIDs.capabilities"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
+        XCTAssertEqual(capabilitiesDecision["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(
+            capabilitiesDecision["capabilitiesSchemaID"] as? String,
+            "https://example.invalid/viftyctl-capabilities.schema.json"
+        )
     }
 
     func testReviewerAcceptsHelperUnreachableCommandErrorsWhenDiagnoseRequiresRepair() throws {
@@ -803,6 +847,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let capabilitiesRequired = try XCTUnwrap(capabilitiesDecision["required"] as? [String])
         for field in [
             "exitStatus",
+            "schemaVersion",
+            "capabilitiesSchemaID",
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",

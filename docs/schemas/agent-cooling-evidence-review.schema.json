@@ -113,6 +113,8 @@
       "additionalProperties": false,
       "required": [
         "exitStatus",
+        "schemaVersion",
+        "capabilitiesSchemaID",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -129,6 +131,26 @@
           "type": [
             "integer",
             "null"
+          ]
+        },
+        "schemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            1,
+            null
+          ]
+        },
+        "capabilitiesSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
+            null
           ]
         },
         "daemonStatusAvailable": {

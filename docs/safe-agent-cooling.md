@@ -182,7 +182,8 @@ state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 blocked readiness without parsing human text. Legacy `v1.1.x` bundles that
 omit `daemonControlPathReady` may pass only when the reviewer can infer it from
 structured readiness/recovery fields. The `capabilitiesDecision` summary
-records whether the bundle advertised `viftyctl run`, force-retry discovery,
+records the captured capabilities schema version and `schemaIDs.capabilities`,
+then records whether the bundle advertised `viftyctl run`, force-retry discovery,
 safe `runLifecycle`, safe direct prepare/restore lifecycle, metadata limits,
 policy enabled status, policy status availability, daemon status, and the unavailable-exit contract before the report is treated
 as agent-safe evidence; absent legacy `metadataLimits` is a warning, not proof
