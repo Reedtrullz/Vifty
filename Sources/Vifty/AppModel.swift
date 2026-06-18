@@ -212,6 +212,7 @@ final class AppModel: ObservableObject {
     static let notificationPluggedInDrainDefaultsKey = AppPreferencesStore.legacyNotificationPluggedInDrainDefaultsKey
     static let notificationAgentCoolingAttentionDefaultsKey = AppPreferencesStore.legacyNotificationAgentCoolingAttentionDefaultsKey
     static let manualTargetDriftRPMThreshold = 75
+    static let manualTargetDriftAttentionSampleCount = 2
     static let manualResponseRPMGapThreshold = 250
 
     private let coordinator: FanControlCoordinator
@@ -229,6 +230,7 @@ final class AppModel: ObservableObject {
     private var previousHelperNeedsAttention = false
     private var previousPluggedInDrain = false
     private var previousAgentCoolingNeedsAttention = false
+    private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var elevatedThermalPressureStartedAt: Date?
     private let notificationMinimumInterval: TimeInterval = 10 * 60
     private let sustainedThermalPressureInterval: TimeInterval = 60
@@ -1300,13 +1302,7 @@ final class AppModel: ObservableObject {
             return "Hardware reports \(modeLabel) while Vifty manual is selected; Vifty will reassert · \(fanIDList(reclaimed))"
         }
 
-        let drifted = fans.filter { fan in
-            guard let targetRPM = fan.targetRPM,
-                  let expectedRPM = expectedManualTargetRPM(for: fan) else {
-                return false
-            }
-            return abs(targetRPM - expectedRPM) >= Self.manualTargetDriftRPMThreshold
-        }
+        let drifted = manualTargetDriftAttentionFans
         if !drifted.isEmpty {
             return "Hardware fan target drift detected; Vifty will reassert · \(fanIDList(drifted))"
         }
@@ -1321,6 +1317,46 @@ final class AppModel: ObservableObject {
         }
         guard !unconfirmedResponse.isEmpty else { return nil }
         return "Manual fan response not confirmed; current RPM is still below requested target · \(fanIDList(unconfirmedResponse))"
+    }
+
+    private var currentManualTargetDriftFans: [Fan] {
+        guard controlState.mode != .auto,
+              let fans = snapshot?.fans.filter(\.controllable),
+              !fans.isEmpty else {
+            return []
+        }
+
+        return fans.filter { fan in
+            guard fan.hardwareMode == .forced,
+                  let targetRPM = fan.targetRPM,
+                  let expectedRPM = expectedManualTargetRPM(for: fan) else {
+                return false
+            }
+            return abs(targetRPM - expectedRPM) >= Self.manualTargetDriftRPMThreshold
+        }
+    }
+
+    private var manualTargetDriftAttentionFans: [Fan] {
+        let drifted = currentManualTargetDriftFans
+        if !hasCompletedHardwarePoll {
+            return drifted
+        }
+        return drifted.filter { fan in
+            (manualTargetDriftSampleCounts[fan.id] ?? 0) >= Self.manualTargetDriftAttentionSampleCount
+        }
+    }
+
+    private func updateManualTargetDriftStability() {
+        let driftedIDs = Set(currentManualTargetDriftFans.map(\.id))
+        guard !driftedIDs.isEmpty else {
+            manualTargetDriftSampleCounts = [:]
+            return
+        }
+
+        manualTargetDriftSampleCounts = driftedIDs.reduce(into: [:]) { countsByFanID, fanID in
+            let count = (manualTargetDriftSampleCounts[fanID] ?? 0) + 1
+            countsByFanID[fanID] = min(count, Self.manualTargetDriftAttentionSampleCount)
+        }
     }
 
     private var manualResponseAttentionIsWarranted: Bool {
@@ -1663,6 +1699,7 @@ final class AppModel: ObservableObject {
 
     private func syncState() async {
         controlState = await coordinator.state
+        updateManualTargetDriftStability()
     }
 
     private func evaluateLocalNotifications(power: PowerSnapshot, thermalPressure: ThermalPressure) async {

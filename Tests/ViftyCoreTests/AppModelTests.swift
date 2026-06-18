@@ -942,6 +942,66 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
+    func testControlOwnershipSuppressesSingleSampleManualTargetDriftDuringReassertion() async {
+        func snapshot(targetRPM: Int) -> HardwareSnapshot {
+            HardwareSnapshot(
+                fans: [
+                    Fan(
+                        id: 0,
+                        name: "Left",
+                        currentRPM: targetRPM,
+                        minimumRPM: 1400,
+                        maximumRPM: 6000,
+                        controllable: true,
+                        hardwareMode: .forced,
+                        targetRPM: targetRPM
+                    )
+                ],
+                temperatureSensors: [
+                    TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 78, source: .smc)
+                ],
+                modelIdentifier: "MacBookPro18,3",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        }
+
+        let hardware = AppModelFakeHardware(snapshot: snapshot(targetRPM: 2200))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath()),
+                initialState: ControlState(
+                    mode: .fixedRPM(3600),
+                    lastAppliedRPM: [0: 3600],
+                    manualControlActive: true
+                )
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.daemonReachable = true
+        model.daemonResponding = true
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3600 RPM · until changed; reasserts if macOS drifts")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Hardware fan target drift detected; Vifty will reassert · F0")
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+
+        await hardware.setSnapshot(snapshot(targetRPM: 3600))
+        await model.pollOnce()
+
+        XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3600 RPM · until changed; reasserts if macOS drifts")
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+    }
+
     func testControlOwnershipWarnsWhenHotManualResponseCannotBeConfirmed() {
         let model = AppModel()
         model.daemonReachable = true
