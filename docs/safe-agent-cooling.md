@@ -147,6 +147,8 @@ diagnose, and command-error schema IDs, daemon-backed policy status,
 supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
 If Vifty/manual ownership is still active, the blocked summary's `run.skippedReason` is `manual control active before smoke run`; restore Auto before collecting supervised run evidence.
 
+Checked-in M1 Pro evidence: `docs/validation-reports/2026-06-18-macbookpro18-main-agent-run-smoke/review-result.json` records MacBookPro18,1 local-ad-hoc `agentRunSmokeResult: "passed-auto-restored"` from `2026-06-18-macbookpro18-main-agent-run-smoke/agent-run-smoke-evidence-summary.json`. Treat that as reviewed developer-workload proof for the guarded `viftyctl run` lifecycle only; it does not promote MacBookPro18 to validated hardware support until a reviewed manual smoke report records `manualSmokeTestResult: "passed-auto-restored"`.
+
 ## Failure Handling
 
 If readiness is blocked:

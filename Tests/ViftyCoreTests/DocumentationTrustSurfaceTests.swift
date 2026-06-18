@@ -46,6 +46,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("scripts/review-agent-cooling-evidence.sh"))
         XCTAssertTrue(readme.contains("make agent-run-smoke-evidence"))
         XCTAssertTrue(readme.contains("after readiness is safe"))
+        XCTAssertTrue(readme.contains("current checked-in developer-workload evidence includes `docs/validation-reports/2026-06-18-macbookpro18-main-agent-run-smoke/review-result.json`"))
+        XCTAssertTrue(readme.contains("MacBookPro18,1 local-ad-hoc `agentRunSmokeResult: \"passed-auto-restored\"`"))
+        XCTAssertTrue(readme.contains("MacBookPro18 still needs manual smoke before Vifty claims validated hardware support"))
     }
 
     func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
@@ -1000,6 +1003,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(guide.contains("one bounded `viftyctl run --json` lease for `/bin/sleep 5`"))
         XCTAssertTrue(guide.contains("not as the first response to helper-unreachable"))
         XCTAssertTrue(guide.contains("blocked readiness states"))
+        XCTAssertTrue(guide.contains("Checked-in M1 Pro evidence"))
+        XCTAssertTrue(guide.contains("2026-06-18-macbookpro18-main-agent-run-smoke/review-result.json"))
+        XCTAssertTrue(guide.contains("agentRunSmokeResult: \"passed-auto-restored\""))
+        XCTAssertTrue(guide.contains("does not promote MacBookPro18 to validated hardware support"))
         XCTAssertTrue(guide.contains("`manual control active before smoke run`"))
         XCTAssertTrue(guide.contains("launchd/helper install evidence"))
         XCTAssertTrue(guide.contains("diagnoseDecision"))
