@@ -521,6 +521,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["passed"] as? Bool) == false
                 && (check["severity"] as? String) == "warning"
                 && (check["message"] as? String)?.contains("restore Auto") == true
+                && (check["message"] as? String)?.contains("re-run diagnose") == true
+                && (check["message"] as? String)?.contains("switch Vifty/default mode to Auto") == true
         })
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount

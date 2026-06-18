@@ -72,7 +72,7 @@ It also includes `recommendedAgentAction`, `safeToRequestCooling`, `daemonContro
 
 - `requestCooling` / `safeToRequestCooling: true` - safe to request a normal bounded lease.
 - `requestCoolingWithCaution` / `safeToRequestCooling: true` - a warning exists; reduce duration/RPM or be ready to back off.
-- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease or manual-control marker is active; restore Auto or wait before requesting new cooling. A successful CLI `restore-auto` clears the local manual-control marker, but agents should re-run `diagnose --json` and require `manualControlActive: false` before cooling.
+- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease or manual-control marker is active; restore Auto once or wait before requesting new cooling. A successful CLI `restore-auto` clears the local manual-control marker, but agents should re-run `diagnose --json` and require `manualControlActive: false` before cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, stop and ask the user to switch Vifty/default startup mode to Auto before requesting cooling.
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
 - `daemonControlPathReady: false` - the daemon-backed snapshot or agent-control path is unavailable; repair the helper before requesting cooling, even if other telemetry exists.
 
@@ -83,13 +83,13 @@ Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl).
 - [diagnose-degraded-manual-control.json](examples/viftyctl/diagnose-degraded-manual-control.json) - degraded + `restoreAutoBeforeRequestingCooling` + `manualControlActive: true`.
 - [diagnose-blocked-helper-unreachable.json](examples/viftyctl/diagnose-blocked-helper-unreachable.json) - blocked + `doNotRequestCooling` + `daemonControlPathReady: false`.
 
-Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership. If an agent runs the supervised CLI restore path, the next diagnose must show `manualControlActive: false` before the agent requests cooling.
+Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership. If an agent runs the supervised CLI restore path, the next diagnose must show `manualControlActive: false` before the agent requests cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, stop and ask the user to switch Vifty/default startup mode to Auto.
 
 `recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
 
 - `none` - no recovery is needed before following `recommendedAgentAction`.
 - `repairHelper` - open Vifty and use Repair/Reinstall Helper; do not attempt direct SMC writes.
-- `restoreAutoBeforeRetry` - restore Auto or wait for the active lease to clear before retrying.
+- `restoreAutoBeforeRetry` - restore Auto once, re-run diagnose, or wait for the active lease to clear before retrying. If `manualControlActive` stays true, switch Vifty/default startup mode to Auto before another cooling request.
 - `backOffWorkload` - thermal pressure is critical; pause or reduce the workload instead of fighting system thermals.
 - `inspectPolicy` - agent cooling policy is disabled; inspect local policy/status before retrying.
 - `collectHardwareEvidence` - hardware/fan/sensor evidence is missing or inconsistent; collect read-only validation evidence before considering support.

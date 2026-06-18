@@ -159,6 +159,11 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         try assertCheck("daemonControlPathReady", in: report.checks, passed: true, severity: .error)
         try assertCheck("activeLeaseClear", in: report.checks, passed: true, severity: .warning)
         try assertCheck("manualControlClear", in: report.checks, passed: false, severity: .warning)
+        XCTAssertTrue(report.checks.contains { check in
+            check.id == "manualControlClear"
+                && check.message.contains("re-run diagnose")
+                && check.message.contains("switch Vifty/default mode to Auto")
+        })
         try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
     }
 

@@ -110,7 +110,7 @@ print_readiness_recovery_action() {
       echo "guarded-run: Vifty recovery action is repairHelper; open Vifty and use Repair/Reinstall Helper before retrying." >&2
       ;;
     restoreAutoBeforeRetry)
-      echo "guarded-run: Vifty recovery action is restoreAutoBeforeRetry; restore Auto or wait before retrying." >&2
+      echo "guarded-run: Vifty recovery action is restoreAutoBeforeRetry; restore Auto once, re-run diagnose, and switch Vifty/default mode to Auto before retrying if manualControlActive stays true." >&2
       ;;
     backOffWorkload)
       echo "guarded-run: Vifty recovery action is backOffWorkload; pause or reduce the workload instead of requesting cooling." >&2
@@ -681,7 +681,7 @@ fi
 if [ "$safe_to_request" != "true" ]; then
   case "$recommended_action" in
     restoreAutoBeforeRequestingCooling)
-      no_cooling_message="Vifty recommends restoring Auto before requesting new cooling."
+      no_cooling_message="Vifty recommends restoring Auto before requesting new cooling; restore once, re-run diagnose, and do not loop if manualControlActive stays true."
       ;;
     doNotRequestCooling)
       no_cooling_message="Vifty recommends not requesting cooling."
@@ -698,7 +698,7 @@ if [ "$daemon_control_path_ready" != "true" ]; then
 fi
 
 if [ "$manual_control_active" = "true" ]; then
-  finish_without_cooling_request "Vifty/manual fan control is active; restore Auto before requesting agent cooling." "$@"
+  finish_without_cooling_request "Vifty/manual fan control is active; restore Auto once, re-run diagnose, and switch Vifty/default mode to Auto if manualControlActive stays true." "$@"
 fi
 
 case "$recommended_action" in

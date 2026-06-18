@@ -520,7 +520,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             severity: .warning,
             passed: !manualControlActive,
             message: manualControlActive
-                ? "Vifty/manual fan control appears active; restore Auto in Vifty before requesting agent cooling."
+                ? "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose. If manualControlActive stays true, switch Vifty/default mode to Auto before requesting agent cooling."
                 : "No Vifty/manual fan-control marker is active."
         )
     }

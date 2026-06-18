@@ -88,7 +88,7 @@
     },
     {
       "id": "manualControlClear",
-      "message": "Vifty/manual fan control appears active; restore Auto before an agent takes ownership.",
+      "message": "Vifty/manual fan control appears active; restore Auto once, then re-run diagnose. If manualControlActive stays true, switch Vifty/default mode to Auto before requesting agent cooling.",
       "passed": false,
       "severity": "warning"
     },

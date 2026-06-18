@@ -577,6 +577,8 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("restoring Auto before requesting new cooling"))
         XCTAssertTrue(result.stderr.contains("recovery action is restoreAutoBeforeRetry"))
+        XCTAssertTrue(result.stderr.contains("re-run diagnose"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("switch Vifty/default mode to Auto"), result.stderr)
         XCTAssertTrue(result.stderr.contains("\"recommendedAgentAction\":\"restoreAutoBeforeRequestingCooling\""))
         XCTAssertTrue(result.stderr.contains("\"recommendedRecoveryAction\":\"restoreAutoBeforeRetry\""))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
@@ -771,6 +773,8 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("manual fan control is active"), result.stderr)
         XCTAssertTrue(result.stderr.contains("recovery action is restoreAutoBeforeRetry"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("re-run diagnose"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("switch Vifty/default mode to Auto"), result.stderr)
         XCTAssertTrue(result.stderr.contains(#""manualControlActive":true"#), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
