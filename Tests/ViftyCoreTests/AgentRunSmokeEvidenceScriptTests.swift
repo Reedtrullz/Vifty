@@ -686,7 +686,7 @@ private final class AgentRunSmokeEvidenceHarness {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         outputURL = rootURL.appendingPathComponent("smoke", isDirectory: true)
-        viftyctlURL = rootURL.appendingPathComponent("Vifty.app/Contents/MacOS/viftyctl")
+        viftyctlURL = rootURL.appendingPathComponent("fake-bin/viftyctl")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
         self.capabilitiesJSON = capabilitiesJSON
         self.diagnoseJSON = diagnoseJSON

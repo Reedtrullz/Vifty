@@ -114,6 +114,8 @@ Decision table:
 
 Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `checks`, and `agentControl`.
 
+If a supervised script runs `/Applications/Vifty.app/Contents/MacOS/viftyctl restore-auto --json`, a successful command clears the same local `manualControlActive` marker that `diagnose --json` uses for the restore-first gate. Always re-run `diagnose --json` after restore and require `manualControlActive: false`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` before requesting cooling.
+
 ## Conservative Workload Limits
 
 These are starting points, not rights to exceed daemon policy:

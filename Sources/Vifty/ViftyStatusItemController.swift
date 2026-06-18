@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class ViftyStatusItemController: NSObject {
-    private static let launchPrimeAttempts = 20
+    private static let launchPrimeAttempts = 120
     private static let launchPrimeRetryDelay: Duration = .milliseconds(750)
 
     var openMainWindow: () -> Void
@@ -24,13 +24,7 @@ final class ViftyStatusItemController: NSObject {
         configurePopover()
         observeModel()
         updateStatusItem()
-        primeTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            await primeStatusItemUntilTelemetryResolved(
-                maxAttempts: Self.launchPrimeAttempts,
-                retryDelay: Self.launchPrimeRetryDelay
-            )
-        }
+        scheduleTelemetryPrimeIfNeeded()
     }
 
     private func configureStatusItem() {
@@ -56,6 +50,17 @@ final class ViftyStatusItemController: NSObject {
                 Task { @MainActor in
                     await Task.yield()
                     self?.updateStatusItem()
+                    self?.scheduleTelemetryPrimeIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+
+        model.$menuBarStatusItemRevision
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    await Task.yield()
+                    self?.updateStatusItem()
+                    self?.scheduleTelemetryPrimeIfNeeded()
                 }
             }
             .store(in: &cancellables)
@@ -63,7 +68,8 @@ final class ViftyStatusItemController: NSObject {
 
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
-        if model.menuBarLabelUsesFanIcon {
+        let statusItemText = model.menuBarStatusItemText
+        if statusItemText == nil {
             let image = NSImage(systemSymbolName: "fan", accessibilityDescription: model.menuBarLabelText)
             image?.isTemplate = true
             button.image = image
@@ -74,10 +80,23 @@ final class ViftyStatusItemController: NSObject {
                 ofSize: NSFont.systemFontSize,
                 weight: .regular
             )
-            button.title = model.menuBarLabelText
+            button.title = statusItemText ?? ""
         }
         button.toolTip = model.menuTitle
         button.setAccessibilityLabel(model.menuBarLabelText)
+    }
+
+    private func scheduleTelemetryPrimeIfNeeded() {
+        guard model.menuBarLabelNeedsTelemetryPrime else { return }
+        guard primeTask == nil else { return }
+        primeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.primeTask = nil }
+            await self.primeStatusItemUntilTelemetryResolved(
+                maxAttempts: Self.launchPrimeAttempts,
+                retryDelay: Self.launchPrimeRetryDelay
+            )
+        }
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {

@@ -560,6 +560,7 @@ public struct ViftyCtlRunner: Sendable {
     private let processRunner: any ViftyCtlProcessRunning
     private let thermalReader: @Sendable () -> ThermalPressure
     private let manualControlActiveReader: @Sendable () -> Bool
+    private let manualControlClearer: @Sendable () -> Void
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
 
@@ -568,6 +569,7 @@ public struct ViftyCtlRunner: Sendable {
         processRunner: any ViftyCtlProcessRunning,
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         manualControlActiveReader: @escaping @Sendable () -> Bool = { ManualControlMarker().wasManualControlActive },
+        manualControlClearer: @escaping @Sendable () -> Void = { ManualControlMarker().clear() },
         now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
     ) {
@@ -575,6 +577,7 @@ public struct ViftyCtlRunner: Sendable {
         self.processRunner = processRunner
         self.thermalReader = thermalReader
         self.manualControlActiveReader = manualControlActiveReader
+        self.manualControlClearer = manualControlClearer
         self.now = now
         self.sleep = sleep
     }
@@ -634,6 +637,7 @@ public struct ViftyCtlRunner: Sendable {
                 )
             case .restoreAuto(let reason, let json):
                 let status = try await client.restore(reason: reason)
+                manualControlClearer()
                 let stdout = try format(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
             case .run(let request, let childArguments, let json, let force):

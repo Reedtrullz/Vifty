@@ -925,6 +925,47 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(processRunner.runCallCount, 0)
     }
 
+    func testRestoreAutoClearsManualControlMarkerAfterSuccessfulDaemonRestore() async throws {
+        let manualControl = ManualControlFlag(active: true)
+        let client = FakeAgentControlClient(status: AgentControlStatus(
+            enabled: true,
+            activeLease: nil,
+            lastDecision: nil,
+            lastErrorCode: nil,
+            policy: AgentControlPolicy(enabled: true).snapshot
+        ))
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlActiveReader: { manualControl.isActive },
+            manualControlClearer: { manualControl.clear() }
+        )
+
+        let beforeRestore = try await runner.run(.diagnose(json: true))
+        XCTAssertEqual(beforeRestore.exitCode, 0)
+        XCTAssertEqual(try boolValue("manualControlActive", in: beforeRestore.stdout), true)
+        XCTAssertEqual(try boolValue("safeToRequestCooling", in: beforeRestore.stdout), false)
+        XCTAssertEqual(
+            try stringValue("recommendedAgentAction", in: beforeRestore.stdout),
+            ViftyCtlRecommendedAgentAction.restoreAutoBeforeRequestingCooling.rawValue
+        )
+
+        let restore = try await runner.run(.restoreAuto(reason: "clear manual marker", json: true))
+        XCTAssertEqual(restore.exitCode, 0)
+        XCTAssertFalse(manualControl.isActive)
+
+        let afterRestore = try await runner.run(.diagnose(json: true))
+        XCTAssertEqual(afterRestore.exitCode, 0)
+        XCTAssertEqual(try boolValue("manualControlActive", in: afterRestore.stdout), false)
+        XCTAssertEqual(try boolValue("safeToRequestCooling", in: afterRestore.stdout), true)
+        XCTAssertEqual(
+            try stringValue("recommendedAgentAction", in: afterRestore.stdout),
+            ViftyCtlRecommendedAgentAction.requestCooling.rawValue
+        )
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(restoreReasons, ["clear manual marker"])
+    }
+
     func testRestoreAutoJSONReturnsStructuredErrorWhenDaemonUnavailable() async throws {
         let client = FakeAgentControlClient(
             restoreError: ViftyError.helperRejected("Daemon connection invalidated.")
@@ -1478,6 +1519,39 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(processRunner.runCallCount, 0)
     }
 
+    private func boolValue(
+        _ key: String,
+        in stdout: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> Bool {
+        let json = try jsonObject(in: stdout, file: file, line: line)
+        return try XCTUnwrap(json[key] as? Bool, file: file, line: line)
+    }
+
+    private func stringValue(
+        _ key: String,
+        in stdout: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> String {
+        let json = try jsonObject(in: stdout, file: file, line: line)
+        return try XCTUnwrap(json[key] as? String, file: file, line: line)
+    }
+
+    private func jsonObject(
+        in stdout: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> [String: Any] {
+        let data = try XCTUnwrap(stdout.data(using: .utf8), file: file, line: line)
+        return try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any],
+            file: file,
+            line: line
+        )
+    }
+
     private static func allowedStatus(for request: AgentControlRequest) -> AgentControlStatus {
         AgentControlStatus(
             enabled: true,
@@ -1528,6 +1602,25 @@ final class ViftyCtlRunnerTests: XCTestCase {
             isMacBookPro: true,
             capturedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+}
+
+private final class ManualControlFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedActive: Bool
+
+    init(active: Bool) {
+        self.storedActive = active
+    }
+
+    var isActive: Bool {
+        lock.withLock { storedActive }
+    }
+
+    func clear() {
+        lock.withLock {
+            storedActive = false
+        }
     }
 }
 

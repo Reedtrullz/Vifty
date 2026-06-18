@@ -1403,6 +1403,7 @@ final class AppModelTests: XCTestCase {
         for (mode, label) in expectations {
             model.menuBarDisplayMode = mode
             XCTAssertEqual(model.menuBarLabelText, label, mode.label)
+            XCTAssertNil(model.menuBarStatusItemText, mode.label)
             XCTAssertFalse(model.menuBarLabelUsesFanIcon, mode.label)
         }
     }
@@ -1428,11 +1429,13 @@ final class AppModelTests: XCTestCase {
         model.menuBarDisplayMode = .ownerTemperatureAndRPM
 
         XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
+        XCTAssertNil(model.menuBarStatusItemText)
 
         await model.primeMenuBarStatusItemTelemetry()
 
         XCTAssertTrue(model.hasCompletedHardwarePoll)
         XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertEqual(model.menuBarStatusItemText, "Mac | 67 C | 3352 RPM")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
@@ -1561,6 +1564,7 @@ final class AppModelTests: XCTestCase {
         model.menuBarDisplayMode = .adapterWattage
 
         XCTAssertEqual(model.menuBarLabelText, "140 W adapter")
+        XCTAssertEqual(model.menuBarStatusItemText, "140 W adapter")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
