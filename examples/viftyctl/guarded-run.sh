@@ -140,6 +140,11 @@ finish_without_cooling_request() {
         ;;
     esac
 
+    if [ "${manual_control_active:-}" = "true" ]; then
+      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but manualControlActive is true; not running workload without cooling." >&2
+      exit 75
+    fi
+
     if [ "${daemon_control_path_ready:-}" != "true" ]; then
       echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling." >&2
       exit 75

@@ -291,6 +291,12 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func primeMenuBarStatusItemTelemetry() async {
+        start()
+        guard !hasCompletedHardwarePoll || menuBarLabelText.contains("--") else { return }
+        await pollOnce()
+    }
+
     func applyStartupModePreferenceIfNeeded() async {
         guard !startupModeApplied else { return }
         startupModeApplied = true

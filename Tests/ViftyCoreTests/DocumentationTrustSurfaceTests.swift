@@ -1118,6 +1118,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("will not use this fallback"))
         XCTAssertTrue(exampleReadme.contains("`repairHelper`, `backOffWorkload`, or"))
         XCTAssertTrue(exampleReadme.contains("`restoreAutoBeforeRetry`, `inspectPolicy`, or `collectHardwareEvidence`, when"))
+        XCTAssertTrue(exampleReadme.contains("`manualControlActive` is true"))
         XCTAssertTrue(exampleReadme.contains("swift-test.sh"))
         XCTAssertTrue(exampleReadme.contains("xcode-build.sh"))
         XCTAssertTrue(exampleReadme.contains("make-test.sh"))

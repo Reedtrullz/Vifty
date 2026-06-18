@@ -1407,6 +1407,35 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testPrimeMenuBarStatusItemTelemetryPopulatesSelectedDisplayBeforeMenuOpens() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 67.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: snapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
+
+        await model.primeMenuBarStatusItemTelemetry()
+
+        XCTAssertTrue(model.hasCompletedHardwarePoll)
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
     func testMenuBarCombinedModeKeepsRPMPlaceholderWhenOnlyTemperatureIsAvailable() {
         let model = AppModel()
         model.snapshot = HardwareSnapshot(

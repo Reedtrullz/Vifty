@@ -760,6 +760,32 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunDoesNotRunUncooledWhenManualControlIsActiveEvenWithoutRecoveryAction() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "none",
+            safeToRequestCooling: true,
+            manualControlActive: true
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-manual-control.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("manual fan control is active"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("manualControlActive is true; not running workload without cooling"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""manualControlActive":true"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunFailsClosedWhenReadinessRecoveryActionIsMissing() throws {
         let harness = try ScriptHarness(
             state: "degraded",

@@ -21,6 +21,9 @@ struct ViftyApp: App {
                 .onAppear {
                     model.start()
                 }
+                .task(id: model.menuBarDisplayMode) {
+                    await model.primeMenuBarStatusItemTelemetry()
+                }
         }
         .menuBarExtraStyle(.window)
 
