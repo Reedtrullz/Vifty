@@ -371,6 +371,14 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     compact.empty? ? "" : compact.join(", ")
   end
 
+  def join_presence(values)
+    normalized = values.map do |value|
+      text = value.to_s.strip
+      text.empty? ? "unknown" : text
+    end.uniq.sort
+    normalized.empty? ? "unknown" : normalized.join(", ")
+  end
+
   def short_digest(value, length = 7)
     digest = value.to_s.strip
     return "" if digest.empty?
@@ -418,6 +426,16 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     "Needs validation"
   end
 
+  def readiness_evidence_for(group)
+    [
+      "safeToRequestCooling=#{join_presence(group.map { |row| row["safeToRequestCooling"] })}",
+      "daemonControlPathReady=#{join_presence(group.map { |row| row["daemonControlPathReady"] })}",
+      "manualControlActive=#{join_presence(group.map { |row| row["manualControlActive"] })}",
+      "agentAction=#{join_presence(group.map { |row| row["recommendedAgentAction"] })}",
+      "recoveryAction=#{join_presence(group.map { |row| row["recommendedRecoveryAction"] })}"
+    ].join("<br>")
+  end
+
   def render_markdown_matrix(rows)
     hardware_rows = rows.reject { |row| row["mode"] == "release" }
     groups = Hash.new { |hash, key| hash[key] = [] }
@@ -431,12 +449,12 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "",
       "Generated from reviewed validation report summaries. Treat source-first and unsigned-dev reports as compatibility evidence only; they are not Developer ID, notarization, Homebrew, or trusted binary evidence.",
       "",
-      "| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |",
-      "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |"
+      "| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Readiness | Evidence |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |"
     ]
 
     if groups.empty?
-      lines << "| No reviewed hardware reports | Needs validation | 0 | 0 | 0 | 0 | 0 |  |  | Add reviewed `review-result.json` files before changing public claims. |"
+      lines << "| No reviewed hardware reports | Needs validation | 0 | 0 | 0 | 0 | 0 |  |  |  | Add reviewed `review-result.json` files before changing public claims. |"
       return lines.join("\n") + "\n"
     end
 
@@ -449,6 +467,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       status = compatibility_status_for(validated_count, candidate_count, safe_block_count, rejected_count)
       identifiers = join_unique(group.map { |row| row["modelIdentifier"] })
       install_sources = join_unique(group.map { |row| row["installSource"] })
+      readiness = readiness_evidence_for(group)
 
       evidence = []
       source_joined = join_unique(group.map { |row| source_evidence_for(row) })
@@ -474,6 +493,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
         rejected_count,
         identifiers,
         install_sources,
+        readiness,
         evidence.join("<br>")
       ].map { |value| markdown_escape(value) }.join(" | ").then { |row| "| #{row} |" }
     end

@@ -132,9 +132,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(markdown.contains("# Vifty Compatibility Matrix Draft"))
         XCTAssertTrue(markdown.contains("Generated from reviewed validation report summaries."))
         XCTAssertTrue(markdown.contains("source-first and unsigned-dev reports as compatibility evidence only"))
-        XCTAssertTrue(markdown.contains("| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Evidence |"))
-        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11 |"))
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Readiness | Evidence |"))
+        XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | safeToRequestCooling=false<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=doNotRequestCooling<br>recoveryAction=collectHardwareEvidence | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11 |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | safeToRequestCooling=true<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=requestCooling<br>recoveryAction=none | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
         XCTAssertFalse(markdown.contains("release-trust-evidence"))
     }
 
@@ -158,7 +158,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 0)
         let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
-        XCTAssertTrue(markdown.contains("| No reviewed hardware reports | Needs validation | 0 | 0 | 0 | 0 | 0 |  |  | Add reviewed `review-result.json` files before changing public claims. |"))
+        XCTAssertTrue(markdown.contains("| No reviewed hardware reports | Needs validation | 0 | 0 | 0 | 0 | 0 |  |  |  | Add reviewed `review-result.json` files before changing public claims. |"))
         XCTAssertFalse(markdown.contains("MacBookPro18"))
     }
 
@@ -203,7 +203,32 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(validatedByModelFamily.isEmpty)
 
         let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Needs manual smoke | 0 | 1 | 1 | 0 | 0 | MacBookPro18,1 | source-build-tag | safeToRequestCooling=true<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=requestCooling<br>recoveryAction=none | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: not recorded<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke |"))
+    }
+
+    func testMarkdownMatrixSurfacesUnknownManualControlReadiness() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "legacy-manual-state/review-result.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,1",
+            safeToRequestCooling: true,
+            manualControlActive: nil,
+            warnings: ["legacy review did not record manualControlActive"]
+        )
+        let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
+
+        let result = try harness.runSummarizer([
+            "--input", reviewURL.path,
+            "--output-tsv", harness.rootURL.appendingPathComponent("summary/report-index.tsv").path,
+            "--output-markdown", markdownURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
+        XCTAssertTrue(markdown.contains("manualControlActive=unknown"))
+        XCTAssertFalse(markdown.contains("manualControlActive=false"))
     }
 
     func testSummarizerRejectsValidatedManualSmokeWithoutSource() throws {
@@ -732,7 +757,7 @@ private final class ValidationReportSummaryHarness {
         safeToRequestCooling: Bool,
         installSource: String = "source-build-tag",
         daemonControlPathReady: Bool = true,
-        manualControlActive: Bool = false,
+        manualControlActive: Bool? = false,
         includeDaemonControlPathReady: Bool = true,
         includeRecommendedAgentAction: Bool = true,
         includeRecommendedRecoveryAction: Bool = true,
@@ -796,7 +821,7 @@ private final class ValidationReportSummaryHarness {
         if includeDaemonControlPathReady {
             json["daemonControlPathReady"] = daemonControlPathReady
         }
-        json["manualControlActive"] = manualControlActive
+        json["manualControlActive"] = manualControlActive as Any? ?? NSNull()
         if includeRecommendedAgentAction {
             json["recommendedAgentAction"] = mode == "unsupported-hardware" ? "doNotRequestCooling" : "requestCooling"
         }
