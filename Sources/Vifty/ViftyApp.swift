@@ -18,6 +18,9 @@ struct ViftyApp: App {
                 .environmentObject(model)
         } label: {
             MenuBarExtraLabel(model: model)
+                .onAppear {
+                    model.start()
+                }
         }
         .menuBarExtraStyle(.window)
 

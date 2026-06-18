@@ -280,8 +280,7 @@ final class AppModel: ObservableObject {
         guard pollingTask == nil else { return }
         isRunning = true
 
-        pollingTask = Task { [weak self] in
-            guard let self else { return }
+        pollingTask = Task { [self] in
             await coordinator.recoverIfNeeded()
             await applyStartupModePreferenceIfNeeded()
 
