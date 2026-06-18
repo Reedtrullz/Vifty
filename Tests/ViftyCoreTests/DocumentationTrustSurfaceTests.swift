@@ -985,8 +985,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(guide.contains("refuses uncooled execution when Vifty recommends"))
         XCTAssertTrue(guide.contains("`repairHelper`,"))
         XCTAssertTrue(guide.contains("`inspectPolicy`, or"))
-        XCTAssertTrue(guide.contains("`collectHardwareEvidence`, or"))
+        XCTAssertTrue(guide.contains("`collectHardwareEvidence`; when"))
         XCTAssertTrue(guide.contains("`daemonControlPathReady` is false"))
+        XCTAssertTrue(guide.contains("`manualControlActive` is true"))
         XCTAssertTrue(guide.contains("uncooled fallback is mutually exclusive"))
         XCTAssertTrue(guide.contains("viftyctl audit --limit 20 --json"))
         XCTAssertTrue(guide.contains("scripts/collect-agent-cooling-evidence.sh"))
@@ -1082,8 +1083,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(integrations.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED"))
         XCTAssertTrue(integrations.contains("refuses to combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED`"))
         XCTAssertTrue(integrations.contains("if `policy.enabled` is absent or false"))
-        XCTAssertTrue(integrations.contains("avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, hardware evidence collection, or when the daemon control path is unavailable"))
-        XCTAssertTrue(integrations.contains("the wrapper still refuses helper-repair, restore-first, backoff, policy-inspection, hardware-evidence, daemon-control-unavailable states, and force-retry combinations"))
+        XCTAssertTrue(integrations.contains("avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, or hardware evidence collection; when the daemon control path is unavailable; or when manual control is active"))
+        XCTAssertTrue(integrations.contains("The wrapper still refuses helper-repair, restore-first, manual-control-active, backoff, policy-inspection, hardware-evidence, daemon-control-unavailable states, and force-retry combinations"))
         XCTAssertTrue(integrations.contains("keep Vifty optional without masking Vifty failures"))
         XCTAssertTrue(integrations.contains("Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command"))
         XCTAssertTrue(integrations.contains("use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly asked"))
@@ -1132,6 +1133,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(jsonExampleReadme.contains("stable command-error schema ID"))
         XCTAssertTrue(jsonExampleReadme.contains("capabilities.schemaIDs.commandError"))
         XCTAssertTrue(jsonExampleReadme.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
+        XCTAssertTrue(jsonExampleReadme.contains("diagnose-degraded-manual-control.json"))
     }
 
     func testStrategyWorkplanReflectsCurrentSourceFirstState() throws {
@@ -1146,7 +1148,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(workplan.contains("guarded-run readiness recovery-action checks"))
         XCTAssertTrue(workplan.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1"))
         XCTAssertTrue(workplan.contains("refusal to combine force retry with uncooled fallback"))
-        XCTAssertTrue(workplan.contains("refuses uncooled execution for `repairHelper`, `backOffWorkload`, `restoreAutoBeforeRetry`, and `daemonControlPathReady=false`"))
+        XCTAssertTrue(workplan.contains("refuses uncooled execution for `repairHelper`, `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, `collectHardwareEvidence`, `daemonControlPathReady=false`, and `manualControlActive=true`"))
         XCTAssertTrue(workplan.contains("community/support surface checks"))
         XCTAssertTrue(workplan.contains("validation report index schema"))
         XCTAssertTrue(workplan.contains("validation review-result schema"))

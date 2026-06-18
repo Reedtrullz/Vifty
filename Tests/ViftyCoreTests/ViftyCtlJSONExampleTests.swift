@@ -131,6 +131,29 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         try assertCheck("thermalPressureSafe", in: report.checks, passed: true, severity: .info)
     }
 
+    func testDiagnoseDegradedManualControlExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-degraded-manual-control.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.state, .degraded)
+        XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertTrue(report.manualControlActive)
+        XCTAssertEqual(report.thermalPressure, .nominal)
+        XCTAssertEqual(report.controllableFanCount, 2)
+        XCTAssertEqual(report.fans.map(\.hardwareMode), ["Forced", "Forced"])
+        XCTAssertEqual(report.fans.map(\.hardwareModeRawValue), [1, 1])
+        XCTAssertTrue(report.agentControl.enabled)
+        XCTAssertNil(report.agentControl.activeLease)
+        XCTAssertNil(report.agentControl.lastErrorCode)
+        try assertCheck("daemonControlPathReady", in: report.checks, passed: true, severity: .error)
+        try assertCheck("activeLeaseClear", in: report.checks, passed: true, severity: .warning)
+        try assertCheck("manualControlClear", in: report.checks, passed: false, severity: .warning)
+        try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
+    }
+
     func testDiagnoseDegradedCautionExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-degraded-caution.json")
 
@@ -365,6 +388,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             ("viftyctl-diagnose.schema.json", "diagnose-ready.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-blocked-helper-unreachable.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-degraded-active-lease.json"),
+            ("viftyctl-diagnose.schema.json", "diagnose-degraded-manual-control.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-degraded-caution.json"),
             ("viftyctl-status.schema.json", "status-active-lease.json")
         ]

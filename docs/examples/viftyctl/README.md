@@ -18,6 +18,7 @@ Files:
 - [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware with `recommendedRecoveryAction`
 - [diagnose-blocked-helper-unreachable.json](diagnose-blocked-helper-unreachable.json) - `viftyctl diagnose --json` when helper telemetry exists but the daemon agent-control path is unreachable
 - [diagnose-degraded-active-lease.json](diagnose-degraded-active-lease.json) - `viftyctl diagnose --json` when another bounded cooling lease is active and new cooling is unsafe
+- [diagnose-degraded-manual-control.json](diagnose-degraded-manual-control.json) - `viftyctl diagnose --json` when Vifty/manual fan control is active and an agent must wait for Auto restore before taking ownership
 - [diagnose-degraded-caution.json](diagnose-degraded-caution.json) - `viftyctl diagnose --json` when warning-only thermal pressure makes cooling safe only with caution
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
 - [command-error.json](command-error.json) - structured `--json` command failure with `recommendedRecoveryAction`

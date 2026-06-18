@@ -46,7 +46,8 @@ wrapper still performs read-only capabilities/readiness checks, prints the
 diagnose JSON, refuses to request cooling, and only then execs the child directly.
 It still refuses uncooled execution when Vifty recommends `repairHelper`,
 `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, or
-`collectHardwareEvidence`, or when `daemonControlPathReady` is false. The
+`collectHardwareEvidence`; when `daemonControlPathReady` is false; or when
+`manualControlActive` is true. The
 uncooled fallback is mutually exclusive with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
 
 For common workloads, use the audited shortcuts:

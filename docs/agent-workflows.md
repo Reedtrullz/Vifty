@@ -65,14 +65,15 @@ It also includes `recommendedAgentAction`, `safeToRequestCooling`, `daemonContro
 
 - `requestCooling` / `safeToRequestCooling: true` - safe to request a normal bounded lease.
 - `requestCoolingWithCaution` / `safeToRequestCooling: true` - a warning exists; reduce duration/RPM or be ready to back off.
-- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease is active; restore Auto or wait before requesting new cooling.
+- `restoreAutoBeforeRequestingCooling` / `safeToRequestCooling: false` - another lease or manual-control marker is active; restore Auto or wait before requesting new cooling.
 - `doNotRequestCooling` / `safeToRequestCooling: false` - a hard blocker exists.
 - `daemonControlPathReady: false` - the daemon-backed snapshot or agent-control path is unavailable; repair the helper before requesting cooling, even if other telemetry exists.
 
-Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl). Use them to test agent behavior against the three non-happy-path decisions:
+Canonical diagnose fixtures live in [docs/examples/viftyctl](examples/viftyctl). Use them to test agent behavior against the four non-happy-path decisions:
 
 - [diagnose-degraded-caution.json](examples/viftyctl/diagnose-degraded-caution.json) - degraded + `requestCoolingWithCaution` + `safeToRequestCooling: true`.
 - [diagnose-degraded-active-lease.json](examples/viftyctl/diagnose-degraded-active-lease.json) - degraded + `restoreAutoBeforeRequestingCooling` + `safeToRequestCooling: false`.
+- [diagnose-degraded-manual-control.json](examples/viftyctl/diagnose-degraded-manual-control.json) - degraded + `restoreAutoBeforeRequestingCooling` + `manualControlActive: true`.
 - [diagnose-blocked-helper-unreachable.json](examples/viftyctl/diagnose-blocked-helper-unreachable.json) - blocked + `doNotRequestCooling` + `daemonControlPathReady: false`.
 
 Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCooling` is the gate. Do treat `daemonControlPathReady: false` as a hard helper-repair stop, and `manualControlActive: true` as a restore-Auto stop before an agent takes ownership.
