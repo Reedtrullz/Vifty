@@ -1408,6 +1408,24 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testStatusItemPresentationSuppressesStartupPlaceholders() {
+        XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
+            statusItemText: "Mac | -- C | -- RPM",
+            labelNeedsTelemetryPrime: false
+        ))
+        XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
+            statusItemText: "Mac | 67 C | 3352 RPM",
+            labelNeedsTelemetryPrime: true
+        ))
+        XCTAssertEqual(
+            ViftyStatusItemPresentation.resolvedText(
+                statusItemText: "Mac | 67 C | 3352 RPM",
+                labelNeedsTelemetryPrime: false
+            ),
+            "Mac | 67 C | 3352 RPM"
+        )
+    }
+
     func testMenuBarStatusItemSuppressesPlaceholderUntilTelemetryPrimeResolves() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],

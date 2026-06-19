@@ -2,6 +2,17 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum ViftyStatusItemPresentation {
+    static func resolvedText(
+        statusItemText: String?,
+        labelNeedsTelemetryPrime: Bool
+    ) -> String? {
+        guard !labelNeedsTelemetryPrime else { return nil }
+        guard let statusItemText, !statusItemText.contains("--") else { return nil }
+        return statusItemText
+    }
+}
+
 @MainActor
 final class ViftyStatusItemController: NSObject {
     private static let launchPrimeAttempts = 120
@@ -82,12 +93,19 @@ final class ViftyStatusItemController: NSObject {
             )
             button.title = statusItemText ?? ""
         }
+        statusItem.length = NSStatusItem.variableLength
         button.toolTip = model.menuTitle
         button.setAccessibilityLabel(model.menuBarLabelText)
+        button.needsLayout = true
+        button.needsDisplay = true
+        button.window?.displayIfNeeded()
     }
 
     private var resolvedStatusItemText: String? {
-        model.menuBarStatusItemText
+        ViftyStatusItemPresentation.resolvedText(
+            statusItemText: model.menuBarStatusItemText,
+            labelNeedsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime
+        )
     }
 
     private func scheduleTelemetryPrimeIfNeeded() {
