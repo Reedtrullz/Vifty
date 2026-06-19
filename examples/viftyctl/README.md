@@ -64,6 +64,7 @@ when Vifty recommends `repairHelper`, `backOffWorkload`, or
 `restoreAutoBeforeRetry`, `inspectPolicy`, or `collectHardwareEvidence`, when
 `manualControlActive` is true, when `daemonControlPathReady` is false, or when
 `VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
+Do not catch guarded-run failures and rerun the child command yourself.
 
 ## Scripts
 

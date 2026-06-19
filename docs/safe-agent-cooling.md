@@ -63,6 +63,7 @@ It still refuses uncooled execution when Vifty recommends `repairHelper`,
 `collectHardwareEvidence`; when `daemonControlPathReady` is false; or when
 `manualControlActive` is true. The
 uncooled fallback is mutually exclusive with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
+Do not catch guarded-run failures and rerun workloads without cooling.
 
 For common workloads, use the audited shortcuts:
 
