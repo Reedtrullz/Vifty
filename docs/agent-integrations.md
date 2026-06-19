@@ -89,6 +89,13 @@ read-only checks, print the diagnose JSON, refuse to request cooling, avoid the 
 
 The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, and command-error schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `wrapperResources` discovery metadata is missing or stale, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, and launch-failure cleanup reporting.
 
+On guarded-run failure paths, extract captured JSON from stderr only between
+the stable markers `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
+`guarded-run: END_VIFTY_CAPABILITIES_JSON` or
+`guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` /
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`; do not parse surrounding human recovery
+text.
+
 ## Codex
 
 For a repository-level `AGENTS.md`, add the shared rule and then use workload-specific commands:

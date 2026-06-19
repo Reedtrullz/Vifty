@@ -143,6 +143,25 @@ print_no_direct_uncooled_rerun_guidance() {
   echo "guarded-run: Do not rerun the child command yourself after this guarded-run failure; use VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1 only after explicit user approval and only when this wrapper allows it." >&2
 }
 
+print_json_evidence() {
+  evidence_name="$1"
+  evidence_payload="$2"
+  if [ -z "$evidence_payload" ]; then
+    return
+  fi
+  echo "guarded-run: BEGIN_$evidence_name" >&2
+  printf '%s\n' "$evidence_payload" >&2
+  echo "guarded-run: END_$evidence_name" >&2
+}
+
+print_capabilities_json_evidence() {
+  print_json_evidence "VIFTY_CAPABILITIES_JSON" "${capabilities_json:-}"
+}
+
+print_diagnose_json_evidence() {
+  print_json_evidence "VIFTY_DIAGNOSE_JSON" "${diagnose_json:-}"
+}
+
 finish_without_cooling_request() {
   message="$1"
   shift
@@ -150,7 +169,7 @@ finish_without_cooling_request() {
   echo "guarded-run: $message" >&2
   print_readiness_recovery_action "$recommended_recovery_action"
   print_manual_control_startup_mode_context
-  printf '%s\n' "$diagnose_json" >&2
+  print_diagnose_json_evidence
 
   if [ "$allow_uncooled" -eq 1 ]; then
     case "$recommended_recovery_action" in
@@ -364,7 +383,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 if [ "$capabilities_status" -ne 0 ] && [ "$capabilities_status" != "$capabilities_unavailable_exit" ]; then
   echo "guarded-run: viftyctl capabilities exited $capabilities_status instead of advertised unavailable exit ${capabilities_unavailable_exit:-unknown}; refusing to request cooling." >&2
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -374,7 +393,7 @@ if [ "$capabilities_schema_version" != "1" ] ||
   echo "guarded-run: viftyctl capabilities schema identity is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaVersion=1 and schemaIDs.capabilities=$expected_capabilities_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -383,7 +402,7 @@ if [ "$capabilities_diagnose_schema_id" != "$expected_diagnose_schema_id" ]; the
   echo "guarded-run: viftyctl capabilities diagnose schema identity is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaIDs.diagnose=$expected_diagnose_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -392,7 +411,7 @@ if [ "$capabilities_command_error_schema_id" != "$expected_command_error_schema_
   echo "guarded-run: viftyctl capabilities command-error schema identity is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaIDs.commandError=$expected_command_error_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -404,7 +423,7 @@ if [ "$capabilities_status" -ne 0 ] || [ "$daemon_status_available" != "true" ] 
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -412,7 +431,7 @@ fi
 if [ "$policy_enabled" != "true" ]; then
   echo "guarded-run: viftyctl capabilities does not advertise enabled agent policy; refusing to request cooling." >&2
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -423,7 +442,7 @@ if ! printf '%s\n' "$capability_commands" | /usr/bin/grep -F '"run"' >/dev/null 
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -434,7 +453,7 @@ if ! printf '%s\n' "$capability_workloads" | /usr/bin/grep -F "\"$workload\"" >/
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -471,7 +490,7 @@ if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -503,7 +522,7 @@ if [ "$run_child_preflight" != "true" ] ||
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -516,7 +535,7 @@ if ! is_positive_integer "$minimum_agent_rpm_percent" ||
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -532,7 +551,7 @@ if ! is_positive_integer "$max_duration_seconds"; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -549,7 +568,7 @@ if ! is_positive_integer "$maximum_reason_length" ||
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -569,7 +588,7 @@ if [ "$force_retry" -eq 1 ] && [ "$supports_force_retry" != "true" ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
   if [ -n "$capabilities_json" ]; then
-    printf '%s\n' "$capabilities_json" >&2
+    print_capabilities_json_evidence
   fi
   exit 75
 fi
@@ -605,14 +624,14 @@ if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
     echo "guarded-run: Vifty diagnose command-error schema identity is not recognized; refusing to request cooling." >&2
     echo "guarded-run: expected schemaVersion=1 and schemaID=$capabilities_command_error_schema_id." >&2
     if [ -n "$diagnose_json" ]; then
-      printf '%s\n' "$diagnose_json" >&2
+      print_diagnose_json_evidence
     fi
     exit 75
   fi
 
   echo "guarded-run: Vifty diagnose failed; refusing to request cooling." >&2
   if [ -n "$diagnose_json" ]; then
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
   fi
   exit 75
 fi
@@ -621,7 +640,7 @@ if [ "$diagnose_schema_version" != "1" ]; then
   echo "guarded-run: Vifty diagnose readiness schema version is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaVersion=1." >&2
   if [ -n "$diagnose_json" ]; then
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
   fi
   exit 75
 fi
@@ -635,7 +654,7 @@ case "$state" in
     ;;
   *)
     echo "guarded-run: unknown Vifty readiness state '$state'; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -646,7 +665,7 @@ if [ -z "$recommended_action" ] ||
    [ -z "$daemon_control_path_ready" ] ||
    [ -z "$manual_control_active" ]; then
   echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-  printf '%s\n' "$diagnose_json" >&2
+  print_diagnose_json_evidence
   exit 75
 fi
 
@@ -655,7 +674,7 @@ case "$safe_to_request" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -665,7 +684,7 @@ case "$daemon_control_path_ready" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -675,7 +694,7 @@ case "$manual_control_active" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -685,7 +704,7 @@ case "$recommended_action" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -695,7 +714,7 @@ case "$recommended_recovery_action" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac
@@ -735,7 +754,7 @@ case "$recommended_action" in
     ;;
   *)
     echo "guarded-run: unknown Vifty agent action '$recommended_action'; refusing to request cooling." >&2
-    printf '%s\n' "$diagnose_json" >&2
+    print_diagnose_json_evidence
     exit 75
     ;;
 esac

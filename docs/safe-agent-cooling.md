@@ -51,6 +51,14 @@ VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
   /path/to/guarded-run.sh build 25m 75 "release build" -- swift build -c release
 ```
 
+When the guarded wrapper refuses before `viftyctl run`, it keeps the captured
+machine-readable payload extractable from stderr: capabilities payloads are
+bracketed by `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` and
+`guarded-run: END_VIFTY_CAPABILITIES_JSON`, while diagnose payloads are bracketed
+by `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` and
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Agents and support tooling should extract
+the exact JSON between those markers instead of parsing surrounding prose.
+
 The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
 The guarded wrapper also does not fall back to an uncooled workload by default.

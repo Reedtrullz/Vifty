@@ -12,6 +12,13 @@ common developer workloads on Vifty's safe path:
 7. delegate to `viftyctl run --json` with one bounded lease;
 8. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
+When the wrapper prints captured JSON on a failure path, it wraps capabilities
+evidence with `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
+`guarded-run: END_VIFTY_CAPABILITIES_JSON` and diagnose evidence with
+`guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` /
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Extract the exact JSON between those
+markers instead of scraping human recovery text.
+
 If a capabilities payload does not advertise schema version `1`, the stable
 capabilities, diagnose, and command-error schema IDs, `runLifecycle`,
 `wrapperResources`, `policyStatusAvailable: true`, `policy.enabled: true`,

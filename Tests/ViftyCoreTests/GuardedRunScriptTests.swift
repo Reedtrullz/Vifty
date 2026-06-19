@@ -81,6 +81,8 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("capabilities schema identity is not recognized"), result.stderr)
         XCTAssertTrue(result.stderr.contains("expected schemaVersion=1"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("BEGIN_VIFTY_CAPABILITIES_JSON"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("END_VIFTY_CAPABILITIES_JSON"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -601,6 +603,8 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
         XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
         XCTAssertTrue(result.stderr.contains("Do not rerun the child command yourself after this guarded-run failure"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("BEGIN_VIFTY_DIAGNOSE_JSON"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("END_VIFTY_DIAGNOSE_JSON"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
