@@ -764,7 +764,8 @@ final class GuardedRunScriptTests: XCTestCase {
             recommendedAction: "requestCooling",
             recommendedRecoveryAction: "restoreAutoBeforeRetry",
             safeToRequestCooling: true,
-            manualControlActive: true
+            manualControlActive: true,
+            startupMode: "Curve"
         )
 
         let result = try harness.runGuardedRun([
@@ -777,7 +778,9 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("re-run diagnose"), result.stderr)
         XCTAssertTrue(result.stderr.contains("inspect appPreferences.startupMode"), result.stderr)
         XCTAssertTrue(result.stderr.contains("switch Vifty/default mode to Auto"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("default startup mode is Curve"), result.stderr)
         XCTAssertTrue(result.stderr.contains(#""manualControlActive":true"#), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""startupMode":"Curve""#), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -1030,6 +1033,7 @@ private final class ScriptHarness {
         safeToRequestCooling: Bool? = nil,
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false,
+        startupMode: String? = nil,
         diagnoseExitCode: Int = 0,
         diagnoseSchemaVersion: Int = 1,
         emitReadinessOnDiagnoseFailure: Bool = false,
@@ -1074,6 +1078,7 @@ private final class ScriptHarness {
                 safeToRequestCooling: safeToRequestCooling ?? Self.defaultSafeToRequestCooling(for: state),
                 daemonControlPathReady: daemonControlPathReady,
                 manualControlActive: manualControlActive,
+                startupMode: startupMode,
                 diagnoseExitCode: diagnoseExitCode,
                 diagnoseSchemaVersion: diagnoseSchemaVersion,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
@@ -1189,6 +1194,7 @@ private final class ScriptHarness {
         safeToRequestCooling: Bool,
         daemonControlPathReady: Bool,
         manualControlActive: Bool,
+        startupMode: String?,
         diagnoseExitCode: Int,
         diagnoseSchemaVersion: Int,
         emitReadinessOnDiagnoseFailure: Bool,
@@ -1216,6 +1222,9 @@ private final class ScriptHarness {
         let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
             ? #","recommendedAgentAction":"\#(recommendedAction)","recommendedRecoveryAction":"\#(recommendedRecoveryAction)","safeToRequestCooling":\#(safeToRequestCooling),"daemonControlPathReady":\#(daemonControlPathReady),"manualControlActive":\#(manualControlActive)"#
             : "")
+        let appPreferences = startupMode.map {
+            #","appPreferences":{"startupMode":"\#($0)","startupModeSource":"persisted","readError":null}"#
+        } ?? ""
         let commandError = commandErrorOverride ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-command-error.schema.json","command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
             ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
@@ -1253,7 +1262,7 @@ private final class ScriptHarness {
 
         if [ "$#" -ge 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then
-            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields),"checks":[]}\n'
+            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(appPreferences),"checks":[]}\n'
           else
             printf '\(commandError)\n'
           fi

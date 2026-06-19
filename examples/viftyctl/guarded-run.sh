@@ -124,12 +124,28 @@ print_readiness_recovery_action() {
   esac
 }
 
+print_manual_control_startup_mode_context() {
+  if [ "${manual_control_active:-}" != "true" ]; then
+    return
+  fi
+
+  case "${startup_mode:-}" in
+    Curve|Fixed)
+      echo "guarded-run: Vifty default startup mode is $startup_mode; switch Vifty/default mode to Auto before retrying if manualControlActive stays true." >&2
+      ;;
+    Auto)
+      echo "guarded-run: Vifty default startup mode is Auto; restore the current manual run to Auto before retrying if manualControlActive stays true." >&2
+      ;;
+  esac
+}
+
 finish_without_cooling_request() {
   message="$1"
   shift
 
   echo "guarded-run: $message" >&2
   print_readiness_recovery_action "$recommended_recovery_action"
+  print_manual_control_startup_mode_context
   printf '%s\n' "$diagnose_json" >&2
 
   if [ "$allow_uncooled" -eq 1 ]; then
@@ -563,6 +579,7 @@ recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil 
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
 manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract manualControlActive raw -o - - 2>/dev/null || printf '')"
+startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPreferences.startupMode raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$diagnose_schema_version" = "null" ] && diagnose_schema_version=""
@@ -572,6 +589,7 @@ manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extra
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 [ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
 [ "$manual_control_active" = "null" ] && manual_control_active=""
+[ "$startup_mode" = "null" ] && startup_mode=""
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
   if [ "$diagnose_schema_version" != "1" ] ||
