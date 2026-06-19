@@ -278,7 +278,7 @@ examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 
 The wrapper:
 
-- runs `capabilities --json` and requires schema version `1`, the stable capabilities, diagnose, and command-error schema IDs, current `wrapperResources` discovery metadata, and the safe `runLifecycle` contract,
+- runs `capabilities --json` and requires schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, current `wrapperResources` discovery metadata, and the safe `runLifecycle` contract,
 - requires `policyStatusAvailable: true`, `policy.enabled: true`, and advertised policy duration/RPM limits, then rejects durations or RPM percentages outside the daemon's advertised policy range before readiness or cooling,
 - requires `metadataLimits` and rejects reasons longer than the advertised maximum before readiness or cooling,
 - runs `diagnose --json` and requires diagnose readiness schema version `1`,

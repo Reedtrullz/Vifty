@@ -828,7 +828,9 @@ final class AppModel: ObservableObject {
 
     var menuBarStatusItemText: String? {
         guard !menuBarLabelUsesFanIcon else { return nil }
-        return menuBarLabelText
+        let label = menuBarLabelText
+        guard !label.contains("--") else { return nil }
+        return label
     }
 
     var menuBarLabelNeedsTelemetryPrime: Bool {

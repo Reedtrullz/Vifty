@@ -1403,9 +1403,40 @@ final class AppModelTests: XCTestCase {
         for (mode, label) in expectations {
             model.menuBarDisplayMode = mode
             XCTAssertEqual(model.menuBarLabelText, label, mode.label)
-            XCTAssertEqual(model.menuBarStatusItemText, label, mode.label)
+            XCTAssertNil(model.menuBarStatusItemText, mode.label)
             XCTAssertFalse(model.menuBarLabelUsesFanIcon, mode.label)
         }
+    }
+
+    func testMenuBarStatusItemSuppressesPlaceholderUntilTelemetryPrimeResolves() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 67.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: snapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
+        XCTAssertNil(model.menuBarStatusItemText)
+        XCTAssertTrue(model.menuBarLabelNeedsTelemetryPrime)
+
+        await model.primeMenuBarStatusItemTelemetry()
+
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertEqual(model.menuBarStatusItemText, "Mac | 67 C | 3352 RPM")
+        XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
     }
 
     func testPrimeMenuBarStatusItemTelemetryPopulatesSelectedDisplayBeforeMenuOpens() async {
@@ -1429,7 +1460,7 @@ final class AppModelTests: XCTestCase {
         model.menuBarDisplayMode = .ownerTemperatureAndRPM
 
         XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
-        XCTAssertEqual(model.menuBarStatusItemText, "Mac | -- C | -- RPM")
+        XCTAssertNil(model.menuBarStatusItemText)
 
         await model.primeMenuBarStatusItemTelemetry()
 

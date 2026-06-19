@@ -41,7 +41,7 @@ final class GuardedRunScriptTests: XCTestCase {
         let harness = try ScriptHarness(
             state: "ready",
             capabilitiesExitCode: 69,
-            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
         )
 
         let result = try harness.runGuardedRun([
@@ -56,7 +56,7 @@ final class GuardedRunScriptTests: XCTestCase {
     func testGuardedRunRejectsFallbackPolicySourceEvenWithSuccessfulCapabilitiesExit() throws {
         let harness = try ScriptHarness(
             state: "ready",
-            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
+            capabilitiesOutputOverride: #"{"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"},"daemonStatusAvailable":false,"policyStatusAvailable":true,"policySource":"fallbackUnavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","localModel","custom"],"supportsForceRetry":true,"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"exitCodes":{"unavailable":69}}"#
         )
 
         let result = try harness.runGuardedRun([
@@ -115,6 +115,22 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("command-error schema identity"), result.stderr)
         XCTAssertTrue(result.stderr.contains("viftyctl-command-error.schema.json"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsCapabilitiesWithMissingRunSchemaID() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            capabilitiesRunSchemaID: nil
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("run schema identity"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("viftyctl-run.schema.json"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -1061,6 +1077,7 @@ private final class ScriptHarness {
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         capabilitiesDiagnoseSchemaID: String? = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         capabilitiesCommandErrorSchemaID: String? = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        capabilitiesRunSchemaID: String? = "https://vifty.local/schemas/viftyctl-run.schema.json",
         capabilitiesOutputOverride: String? = nil,
         createFakeViftyCtl: Bool = true
     ) throws {
@@ -1106,6 +1123,7 @@ private final class ScriptHarness {
                 capabilitiesSchemaID: capabilitiesSchemaID,
                 capabilitiesDiagnoseSchemaID: capabilitiesDiagnoseSchemaID,
                 capabilitiesCommandErrorSchemaID: capabilitiesCommandErrorSchemaID,
+                capabilitiesRunSchemaID: capabilitiesRunSchemaID,
                 capabilitiesOutputOverride: capabilitiesOutputOverride
             )
         }
@@ -1222,6 +1240,7 @@ private final class ScriptHarness {
         capabilitiesSchemaID: String,
         capabilitiesDiagnoseSchemaID: String?,
         capabilitiesCommandErrorSchemaID: String?,
+        capabilitiesRunSchemaID: String?,
         capabilitiesOutputOverride: String?
     ) throws {
         let emitReadinessOnDiagnoseFailureValue = emitReadinessOnDiagnoseFailure ? "1" : "0"
@@ -1252,6 +1271,9 @@ private final class ScriptHarness {
         }
         if let capabilitiesCommandErrorSchemaID {
             schemaIDs += #","commandError":"\#(capabilitiesCommandErrorSchemaID)""#
+        }
+        if let capabilitiesRunSchemaID {
+            schemaIDs += #","run":"\#(capabilitiesRunSchemaID)""#
         }
         let schemaIdentity = #""schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{\#(schemaIDs)}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty

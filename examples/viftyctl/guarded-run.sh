@@ -287,6 +287,7 @@ allow_uncooled="${VIFTY_GUARDED_RUN_ALLOW_UNCOOLED:-0}"
 expected_capabilities_schema_id="https://vifty.local/schemas/viftyctl-capabilities.schema.json"
 expected_diagnose_schema_id="https://vifty.local/schemas/viftyctl-diagnose.schema.json"
 expected_command_error_schema_id="https://vifty.local/schemas/viftyctl-command-error.schema.json"
+expected_run_schema_id="https://vifty.local/schemas/viftyctl-run.schema.json"
 
 if [ ! -x "$viftyctl" ]; then
   echo "guarded-run: viftyctl is not executable at $viftyctl" >&2
@@ -335,6 +336,7 @@ capabilities_schema_version="$(printf '%s\n' "$capabilities_json" | /usr/bin/plu
 capabilities_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.capabilities raw -o - - 2>/dev/null || printf '')"
 capabilities_diagnose_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.diagnose raw -o - - 2>/dev/null || printf '')"
 capabilities_command_error_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.commandError raw -o - - 2>/dev/null || printf '')"
+capabilities_run_schema_id="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract schemaIDs.run raw -o - - 2>/dev/null || printf '')"
 capabilities_unavailable_exit="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract exitCodes.unavailable raw -o - - 2>/dev/null || printf '')"
 daemon_status_available="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract daemonStatusAvailable raw -o - - 2>/dev/null || printf '')"
 policy_source="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policySource raw -o - - 2>/dev/null || printf '')"
@@ -365,6 +367,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$capabilities_schema_id" = "null" ] && capabilities_schema_id=""
 [ "$capabilities_diagnose_schema_id" = "null" ] && capabilities_diagnose_schema_id=""
 [ "$capabilities_command_error_schema_id" = "null" ] && capabilities_command_error_schema_id=""
+[ "$capabilities_run_schema_id" = "null" ] && capabilities_run_schema_id=""
 [ "$capabilities_unavailable_exit" = "null" ] && capabilities_unavailable_exit=""
 [ "$daemon_status_available" = "null" ] && daemon_status_available=""
 [ "$policy_source" = "null" ] && policy_source=""
@@ -410,6 +413,15 @@ fi
 if [ "$capabilities_command_error_schema_id" != "$expected_command_error_schema_id" ]; then
   echo "guarded-run: viftyctl capabilities command-error schema identity is not recognized; refusing to request cooling." >&2
   echo "guarded-run: expected schemaIDs.commandError=$expected_command_error_schema_id." >&2
+  if [ -n "$capabilities_json" ]; then
+    print_capabilities_json_evidence
+  fi
+  exit 75
+fi
+
+if [ "$capabilities_run_schema_id" != "$expected_run_schema_id" ]; then
+  echo "guarded-run: viftyctl capabilities run schema identity is not recognized; refusing to request cooling." >&2
+  echo "guarded-run: expected schemaIDs.run=$expected_run_schema_id." >&2
   if [ -n "$capabilities_json" ]; then
     print_capabilities_json_evidence
   fi
