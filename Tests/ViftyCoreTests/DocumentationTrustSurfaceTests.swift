@@ -1143,6 +1143,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(integrations.contains("keep Vifty optional without masking Vifty failures"))
         XCTAssertTrue(integrations.contains("Do not add a fallback after `guarded-run.sh` that catches its nonzero exit and reruns the same child command"))
         XCTAssertTrue(integrations.contains("use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` only when the user explicitly asked"))
+        XCTAssertFalse(integrations.contains("stop or run the workload without Vifty cooling, depending on the user's instruction"))
+        XCTAssertTrue(integrations.contains("If the user explicitly approves running the child command without Vifty cooling after seeing that JSON, use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` with the guarded wrapper"))
+        XCTAssertTrue(integrations.contains("do not catch a guarded-run failure and rerun the child yourself"))
 
         let exampleReadme = try read("examples/viftyctl/README.md")
         XCTAssertTrue(exampleReadme.contains("The app bundle installs this directory to `Contents/Resources/viftyctl-wrappers/`"))
