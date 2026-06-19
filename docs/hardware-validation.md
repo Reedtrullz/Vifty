@@ -111,7 +111,7 @@ make validation-evidence-review \
   VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
-The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file only after checking the adjacent smoke bundle: `manifest.tsv` must match the summary `commands[]`, each command's stdout/stderr/status file must exist and match its recorded status, and `checksums.tsv` must cover and recompute the summary, manifest, command stdout/stderr, and status files. When `rateLimitRetry.attempted=true`, the reviewer also requires the initial `viftyctl-run` JSON to be structured `PREPARE_RATE_LIMITED` cooldown evidence with `safeToProceed=false`, matching `retryAfterSeconds`, no lease prepared, no Auto restore attempted, and a nonzero exit status that matches the recorded `rateLimitRetry.initialExitStatus`; the final `run` proof must reference the `viftyctl-run-retry` stdout/stderr/status files. A passed captured summary must also report `coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, and `childExitCode=0` in its `run` object, so developer-workload proof includes the bounded lease and Auto-restore outcome rather than only the wrapper exit status. When the captured smoke summary includes `preflight.appPreferences`, the reviewer copies it into `review-result.json` as `agentRunSmokeStartupMode`, `agentRunSmokeStartupModeSource`, and `agentRunSmokeStartupModeReadError`, and the generated compatibility index preserves those fields for filtering blocked/manual-control reports. These fields explain recovery context only; they are not cooling authorization. If only issue-template text is available, use `VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT=passed-auto-restored VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE=<hardware-validation-issue-url>#agent-run-smoke`.
+The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json`. The reviewer validates that schema identity and derives `agentRunSmokeResult` / `agentRunSmokeSource` from the captured file only after checking the adjacent smoke bundle: `manifest.tsv` must match the summary `commands[]`, each command's stdout/stderr/status file must exist and match its recorded status, and `checksums.tsv` must cover and recompute the summary, manifest, command stdout/stderr, and status files. When `rateLimitRetry.attempted=true`, the reviewer also requires the initial `viftyctl-run` JSON to be structured `PREPARE_RATE_LIMITED` cooldown evidence with `safeToProceed=false`, matching `retryAfterSeconds`, no lease prepared, no Auto restore attempted, and a nonzero exit status that matches the recorded `rateLimitRetry.initialExitStatus`; the final `run` proof must reference the `viftyctl-run-retry` stdout/stderr/status files. A passed captured summary must also report `coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, and `childExitCode=0` in its `run` object, so developer-workload proof includes the bounded lease and Auto-restore outcome rather than only the wrapper exit status. For passed `local-ad-hoc-build` smoke, the reviewer also requires `daemonRuntime.matchRequired=true`, `installedDaemonPresent=true`, and `matchesExpectedDaemon=true` so current-build smoke cannot overclaim a stale installed helper daemon. When the captured smoke summary includes `preflight.appPreferences`, the reviewer copies it into `review-result.json` as `agentRunSmokeStartupMode`, `agentRunSmokeStartupModeSource`, and `agentRunSmokeStartupModeReadError`, and the generated compatibility index preserves those fields for filtering blocked/manual-control reports. These fields explain recovery context only; they are not cooling authorization. If only issue-template text is available, use `VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT=passed-auto-restored VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE=<hardware-validation-issue-url>#agent-run-smoke`.
 
 The agent-run smoke result uses the same values as the manual smoke test and is preserved as developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
 
@@ -268,7 +268,13 @@ make agent-run-smoke-evidence-current-build
 
 This requires a clean git worktree, builds `.build/Vifty.app`, and runs the
 smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so the evidence follows
-the current source checkout. The smoke summary records `installSource`, `sourceRef`, `sourceSHA`, and optional source artifact fields; this target sets
+the current source checkout. Because the actual fan writes are serviced by the
+installed LaunchDaemon helper, the current-build target also hashes the
+installed daemon and the freshly built `.build/Vifty.app/Contents/MacOS/ViftyDaemon`;
+it stops before requesting cooling unless those hashes match. The smoke summary
+records `daemonRuntime`, and the bundle includes `daemon-runtime.tsv` so reviewers
+can tell exactly which privileged daemon handled the run. The smoke summary also
+records `installSource`, `sourceRef`, `sourceSHA`, and optional source artifact fields; this target sets
 `installSource=local-ad-hoc-build`, the current git ref, and the current
 40-character source SHA automatically. If you are intentionally validating an
 already installed app from a source checkout, use the generic supervised Make
@@ -293,7 +299,7 @@ scenario that needs different bounded values or stronger source provenance. The 
 advanced/manual runs.
 
 This writes an agent-run smoke bundle with `manifest.tsv`,
-`agent-run-smoke-evidence-summary.json`, the `viftyctl run` stdout/stderr/status
+`agent-run-smoke-evidence-summary.json`, `daemon-runtime.tsv`, the `viftyctl run` stdout/stderr/status
 when the run is attempted, optional `viftyctl-run-retry.*` files after a
 structured `PREPARE_RATE_LIMITED` cooldown, and follow-up
 capabilities/status/audit/diagnose files. It is not read-only when readiness is
@@ -305,7 +311,7 @@ it exactly how long to wait. It records the run proof fields
 `viftyctl run` exit semantics and the advertised safe `runLifecycle` contract
 when child stdout is not JSON. It stops before `viftyctl run` when
 `pre-capabilities.json` does not advertise
-`policyStatusAvailable: true`, the `run` command, `test` workload, wrapper resource discovery, and safe `runLifecycle` contract, or when readiness is
+`policyStatusAvailable: true`, the `run` command, `test` workload, wrapper resource discovery, and safe `runLifecycle` contract, when current-build daemon matching is required but the installed helper hash does not match the freshly built daemon, or when readiness is
 blocked. In those cases it writes a blocked summary, captures read-only
 status/audit follow-up, and exits `75`. The blocked summary copies
 `pre-diagnose.json` `appPreferences.startupMode` into

@@ -130,7 +130,7 @@ After the manual smoke test, wait for `policy.prepareCooldownSeconds`, then coll
 make agent-run-smoke-evidence-current-build
 ```
 
-This requires a clean git worktree, builds `.build/Vifty.app`, and runs the smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so current development evidence does not accidentally exercise an older installed app. If you are intentionally testing an already installed app from a source checkout, pass the installed CLI explicitly:
+This requires a clean git worktree, builds `.build/Vifty.app`, and runs the smoke through `.build/Vifty.app/Contents/MacOS/viftyctl` so current development evidence does not accidentally exercise an older installed app. Because the privileged XPC service is launchd-installed, the current-build smoke target should also require the installed helper daemon hash to match the freshly built `.build/Vifty.app/Contents/MacOS/ViftyDaemon` before it requests cooling, with the result preserved in `daemon-runtime.tsv` and `agent-run-smoke-evidence-summary.json`. If you are intentionally testing an already installed app from a source checkout, pass the installed CLI explicitly:
 
 ```sh
 make agent-run-smoke-evidence \

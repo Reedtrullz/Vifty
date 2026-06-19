@@ -970,6 +970,49 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def validate_agent_run_smoke_daemon_runtime(summary, failures)
+    daemon_runtime = summary["daemonRuntime"]
+    unless daemon_runtime.is_a?(Hash)
+      failures << "agent-run-smoke summary daemonRuntime is required"
+      return
+    end
+
+    unless [true, false].include?(daemon_runtime["installedDaemonPresent"])
+      failures << "agent-run-smoke summary daemonRuntime.installedDaemonPresent must be boolean"
+    end
+    unless [true, false].include?(daemon_runtime["matchRequired"])
+      failures << "agent-run-smoke summary daemonRuntime.matchRequired must be boolean"
+    end
+    unless [true, false, nil].include?(daemon_runtime["matchesExpectedDaemon"])
+      failures << "agent-run-smoke summary daemonRuntime.matchesExpectedDaemon must be boolean or null"
+    end
+    unless daemon_runtime["installedDaemonSHA256"].nil?
+      require_sha256(
+        daemon_runtime["installedDaemonSHA256"],
+        "agent-run-smoke summary daemonRuntime.installedDaemonSHA256",
+        failures
+      )
+    end
+    unless daemon_runtime["expectedDaemonSHA256"].nil?
+      require_sha256(
+        daemon_runtime["expectedDaemonSHA256"],
+        "agent-run-smoke summary daemonRuntime.expectedDaemonSHA256",
+        failures
+      )
+    end
+
+    return unless summary["status"].to_s == "passed" &&
+      summary["installSource"].to_s == "local-ad-hoc-build"
+
+    unless daemon_runtime["matchRequired"] == true &&
+        daemon_runtime["installedDaemonPresent"] == true &&
+        daemon_runtime["matchesExpectedDaemon"] == true &&
+        daemon_runtime["installedDaemonSHA256"].is_a?(String) &&
+        daemon_runtime["expectedDaemonSHA256"].is_a?(String)
+      failures << "passed local-ad-hoc agent-run-smoke summary must match the installed daemon to the expected build daemon"
+    end
+  end
+
   def normalize_agent_run_smoke_app_preferences(value)
     return nil unless value.is_a?(Hash)
 
@@ -1022,6 +1065,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     validate_agent_run_smoke_bundle(path, summary, failures)
     validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
     validate_agent_run_smoke_provenance(summary, failures)
+    validate_agent_run_smoke_daemon_runtime(summary, failures)
 
     unless summary["schemaVersion"] == 1
       failures << "agent-run-smoke summary schemaVersion must be 1"

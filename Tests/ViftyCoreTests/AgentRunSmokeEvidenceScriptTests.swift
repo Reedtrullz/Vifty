@@ -40,6 +40,13 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("metadata.txt").contains("sourceRef="))
         XCTAssertTrue(try harness.read("metadata.txt").contains("sourceSHA="))
         XCTAssertTrue(try harness.read("metadata.txt").contains("sourceArtifactName="))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("installedDaemonPath=\(harness.installedDaemonURL.path)"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("installedDaemonPresent=true"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("daemonMatchesExpected=unknown"))
+
+        let daemonRuntime = try harness.read("daemon-runtime.tsv")
+        XCTAssertTrue(daemonRuntime.contains("installedDaemonPresent\ttrue"))
+        XCTAssertTrue(daemonRuntime.contains("daemonMatchesExpected\tunknown"))
 
         let manifest = try harness.read("manifest.tsv")
         XCTAssertTrue(manifest.contains("name\tstatus\tstdout\tstderr"))
@@ -68,6 +75,14 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["sourceArtifactName"] as? String, "")
         XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, "")
         XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "")
+        let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPath"] as? String, harness.installedDaemonURL.path)
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPresent"] as? Bool, true)
+        XCTAssertNotNil(daemonRuntimeSummary["installedDaemonSHA256"] as? String)
+        XCTAssertTrue(daemonRuntimeSummary["expectedDaemonPath"] is NSNull)
+        XCTAssertTrue(daemonRuntimeSummary["expectedDaemonSHA256"] is NSNull)
+        XCTAssertTrue(daemonRuntimeSummary["matchesExpectedDaemon"] is NSNull)
+        XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, false)
         XCTAssertEqual(summary["workload"] as? String, "test")
         XCTAssertEqual(summary["duration"] as? String, "2m")
         XCTAssertEqual(summary["maxRPMPercent"] as? Int, 55)
@@ -124,6 +139,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("sha256\tbytes\tfile"))
         XCTAssertTrue(checksums.contains("\tREADME.txt"))
         XCTAssertTrue(checksums.contains("\tmetadata.txt"))
+        XCTAssertTrue(checksums.contains("\tdaemon-runtime.tsv"))
         XCTAssertTrue(checksums.contains("\tmanifest.tsv"))
         XCTAssertTrue(checksums.contains("\tagent-run-smoke-evidence-summary.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-run.json"))
@@ -156,6 +172,57 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["sourceArtifactName"] as? String, "")
         XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, "")
         XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "")
+    }
+
+    func testSmokeCollectorRecordsExpectedDaemonMatchWhenRequested() throws {
+        let harness = try AgentRunSmokeEvidenceHarness()
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let daemonRuntime = try harness.read("daemon-runtime.tsv")
+        XCTAssertTrue(daemonRuntime.contains("expectedDaemonPath\t\(harness.expectedDaemonURL.path)"))
+        XCTAssertTrue(daemonRuntime.contains("daemonMatchesExpected\ttrue"))
+        XCTAssertTrue(daemonRuntime.contains("daemonMatchRequired\t1"))
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPath"] as? String, harness.expectedDaemonURL.path)
+        XCTAssertNotNil(daemonRuntimeSummary["expectedDaemonSHA256"] as? String)
+        XCTAssertEqual(daemonRuntimeSummary["matchesExpectedDaemon"] as? Bool, true)
+        XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, true)
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenRequiredDaemonDoesNotMatchExpectedBuild() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(expectedDaemonMatchesInstalled: false)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("installed daemon does not match expected build daemon"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntimeSummary["matchesExpectedDaemon"] as? Bool, false)
+        XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, true)
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["skippedReason"] as? String, "installed daemon does not match expected build daemon")
     }
 
     func testSmokeCollectorRejectsLocalAdHocProvenanceWithoutSourceSHA() throws {
@@ -613,6 +680,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "sourceArtifactName",
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
+            "daemonRuntime",
             "preflight",
             "run",
             "commands"
@@ -621,6 +689,19 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         }
 
         let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let daemonRuntime = try XCTUnwrap(defs["daemonRuntime"] as? [String: Any])
+        let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
+        for field in [
+            "installedDaemonPath",
+            "installedDaemonPresent",
+            "installedDaemonSHA256",
+            "expectedDaemonPath",
+            "expectedDaemonSHA256",
+            "matchesExpectedDaemon",
+            "matchRequired"
+        ] {
+            XCTAssertTrue(daemonRuntimeRequired.contains(field), "daemonRuntime should require \(field)")
+        }
         let run = try XCTUnwrap(defs["run"] as? [String: Any])
         let runRequired = try XCTUnwrap(run["required"] as? [String])
         for field in [
@@ -695,6 +776,8 @@ private final class AgentRunSmokeEvidenceHarness {
     let rootURL: URL
     let outputURL: URL
     let viftyctlURL: URL
+    let installedDaemonURL: URL
+    let expectedDaemonURL: URL
     let logURL: URL
     private let capabilitiesJSON: String
     private let diagnoseJSON: String
@@ -713,13 +796,16 @@ private final class AgentRunSmokeEvidenceHarness {
         runJSON: String = AgentRunSmokeEvidenceHarness.runSuccessJSON,
         runExitCode: Int = 0,
         runJSONs: [String]? = nil,
-        runExitCodes: [Int]? = nil
+        runExitCodes: [Int]? = nil,
+        expectedDaemonMatchesInstalled: Bool = true
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         outputURL = rootURL.appendingPathComponent("smoke", isDirectory: true)
         viftyctlURL = rootURL.appendingPathComponent("fake-bin/viftyctl")
+        installedDaemonURL = rootURL.appendingPathComponent("installed/tech.reidar.vifty.daemon")
+        expectedDaemonURL = rootURL.appendingPathComponent("expected/ViftyDaemon")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
         self.capabilitiesJSON = capabilitiesJSON
         self.diagnoseJSON = diagnoseJSON
@@ -730,6 +816,7 @@ private final class AgentRunSmokeEvidenceHarness {
         self.runExitCodes = runExitCodes ?? [runExitCode]
 
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try writeFakeDaemonFiles(expectedDaemonMatchesInstalled: expectedDaemonMatchesInstalled)
         try writeFakeViftyCtl()
     }
 
@@ -752,7 +839,8 @@ private final class AgentRunSmokeEvidenceHarness {
             "VIFTY_FAKE_AUDIT_JSON": auditJSON,
             "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"autoRestoreError":null,"generatedAt":700000000}"#,
             "VIFTY_FAKE_RUN_EXIT": "\(self.runExitCodes.last ?? 0)",
-            "VIFTY_AGENT_RUN_SMOKE_SKIP_RETRY_SLEEP": "1"
+            "VIFTY_AGENT_RUN_SMOKE_SKIP_RETRY_SLEEP": "1",
+            "VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH": installedDaemonURL.path
         ]) { _, new in new }
         for (index, json) in self.runJSONs.enumerated() {
             environment["VIFTY_FAKE_RUN_JSON_\(index + 1)"] = json
@@ -858,6 +946,20 @@ private final class AgentRunSmokeEvidenceHarness {
             [.posixPermissions: 0o755],
             ofItemAtPath: viftyctlURL.path
         )
+    }
+
+    private func writeFakeDaemonFiles(expectedDaemonMatchesInstalled: Bool) throws {
+        try FileManager.default.createDirectory(
+            at: installedDaemonURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: expectedDaemonURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("installed-daemon".utf8).write(to: installedDaemonURL)
+        let expectedContents = expectedDaemonMatchesInstalled ? "installed-daemon" : "different-daemon"
+        try Data(expectedContents.utf8).write(to: expectedDaemonURL)
     }
 
     static let defaultCapabilitiesJSON = """

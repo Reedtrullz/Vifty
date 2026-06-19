@@ -31,6 +31,11 @@ Options:
                              local-ad-hoc-build.
   --source-artifact <path>   Hash the source-first tester zip or release artifact
                              used for the tested app, when available locally.
+  --expected-daemon <path>   Hash the daemon binary expected to service the
+                             smoke run. Current-build evidence should pass the
+                             freshly built ViftyDaemon here.
+  --require-daemon-match     Stop before requesting cooling unless the installed
+                             LaunchDaemon helper hash matches --expected-daemon.
   -h, --help                 Show this help.
 
 By default the smoke child command is:
@@ -61,6 +66,13 @@ SOURCE_ARTIFACT_PATH="${VIFTY_AGENT_RUN_SMOKE_SOURCE_ARTIFACT:-}"
 SOURCE_ARTIFACT_NAME=""
 SOURCE_ARTIFACT_SHA256=""
 SOURCE_ARTIFACT_BYTES=""
+EXPECTED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_EXPECTED_DAEMON:-}"
+REQUIRE_DAEMON_MATCH="${VIFTY_AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
+INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
+INSTALLED_DAEMON_PRESENT="false"
+INSTALLED_DAEMON_SHA256=""
+EXPECTED_DAEMON_SHA256=""
+DAEMON_MATCHES_EXPECTED="unknown"
 CHILD_COMMAND=("/bin/sleep" "5")
 CUSTOM_CHILD=0
 
@@ -145,6 +157,18 @@ while [[ $# -gt 0 ]]; do
       fi
       SOURCE_ARTIFACT_PATH="$2"
       shift 2
+      ;;
+    --expected-daemon)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --expected-daemon requires a path" >&2
+        exit 64
+      fi
+      EXPECTED_DAEMON_PATH="$2"
+      shift 2
+      ;;
+    --require-daemon-match)
+      REQUIRE_DAEMON_MATCH=1
+      shift
       ;;
     --)
       shift
@@ -239,9 +263,46 @@ if [[ -n "${SOURCE_ARTIFACT_PATH}" ]]; then
   SOURCE_ARTIFACT_BYTES="$(/usr/bin/stat -f%z "${SOURCE_ARTIFACT_PATH}")"
 fi
 
+case "${REQUIRE_DAEMON_MATCH}" in
+  1|true|yes)
+    REQUIRE_DAEMON_MATCH=1
+    ;;
+  0|false|no)
+    REQUIRE_DAEMON_MATCH=0
+    ;;
+  *)
+    echo "error: VIFTY_AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH must be 0 or 1" >&2
+    exit 64
+    ;;
+esac
+
+if [[ "${REQUIRE_DAEMON_MATCH}" -eq 1 && -z "${EXPECTED_DAEMON_PATH}" ]]; then
+  echo "error: --require-daemon-match requires --expected-daemon" >&2
+  exit 64
+fi
+
+if [[ -n "${EXPECTED_DAEMON_PATH}" && ! -f "${EXPECTED_DAEMON_PATH}" ]]; then
+  echo "error: expected daemon not found: ${EXPECTED_DAEMON_PATH}" >&2
+  exit 66
+fi
+
 if [[ ! -x "${VIFTYCTL}" ]]; then
   echo "error: viftyctl is not executable: ${VIFTYCTL}" >&2
   exit 69
+fi
+
+if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PRESENT="true"
+  INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
+fi
+
+if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
+  EXPECTED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${EXPECTED_DAEMON_PATH}" | awk '{print $1}')"
+  if [[ -n "${INSTALLED_DAEMON_SHA256}" && "${INSTALLED_DAEMON_SHA256}" == "${EXPECTED_DAEMON_SHA256}" ]]; then
+    DAEMON_MATCHES_EXPECTED="true"
+  else
+    DAEMON_MATCHES_EXPECTED="false"
+  fi
 fi
 
 if [[ -z "${OUTPUT_DIR}" ]]; then
@@ -410,7 +471,11 @@ The bundle records source provenance in \`metadata.txt\` and
 \`installSource=not-recorded\`; clean source checkouts should prefer
 \`make agent-run-smoke-evidence-current-build\`, which records
 \`installSource=local-ad-hoc-build\`, the current git ref, and the immutable
-40-character source SHA for the freshly built \`viftyctl\`.
+40-character source SHA for the freshly built \`viftyctl\`. It also records
+\`daemon-runtime.tsv\` so reviewers can see the hash of the installed
+LaunchDaemon helper that actually services XPC. Current-build smoke evidence
+requires that installed daemon hash to match the freshly built
+\`ViftyDaemon\`; otherwise the collector stops before requesting cooling.
 
 The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
@@ -428,6 +493,7 @@ Attach or paste:
 - post-audit.json or blocked-audit.json
 - post-diagnose.json, when present
 - manifest.tsv
+- daemon-runtime.tsv
 - agent-run-smoke-evidence-summary.json
 - checksums.tsv
 
@@ -451,12 +517,32 @@ sourceSHA=${SOURCE_SHA}
 sourceArtifactName=${SOURCE_ARTIFACT_NAME}
 sourceArtifactSHA256=${SOURCE_ARTIFACT_SHA256}
 sourceArtifactBytes=${SOURCE_ARTIFACT_BYTES}
+installedDaemonPath=${INSTALLED_DAEMON_PATH}
+installedDaemonPresent=${INSTALLED_DAEMON_PRESENT}
+installedDaemonSHA256=${INSTALLED_DAEMON_SHA256}
+expectedDaemonPath=${EXPECTED_DAEMON_PATH}
+expectedDaemonSHA256=${EXPECTED_DAEMON_SHA256}
+daemonMatchesExpected=${DAEMON_MATCHES_EXPECTED}
+daemonMatchRequired=${REQUIRE_DAEMON_MATCH}
 workload=test
 duration=${DURATION}
 maxRPMPercent=${MAX_RPM_PERCENT}
 reason=${REASON}
 auditLimit=${AUDIT_LIMIT}
 childCommand=${CHILD_COMMAND[*]}
+EOF
+}
+
+write_daemon_runtime() {
+  cat > "${OUTPUT_DIR}/daemon-runtime.tsv" <<EOF
+key	value
+installedDaemonPath	${INSTALLED_DAEMON_PATH}
+installedDaemonPresent	${INSTALLED_DAEMON_PRESENT}
+installedDaemonSHA256	${INSTALLED_DAEMON_SHA256}
+expectedDaemonPath	${EXPECTED_DAEMON_PATH}
+expectedDaemonSHA256	${EXPECTED_DAEMON_SHA256}
+daemonMatchesExpected	${DAEMON_MATCHES_EXPECTED}
+daemonMatchRequired	${REQUIRE_DAEMON_MATCH}
 EOF
 }
 
@@ -475,11 +561,13 @@ write_summary_json() {
   ruby -rjson -e '
     manifest_path, generated_at, viftyctl, install_source, source_ref,
       source_sha, source_artifact_name, source_artifact_sha256,
-      source_artifact_bytes, workload, duration, max_rpm_percent,
+      source_artifact_bytes, installed_daemon_path, installed_daemon_present,
+      installed_daemon_sha256, expected_daemon_path, expected_daemon_sha256,
+      daemon_matches_expected, daemon_match_required, workload, duration, max_rpm_percent,
       reason, status, read_only, cooling_commands_run, run_status,
       skipped_reason, audit_limit, pre_capabilities_path, pre_diagnose_path,
       run_json_path, run_stdout_name, run_stderr_name, rate_limit_retry_attempted,
-      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(27)
+      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(34)
 
     def boolean_or_nil(value)
       [true, false].include?(value) ? value : nil
@@ -587,6 +675,15 @@ write_summary_json() {
       "sourceArtifactName" => source_artifact_name,
       "sourceArtifactSHA256" => source_artifact_sha256,
       "sourceArtifactBytes" => source_artifact_bytes,
+      "daemonRuntime" => {
+        "installedDaemonPath" => installed_daemon_path,
+        "installedDaemonPresent" => installed_daemon_present == "true",
+        "installedDaemonSHA256" => installed_daemon_sha256.empty? ? nil : installed_daemon_sha256,
+        "expectedDaemonPath" => expected_daemon_path.empty? ? nil : expected_daemon_path,
+        "expectedDaemonSHA256" => expected_daemon_sha256.empty? ? nil : expected_daemon_sha256,
+        "matchesExpectedDaemon" => daemon_matches_expected == "unknown" ? nil : daemon_matches_expected == "true",
+        "matchRequired" => daemon_match_required == "1"
+      },
       "workload" => workload,
       "duration" => duration,
       "maxRPMPercent" => max_rpm_percent.to_i,
@@ -620,6 +717,9 @@ write_summary_json() {
   ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" \
     "${INSTALL_SOURCE}" "${SOURCE_REF}" "${SOURCE_SHA}" \
     "${SOURCE_ARTIFACT_NAME}" "${SOURCE_ARTIFACT_SHA256}" "${SOURCE_ARTIFACT_BYTES}" \
+    "${INSTALLED_DAEMON_PATH}" "${INSTALLED_DAEMON_PRESENT}" "${INSTALLED_DAEMON_SHA256}" \
+    "${EXPECTED_DAEMON_PATH}" "${EXPECTED_DAEMON_SHA256}" "${DAEMON_MATCHES_EXPECTED}" \
+    "${REQUIRE_DAEMON_MATCH}" \
     "test" "${DURATION}" \
     "${MAX_RPM_PERCENT}" "${REASON}" "${status}" "${read_only}" \
     "${cooling_commands_run}" "${run_status}" "${skipped_reason}" \
@@ -662,6 +762,8 @@ IFS=$'\t' read -r readiness_state safe_to_request daemon_ready manual_control_ac
 skip_reason=""
 if [[ "${pre_capabilities_status}" -ne 0 || "${capabilities_safe}" != "true" ]]; then
   skip_reason="capabilities preflight did not advertise safe viftyctl run"
+elif [[ "${REQUIRE_DAEMON_MATCH}" -eq 1 && "${DAEMON_MATCHES_EXPECTED}" != "true" ]]; then
+  skip_reason="installed daemon does not match expected build daemon"
 elif [[ "${manual_control_active}" == "true" ]]; then
   skip_reason="manual control active before smoke run"
 elif [[ "${pre_diagnose_status}" -ne 0 ||
@@ -679,6 +781,7 @@ if [[ -n "${skip_reason}" ]]; then
     "${VIFTYCTL}" audit --limit "${AUDIT_LIMIT}" --json
   write_readme
   write_metadata "true" "false"
+  write_daemon_runtime
   write_summary_json "blocked" "true" "false" "" "${skip_reason}" "" "" "false" "" ""
   write_checksums
   echo "Agent run smoke skipped: ${skip_reason}"
@@ -740,6 +843,7 @@ fi
 
 write_readme
 write_metadata "false" "true"
+write_daemon_runtime
 write_summary_json "${smoke_status}" "false" "true" "${run_status}" "" \
   "${run_stdout_name}" "${run_stderr_name}" "${rate_limit_retry_attempted}" \
   "${rate_limit_retry_after}" "${rate_limit_initial_status}"

@@ -19,6 +19,7 @@
     "sourceArtifactName",
     "sourceArtifactSHA256",
     "sourceArtifactBytes",
+    "daemonRuntime",
     "workload",
     "duration",
     "maxRPMPercent",
@@ -78,6 +79,9 @@
     "sourceArtifactBytes": {
       "type": "string",
       "pattern": "^$|^[1-9][0-9]*$"
+    },
+    "daemonRuntime": {
+      "$ref": "#/$defs/daemonRuntime"
     },
     "workload": {
       "type": "string"
@@ -255,6 +259,56 @@
         },
         "appPreferences": {
           "$ref": "#/$defs/appPreferencesDiagnostic"
+        }
+      }
+    },
+    "daemonRuntime": {
+      "type": "object",
+      "description": "Read-only provenance for the privileged daemon that actually services XPC during the smoke run. For current-build evidence, matchesExpectedDaemon must be true before cooling is requested.",
+      "required": [
+        "installedDaemonPath",
+        "installedDaemonPresent",
+        "installedDaemonSHA256",
+        "expectedDaemonPath",
+        "expectedDaemonSHA256",
+        "matchesExpectedDaemon",
+        "matchRequired"
+      ],
+      "properties": {
+        "installedDaemonPath": {
+          "type": "string"
+        },
+        "installedDaemonPresent": {
+          "type": "boolean"
+        },
+        "installedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expectedDaemonPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "matchesExpectedDaemon": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "matchRequired": {
+          "type": "boolean"
         }
       }
     },

@@ -794,6 +794,31 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedLocalAdHocAgentRunSmokeWhenInstalledDaemonDoesNotMatchBuild() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: String(repeating: "1", count: 40),
+            daemonRuntimeMatchesExpected: false,
+            daemonRuntimeMatchRequired: true
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed local-ad-hoc agent-run-smoke summary must match the installed daemon to the expected build daemon"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithManualControlActive() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1296,7 +1321,9 @@ private final class ValidationEvidenceReviewHarness {
         sourceSHA: String = "",
         sourceArtifactName: String = "",
         sourceArtifactSHA256: String = "",
-        sourceArtifactBytes: String = ""
+        sourceArtifactBytes: String = "",
+        daemonRuntimeMatchesExpected: Bool? = true,
+        daemonRuntimeMatchRequired: Bool = true
     ) throws -> URL {
         try writeAgentRunSmokeBundleSummary(
             status: status,
@@ -1324,7 +1351,9 @@ private final class ValidationEvidenceReviewHarness {
             sourceSHA: sourceSHA,
             sourceArtifactName: sourceArtifactName,
             sourceArtifactSHA256: sourceArtifactSHA256,
-            sourceArtifactBytes: sourceArtifactBytes
+            sourceArtifactBytes: sourceArtifactBytes,
+            daemonRuntimeMatchesExpected: daemonRuntimeMatchesExpected,
+            daemonRuntimeMatchRequired: daemonRuntimeMatchRequired
         )
     }
 
@@ -1362,7 +1391,9 @@ private final class ValidationEvidenceReviewHarness {
         sourceSHA: String = "",
         sourceArtifactName: String = "",
         sourceArtifactSHA256: String = "",
-        sourceArtifactBytes: String = ""
+        sourceArtifactBytes: String = "",
+        daemonRuntimeMatchesExpected: Bool? = true,
+        daemonRuntimeMatchRequired: Bool = true
     ) throws -> URL {
         let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
@@ -1534,6 +1565,15 @@ private final class ValidationEvidenceReviewHarness {
             "sourceArtifactName": sourceArtifactName,
             "sourceArtifactSHA256": sourceArtifactSHA256,
             "sourceArtifactBytes": sourceArtifactBytes,
+            "daemonRuntime": [
+                "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                "installedDaemonPresent": true,
+                "installedDaemonSHA256": String(repeating: "a", count: 64),
+                "expectedDaemonPath": "/tmp/ViftyDaemon",
+                "expectedDaemonSHA256": String(repeating: daemonRuntimeMatchesExpected == false ? "b" : "a", count: 64),
+                "matchesExpectedDaemon": daemonRuntimeMatchesExpected as Any? ?? NSNull(),
+                "matchRequired": daemonRuntimeMatchRequired
+            ],
             "workload": "test",
             "duration": "2m",
             "maxRPMPercent": 55,
