@@ -772,6 +772,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWithoutResolvedChildExecutableEvidence() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            resolvedChildExecutable: nil
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary must report absolute resolvedChildExecutable when capabilities advertise resolvedChildExecutableReported"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithoutDaemonBackedCapabilities() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1313,6 +1334,8 @@ private final class ValidationEvidenceReviewHarness {
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
+        resolvedChildExecutableReported: Bool? = true,
+        resolvedChildExecutable: String? = "/bin/sleep",
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1343,6 +1366,8 @@ private final class ValidationEvidenceReviewHarness {
             diagnoseSchemaID: diagnoseSchemaID,
             commandErrorSchemaID: commandErrorSchemaID,
             runSchemaID: runSchemaID,
+            resolvedChildExecutableReported: resolvedChildExecutableReported,
+            resolvedChildExecutable: resolvedChildExecutable,
             manualControlActive: manualControlActive,
             startupMode: startupMode,
             startupModeSource: startupModeSource,
@@ -1375,6 +1400,8 @@ private final class ValidationEvidenceReviewHarness {
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
+        resolvedChildExecutableReported: Bool? = true,
+        resolvedChildExecutable: String? = "/bin/sleep",
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1413,7 +1440,8 @@ private final class ValidationEvidenceReviewHarness {
                 "coolingLeasePrepared": NSNull(),
                 "autoRestoreAttempted": NSNull(),
                 "autoRestoreSucceeded": NSNull(),
-                "childExitCode": NSNull()
+                "childExitCode": NSNull(),
+                "resolvedChildExecutable": NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -1456,7 +1484,8 @@ private final class ValidationEvidenceReviewHarness {
                 "coolingLeasePrepared": coolingLeasePrepared,
                 "autoRestoreAttempted": autoRestoreAttempted,
                 "autoRestoreSucceeded": autoRestoreSucceeded,
-                "childExitCode": childExitCode
+                "childExitCode": childExitCode,
+                "resolvedChildExecutable": resolvedChildExecutable as Any? ?? NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -1504,7 +1533,7 @@ private final class ValidationEvidenceReviewHarness {
             let initialRunStatus = rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus
             let initialRunStdoutContents = rateLimitRetryAttempted
                 ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
-                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"autoRestoreError":null}"#
+                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")","autoRestoreError":null}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
@@ -1520,7 +1549,7 @@ private final class ValidationEvidenceReviewHarness {
                     status: runExitStatus,
                     stdout: "viftyctl-run-retry.json",
                     stderr: "viftyctl-run-retry.stderr",
-                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"autoRestoreError":null}"#
+                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")","autoRestoreError":null}"#
                 )
             }
         }
@@ -1538,6 +1567,7 @@ private final class ValidationEvidenceReviewHarness {
             "diagnoseSchemaID": diagnoseSchemaID,
             "commandErrorSchemaID": commandErrorSchemaID,
             "runSchemaID": runSchemaID,
+            "resolvedChildExecutableReported": resolvedChildExecutableReported as Any? ?? NSNull(),
             "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
             "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
             "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
@@ -2100,6 +2130,7 @@ private final class ValidationEvidenceReviewHarness {
     runLifecycle.autoRestoreAfterChildExit\ttrue\ttrue
     runLifecycle.structuredPreChildFailures\ttrue\ttrue
     runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
+    runLifecycle.resolvedChildExecutableReported\ttrue\ttrue
     runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
     directControlLifecycle.prepareUsesIdempotencyKey\ttrue\ttrue
     directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse

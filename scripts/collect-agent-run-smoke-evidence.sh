@@ -445,6 +445,7 @@ capabilities_run_contract_safe() {
         lifecycle["autoRestoreAfterChildExit"] == true &&
         lifecycle["structuredPreChildFailures"] == true &&
         lifecycle["cleanupStateReportedOnLaunchFailure"] == true &&
+        lifecycle["resolvedChildExecutableReported"] == true &&
         %w[INT TERM HUP].all? { |signal| signals.include?(signal) } &&
         wrapper_resources["sourceDirectory"] == "examples/viftyctl" &&
         wrapper_resources["bundleDirectory"] == "Contents/Resources/viftyctl-wrappers" &&
@@ -477,7 +478,7 @@ LaunchDaemon helper that actually services XPC. Current-build smoke evidence
 requires that installed daemon hash to match the freshly built
 \`ViftyDaemon\`; otherwise the collector stops before requesting cooling.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, including \`resolvedChildExecutableReported=true\`; then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
 Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, manualControlActive is true, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep
@@ -620,7 +621,8 @@ write_summary_json() {
         "coolingLeasePrepared" => nil,
         "autoRestoreAttempted" => nil,
         "autoRestoreSucceeded" => nil,
-        "childExitCode" => nil
+        "childExitCode" => nil,
+        "resolvedChildExecutable" => nil
       }
     else
       exit_status = run_status.to_i
@@ -631,6 +633,7 @@ write_summary_json() {
       auto_restore_attempted = boolean_or_nil(run_report["autoRestoreAttempted"])
       auto_restore_succeeded = boolean_or_nil(run_report["autoRestoreSucceeded"])
       child_exit_code = integer_or_nil(run_report["childExitCode"])
+      resolved_child_executable = run_report["resolvedChildExecutable"].is_a?(String) ? run_report["resolvedChildExecutable"] : nil
 
       if exit_status == 0
         cooling_lease_prepared = true if cooling_lease_prepared.nil?
@@ -650,7 +653,8 @@ write_summary_json() {
         "coolingLeasePrepared" => cooling_lease_prepared,
         "autoRestoreAttempted" => auto_restore_attempted,
         "autoRestoreSucceeded" => auto_restore_succeeded,
-        "childExitCode" => child_exit_code
+        "childExitCode" => child_exit_code,
+        "resolvedChildExecutable" => resolved_child_executable
       }
     end
     rate_limit_retry = {
@@ -697,6 +701,7 @@ write_summary_json() {
         "diagnoseSchemaID" => capabilities.dig("schemaIDs", "diagnose"),
         "commandErrorSchemaID" => capabilities.dig("schemaIDs", "commandError"),
         "runSchemaID" => capabilities.dig("schemaIDs", "run"),
+        "resolvedChildExecutableReported" => boolean_or_nil(capabilities.dig("runLifecycle", "resolvedChildExecutableReported")),
         "daemonStatusAvailable" => capabilities["daemonStatusAvailable"],
         "policySource" => capabilities["policySource"],
         "policyStatusAvailable" => capabilities["policyStatusAvailable"],

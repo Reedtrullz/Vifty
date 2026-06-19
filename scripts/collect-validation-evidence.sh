@@ -652,6 +652,7 @@ capture_capabilities_contract() {
       "runLifecycle.autoRestoreAfterChildExit" => run_lifecycle["autoRestoreAfterChildExit"],
       "runLifecycle.structuredPreChildFailures" => run_lifecycle["structuredPreChildFailures"],
       "runLifecycle.cleanupStateReportedOnLaunchFailure" => run_lifecycle["cleanupStateReportedOnLaunchFailure"],
+      "runLifecycle.resolvedChildExecutableReported" => run_lifecycle["resolvedChildExecutableReported"],
       "directControlLifecycle.prepareUsesIdempotencyKey" => direct_lifecycle["prepareUsesIdempotencyKey"],
       "directControlLifecycle.preferRunForSingleChildWorkloads" => direct_lifecycle["preferRunForSingleChildWorkloads"]
     }

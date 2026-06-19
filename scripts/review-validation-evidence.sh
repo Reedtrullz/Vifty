@@ -229,6 +229,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "runLifecycle.autoRestoreAfterChildExit" => "true",
     "runLifecycle.structuredPreChildFailures" => "true",
     "runLifecycle.cleanupStateReportedOnLaunchFailure" => "true",
+    "runLifecycle.resolvedChildExecutableReported" => "true",
     "runLifecycle.signalsForwardedToChild" => "INT,TERM,HUP",
     "directControlLifecycle.prepareUsesIdempotencyKey" => "true",
     "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => "false",
@@ -1171,6 +1172,22 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       end
       unless run["childExitCode"] == 0
         failures << "passed agent-run-smoke summary must report childExitCode=0"
+      end
+      if preflight["resolvedChildExecutableReported"] == true
+        resolved_child_executable = run["resolvedChildExecutable"]
+        unless resolved_child_executable.is_a?(String) && resolved_child_executable.start_with?("/")
+          failures << "passed agent-run-smoke summary must report absolute resolvedChildExecutable when capabilities advertise resolvedChildExecutableReported"
+        end
+        final_run_json = nil
+        if run["stdout"].is_a?(String)
+          relative_path = agent_run_smoke_local_filename(run["stdout"], "final run stdout", failures)
+          final_run_json = parse_external_json(File.join(File.dirname(path), relative_path), failures, "agent-run-smoke final run JSON") unless relative_path.nil?
+        end
+        if final_run_json && final_run_json["resolvedChildExecutable"] != resolved_child_executable
+          failures << "passed agent-run-smoke final run JSON resolvedChildExecutable must match summary run.resolvedChildExecutable"
+        end
+      elsif !preflight.key?("resolvedChildExecutableReported") || preflight["resolvedChildExecutableReported"].nil?
+        warnings << "agent-run-smoke summary did not record resolvedChildExecutableReported; keep executable provenance claims conservative"
       end
       "passed-auto-restored"
     when "failed"

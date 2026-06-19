@@ -148,6 +148,7 @@
         "diagnoseSchemaID",
         "commandErrorSchemaID",
         "runSchemaID",
+        "resolvedChildExecutableReported",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -193,6 +194,13 @@
             "string",
             "null"
           ]
+        },
+        "resolvedChildExecutableReported": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Copied from pre-capabilities runLifecycle.resolvedChildExecutableReported. When true, passed run proof must include run.resolvedChildExecutable."
         },
         "daemonStatusAvailable": {
           "type": [
@@ -368,7 +376,8 @@
         "coolingLeasePrepared",
         "autoRestoreAttempted",
         "autoRestoreSucceeded",
-        "childExitCode"
+        "childExitCode",
+        "resolvedChildExecutable"
       ],
       "properties": {
         "exitStatus": {
@@ -436,6 +445,14 @@
             "integer",
             "null"
           ]
+        },
+        "resolvedChildExecutable": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^/.*$",
+          "description": "Absolute executable path copied from completed viftyctl run --json output when runLifecycle.resolvedChildExecutableReported is true."
         }
       }
     },
