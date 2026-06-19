@@ -6,6 +6,7 @@
   "command": "run",
   "coolingLeasePrepared": true,
   "generatedAt": 700001000,
+  "resolvedChildExecutable": "/usr/bin/true",
   "schemaID": "https://vifty.local/schemas/viftyctl-run.schema.json",
   "schemaVersion": 1
 }

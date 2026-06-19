@@ -22,6 +22,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.runLifecycle.autoRestoreAfterChildExit, true)
         XCTAssertEqual(capabilities.runLifecycle.structuredPreChildFailures, true)
         XCTAssertEqual(capabilities.runLifecycle.cleanupStateReportedOnLaunchFailure, true)
+        XCTAssertEqual(capabilities.runLifecycle.resolvedChildExecutableReported, true)
         XCTAssertEqual(capabilities.directControlLifecycle.prepareUsesIdempotencyKey, true)
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoAcceptsIdempotencyKey, false)
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoScopedByIdempotencyKey, false)
@@ -73,6 +74,19 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.metadataLimits, .unsupported)
         XCTAssertFalse(capabilities.policyStatusAvailable)
         XCTAssertEqual(capabilities.wrapperResources, .unsupported)
+    }
+
+    func testLegacyRunLifecycleDecodesWithoutResolvedExecutableReporting() throws {
+        var payload = try readJSON(fixtureURL("capabilities.json"))
+        var runLifecycle = try XCTUnwrap(payload["runLifecycle"] as? [String: Any])
+        runLifecycle.removeValue(forKey: "resolvedChildExecutableReported")
+        payload["runLifecycle"] = runLifecycle
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
+
+        XCTAssertTrue(capabilities.runLifecycle.childCommandPreflightBeforeCooling)
+        XCTAssertFalse(capabilities.runLifecycle.resolvedChildExecutableReported)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -313,6 +327,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.autoRestoreSucceeded, true)
         XCTAssertEqual(report.childExitCode, 0)
         XCTAssertNil(report.autoRestoreError)
+        XCTAssertEqual(report.resolvedChildExecutable, "/usr/bin/true")
     }
 
     func testAuditExampleDecodesAgainstCurrentModel() throws {
@@ -543,6 +558,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(runProperties["autoRestoreAttempted"] as? [String: Any])
         XCTAssertNotNil(runProperties["autoRestoreSucceeded"] as? [String: Any])
         XCTAssertNotNil(runProperties["childExitCode"] as? [String: Any])
+        XCTAssertNotNil(runProperties["resolvedChildExecutable"] as? [String: Any])
         let runExample = try readJSON(fixtureURL("run-success.json"))
         XCTAssertEqual(runExample["schemaVersion"] as? Int, 1)
         XCTAssertEqual(runExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
@@ -551,6 +567,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(runExample["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(runExample["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(runExample["childExitCode"] as? Int, 0)
+        XCTAssertEqual(runExample["resolvedChildExecutable"] as? String, "/usr/bin/true")
 
         let statusSchema = try readJSON(schemaURL("viftyctl-status.schema.json"))
         let statusDefinitions = try XCTUnwrap(statusSchema["$defs"] as? [String: Any])

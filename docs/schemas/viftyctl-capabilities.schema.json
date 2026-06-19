@@ -299,6 +299,10 @@
         "cleanupStateReportedOnLaunchFailure": {
           "type": "boolean",
           "description": "True when launch failures after a prepared lease report whether cleanup was attempted and whether Auto restore succeeded."
+        },
+        "resolvedChildExecutableReported": {
+          "type": "boolean",
+          "description": "True when successful completed viftyctl run --json reports include resolvedChildExecutable so agents can audit the absolute child executable selected before cooling was requested."
         }
       }
     },

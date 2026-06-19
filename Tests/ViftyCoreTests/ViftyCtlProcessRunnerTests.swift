@@ -11,6 +11,26 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
         XCTAssertEqual(resolved, ["/bin/echo", "hello"])
     }
 
+    func testResolveCanonicalizesExecutableRelativePathBeforeRun() throws {
+        let originalDirectory = FileManager.default.currentDirectoryPath
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-process-runner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer {
+            _ = FileManager.default.changeCurrentDirectoryPath(originalDirectory)
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+        let childURL = tempDirectory.appendingPathComponent("tool")
+        FileManager.default.createFile(atPath: childURL.path, contents: Data("#!/bin/sh\nexit 0\n".utf8))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: childURL.path)
+        XCTAssertTrue(FileManager.default.changeCurrentDirectoryPath(tempDirectory.path))
+        let runner = ViftyCtlProcessRunner()
+
+        let resolved = try runner.resolve(["./tool", "arg"])
+
+        XCTAssertEqual(resolved, [childURL.path, "arg"])
+    }
+
     func testResolveRejectsNonExecutableAbsolutePathBeforeRun() throws {
         let runner = ViftyCtlProcessRunner()
         let tempDirectory = FileManager.default.temporaryDirectory

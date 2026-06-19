@@ -30,6 +30,7 @@
     "autoRestoreAfterChildExit": true,
     "childCommandPreflightBeforeCooling": true,
     "cleanupStateReportedOnLaunchFailure": true,
+    "resolvedChildExecutableReported": true,
     "signalsForwardedToChild": [
       "INT",
       "TERM",

@@ -57,12 +57,16 @@ struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
             guard isExecutableCommand(atPath: arguments[0]) else {
                 throw ViftyError.helperRejected("Child command is not executable: \(arguments[0])")
             }
-            return arguments
+            let executablePath = URL(fileURLWithPath: arguments[0]).standardizedFileURL.path
+            return [executablePath] + Array(arguments.dropFirst())
         }
 
         let path = environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
-            let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(arguments[0]).path
+            let candidate = URL(fileURLWithPath: String(directory))
+                .appendingPathComponent(arguments[0])
+                .standardizedFileURL
+                .path
             if isExecutableCommand(atPath: candidate) {
                 return [candidate] + Array(arguments.dropFirst())
             }

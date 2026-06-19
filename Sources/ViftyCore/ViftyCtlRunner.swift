@@ -18,19 +18,22 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
     public var autoRestoreAfterChildExit: Bool
     public var structuredPreChildFailures: Bool
     public var cleanupStateReportedOnLaunchFailure: Bool
+    public var resolvedChildExecutableReported: Bool
 
     public init(
         childCommandPreflightBeforeCooling: Bool = true,
         signalsForwardedToChild: [String] = ["INT", "TERM", "HUP"],
         autoRestoreAfterChildExit: Bool = true,
         structuredPreChildFailures: Bool = true,
-        cleanupStateReportedOnLaunchFailure: Bool = true
+        cleanupStateReportedOnLaunchFailure: Bool = true,
+        resolvedChildExecutableReported: Bool = true
     ) {
         self.childCommandPreflightBeforeCooling = childCommandPreflightBeforeCooling
         self.signalsForwardedToChild = signalsForwardedToChild
         self.autoRestoreAfterChildExit = autoRestoreAfterChildExit
         self.structuredPreChildFailures = structuredPreChildFailures
         self.cleanupStateReportedOnLaunchFailure = cleanupStateReportedOnLaunchFailure
+        self.resolvedChildExecutableReported = resolvedChildExecutableReported
     }
 
     public static let unsupported = ViftyCtlRunLifecycleCapabilities(
@@ -38,8 +41,38 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         signalsForwardedToChild: [],
         autoRestoreAfterChildExit: false,
         structuredPreChildFailures: false,
-        cleanupStateReportedOnLaunchFailure: false
+        cleanupStateReportedOnLaunchFailure: false,
+        resolvedChildExecutableReported: false
     )
+
+    private enum CodingKeys: String, CodingKey {
+        case childCommandPreflightBeforeCooling
+        case signalsForwardedToChild
+        case autoRestoreAfterChildExit
+        case structuredPreChildFailures
+        case cleanupStateReportedOnLaunchFailure
+        case resolvedChildExecutableReported
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        childCommandPreflightBeforeCooling = try container.decode(Bool.self, forKey: .childCommandPreflightBeforeCooling)
+        signalsForwardedToChild = try container.decode([String].self, forKey: .signalsForwardedToChild)
+        autoRestoreAfterChildExit = try container.decode(Bool.self, forKey: .autoRestoreAfterChildExit)
+        structuredPreChildFailures = try container.decode(Bool.self, forKey: .structuredPreChildFailures)
+        cleanupStateReportedOnLaunchFailure = try container.decode(Bool.self, forKey: .cleanupStateReportedOnLaunchFailure)
+        resolvedChildExecutableReported = try container.decodeIfPresent(Bool.self, forKey: .resolvedChildExecutableReported) ?? false
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(childCommandPreflightBeforeCooling, forKey: .childCommandPreflightBeforeCooling)
+        try container.encode(signalsForwardedToChild, forKey: .signalsForwardedToChild)
+        try container.encode(autoRestoreAfterChildExit, forKey: .autoRestoreAfterChildExit)
+        try container.encode(structuredPreChildFailures, forKey: .structuredPreChildFailures)
+        try container.encode(cleanupStateReportedOnLaunchFailure, forKey: .cleanupStateReportedOnLaunchFailure)
+        try container.encode(resolvedChildExecutableReported, forKey: .resolvedChildExecutableReported)
+    }
 }
 
 public struct ViftyCtlDirectControlLifecycleCapabilities: Codable, Equatable, Sendable {
@@ -508,6 +541,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
     public var autoRestoreSucceeded: Bool
     public var childExitCode: Int32
     public var autoRestoreError: String?
+    public var resolvedChildExecutable: String?
     public var generatedAt: Date
 
     public init(
@@ -519,6 +553,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         autoRestoreSucceeded: Bool,
         childExitCode: Int32,
         autoRestoreError: String? = nil,
+        resolvedChildExecutable: String? = nil,
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
@@ -529,6 +564,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         self.autoRestoreSucceeded = autoRestoreSucceeded
         self.childExitCode = childExitCode
         self.autoRestoreError = autoRestoreError
+        self.resolvedChildExecutable = resolvedChildExecutable
         self.generatedAt = generatedAt
     }
 
@@ -541,6 +577,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         case autoRestoreSucceeded
         case childExitCode
         case autoRestoreError
+        case resolvedChildExecutable
         case generatedAt
     }
 
@@ -555,6 +592,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         autoRestoreSucceeded = try container.decode(Bool.self, forKey: .autoRestoreSucceeded)
         childExitCode = try container.decode(Int32.self, forKey: .childExitCode)
         autoRestoreError = try container.decodeIfPresent(String.self, forKey: .autoRestoreError)
+        resolvedChildExecutable = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutable)
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
     }
 
@@ -572,6 +610,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         } else {
             try container.encodeNil(forKey: .autoRestoreError)
         }
+        try container.encodeIfPresent(resolvedChildExecutable, forKey: .resolvedChildExecutable)
         try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
@@ -810,6 +849,7 @@ public struct ViftyCtlRunner: Sendable {
                     return try await restoreAfterRun(
                         reason: "viftyctl run child exited with \(exitCode)",
                         childExitCode: exitCode,
+                        resolvedChildExecutable: resolvedChildArguments[0],
                         json: json
                     )
                 } catch {
@@ -1138,6 +1178,7 @@ public struct ViftyCtlRunner: Sendable {
     private func restoreAfterRun(
         reason: String,
         childExitCode: Int32,
+        resolvedChildExecutable: String,
         json: Bool
     ) async throws -> ViftyCtlResult {
         do {
@@ -1146,6 +1187,7 @@ public struct ViftyCtlRunner: Sendable {
                 let report = ViftyCtlRunReport(
                     autoRestoreSucceeded: true,
                     childExitCode: childExitCode,
+                    resolvedChildExecutable: resolvedChildExecutable,
                     generatedAt: now()
                 )
                 return ViftyCtlResult(stdout: try encodeJSON(report) + "\n", exitCode: childExitCode)
@@ -1157,6 +1199,7 @@ public struct ViftyCtlRunner: Sendable {
                     autoRestoreSucceeded: false,
                     childExitCode: childExitCode,
                     autoRestoreError: error.localizedDescription,
+                    resolvedChildExecutable: resolvedChildExecutable,
                     generatedAt: now()
                 )
                 return ViftyCtlResult(

@@ -43,6 +43,10 @@
         "null"
       ]
     },
+    "resolvedChildExecutable": {
+      "type": "string",
+      "description": "Absolute executable path selected by viftyctl run child-command resolution before the cooling lease was requested. Present in current builds when runLifecycle.resolvedChildExecutableReported is true; absent in legacy run reports."
+    },
     "generatedAt": {
       "type": "number"
     }

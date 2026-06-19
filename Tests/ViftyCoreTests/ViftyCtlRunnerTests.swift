@@ -164,6 +164,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(runLifecycle["autoRestoreAfterChildExit"] as? Bool, true)
         XCTAssertEqual(runLifecycle["structuredPreChildFailures"] as? Bool, true)
         XCTAssertEqual(runLifecycle["cleanupStateReportedOnLaunchFailure"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["resolvedChildExecutableReported"] as? Bool, true)
         let directControlLifecycle = try XCTUnwrap(json["directControlLifecycle"] as? [String: Any])
         XCTAssertEqual(directControlLifecycle["prepareUsesIdempotencyKey"] as? Bool, true)
         XCTAssertEqual(directControlLifecycle["restoreAutoAcceptsIdempotencyKey"] as? Bool, false)
@@ -247,6 +248,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(runLifecycle["childCommandPreflightBeforeCooling"] as? Bool, true)
         XCTAssertEqual(runLifecycle["autoRestoreAfterChildExit"] as? Bool, true)
         XCTAssertEqual(runLifecycle["cleanupStateReportedOnLaunchFailure"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["resolvedChildExecutableReported"] as? Bool, true)
         let directControlLifecycle = try XCTUnwrap(json["directControlLifecycle"] as? [String: Any])
         XCTAssertEqual(directControlLifecycle["prepareUsesIdempotencyKey"] as? Bool, true)
         XCTAssertEqual(directControlLifecycle["restoreAutoAcceptsIdempotencyKey"] as? Bool, false)
@@ -1063,6 +1065,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(json["childExitCode"] as? Int, 0)
         XCTAssertTrue(json["autoRestoreError"] is NSNull)
+        XCTAssertEqual(json["resolvedChildExecutable"] as? String, "/usr/bin/swift")
         XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
         let prepareRequests = await client.prepareRequests
         let restoreReasons = await client.restoreReasons
@@ -1096,6 +1099,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, false)
         XCTAssertEqual(json["childExitCode"] as? Int, 0)
         XCTAssertTrue((json["autoRestoreError"] as? String)?.contains("restore failed") == true)
+        XCTAssertEqual(json["resolvedChildExecutable"] as? String, "/usr/bin/swift")
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
         XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
