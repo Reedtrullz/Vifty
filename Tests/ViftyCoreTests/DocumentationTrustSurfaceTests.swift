@@ -237,6 +237,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("manualSmokeTestResult"))
         XCTAssertTrue(triage.contains("passed-auto-restored"))
         XCTAssertTrue(triage.contains("daemonControlPathReady"))
+        XCTAssertTrue(triage.contains("agentRunSmokeStartupMode"))
+        XCTAssertTrue(triage.contains("agentRunSmokeStartupModeSource"))
+        XCTAssertTrue(triage.contains("agentRunSmokeStartupModeReadError"))
+        XCTAssertTrue(triage.contains("startup-mode recovery context, not cooling authorization"))
     }
 
     func testAgentCoolingTemplateKeepsBlockedReadinessEvidenceOnly() throws {
