@@ -314,6 +314,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], [])
         let appPreferences = try XCTUnwrap(json["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferences["startupMode"] as? String, "Auto")
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
@@ -372,6 +374,20 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "unknown")
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], [
+            "daemonSnapshotAvailable",
+            "daemonControlPathReady",
+            "supportedHardware",
+            "temperatureSensorsPresent",
+            "controllableFansPresent"
+        ])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], [
+            "daemonSnapshotAvailable",
+            "daemonControlPathReady",
+            "supportedHardware",
+            "temperatureSensorsPresent",
+            "controllableFansPresent"
+        ])
         XCTAssertTrue((json["daemonSnapshotError"] as? String)?.contains("Daemon request timed out") == true)
         let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
@@ -414,6 +430,16 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], [
+            "agentControlStatusAvailable",
+            "daemonControlPathReady",
+            "agentControlEnabled"
+        ])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], [
+            "agentControlStatusAvailable",
+            "daemonControlPathReady",
+            "agentControlEnabled"
+        ])
         XCTAssertTrue((json["agentControlStatusError"] as? String)?.contains("Could not create daemon proxy") == true)
         let agentControl = try XCTUnwrap(json["agentControl"] as? [String: Any])
         XCTAssertEqual(agentControl["enabled"] as? Bool, false)
@@ -483,6 +509,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         )
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], ["activeLeaseClear"])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["activeLeaseClear"])
         let agentControl = try XCTUnwrap(json["agentControl"] as? [String: Any])
         let lease = try XCTUnwrap(agentControl["activeLease"] as? [String: Any])
         XCTAssertEqual(lease["id"] as? String, "lease-example-test")
@@ -537,6 +565,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], ["manualControlClear"])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["manualControlClear"])
         let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
             (check["id"] as? String) == "manualControlClear"
@@ -700,6 +730,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.failedCheckIDs, ["thermalPressureSafe"])
+        XCTAssertEqual(report.coolingBlockerIDs, [])
     }
 
     func testReadinessReportRecommendsRestoreAutoBeforeNewCoolingWhenLeaseIsActive() {
@@ -728,6 +760,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.failedCheckIDs, ["activeLeaseClear"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["activeLeaseClear"])
     }
 
     func testReadinessReportRecommendsRestoreAutoBeforeNewCoolingWhenManualControlMarkerIsActive() {
@@ -751,6 +785,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertTrue(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, ["manualControlClear"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["manualControlClear"])
         XCTAssertTrue(report.checks.contains { $0.id == "manualControlClear" && !$0.passed && $0.severity == .warning })
     }
 
@@ -773,6 +809,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .inspectPolicy)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.failedCheckIDs, ["agentControlEnabled"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["agentControlEnabled"])
     }
 
     func testReadinessReportBlocksUnsupportedHardware() {
@@ -795,6 +833,14 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.recommendedRecoveryAction, .backOffWorkload)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertEqual(report.failedCheckIDs, [
+            "supportedHardware",
+            "agentControlEnabled",
+            "temperatureSensorsPresent",
+            "controllableFansPresent",
+            "thermalPressureSafe"
+        ])
+        XCTAssertEqual(report.coolingBlockerIDs, report.failedCheckIDs)
         XCTAssertTrue(report.checks.contains { $0.id == "supportedHardware" && !$0.passed && $0.severity == .error })
         XCTAssertTrue(report.checks.contains { $0.id == "temperatureSensorsPresent" && !$0.passed && $0.severity == .error })
         XCTAssertTrue(report.checks.contains { $0.id == "thermalPressureSafe" && !$0.passed && $0.severity == .error })

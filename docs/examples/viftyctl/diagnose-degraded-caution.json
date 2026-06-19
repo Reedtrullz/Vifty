@@ -160,5 +160,9 @@
       "source": "HID"
     }
   ],
-  "thermalPressure": "serious"
+  "thermalPressure": "serious",
+  "failedCheckIDs": [
+    "thermalPressureSafe"
+  ],
+  "coolingBlockerIDs": []
 }

@@ -7,8 +7,11 @@
       "errorCode": "HELPER_UNREACHABLE",
       "message": "Daemon agent-control status is unavailable: Could not create daemon proxy.",
       "retryAfterSeconds": null,
-      "targetRPMByFanID": {},
-      "warnings": []
+      "targetRPMByFanID": {
+      },
+      "warnings": [
+
+      ]
     },
     "lastErrorCode": "HELPER_UNREACHABLE",
     "policy": null
@@ -161,5 +164,15 @@
       "source": "HID"
     }
   ],
-  "thermalPressure": "nominal"
+  "thermalPressure": "nominal",
+  "failedCheckIDs": [
+    "agentControlStatusAvailable",
+    "daemonControlPathReady",
+    "agentControlEnabled"
+  ],
+  "coolingBlockerIDs": [
+    "agentControlStatusAvailable",
+    "daemonControlPathReady",
+    "agentControlEnabled"
+  ]
 }

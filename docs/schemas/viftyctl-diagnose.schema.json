@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
   "title": "viftyctl diagnose --json readiness report",
-  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked, safeToRequestCooling=false, daemonControlPathReady=false, or manualControlActive=true as a hard stop before requesting Vifty cooling.",
+  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked, safeToRequestCooling=false, daemonControlPathReady=false, manualControlActive=true, or non-empty coolingBlockerIDs as a hard stop before requesting Vifty cooling.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -69,6 +69,20 @@
     "manualControlActive": {
       "description": "True when Vifty's local manual-control marker is present. Agents must restore Auto or ask the user to switch Vifty to Auto before requesting cooling.",
       "type": "boolean"
+    },
+    "failedCheckIDs": {
+      "description": "Ordered readiness check IDs whose checks failed in this report. This mirrors checks[] without requiring agents to parse messages.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/readinessCheckID"
+      }
+    },
+    "coolingBlockerIDs": {
+      "description": "Ordered failed check IDs that block a new cooling request. Warning-only caution states may have failedCheckIDs without coolingBlockerIDs.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/readinessCheckID"
+      }
     },
     "appPreferences": {
       "description": "Read-only snapshot of local Vifty app preferences useful for diagnosing whether a saved default startup mode may reassert manual control. This is not a cooling authorization.",
@@ -276,22 +290,7 @@
       ],
       "properties": {
         "id": {
-          "enum": [
-            "daemonSnapshotAvailable",
-            "agentControlStatusAvailable",
-            "daemonControlPathReady",
-            "supportedHardware",
-            "agentControlEnabled",
-            "temperatureSensorsPresent",
-            "controllableFansPresent",
-            "fanIDsValid",
-            "fanIDsUnique",
-            "fanRangesValid",
-            "thermalPressureSafe",
-            "activeLeaseClear",
-            "manualControlClear",
-            "fanModeTelemetry"
-          ]
+          "$ref": "#/$defs/readinessCheckID"
         },
         "severity": {
           "enum": [
@@ -307,6 +306,24 @@
           "type": "string"
         }
       }
+    },
+    "readinessCheckID": {
+      "enum": [
+        "daemonSnapshotAvailable",
+        "agentControlStatusAvailable",
+        "daemonControlPathReady",
+        "supportedHardware",
+        "agentControlEnabled",
+        "temperatureSensorsPresent",
+        "controllableFansPresent",
+        "fanIDsValid",
+        "fanIDsUnique",
+        "fanRangesValid",
+        "thermalPressureSafe",
+        "activeLeaseClear",
+        "manualControlClear",
+        "fanModeTelemetry"
+      ]
     },
     "agentControlStatus": {
       "type": "object",

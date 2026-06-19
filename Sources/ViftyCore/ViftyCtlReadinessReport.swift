@@ -91,6 +91,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var safeToRequestCooling: Bool?
     public var daemonControlPathReady: Bool
     public var manualControlActive: Bool
+    public var failedCheckIDs: [String]
+    public var coolingBlockerIDs: [String]
     public var appPreferences: ViftyAppPreferencesDiagnostic
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
@@ -116,6 +118,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case safeToRequestCooling
         case daemonControlPathReady
         case manualControlActive
+        case failedCheckIDs
+        case coolingBlockerIDs
         case appPreferences
         case modelIdentifier
         case isAppleSilicon
@@ -168,6 +172,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
+        self.failedCheckIDs = Self.failedCheckIDs(from: checks)
+        self.coolingBlockerIDs = Self.coolingBlockerIDs(from: checks)
         self.appPreferences = appPreferences
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
@@ -241,6 +247,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
         try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
         try container.encode(manualControlActive, forKey: .manualControlActive)
+        try container.encode(failedCheckIDs, forKey: .failedCheckIDs)
+        try container.encode(coolingBlockerIDs, forKey: .coolingBlockerIDs)
         try container.encode(appPreferences, forKey: .appPreferences)
         try container.encode(modelIdentifier, forKey: .modelIdentifier)
         try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
@@ -663,6 +671,23 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         }
         return !failedCheck("daemonSnapshotAvailable", in: checks)
             && !failedCheck("agentControlStatusAvailable", in: checks)
+    }
+
+    private static func failedCheckIDs(from checks: [ViftyCtlReadinessCheck]) -> [String] {
+        checks
+            .filter { !$0.passed }
+            .map(\.id)
+    }
+
+    private static func coolingBlockerIDs(from checks: [ViftyCtlReadinessCheck]) -> [String] {
+        checks
+            .filter { check in
+                !check.passed
+                    && (check.severity == .error
+                        || check.id == "activeLeaseClear"
+                        || check.id == "manualControlClear")
+            }
+            .map(\.id)
     }
 
     private static func failedCheck(_ id: String, in checks: [ViftyCtlReadinessCheck]) -> Bool {

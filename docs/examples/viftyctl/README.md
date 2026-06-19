@@ -46,6 +46,6 @@ Schema:
 - [../../schemas/viftyctl-run.schema.json](../../schemas/viftyctl-run.schema.json) - agent-facing schema for completed `viftyctl run --json` reports
 - [../../schemas/viftyctl-status.schema.json](../../schemas/viftyctl-status.schema.json) - agent-facing schema for status, prepare, and restore-auto reports
 
-Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop, and `manualControlActive: true` is always a restore-Auto stop before requesting cooling. Current diagnose examples include `appPreferences.startupMode` so integrations can distinguish a one-off manual marker from a saved Curve/Fixed default that may reassert control after launch.
+Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop, and `manualControlActive: true` is always a restore-Auto stop before requesting cooling. Current diagnose examples include `failedCheckIDs` for all failed readiness checks, `coolingBlockerIDs` for the hard-stop subset, and `appPreferences.startupMode` so integrations can distinguish a one-off manual marker from a saved Curve/Fixed default that may reassert control after launch.
 
 Dates use Swift's current `JSONEncoder` default date representation, matching the CLI output.

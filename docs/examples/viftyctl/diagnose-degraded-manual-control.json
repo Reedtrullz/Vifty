@@ -160,5 +160,11 @@
       "source": "HID"
     }
   ],
-  "thermalPressure": "nominal"
+  "thermalPressure": "nominal",
+  "failedCheckIDs": [
+    "manualControlClear"
+  ],
+  "coolingBlockerIDs": [
+    "manualControlClear"
+  ]
 }

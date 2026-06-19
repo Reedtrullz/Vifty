@@ -188,5 +188,11 @@
       "source": "HID"
     }
   ],
-  "thermalPressure": "nominal"
+  "thermalPressure": "nominal",
+  "failedCheckIDs": [
+    "activeLeaseClear"
+  ],
+  "coolingBlockerIDs": [
+    "activeLeaseClear"
+  ]
 }

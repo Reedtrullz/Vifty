@@ -99,6 +99,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, [])
+        XCTAssertEqual(report.coolingBlockerIDs, [])
         XCTAssertEqual(report.appPreferences.startupMode, .auto)
         XCTAssertEqual(report.appPreferences.startupModeSource, .persisted)
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
@@ -121,6 +123,16 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertFalse(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, [
+            "agentControlStatusAvailable",
+            "daemonControlPathReady",
+            "agentControlEnabled"
+        ])
+        XCTAssertEqual(report.coolingBlockerIDs, [
+            "agentControlStatusAvailable",
+            "daemonControlPathReady",
+            "agentControlEnabled"
+        ])
         XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertNil(report.daemonSnapshotError)
@@ -146,6 +158,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, ["activeLeaseClear"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["activeLeaseClear"])
         XCTAssertEqual(report.thermalPressure, .nominal)
         XCTAssertTrue(report.agentControl.enabled)
         XCTAssertEqual(report.agentControl.activeLease?.id, "lease-example-test")
@@ -168,6 +182,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertTrue(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, ["manualControlClear"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["manualControlClear"])
         XCTAssertEqual(report.appPreferences.startupMode, .curve)
         XCTAssertEqual(report.appPreferences.startupModeSource, .persisted)
         XCTAssertEqual(report.thermalPressure, .nominal)
@@ -198,6 +214,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, ["thermalPressureSafe"])
+        XCTAssertEqual(report.coolingBlockerIDs, [])
         XCTAssertEqual(report.thermalPressure, .serious)
         XCTAssertTrue(report.agentControl.enabled)
         XCTAssertNil(report.agentControl.activeLease)
@@ -214,6 +232,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "daemonControlPathReady")
         payload.removeValue(forKey: "manualControlActive")
         payload.removeValue(forKey: "appPreferences")
+        payload.removeValue(forKey: "failedCheckIDs")
+        payload.removeValue(forKey: "coolingBlockerIDs")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let report = try JSONDecoder().decode(ViftyCtlReadinessReport.self, from: data)
@@ -225,6 +245,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
         XCTAssertEqual(report.appPreferences, .unavailable)
+        XCTAssertEqual(report.failedCheckIDs, [])
+        XCTAssertEqual(report.coolingBlockerIDs, [])
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
@@ -372,6 +394,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
         let appPreferencesProperty = try XCTUnwrap(properties["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferencesProperty["$ref"] as? String, "#/$defs/appPreferencesDiagnostic")
+        XCTAssertNotNil(properties["failedCheckIDs"])
+        XCTAssertNotNil(properties["coolingBlockerIDs"])
         XCTAssertEqual(enumValues(named: "state", in: properties), ["ready", "degraded", "blocked"])
         XCTAssertEqual(enumValues(named: "recommendedAgentAction", in: properties), [
             "requestCooling",
@@ -414,7 +438,10 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let readinessCheck = try XCTUnwrap(definitions["readinessCheck"] as? [String: Any])
         let checkProperties = try XCTUnwrap(readinessCheck["properties"] as? [String: Any])
         XCTAssertEqual(enumValues(named: "severity", in: checkProperties), ["info", "warning", "error"])
-        XCTAssertEqual(enumValues(named: "id", in: checkProperties), [
+        let checkIDProperty = try XCTUnwrap(checkProperties["id"] as? [String: Any])
+        XCTAssertEqual(checkIDProperty["$ref"] as? String, "#/$defs/readinessCheckID")
+        let readinessCheckID = try XCTUnwrap(definitions["readinessCheckID"] as? [String: Any])
+        XCTAssertEqual(readinessCheckID["enum"] as? [String], [
             "daemonSnapshotAvailable",
             "agentControlStatusAvailable",
             "daemonControlPathReady",
@@ -446,6 +473,29 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             for field in checkRequired {
                 XCTAssertNotNil(checks.first?[field], "\(exampleFilename) check should include \(field)")
             }
+        }
+    }
+
+    func testDiagnoseExamplesIncludeDerivedCheckIDLists() throws {
+        for exampleFilename in try diagnoseExampleFilenames() {
+            let example = try readJSON(fixtureURL(exampleFilename))
+            let checks = try XCTUnwrap(example["checks"] as? [[String: Any]])
+            let failedIDs = checks
+                .filter { ($0["passed"] as? Bool) == false }
+                .compactMap { $0["id"] as? String }
+            let blockerIDs = checks
+                .filter { check in
+                    guard (check["passed"] as? Bool) == false,
+                          let id = check["id"] as? String,
+                          let severity = check["severity"] as? String else {
+                        return false
+                    }
+                    return severity == "error" || ["activeLeaseClear", "manualControlClear"].contains(id)
+                }
+                .compactMap { $0["id"] as? String }
+
+            XCTAssertEqual(example["failedCheckIDs"] as? [String], failedIDs, exampleFilename)
+            XCTAssertEqual(example["coolingBlockerIDs"] as? [String], blockerIDs, exampleFilename)
         }
     }
 
