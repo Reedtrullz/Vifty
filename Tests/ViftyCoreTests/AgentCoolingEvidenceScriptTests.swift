@@ -283,6 +283,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["manualControlActive"] as? Bool, false)
+        let appPreferences = try XCTUnwrap(diagnoseDecision["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Auto")
+        XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+        XCTAssertTrue(appPreferences["readError"] is NSNull)
         let capabilitiesDecision = try XCTUnwrap(reviewSummary["capabilitiesDecision"] as? [String: Any])
         XCTAssertEqual(capabilitiesDecision["exitStatus"] as? Int, 0)
         XCTAssertEqual(capabilitiesDecision["schemaVersion"] as? Int, 1)
@@ -371,6 +375,60 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let warnings = try XCTUnwrap(reviewSummary["warnings"] as? [String])
         XCTAssertTrue(warnings.contains { $0.contains("legacy read-only evidence") })
         XCTAssertTrue(warnings.contains { $0.contains("inferred true") })
+        XCTAssertTrue(warnings.contains { $0.contains("missing appPreferences") })
+        let appPreferences = try XCTUnwrap(diagnoseDecision["appPreferences"] as? [String: Any])
+        XCTAssertTrue(appPreferences["startupMode"] is NSNull)
+        XCTAssertTrue(appPreferences["startupModeSource"] is NSNull)
+        XCTAssertTrue(appPreferences["readError"] is NSNull)
+    }
+
+    func testReviewerSurfacesManualControlStartupModeForAgentTriage() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"""
+            {
+              "state": "degraded",
+              "recommendedAgentAction": "restoreAutoBeforeRequestingCooling",
+              "safeToRequestCooling": false,
+              "daemonControlPathReady": true,
+              "manualControlActive": true,
+              "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+              "appPreferences": {
+                "startupMode": "Curve",
+                "startupModeSource": "persisted",
+                "readError": null
+              },
+              "checks": []
+            }
+            """#
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["manualControlActive"] as? Bool, true)
+        let appPreferences = try XCTUnwrap(diagnoseDecision["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
+        XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+        XCTAssertTrue(appPreferences["readError"] is NSNull)
+        let warnings = try XCTUnwrap(reviewSummary["warnings"] as? [String])
+        XCTAssertTrue(warnings.contains { warning in
+            warning.contains("manualControlActive is true")
+                && warning.contains("default startup mode is Curve")
+                && warning.contains("switch the default mode to Auto")
+        })
     }
 
     func testReviewerAcceptsLegacyHelperRepairEvidenceWithoutDaemonReadyField() throws {
@@ -908,10 +966,18 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "recommendedRecoveryAction",
             "safeToRequestCooling",
             "daemonControlPathReady",
-            "manualControlActive"
+            "manualControlActive",
+            "appPreferences"
         ] {
             XCTAssertTrue(diagnoseRequired.contains(field), "diagnoseDecision should require \(field)")
         }
+
+        let diagnoseProperties = try XCTUnwrap(diagnoseDecision["properties"] as? [String: Any])
+        XCTAssertEqual(diagnoseProperties["appPreferences"] as? [String: String], ["$ref": "#/$defs/appPreferencesDiagnostic"])
+
+        let appPreferencesDiagnostic = try XCTUnwrap(defs["appPreferencesDiagnostic"] as? [String: Any])
+        let appPreferencesRequired = try XCTUnwrap(appPreferencesDiagnostic["required"] as? [String])
+        XCTAssertEqual(appPreferencesRequired, ["startupMode", "startupModeSource", "readError"])
 
         let capabilitiesDecision = try XCTUnwrap(defs["capabilitiesDecision"] as? [String: Any])
         let capabilitiesRequired = try XCTUnwrap(capabilitiesDecision["required"] as? [String])
@@ -979,7 +1045,7 @@ private final class AgentCoolingEvidenceHarness {
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
         capabilitiesExitCode: Int = 0,
-        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","checks":[]}"#,
+        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         statusExitCode: Int = 0,

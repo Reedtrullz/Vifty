@@ -87,6 +87,14 @@ DIAGNOSE_RECOVERY_ACTIONS = %w[
   inspectPolicy
   collectHardwareEvidence
 ].freeze
+STARTUP_MODES = %w[Auto Curve Fixed].freeze
+STARTUP_MODE_SOURCES = %w[
+  persisted
+  defaultMissingFile
+  defaultMissingKey
+  unreadable
+  unavailable
+].freeze
 REQUIRED_FILES = %w[
   agent-cooling-evidence-summary.json
   manifest.tsv
@@ -114,7 +122,12 @@ diagnose_decision = {
   "recommendedRecoveryAction" => nil,
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil,
-  "manualControlActive" => nil
+  "manualControlActive" => nil,
+  "appPreferences" => {
+    "startupMode" => nil,
+    "startupModeSource" => nil,
+    "readError" => nil
+  }
 }
 capabilities_decision = {
   "exitStatus" => nil,
@@ -539,6 +552,8 @@ if File.file?(diagnose_path)
       daemon_ready_present = diagnose.key?("daemonControlPathReady")
       manual_control_active = diagnose["manualControlActive"]
       manual_control_active_present = diagnose.key?("manualControlActive")
+      app_preferences = diagnose["appPreferences"]
+      app_preferences_present = diagnose.key?("appPreferences")
 
       diagnose_decision["state"] = state if DIAGNOSE_STATES.include?(state)
       diagnose_decision["recommendedAgentAction"] = agent_action if DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
@@ -573,6 +588,39 @@ if File.file?(diagnose_path)
         failures << "viftyctl-diagnose.json manualControlActive must be boolean"
       elsif !manual_control_active_present
         warnings << "viftyctl-diagnose.json is missing manualControlActive; legacy reports may not distinguish manual/user fan ownership"
+      end
+      if app_preferences_present
+        if app_preferences.is_a?(Hash)
+          startup_mode = app_preferences["startupMode"]
+          startup_mode_source = app_preferences["startupModeSource"]
+          read_error = app_preferences["readError"]
+
+          if STARTUP_MODES.include?(startup_mode) || startup_mode.nil?
+            diagnose_decision["appPreferences"]["startupMode"] = startup_mode
+          else
+            failures << "viftyctl-diagnose.json appPreferences.startupMode is missing or unsupported"
+          end
+
+          if STARTUP_MODE_SOURCES.include?(startup_mode_source)
+            diagnose_decision["appPreferences"]["startupModeSource"] = startup_mode_source
+          else
+            failures << "viftyctl-diagnose.json appPreferences.startupModeSource is missing or unsupported"
+          end
+
+          if read_error.is_a?(String) || read_error.nil?
+            diagnose_decision["appPreferences"]["readError"] = read_error
+          else
+            failures << "viftyctl-diagnose.json appPreferences.readError must be string or null"
+          end
+
+          if manual_control_active == true && %w[Curve Fixed].include?(startup_mode)
+            warnings << "manualControlActive is true and Vifty default startup mode is #{startup_mode}; switch the default mode to Auto before retrying agent cooling"
+          end
+        else
+          failures << "viftyctl-diagnose.json appPreferences must be an object"
+        end
+      else
+        warnings << "viftyctl-diagnose.json is missing appPreferences; legacy reports may not identify Vifty startup/default mode"
       end
 
       if diagnose_status == 75 && state != "blocked"

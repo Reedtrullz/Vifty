@@ -240,7 +240,8 @@
         "recommendedRecoveryAction",
         "safeToRequestCooling",
         "daemonControlPathReady",
-        "manualControlActive"
+        "manualControlActive",
+        "appPreferences"
       ],
       "properties": {
         "exitStatus": {
@@ -304,6 +305,52 @@
         "manualControlActive": {
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "appPreferences": {
+          "$ref": "#/$defs/appPreferencesDiagnostic"
+        }
+      }
+    },
+    "appPreferencesDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startupMode",
+        "startupModeSource",
+        "readError"
+      ],
+      "properties": {
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "startupModeSource": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "persisted",
+            "defaultMissingFile",
+            "defaultMissingKey",
+            "unreadable",
+            "unavailable",
+            null
+          ]
+        },
+        "readError": {
+          "type": [
+            "string",
             "null"
           ]
         }

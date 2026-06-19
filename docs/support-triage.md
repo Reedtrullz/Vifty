@@ -42,10 +42,14 @@ Its JSON summary declares
 It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 summarizes the reviewed diagnose contract in `diagnoseDecision`: exit status,
 readiness state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive`. If those fields are
-missing or contradict the diagnose exit code, the review fails, except legacy
-`v1.1.x` reports that omit `daemonControlPathReady` may pass only when the same
-boolean can be inferred from structured readiness/recovery fields. It also
+`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and
+`appPreferences.startupMode`. If those fields are missing or contradict the
+diagnose exit code, the review fails, except legacy `v1.1.x` reports that omit
+`daemonControlPathReady` or `appPreferences` may pass only with a warning;
+`daemonControlPathReady` must still be inferred from structured
+readiness/recovery fields. When `manualControlActive` is true and the saved
+startup mode is `Curve` or `Fixed`, the reviewer warning should be routed as a
+default-mode issue before another agent-cooling request. It also
 writes `capabilitiesDecision` for advertised `viftyctl run` support,
 force-retry discovery, safe `runLifecycle`, safe direct prepare/restore
 lifecycle, wrapper resource discovery, metadata limits, policy status availability, daemon status, and unavailable-exit metadata;
