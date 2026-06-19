@@ -18,13 +18,13 @@ make validation-evidence
 
 This defaults to `/Applications/Vifty.app` with `installSource=not-recorded` so a local report never pretends the installed app came from the current checkout. Use `VALIDATION_EVIDENCE_APP=<path>`, `VALIDATION_EVIDENCE_OUTPUT=<dir>`, `VALIDATION_EVIDENCE_INSTALL_SOURCE=<source>`, `VALIDATION_EVIDENCE_SOURCE_REF=<ref>`, `VALIDATION_EVIDENCE_SOURCE_SHA=<sha>`, `VALIDATION_EVIDENCE_SOURCE_ARTIFACT=<path>`, `VALIDATION_EVIDENCE_RELEASE_SUMMARY=<path>`, or `VALIDATION_EVIDENCE_RELEASE_CHECKLIST=<path>` when the installed app came from a known source or release artifact.
 
-For a current `main` or other local ad-hoc source checkout, prefer the current-build target. It requires a clean git worktree, builds `.build/Vifty.app` first, and records `local-ad-hoc-build` with the current git ref and full SHA:
+For a current `main` or other local ad-hoc source checkout, prefer the current-build target. It requires a clean git worktree, builds `.build/Vifty.app` first, runs the read-only helper `probeLocal` by default, and records `local-ad-hoc-build` with the current git ref and full SHA:
 
 ```sh
 make validation-evidence-current-build
 ```
 
-If the worktree is dirty, commit or stash first; otherwise use `make validation-evidence` with the default `installSource=not-recorded` for exploratory local evidence. If you already installed a local ad-hoc build elsewhere, set source provenance only after the installed app was actually built from that exact ref/SHA:
+If the local helper probe is not useful for an exploratory capture, set `VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL=0`; supported-hardware review will keep that report unvalidated until `probeLocal` evidence is present. If the worktree is dirty, commit or stash first; otherwise use `make validation-evidence` with the default `installSource=not-recorded` for exploratory local evidence. If you already installed a local ad-hoc build elsewhere, set source provenance only after the installed app was actually built from that exact ref/SHA:
 
 ```sh
 make validation-evidence \

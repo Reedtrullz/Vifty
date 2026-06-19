@@ -445,7 +445,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("installSource=not-recorded"))
         XCTAssertTrue(hardwareValidation.contains("local report never pretends the installed app came from the current checkout"))
         XCTAssertTrue(hardwareValidation.contains("make validation-evidence-current-build"))
-        XCTAssertTrue(hardwareValidation.contains("requires a clean git worktree, builds `.build/Vifty.app` first, and records `local-ad-hoc-build` with the current git ref and full SHA"))
+        XCTAssertTrue(hardwareValidation.contains("requires a clean git worktree, builds `.build/Vifty.app` first, runs the read-only helper `probeLocal` by default, and records `local-ad-hoc-build` with the current git ref and full SHA"))
         XCTAssertTrue(hardwareValidation.contains("If the worktree is dirty, commit or stash first; otherwise use `make validation-evidence` with the default `installSource=not-recorded`"))
         XCTAssertTrue(hardwareValidation.contains("VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build"))
         XCTAssertTrue(hardwareValidation.contains("VALIDATION_EVIDENCE_SOURCE_REF=main"))

@@ -18,6 +18,7 @@ VALIDATION_EVIDENCE_SOURCE_ARTIFACT ?=
 VALIDATION_EVIDENCE_RELEASE_SUMMARY ?=
 VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
 VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
+VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1
 CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 VALIDATION_EVIDENCE_BUNDLE ?=
@@ -90,7 +91,7 @@ validation-evidence: ## Collect read-only release/hardware validation evidence
 validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence
 	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "validation-evidence-current-build requires a clean git worktree so source ref/SHA match the built app; commit or stash changes first, or use make validation-evidence with installSource=not-recorded for exploratory local evidence." >&2; exit 65; fi
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
-	$(MAKE) validation-evidence VALIDATION_EVIDENCE_APP="$(APP_DIR)" VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build VALIDATION_EVIDENCE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" VALIDATION_EVIDENCE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)"
+	$(MAKE) validation-evidence VALIDATION_EVIDENCE_APP="$(APP_DIR)" VALIDATION_EVIDENCE_INSTALL_SOURCE=local-ad-hoc-build VALIDATION_EVIDENCE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" VALIDATION_EVIDENCE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)" VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL="$(VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL)"
 
 validation-evidence-review: ## Review a captured validation evidence bundle
 	@if [ -z "$(VALIDATION_EVIDENCE_BUNDLE)" ]; then echo "VALIDATION_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
