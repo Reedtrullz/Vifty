@@ -139,6 +139,10 @@ print_manual_control_startup_mode_context() {
   esac
 }
 
+print_no_direct_uncooled_rerun_guidance() {
+  echo "guarded-run: Do not rerun the child command yourself after this guarded-run failure; use VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1 only after explicit user approval and only when this wrapper allows it." >&2
+}
+
 finish_without_cooling_request() {
   message="$1"
   shift
@@ -152,17 +156,20 @@ finish_without_cooling_request() {
     case "$recommended_recovery_action" in
       repairHelper|backOffWorkload|restoreAutoBeforeRetry|inspectPolicy|collectHardwareEvidence)
         echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling." >&2
+        print_no_direct_uncooled_rerun_guidance
         exit 75
         ;;
     esac
 
     if [ "${manual_control_active:-}" = "true" ]; then
       echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but manualControlActive is true; not running workload without cooling." >&2
+      print_no_direct_uncooled_rerun_guidance
       exit 75
     fi
 
     if [ "${daemon_control_path_ready:-}" != "true" ]; then
       echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling." >&2
+      print_no_direct_uncooled_rerun_guidance
       exit 75
     fi
 
@@ -170,6 +177,7 @@ finish_without_cooling_request() {
     exec "$@"
   fi
 
+  print_no_direct_uncooled_rerun_guidance
   exit 75
 }
 

@@ -600,6 +600,7 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("readiness is blocked"))
         XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
         XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
+        XCTAssertTrue(result.stderr.contains("Do not rerun the child command yourself after this guarded-run failure"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -645,6 +646,7 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("recovery action is collectHardwareEvidence"), result.stderr)
         XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("Do not rerun the child command yourself after this guarded-run failure"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
