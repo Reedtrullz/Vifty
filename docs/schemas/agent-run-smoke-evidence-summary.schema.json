@@ -245,6 +245,52 @@
             "boolean",
             "null"
           ]
+        },
+        "appPreferences": {
+          "$ref": "#/$defs/appPreferencesDiagnostic"
+        }
+      }
+    },
+    "appPreferencesDiagnostic": {
+      "type": "object",
+      "description": "Read-only app preference diagnostic copied from pre-diagnose; useful when manualControlActive blocks supervised smoke evidence, but never a cooling authorization.",
+      "required": [
+        "startupMode",
+        "startupModeSource",
+        "readError"
+      ],
+      "properties": {
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "startupModeSource": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "persisted",
+            "defaultMissingFile",
+            "defaultMissingKey",
+            "unreadable",
+            "unavailable",
+            null
+          ]
+        },
+        "readError": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

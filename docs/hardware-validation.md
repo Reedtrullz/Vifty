@@ -307,7 +307,11 @@ when child stdout is not JSON. It stops before `viftyctl run` when
 `pre-capabilities.json` does not advertise
 `policyStatusAvailable: true`, the `run` command, `test` workload, wrapper resource discovery, and safe `runLifecycle` contract, or when readiness is
 blocked. In those cases it writes a blocked summary, captures read-only
-status/audit follow-up, and exits `75`.
+status/audit follow-up, and exits `75`. The blocked summary copies
+`pre-diagnose.json` `appPreferences.startupMode` into
+`preflight.appPreferences` so maintainers can distinguish a one-off active
+lease from a persisted `Curve` or `Fixed` startup default; that field is
+recovery context only, not authorization to request cooling.
 
 To run the same smoke manually:
 

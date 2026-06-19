@@ -513,6 +513,12 @@ write_summary_json() {
     rescue StandardError
       {}
     end
+    diagnose_app_preferences = diagnose["appPreferences"].is_a?(Hash) ? diagnose["appPreferences"] : {}
+    preflight_app_preferences = {
+      "startupMode" => diagnose_app_preferences["startupMode"],
+      "startupModeSource" => diagnose_app_preferences["startupModeSource"],
+      "readError" => diagnose_app_preferences.key?("readError") ? diagnose_app_preferences["readError"] : nil
+    }
     run = if run_status.to_s.empty?
       {
         "exitStatus" => nil,
@@ -593,7 +599,8 @@ write_summary_json() {
         "recommendedRecoveryAction" => diagnose["recommendedRecoveryAction"],
         "safeToRequestCooling" => diagnose["safeToRequestCooling"],
         "daemonControlPathReady" => diagnose["daemonControlPathReady"],
-        "manualControlActive" => diagnose["manualControlActive"]
+        "manualControlActive" => diagnose["manualControlActive"],
+        "appPreferences" => preflight_app_preferences
       },
       "rateLimitRetry" => rate_limit_retry,
       "run" => run,

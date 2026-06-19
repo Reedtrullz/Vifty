@@ -967,6 +967,36 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def normalize_agent_run_smoke_app_preferences(value)
+    return nil unless value.is_a?(Hash)
+
+    {
+      "startupMode" => value.key?("startupMode") ? value["startupMode"] : nil,
+      "startupModeSource" => value.key?("startupModeSource") ? value["startupModeSource"] : nil,
+      "readError" => value.key?("readError") ? value["readError"] : nil
+    }
+  end
+
+  def validate_agent_run_smoke_app_preferences(path, summary, preflight, failures)
+    summary_preferences = normalize_agent_run_smoke_app_preferences(preflight["appPreferences"])
+    return if summary_preferences.nil?
+
+    pre_diagnose = agent_run_smoke_command_json(path, summary, "pre-diagnose", failures)
+    return if pre_diagnose.nil?
+
+    diagnose_preferences = normalize_agent_run_smoke_app_preferences(pre_diagnose["appPreferences"])
+    if diagnose_preferences.nil?
+      return if summary_preferences.values.all?(&:nil?)
+
+      failures << "agent-run-smoke summary preflight.appPreferences must match pre-diagnose appPreferences"
+      return
+    end
+
+    unless summary_preferences == diagnose_preferences
+      failures << "agent-run-smoke summary preflight.appPreferences must match pre-diagnose appPreferences"
+    end
+  end
+
   def validate_agent_run_smoke_summary(path, expected_schema_id, failures)
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
@@ -987,6 +1017,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
     preflight = summary["preflight"].is_a?(Hash) ? summary["preflight"] : {}
     run = summary["run"].is_a?(Hash) ? summary["run"] : {}
+    validate_agent_run_smoke_app_preferences(path, summary, preflight, failures)
     unless summary["commands"].is_a?(Array) && !summary["commands"].empty?
       failures << "agent-run-smoke summary commands must be a non-empty array"
     end

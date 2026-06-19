@@ -808,6 +808,53 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryWhenAppPreferencesDriftFromPreDiagnose() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "passed")
+        var summary = try harness.readJSON(smokeSummaryURL)
+        var preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        preflight["appPreferences"] = [
+            "startupMode": "Curve",
+            "startupModeSource": "persisted",
+            "readError": NSNull()
+        ]
+        summary["preflight"] = preflight
+        try harness.overwriteAgentRunSmokeBundleJSON(
+            summaryURL: smokeSummaryURL,
+            filename: "agent-run-smoke-evidence-summary.json",
+            value: summary,
+            refreshChecksums: false
+        )
+        try harness.overwriteAgentRunSmokeBundleJSON(
+            summaryURL: smokeSummaryURL,
+            filename: "pre-diagnose.json",
+            value: [
+                "state": "ready",
+                "safeToRequestCooling": true,
+                "daemonControlPathReady": true,
+                "appPreferences": [
+                    "startupMode": "Auto",
+                    "startupModeSource": "defaultMissingFile",
+                    "readError": NSNull()
+                ]
+            ],
+            refreshChecksums: true
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary preflight.appPreferences must match pre-diagnose appPreferences"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithDisabledPolicy() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1481,6 +1528,20 @@ private final class ValidationEvidenceReviewHarness {
             atomically: true,
             encoding: .utf8
         )
+    }
+
+    func overwriteAgentRunSmokeBundleJSON(
+        summaryURL: URL,
+        filename: String,
+        value: Any,
+        refreshChecksums: Bool
+    ) throws {
+        let smokeBundleURL = summaryURL.deletingLastPathComponent()
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: smokeBundleURL.appendingPathComponent(filename))
+        if refreshChecksums {
+            try writeAgentRunSmokeChecksums(in: smokeBundleURL)
+        }
     }
 
     func removeChecksumEntry(for filename: String) throws {

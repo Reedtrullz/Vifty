@@ -219,7 +219,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
     func testSmokeCollectorBlocksBeforeRunWhenManualControlIsActive() throws {
         let harness = try AgentRunSmokeEvidenceHarness(
-            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":true,"recommendedRecoveryAction":"restoreAutoBeforeRetry","checks":[]}"#
+            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":true,"recommendedRecoveryAction":"restoreAutoBeforeRetry","appPreferences":{"startupMode":"Curve","startupModeSource":"persisted","readError":null},"checks":[]}"#
         )
 
         let result = try harness.runCollector([
@@ -239,6 +239,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
         XCTAssertEqual(preflight["manualControlActive"] as? Bool, true)
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
+        let appPreferences = try XCTUnwrap(preflight["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
+        XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+        XCTAssertTrue(appPreferences["readError"] is NSNull)
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["skippedReason"] as? String, "manual control active before smoke run")
     }
@@ -647,6 +651,20 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "manualControlActive"
         ] {
             XCTAssertTrue(preflightRequired.contains(field), "preflight should require \(field)")
+        }
+        let preflightProperties = try XCTUnwrap(preflight["properties"] as? [String: Any])
+        XCTAssertEqual(
+            (preflightProperties["appPreferences"] as? [String: Any])?["$ref"] as? String,
+            "#/$defs/appPreferencesDiagnostic"
+        )
+        let appPreferences = try XCTUnwrap(defs["appPreferencesDiagnostic"] as? [String: Any])
+        let appPreferencesRequired = try XCTUnwrap(appPreferences["required"] as? [String])
+        for field in [
+            "startupMode",
+            "startupModeSource",
+            "readError"
+        ] {
+            XCTAssertTrue(appPreferencesRequired.contains(field), "appPreferences should require \(field)")
         }
     }
 }
