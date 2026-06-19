@@ -211,6 +211,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         ])
 
         XCTAssertEqual(result.exitCode, 75, result.stderr)
+        assertSkippedEvidenceOutput(result, harness: harness)
         XCTAssertTrue(result.stdout.contains("installed daemon does not match expected build daemon"), result.stdout)
         XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
 
@@ -253,7 +254,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         ])
 
         XCTAssertEqual(result.exitCode, 75, result.stderr)
-        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout)
+        assertSkippedEvidenceOutput(result, harness: harness)
         XCTAssertEqual(
             try harness.loggedArguments(),
             [
@@ -762,6 +763,21 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(appPreferencesRequired.contains(field), "appPreferences should require \(field)")
         }
+    }
+
+    private func assertSkippedEvidenceOutput(
+        _ result: AgentRunSmokeProcessResult,
+        harness: AgentRunSmokeEvidenceHarness,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped"), result.stdout, file: file, line: line)
+        XCTAssertTrue(
+            result.stdout.contains("Agent run smoke evidence written to \(harness.outputURL.path)"),
+            result.stdout,
+            file: file,
+            line: line
+        )
     }
 }
 

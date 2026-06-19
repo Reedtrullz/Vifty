@@ -785,6 +785,7 @@ if [[ -n "${skip_reason}" ]]; then
   write_summary_json "blocked" "true" "false" "" "${skip_reason}" "" "" "false" "" ""
   write_checksums
   echo "Agent run smoke skipped: ${skip_reason}"
+  echo "Agent run smoke evidence written to ${OUTPUT_DIR}"
   exit 75
 fi
 
