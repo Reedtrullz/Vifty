@@ -26,7 +26,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("workload wrappers for Swift, Xcode, Make, npm, cargo, pytest, local-model, and custom runs"))
         XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`"))
         XCTAssertTrue(readme.contains("Use `VIFTY_GUARDED_RUN_FORCE_RETRY=1` only for supervised runs where the user approved waiting for `retryAfterSeconds` and retrying one rate-limited prepare."))
-        XCTAssertTrue(readme.contains("The guarded wrapper still refuses helper-repair, restore-first, backoff, policy-inspection, hardware-evidence, and daemon-control-unavailable states, and it refuses to combine uncooled fallback with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`."))
+        XCTAssertTrue(readme.contains("The guarded wrapper still refuses helper-repair, restore-first, manual-control-active, backoff, policy-inspection, hardware-evidence, and daemon-control-unavailable states, and it refuses to combine uncooled fallback with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`."))
+        XCTAssertTrue(readme.contains("Do not catch guarded-run failures and rerun workloads without cooling."))
         XCTAssertTrue(readme.contains("Do not fall back to `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or direct helper writes."))
     }
 
