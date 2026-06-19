@@ -129,6 +129,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
         XCTAssertEqual(run["resolvedChildExecutable"] as? String, "/bin/sleep")
+        XCTAssertEqual(run["skipReasons"] as? [String], [])
         let rateLimitRetry = try XCTUnwrap(summary["rateLimitRetry"] as? [String: Any])
         XCTAssertEqual(rateLimitRetry["attempted"] as? Bool, false)
         XCTAssertTrue(rateLimitRetry["retryAfterSeconds"] is NSNull)
@@ -227,6 +228,45 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, true)
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["skippedReason"] as? String, "installed daemon does not match expected build daemon")
+        XCTAssertEqual(run["skipReasons"] as? [String], ["installed daemon does not match expected build daemon"])
+    }
+
+    func testSmokeCollectorRecordsAllKnownSkipReasonsWhenMultiplePreflightBlockersExist() throws {
+        let harness = try AgentRunSmokeEvidenceHarness(
+            diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"restoreAutoBeforeRequestingCooling","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"recommendedRecoveryAction":"restoreAutoBeforeRetry","appPreferences":{"startupMode":"Curve","startupModeSource":"persisted","readError":null},"checks":[]}"#,
+            expectedDaemonMatchesInstalled: false
+        )
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke skipped: installed daemon does not match expected build daemon"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Additional skip blockers:"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("- manual control active before smoke run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
+        XCTAssertEqual(preflight["manualControlActive"] as? Bool, true)
+        let appPreferences = try XCTUnwrap(preflight["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["skippedReason"] as? String, "installed daemon does not match expected build daemon")
+        XCTAssertEqual(run["skipReasons"] as? [String], [
+            "installed daemon does not match expected build daemon",
+            "manual control active before smoke run",
+            "diagnose reported safeToRequestCooling is not true",
+            "diagnose did not report manualControlActive=false",
+            "diagnose recommended agent action is not request cooling"
+        ])
     }
 
     func testSmokeCollectorRejectsLocalAdHocProvenanceWithoutSourceSHA() throws {
@@ -289,6 +329,13 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "readiness blocked before smoke run")
+        XCTAssertEqual(run["skipReasons"] as? [String], [
+            "diagnose preflight did not complete successfully",
+            "diagnose reported safeToRequestCooling is not true",
+            "diagnose reported daemonControlPathReady is not true",
+            "diagnose did not report manualControlActive=false",
+            "diagnose recommended agent action is not request cooling"
+        ])
         XCTAssertTrue(run["coolingLeasePrepared"] is NSNull)
         XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
         XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
@@ -324,6 +371,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(appPreferences["readError"] is NSNull)
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["skippedReason"] as? String, "manual control active before smoke run")
+        XCTAssertEqual(run["skipReasons"] as? [String], [
+            "manual control active before smoke run",
+            "diagnose did not report manualControlActive=false"
+        ])
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenCapabilitiesDoNotAdvertiseSafeRunLifecycle() throws {
@@ -362,6 +413,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
+        XCTAssertEqual(run["skipReasons"] as? [String], ["capabilities preflight did not advertise safe viftyctl run"])
         XCTAssertTrue(run["coolingLeasePrepared"] is NSNull)
         XCTAssertTrue(run["autoRestoreAttempted"] is NSNull)
         XCTAssertTrue(run["autoRestoreSucceeded"] is NSNull)
@@ -555,6 +607,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
         XCTAssertTrue(run["resolvedChildExecutable"] is NSNull)
+        XCTAssertEqual(run["skipReasons"] as? [String], [])
     }
 
     func testSmokeCollectorRunsWhenReadinessAllowsCoolingWithCaution() throws {
@@ -640,6 +693,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
         XCTAssertEqual(run["resolvedChildExecutable"] as? String, "/bin/sleep")
+        XCTAssertEqual(run["skipReasons"] as? [String], [])
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
         XCTAssertEqual(commands.count, 8)
 
@@ -724,6 +778,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
         }
+        let runProperties = try XCTUnwrap(run["properties"] as? [String: Any])
+        XCTAssertNotNil(runProperties["skipReasons"], "run should document optional skipReasons")
         let rateLimitRetry = try XCTUnwrap(defs["rateLimitRetry"] as? [String: Any])
         let rateLimitRetryRequired = try XCTUnwrap(rateLimitRetry["required"] as? [String])
         for field in [

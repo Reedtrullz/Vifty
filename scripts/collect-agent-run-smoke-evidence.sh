@@ -553,11 +553,12 @@ write_summary_json() {
   local cooling_commands_run="$3"
   local run_status="$4"
   local skipped_reason="$5"
-  local run_stdout_name="$6"
-  local run_stderr_name="$7"
-  local rate_limit_retry_attempted="$8"
-  local rate_limit_retry_after="$9"
-  local rate_limit_initial_status="${10}"
+  local skip_reasons="$6"
+  local run_stdout_name="$7"
+  local run_stderr_name="$8"
+  local rate_limit_retry_attempted="$9"
+  local rate_limit_retry_after="${10}"
+  local rate_limit_initial_status="${11}"
 
   ruby -rjson -e '
     manifest_path, generated_at, viftyctl, install_source, source_ref,
@@ -566,9 +567,9 @@ write_summary_json() {
       installed_daemon_sha256, expected_daemon_path, expected_daemon_sha256,
       daemon_matches_expected, daemon_match_required, workload, duration, max_rpm_percent,
       reason, status, read_only, cooling_commands_run, run_status,
-      skipped_reason, audit_limit, pre_capabilities_path, pre_diagnose_path,
+      skipped_reason, skip_reasons_text, audit_limit, pre_capabilities_path, pre_diagnose_path,
       run_json_path, run_stdout_name, run_stderr_name, rate_limit_retry_attempted,
-      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(34)
+      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(35)
 
     def boolean_or_nil(value)
       [true, false].include?(value) ? value : nil
@@ -609,6 +610,7 @@ write_summary_json() {
       "startupModeSource" => diagnose_app_preferences["startupModeSource"],
       "readError" => diagnose_app_preferences.key?("readError") ? diagnose_app_preferences["readError"] : nil
     }
+    skip_reasons = skip_reasons_text.to_s.split("\n").reject(&:empty?)
     run = if run_status.to_s.empty?
       {
         "schemaVersion" => nil,
@@ -618,6 +620,7 @@ write_summary_json() {
         "stdout" => nil,
         "stderr" => nil,
         "skippedReason" => skipped_reason,
+        "skipReasons" => skip_reasons,
         "coolingLeasePrepared" => nil,
         "autoRestoreAttempted" => nil,
         "autoRestoreSucceeded" => nil,
@@ -650,6 +653,7 @@ write_summary_json() {
         "stdout" => run_stdout_name,
         "stderr" => run_stderr_name,
         "skippedReason" => nil,
+        "skipReasons" => [],
         "coolingLeasePrepared" => cooling_lease_prepared,
         "autoRestoreAttempted" => auto_restore_attempted,
         "autoRestoreSucceeded" => auto_restore_succeeded,
@@ -728,7 +732,7 @@ write_summary_json() {
     "test" "${DURATION}" \
     "${MAX_RPM_PERCENT}" "${REASON}" "${status}" "${read_only}" \
     "${cooling_commands_run}" "${run_status}" "${skipped_reason}" \
-    "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-capabilities.json" \
+    "${skip_reasons}" "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-capabilities.json" \
     "${OUTPUT_DIR}/pre-diagnose.json" \
     "${OUTPUT_DIR}/${run_stdout_name}" "${run_stdout_name}" "${run_stderr_name}" \
     "${rate_limit_retry_attempted}" "${rate_limit_retry_after}" \
@@ -764,19 +768,64 @@ IFS=$'\t' read -r readiness_state safe_to_request daemon_ready manual_control_ac
   diagnose_field_report "${OUTPUT_DIR}/pre-diagnose.json"
 )
 
-skip_reason=""
+skip_reasons=()
+capabilities_blocked="false"
+daemon_match_blocked="false"
+manual_control_blocked="false"
+readiness_blocked="false"
 if [[ "${pre_capabilities_status}" -ne 0 || "${capabilities_safe}" != "true" ]]; then
-  skip_reason="capabilities preflight did not advertise safe viftyctl run"
-elif [[ "${REQUIRE_DAEMON_MATCH}" -eq 1 && "${DAEMON_MATCHES_EXPECTED}" != "true" ]]; then
-  skip_reason="installed daemon does not match expected build daemon"
-elif [[ "${manual_control_active}" == "true" ]]; then
-  skip_reason="manual control active before smoke run"
-elif [[ "${pre_diagnose_status}" -ne 0 ||
-        "${safe_to_request}" != "true" ||
-        "${daemon_ready}" != "true" ||
-        "${manual_control_active}" != "false" ||
-        ( "${agent_action}" != "requestCooling" && "${agent_action}" != "requestCoolingWithCaution" ) ]]; then
-  skip_reason="readiness blocked before smoke run"
+  capabilities_blocked="true"
+  skip_reasons+=("capabilities preflight did not advertise safe viftyctl run")
+fi
+if [[ "${REQUIRE_DAEMON_MATCH}" -eq 1 && "${DAEMON_MATCHES_EXPECTED}" != "true" ]]; then
+  daemon_match_blocked="true"
+  skip_reasons+=("installed daemon does not match expected build daemon")
+fi
+if [[ "${manual_control_active}" == "true" ]]; then
+  manual_control_blocked="true"
+  skip_reasons+=("manual control active before smoke run")
+fi
+if [[ "${pre_diagnose_status}" -ne 0 ]]; then
+  readiness_blocked="true"
+  skip_reasons+=("diagnose preflight did not complete successfully")
+fi
+if [[ "${safe_to_request}" != "true" ]]; then
+  readiness_blocked="true"
+  skip_reasons+=("diagnose reported safeToRequestCooling is not true")
+fi
+if [[ "${daemon_ready}" != "true" ]]; then
+  readiness_blocked="true"
+  skip_reasons+=("diagnose reported daemonControlPathReady is not true")
+fi
+if [[ "${manual_control_active}" != "false" ]]; then
+  readiness_blocked="true"
+  skip_reasons+=("diagnose did not report manualControlActive=false")
+fi
+if [[ "${agent_action}" != "requestCooling" && "${agent_action}" != "requestCoolingWithCaution" ]]; then
+  readiness_blocked="true"
+  skip_reasons+=("diagnose recommended agent action is not request cooling")
+fi
+
+skip_reason=""
+if [[ "${#skip_reasons[@]}" -gt 0 ]]; then
+  if [[ "${capabilities_blocked}" == "true" ]]; then
+    skip_reason="capabilities preflight did not advertise safe viftyctl run"
+  elif [[ "${daemon_match_blocked}" == "true" ]]; then
+    skip_reason="installed daemon does not match expected build daemon"
+  elif [[ "${manual_control_blocked}" == "true" ]]; then
+    skip_reason="manual control active before smoke run"
+  elif [[ "${readiness_blocked}" == "true" ]]; then
+    skip_reason="readiness blocked before smoke run"
+  else
+    skip_reason="${skip_reasons[0]}"
+  fi
+  skip_reasons_text=""
+  for reason in "${skip_reasons[@]}"; do
+    if [[ -n "${skip_reasons_text}" ]]; then
+      skip_reasons_text+=$'\n'
+    fi
+    skip_reasons_text+="${reason}"
+  done
 fi
 
 if [[ -n "${skip_reason}" ]]; then
@@ -787,9 +836,13 @@ if [[ -n "${skip_reason}" ]]; then
   write_readme
   write_metadata "true" "false"
   write_daemon_runtime
-  write_summary_json "blocked" "true" "false" "" "${skip_reason}" "" "" "false" "" ""
+  write_summary_json "blocked" "true" "false" "" "${skip_reason}" "${skip_reasons_text}" "" "" "false" "" ""
   write_checksums
   echo "Agent run smoke skipped: ${skip_reason}"
+  if [[ "${#skip_reasons[@]}" -gt 1 ]]; then
+    printf 'Additional skip blockers:\n'
+    printf -- '- %s\n' "${skip_reasons[@]:1}"
+  fi
   echo "Agent run smoke evidence written to ${OUTPUT_DIR}"
   exit 75
 fi
@@ -850,7 +903,7 @@ fi
 write_readme
 write_metadata "false" "true"
 write_daemon_runtime
-write_summary_json "${smoke_status}" "false" "true" "${run_status}" "" \
+write_summary_json "${smoke_status}" "false" "true" "${run_status}" "" "" \
   "${run_stdout_name}" "${run_stderr_name}" "${rate_limit_retry_attempted}" \
   "${rate_limit_retry_after}" "${rate_limit_initial_status}"
 write_checksums

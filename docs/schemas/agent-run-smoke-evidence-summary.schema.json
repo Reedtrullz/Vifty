@@ -402,7 +402,15 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "Headline reason the collector skipped viftyctl run before cooling. Use skipReasons for the full ordered blocker list when present."
+        },
+        "skipReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of all known preflight blockers that caused the collector to skip viftyctl run before requesting cooling. Empty when run was attempted."
         },
         "schemaVersion": {
           "type": [

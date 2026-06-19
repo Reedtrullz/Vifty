@@ -115,6 +115,8 @@ The agent-run smoke summary declares `schemaID: https://vifty.local/schemas/agen
 
 The agent-run smoke result uses the same values as the manual smoke test and is preserved as developer-workload proof for the guarded `viftyctl run` lifecycle, but it does not replace `manualSmokeTestResult: "passed-auto-restored"` for validated hardware claims. A `failed` agent-run smoke result fails supported-hardware review so unsafe agent/build/test cooling evidence cannot be indexed as supported.
 
+Blocked agent-run smoke summaries keep `run.skippedReason` as the headline blocker for older tooling and write `run.skipReasons[]` with every known preflight blocker, such as a stale installed daemon plus active manual control. Use the full list for triage; do not fix only the headline blocker and assume the machine is ready for cooling.
+
 After several reports are reviewed, build a local index for maintainers:
 
 ```sh

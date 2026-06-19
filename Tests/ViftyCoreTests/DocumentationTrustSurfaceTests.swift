@@ -939,6 +939,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("`checksums.tsv` must cover and recompute the summary, manifest, command stdout/stderr, and status files"))
         XCTAssertTrue(hardwareValidation.contains("`coolingLeasePrepared=true`, `autoRestoreAttempted=true`, `autoRestoreSucceeded=true`, `childExitCode=0`, and, when `preflight.resolvedChildExecutableReported=true`, an absolute `resolvedChildExecutable`"))
         XCTAssertTrue(hardwareValidation.contains("matches the captured final `viftyctl-run*.json` file"))
+        XCTAssertTrue(hardwareValidation.contains("Blocked agent-run smoke summaries keep `run.skippedReason` as the headline blocker"))
+        XCTAssertTrue(hardwareValidation.contains("write `run.skipReasons[]` with every known preflight blocker"))
         XCTAssertTrue(hardwareValidation.contains("not read-only when readiness is"))
         XCTAssertTrue(hardwareValidation.contains("with at most one cooldown retry when the daemon tells"))
         XCTAssertTrue(hardwareValidation.contains("records retry metadata in `rateLimitRetry`"))
