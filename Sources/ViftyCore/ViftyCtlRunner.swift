@@ -491,6 +491,33 @@ public struct ViftyCtlAuditReport: Codable, Equatable, Sendable {
     }
 }
 
+public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
+    public var schemaVersion: Int
+    public var schemaID: String
+    public var generatedAt: Date
+    public var enabled: Bool
+    public var activeLease: AgentCoolingLease?
+    public var lastDecision: AgentControlDecision?
+    public var lastErrorCode: AgentControlErrorCode?
+    public var policy: AgentControlPolicySnapshot?
+
+    public init(
+        schemaVersion: Int = 1,
+        schemaID: String = ViftyCtlSchemaReferences.schemaIDs.status,
+        generatedAt: Date,
+        status: AgentControlStatus
+    ) {
+        self.schemaVersion = schemaVersion
+        self.schemaID = schemaID
+        self.generatedAt = generatedAt
+        self.enabled = status.enabled
+        self.activeLease = status.activeLease
+        self.lastDecision = status.lastDecision
+        self.lastErrorCode = status.lastErrorCode
+        self.policy = status.policy
+    }
+}
+
 public protocol ViftyCtlAgentControlClient: Sendable {
     func snapshot() async throws -> HardwareSnapshot
     func status() async throws -> AgentControlStatus
@@ -592,7 +619,7 @@ public struct ViftyCtlRunner: Sendable {
             switch command {
             case .status(let json):
                 let status = try await client.status()
-                let stdout = try format(status, json: json)
+                let stdout = try formatStatus(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
             case .capabilities(let json):
                 let capabilities = await capabilitiesReport()
@@ -635,7 +662,7 @@ public struct ViftyCtlRunner: Sendable {
                 return ViftyCtlResult(stdout: formatHumanReadable(report) + "\n")
             case .prepare(let request, let json, let force):
                 let status = try await prepareWithOptionalForceRetry(request, force: force)
-                let stdout = try format(status, json: json)
+                let stdout = try formatStatus(status, json: json)
                 return ViftyCtlResult(
                     stdout: stdout,
                     exitCode: prepareSucceeded(status, request: request) ? 0 : 1
@@ -643,7 +670,7 @@ public struct ViftyCtlRunner: Sendable {
             case .restoreAuto(let reason, let json):
                 let status = try await client.restore(reason: reason)
                 manualControlClearer()
-                let stdout = try format(status, json: json)
+                let stdout = try formatStatus(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
             case .run(let request, let childArguments, let json, let force):
                 let resolvedChildArguments: [String]
@@ -904,6 +931,13 @@ public struct ViftyCtlRunner: Sendable {
         }
 
         return String(describing: value) + "\n"
+    }
+
+    private func formatStatus(_ status: AgentControlStatus, json: Bool) throws -> String {
+        if json {
+            return try encodeJSON(ViftyCtlStatusReport(generatedAt: now(), status: status)) + "\n"
+        }
+        return try format(status, json: false)
     }
 
     private func encodeJSON<T: Encodable>(_ value: T) throws -> String {

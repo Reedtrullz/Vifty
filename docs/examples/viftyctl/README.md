@@ -11,6 +11,11 @@ Command-error examples include the stable command-error schema ID,
 `capabilities.schemaIDs.commandError` before agents trust recovery, retry, or
 cleanup fields.
 
+Status examples include the stable status schema ID,
+`https://vifty.local/schemas/viftyctl-status.schema.json`, matching
+`capabilities.schemaIDs.status` before agents trust lease, policy, or decision
+fields.
+
 Files:
 
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`

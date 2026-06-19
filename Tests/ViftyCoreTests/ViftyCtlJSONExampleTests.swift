@@ -211,6 +211,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
     }
 
     func testStatusActiveLeaseExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlStatusReport.self, from: "status-active-lease.json")
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.schemaID, "https://vifty.local/schemas/viftyctl-status.schema.json")
+        XCTAssertEqual(report.generatedAt, Date(timeIntervalSinceReferenceDate: 700_000_900))
+        XCTAssertEqual(report.activeLease?.id, "lease-example-test")
+
         let status = try decode(AgentControlStatus.self, from: "status-active-lease.json")
 
         XCTAssertTrue(status.enabled)
@@ -518,6 +524,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(definitionEnumValues(named: "workload", in: statusDefinitions), ["build", "test", "render", "localModel", "custom"])
         XCTAssertEqual(definitionEnumValues(named: "errorCode", in: statusDefinitions), agentErrorCodeStrings)
         let statusExample = try readJSON(fixtureURL("status-active-lease.json"))
+        XCTAssertEqual(statusExample["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(statusExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
+        XCTAssertNotNil(statusExample["generatedAt"])
         let activeLease = try XCTUnwrap(statusExample["activeLease"] as? [String: Any])
         try assertRequiredFields(definition: "lease", in: statusDefinitions, arePresentIn: activeLease, context: "active lease")
         try assertRequiredFields(definition: "request", in: statusDefinitions, arePresentIn: activeLease["request"] as? [String: Any], context: "lease request")

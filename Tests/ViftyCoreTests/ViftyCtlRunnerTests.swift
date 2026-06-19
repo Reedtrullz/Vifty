@@ -22,13 +22,20 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 lastErrorCode: nil
             )
         )
-        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
 
         let result = try await runner.run(.status(json: true))
 
         XCTAssertEqual(result.exitCode, 0)
         let data = try XCTUnwrap(result.stdout.data(using: .utf8))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
+        XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
         XCTAssertEqual(json["enabled"] as? Bool, true)
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount
@@ -889,6 +896,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(result.stderr, "")
         let data = try XCTUnwrap(result.stdout.data(using: .utf8))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(json["lastErrorCode"] as? String, AgentControlErrorCode.unsupportedHardware.rawValue)
         let decision = try XCTUnwrap(json["lastDecision"] as? [String: Any])
         XCTAssertEqual(decision["message"] as? String, "Agent cooling is supported only on Apple Silicon MacBook Pro hardware.")
@@ -965,6 +974,10 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
         let restore = try await runner.run(.restoreAuto(reason: "clear manual marker", json: true))
         XCTAssertEqual(restore.exitCode, 0)
+        let restoreData = try XCTUnwrap(restore.stdout.data(using: .utf8))
+        let restoreJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: restoreData) as? [String: Any])
+        XCTAssertEqual(restoreJSON["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(restoreJSON["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertFalse(manualControl.isActive)
 
         let afterRestore = try await runner.run(.diagnose(json: true))

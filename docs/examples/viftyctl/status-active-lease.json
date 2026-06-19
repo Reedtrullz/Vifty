@@ -37,5 +37,8 @@
     "maximumAllowedRPMPercent": 80,
     "minimumAgentRPMPercent": 45,
     "prepareCooldownSeconds": 30
-  }
+  },
+  "generatedAt": 700000900,
+  "schemaID": "https://vifty.local/schemas/viftyctl-status.schema.json",
+  "schemaVersion": 1
 }

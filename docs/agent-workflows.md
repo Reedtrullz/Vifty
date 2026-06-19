@@ -200,13 +200,16 @@ For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell ru
 
 The status response includes:
 
+- `schemaVersion`
+- `schemaID`
+- `generatedAt`
 - `enabled`
 - `activeLease`
 - `lastDecision`
 - `lastErrorCode`
 - `policy`
 
-`prepare` exits with code `0` only when the daemon returns an active lease matching the request. It exits nonzero when cooling is denied or the returned status is not safe to rely on. With `--json`, the structured status is still printed so agents can inspect `lastDecision.errorCode`, `lastDecision.message`, and `lastDecision.retryAfterSeconds`.
+Successful `status --json`, `prepare --json`, and `restore-auto --json` payloads identify this shape with `schemaVersion: 1` and `schemaID: "https://vifty.local/schemas/viftyctl-status.schema.json"` while keeping the operational fields at the top level. `prepare` exits with code `0` only when the daemon returns an active lease matching the request. It exits nonzero when cooling is denied or the returned status is not safe to rely on. With `--json`, the structured status is still printed so agents can inspect `lastDecision.errorCode`, `lastDecision.message`, and `lastDecision.retryAfterSeconds`.
 
 Known `lastDecision.errorCode` values include:
 

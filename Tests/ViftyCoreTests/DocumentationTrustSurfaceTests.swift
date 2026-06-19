@@ -20,6 +20,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("`recommendedAgentAction`"))
         XCTAssertTrue(readme.contains("`recommendedRecoveryAction`"))
         XCTAssertTrue(readme.contains("When `restore-auto` succeeds, the CLI also clears the local `manualControlActive` marker"))
+        XCTAssertTrue(readme.contains("Successful `status --json`, `prepare --json`, and `restore-auto --json` payloads include `schemaVersion: 1`, `schemaID: \"https://vifty.local/schemas/viftyctl-status.schema.json\"`, and `generatedAt`"))
+        XCTAssertTrue(readme.contains("while keeping `enabled`, `activeLease`, `lastDecision`, `lastErrorCode`, and `policy` at the top level"))
         XCTAssertTrue(readme.contains("a successful CLI `restore-auto` clears that same local marker before the next diagnose"))
         XCTAssertTrue(readme.contains("If `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and switch Vifty/default startup mode to Auto before another cooling request."))
         XCTAssertTrue(readme.contains("`examples/viftyctl/guarded-run.sh ... -- <command>`"))
@@ -1058,6 +1060,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentWorkflows.contains("advertised command-error schema identity"))
         XCTAssertTrue(agentWorkflows.contains("capabilities.schemaIDs.commandError"))
         XCTAssertTrue(agentWorkflows.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
+        XCTAssertTrue(agentWorkflows.contains("Successful `status --json`, `prepare --json`, and `restore-auto --json` payloads identify this shape with `schemaVersion: 1` and `schemaID: \"https://vifty.local/schemas/viftyctl-status.schema.json\""))
+        XCTAssertTrue(agentWorkflows.contains("- `schemaVersion`\n- `schemaID`\n- `generatedAt`\n- `enabled`"))
         XCTAssertTrue(agentWorkflows.contains("After a successful direct `restore-auto`, re-run `diagnose --json`; the CLI clears the same local `manualControlActive` marker"))
         XCTAssertTrue(agentWorkflows.contains("A successful CLI `restore-auto` clears the local manual-control marker"))
         XCTAssertTrue(agentWorkflows.contains("Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto"))
@@ -1219,6 +1223,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(jsonExampleReadme.contains("stable command-error schema ID"))
         XCTAssertTrue(jsonExampleReadme.contains("capabilities.schemaIDs.commandError"))
         XCTAssertTrue(jsonExampleReadme.contains("https://vifty.local/schemas/viftyctl-command-error.schema.json"))
+        XCTAssertTrue(jsonExampleReadme.contains("stable status schema ID"))
+        XCTAssertTrue(jsonExampleReadme.contains("capabilities.schemaIDs.status"))
+        XCTAssertTrue(jsonExampleReadme.contains("https://vifty.local/schemas/viftyctl-status.schema.json"))
         XCTAssertTrue(jsonExampleReadme.contains("diagnose-degraded-manual-control.json"))
     }
 

@@ -2,9 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-status.schema.json",
   "title": "viftyctl status --json report",
-  "description": "Machine-readable agent-control status emitted by viftyctl status --json, prepare --json, and restore-auto --json.",
+  "description": "Machine-readable agent-control status emitted by viftyctl status --json, prepare --json, and restore-auto --json. Successful payloads self-identify with schemaVersion and schemaID while keeping lease, decision, and policy fields top-level.",
   "type": "object",
   "required": [
+    "schemaVersion",
+    "schemaID",
+    "generatedAt",
     "enabled",
     "activeLease",
     "lastDecision",
@@ -12,6 +15,15 @@
     "policy"
   ],
   "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/viftyctl-status.schema.json"
+    },
+    "generatedAt": {
+      "type": "number"
+    },
     "enabled": {
       "type": "boolean"
     },
