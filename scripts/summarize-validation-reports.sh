@@ -196,6 +196,14 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       failures << "#{path} agentRunSmokeResult is not a supported value"
       valid = false
     end
+    unless ["", "Auto", "Curve", "Fixed"].include?(result.fetch("agentRunSmokeStartupMode", "").to_s)
+      failures << "#{path} agentRunSmokeStartupMode is not a supported value"
+      valid = false
+    end
+    unless ["", "persisted", "defaultMissingFile", "defaultMissingKey", "unreadable", "unavailable"].include?(result.fetch("agentRunSmokeStartupModeSource", "").to_s)
+      failures << "#{path} agentRunSmokeStartupModeSource is not a supported value"
+      valid = false
+    end
 
     unless %w[
       requestCooling
@@ -548,6 +556,9 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
       "agentRunSmokeValidated" => boolean_string(agent_run_smoke_validated),
+      "agentRunSmokeStartupMode" => result["agentRunSmokeStartupMode"].to_s,
+      "agentRunSmokeStartupModeSource" => result["agentRunSmokeStartupModeSource"].to_s,
+      "agentRunSmokeStartupModeReadError" => result["agentRunSmokeStartupModeReadError"].to_s,
       "modelIdentifier" => model_identifier,
       "modelFamily" => model_family,
       "isAppleSilicon" => boolean_string(result["isAppleSilicon"]),
@@ -641,6 +652,9 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     agentRunSmokeResult
     agentRunSmokeSource
     agentRunSmokeValidated
+    agentRunSmokeStartupMode
+    agentRunSmokeStartupModeSource
+    agentRunSmokeStartupModeReadError
     modelIdentifier
     modelFamily
     isAppleSilicon

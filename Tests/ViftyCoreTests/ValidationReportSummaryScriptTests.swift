@@ -21,7 +21,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             manualSmokeTestResult: "passed-auto-restored",
             manualSmokeTestSource: "https://github.com/reidar/vifty/issues/42",
             agentRunSmokeResult: "passed-auto-restored",
-            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke"
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke",
+            agentRunSmokeStartupMode: "Auto",
+            agentRunSmokeStartupModeSource: "persisted"
         )
         try harness.writeReviewResult(
             at: "unsupported/review-result.json",
@@ -66,7 +68,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
-        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tMacBookPro18,3\tMacBookPro18"))
+        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tAuto\tpersisted\t\"\"\tMacBookPro18,3\tMacBookPro18"))
         XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
         XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
@@ -98,6 +100,11 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reports.contains { ($0["recommendedAgentAction"] as? String) == "doNotRequestCooling" })
         XCTAssertTrue(reports.contains { ($0["recommendedRecoveryAction"] as? String) == "collectHardwareEvidence" })
         XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "MacBookPro18,3" && ($0["modelFamily"] as? String) == "MacBookPro18" })
+        XCTAssertTrue(reports.contains {
+            ($0["agentRunSmokeStartupMode"] as? String) == "Auto" &&
+                ($0["agentRunSmokeStartupModeSource"] as? String) == "persisted" &&
+                ($0["agentRunSmokeStartupModeReadError"] as? String) == ""
+        })
         XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "Mac14,2" && ($0["modelFamily"] as? String) == "Mac14" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
@@ -305,6 +312,9 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reportRequired.contains("modelFamily"))
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
         XCTAssertTrue(reportRequired.contains("manualControlActive"))
+        XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupMode"))
+        XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeSource"))
+        XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeReadError"))
         XCTAssertTrue(reportRequired.contains("recommendedAgentAction"))
         XCTAssertTrue(reportRequired.contains("recommendedRecoveryAction"))
         let agentAction = try XCTUnwrap(defs["readinessAgentAction"] as? [String: Any])
@@ -324,6 +334,11 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let reportProperties = try XCTUnwrap(report["properties"] as? [String: Any])
         let reportGeneratedAt = try XCTUnwrap(reportProperties["reviewGeneratedAtUTC"] as? [String: Any])
         XCTAssertEqual(reportGeneratedAt["$ref"] as? String, "#/$defs/utcTimestamp")
+        let reportStartupMode = try XCTUnwrap(reportProperties["agentRunSmokeStartupMode"] as? [String: Any])
+        XCTAssertEqual(
+            reportStartupMode["description"] as? String,
+            "Read-only startup mode copied from reviewed supervised agent-run smoke preflight app preferences when present."
+        )
         XCTAssertNotNil(defs["versionTag"] as? [String: Any])
         let reportAllOf = try XCTUnwrap(report["allOf"] as? [[String: Any]])
         XCTAssertTrue(reportAllOf.contains { condition in
@@ -374,6 +389,13 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(required.contains(field), "review-result schema should require \(field)")
         }
+        XCTAssertFalse(required.contains("agentRunSmokeStartupMode"))
+        XCTAssertFalse(required.contains("agentRunSmokeStartupModeSource"))
+        XCTAssertFalse(required.contains("agentRunSmokeStartupModeReadError"))
+
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let startupMode = try XCTUnwrap(properties["agentRunSmokeStartupMode"] as? [String: Any])
+        XCTAssertEqual(startupMode["$ref"] as? String, "#/$defs/agentRunSmokeStartupMode")
 
         let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
         let installSource = try XCTUnwrap(defs["installSource"] as? [String: Any])
@@ -765,6 +787,9 @@ private final class ValidationReportSummaryHarness {
         manualSmokeTestSource: String = "",
         agentRunSmokeResult: String = "not-recorded",
         agentRunSmokeSource: String = "",
+        agentRunSmokeStartupMode: String = "",
+        agentRunSmokeStartupModeSource: String = "",
+        agentRunSmokeStartupModeReadError: String = "",
         failures: [String] = [],
         warnings: [String] = [],
         readOnly: Bool = true,
@@ -809,6 +834,9 @@ private final class ValidationReportSummaryHarness {
             "manualSmokeTestSource": manualSmokeTestSource,
             "agentRunSmokeResult": agentRunSmokeResult,
             "agentRunSmokeSource": agentRunSmokeSource,
+            "agentRunSmokeStartupMode": agentRunSmokeStartupMode,
+            "agentRunSmokeStartupModeSource": agentRunSmokeStartupModeSource,
+            "agentRunSmokeStartupModeReadError": agentRunSmokeStartupModeReadError,
             "failures": failures,
             "warnings": warnings
         ]

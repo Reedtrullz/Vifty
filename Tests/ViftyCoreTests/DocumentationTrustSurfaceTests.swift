@@ -428,7 +428,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("validatedHardwareReportsByModelFamily"))
         XCTAssertTrue(hardwareValidation.contains("countsByManualControlActive"))
         XCTAssertTrue(hardwareValidation.contains("The optional `--output-markdown` file is a conservative compatibility matrix draft"))
-        XCTAssertTrue(hardwareValidation.contains("`recommendedAgentAction`, `recommendedRecoveryAction`, `daemonControlPathReady`, `manualControlActive`, `agentRunSmokeResult`, and `agentRunSmokeSource`"))
+        XCTAssertTrue(hardwareValidation.contains("`recommendedAgentAction`, `recommendedRecoveryAction`, `daemonControlPathReady`, `manualControlActive`, `agentRunSmokeResult`, `agentRunSmokeSource`, `agentRunSmokeStartupMode`, `agentRunSmokeStartupModeSource`, and `agentRunSmokeStartupModeReadError`"))
         XCTAssertTrue(hardwareValidation.contains("rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof"))
         XCTAssertTrue(hardwareValidation.contains("Source-first and unsigned-dev `v1.1.1` hardware reports may leave release-artifact verifier evidence skipped or absent."))
         XCTAssertTrue(issueTemplate.contains("For `v1.1.1`, choose **Source build from tag**"))

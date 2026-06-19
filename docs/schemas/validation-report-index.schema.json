@@ -149,6 +149,24 @@
         "failed"
       ]
     },
+    "agentRunSmokeStartupMode": {
+      "enum": [
+        "",
+        "Auto",
+        "Curve",
+        "Fixed"
+      ]
+    },
+    "agentRunSmokeStartupModeSource": {
+      "enum": [
+        "",
+        "persisted",
+        "defaultMissingFile",
+        "defaultMissingKey",
+        "unreadable",
+        "unavailable"
+      ]
+    },
     "installSource": {
       "enum": [
         "",
@@ -235,6 +253,9 @@
         "agentRunSmokeResult",
         "agentRunSmokeSource",
         "agentRunSmokeValidated",
+        "agentRunSmokeStartupMode",
+        "agentRunSmokeStartupModeSource",
+        "agentRunSmokeStartupModeReadError",
         "modelIdentifier",
         "modelFamily",
         "isAppleSilicon",
@@ -301,6 +322,18 @@
         },
         "agentRunSmokeValidated": {
           "$ref": "#/$defs/booleanString"
+        },
+        "agentRunSmokeStartupMode": {
+          "$ref": "#/$defs/agentRunSmokeStartupMode",
+          "description": "Read-only startup mode copied from reviewed supervised agent-run smoke preflight app preferences when present."
+        },
+        "agentRunSmokeStartupModeSource": {
+          "$ref": "#/$defs/agentRunSmokeStartupModeSource",
+          "description": "Read-only source for agentRunSmokeStartupMode copied from reviewed supervised agent-run smoke preflight app preferences when present."
+        },
+        "agentRunSmokeStartupModeReadError": {
+          "type": "string",
+          "description": "Read-only app-preferences diagnostic read error copied from reviewed supervised agent-run smoke preflight evidence when present."
         },
         "modelIdentifier": {
           "type": "string"

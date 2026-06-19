@@ -153,6 +153,18 @@
       "type": "string",
       "description": "Share-safe source reference for supervised agent-run smoke evidence, such as an issue URL or bundle-local summary path; auto-derived local filesystem paths should not be absolute."
     },
+    "agentRunSmokeStartupMode": {
+      "$ref": "#/$defs/agentRunSmokeStartupMode",
+      "description": "Read-only startup mode copied from reviewed supervised agent-run smoke preflight app preferences when present. This is not a cooling authorization."
+    },
+    "agentRunSmokeStartupModeSource": {
+      "$ref": "#/$defs/agentRunSmokeStartupModeSource",
+      "description": "Read-only source for agentRunSmokeStartupMode copied from reviewed supervised agent-run smoke preflight app preferences when present."
+    },
+    "agentRunSmokeStartupModeReadError": {
+      "type": "string",
+      "description": "Read-only app-preferences diagnostic read error copied from reviewed supervised agent-run smoke preflight evidence when present."
+    },
     "failures": {
       "$ref": "#/$defs/stringArray"
     },
@@ -237,6 +249,24 @@
       "type": [
         "boolean",
         "null"
+      ]
+    },
+    "agentRunSmokeStartupMode": {
+      "enum": [
+        "",
+        "Auto",
+        "Curve",
+        "Fixed"
+      ]
+    },
+    "agentRunSmokeStartupModeSource": {
+      "enum": [
+        "",
+        "persisted",
+        "defaultMissingFile",
+        "defaultMissingKey",
+        "unreadable",
+        "unavailable"
       ]
     },
     "nullableInteger": {

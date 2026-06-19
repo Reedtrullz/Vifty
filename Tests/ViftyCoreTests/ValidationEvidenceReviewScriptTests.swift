@@ -542,7 +542,11 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
 
     func testReviewDerivesValidatedAgentRunSmokeFromCapturedSummary() throws {
         let harness = try ValidationEvidenceReviewHarness()
-        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "passed")
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            startupMode: "Auto",
+            startupModeSource: "persisted"
+        )
         let summaryURL = harness.rootURL.appendingPathComponent("summaries/captured-agent-run-review.json")
 
         let result = try harness.runReview(
@@ -558,6 +562,9 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
+        XCTAssertEqual(summary["agentRunSmokeStartupMode"] as? String, "Auto")
+        XCTAssertEqual(summary["agentRunSmokeStartupModeSource"] as? String, "persisted")
+        XCTAssertEqual(summary["agentRunSmokeStartupModeReadError"] as? String, "")
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
@@ -1280,6 +1287,9 @@ private final class ValidationEvidenceReviewHarness {
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         manualControlActive: Bool = false,
+        startupMode: String? = nil,
+        startupModeSource: String? = nil,
+        startupModeReadError: String? = nil,
         installSource: String = "not-recorded",
         sourceRef: String = "",
         sourceSHA: String = "",
@@ -1304,6 +1314,9 @@ private final class ValidationEvidenceReviewHarness {
             diagnoseSchemaID: diagnoseSchemaID,
             commandErrorSchemaID: commandErrorSchemaID,
             manualControlActive: manualControlActive,
+            startupMode: startupMode,
+            startupModeSource: startupModeSource,
+            startupModeReadError: startupModeReadError,
             installSource: installSource,
             sourceRef: sourceRef,
             sourceSHA: sourceSHA,
@@ -1330,6 +1343,9 @@ private final class ValidationEvidenceReviewHarness {
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         manualControlActive: Bool = false,
+        startupMode: String? = nil,
+        startupModeSource: String? = nil,
+        startupModeReadError: String? = nil,
         rateLimitRetryAttempted: Bool = false,
         rateLimitRetryAfterSeconds: Int = 2,
         rateLimitInitialExitStatus: Int = 75,
@@ -1379,7 +1395,14 @@ private final class ValidationEvidenceReviewHarness {
                 status: 75,
                 stdout: "pre-diagnose.json",
                 stderr: "pre-diagnose.stderr",
-                stdoutContents: #"{"state":"blocked","safeToRequestCooling":false,"daemonControlPathReady":false}"#
+                stdoutContents: agentRunSmokeDiagnoseJSON(
+                    state: "blocked",
+                    safeToRequestCooling: false,
+                    daemonControlPathReady: false,
+                    startupMode: startupMode,
+                    startupModeSource: startupModeSource,
+                    startupModeReadError: startupModeReadError
+                )
             )
         } else {
             let finalRunStdout = rateLimitRetryAttempted ? (runStdoutOverride ?? "viftyctl-run-retry.json") : "viftyctl-run.json"
@@ -1428,7 +1451,14 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-diagnose.json",
                 stderr: "pre-diagnose.stderr",
-                stdoutContents: #"{"state":"ready","safeToRequestCooling":true,"daemonControlPathReady":true}"#
+                stdoutContents: agentRunSmokeDiagnoseJSON(
+                    state: "ready",
+                    safeToRequestCooling: true,
+                    daemonControlPathReady: true,
+                    startupMode: startupMode,
+                    startupModeSource: startupModeSource,
+                    startupModeReadError: startupModeReadError
+                )
             )
             let initialRunStatus = rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus
             let initialRunStdoutContents = rateLimitRetryAttempted
@@ -1453,6 +1483,32 @@ private final class ValidationEvidenceReviewHarness {
                 )
             }
         }
+        var preflight: [String: Any] = [
+            "exitStatus": status == "blocked" ? 75 : 0,
+            "state": status == "blocked" ? "blocked" : "ready",
+            "recommendedAgentAction": status == "blocked" ? "doNotRequestCooling" : "requestCooling",
+            "recommendedRecoveryAction": status == "blocked" ? "repairHelper" : "none",
+            "safeToRequestCooling": status != "blocked",
+            "daemonControlPathReady": status != "blocked",
+            "manualControlActive": manualControlActive,
+            "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
+            "capabilitiesSchemaVersion": capabilitiesSchemaVersion,
+            "capabilitiesSchemaID": capabilitiesSchemaID,
+            "diagnoseSchemaID": diagnoseSchemaID,
+            "commandErrorSchemaID": commandErrorSchemaID,
+            "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
+            "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
+            "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
+            "policyEnabled": policyEnabled
+        ]
+        if startupMode != nil || startupModeSource != nil || startupModeReadError != nil {
+            preflight["appPreferences"] = [
+                "startupMode": startupMode as Any? ?? NSNull(),
+                "startupModeSource": startupModeSource as Any? ?? NSNull(),
+                "readError": startupModeReadError as Any? ?? NSNull()
+            ]
+        }
+
         var json: [String: Any] = [
             "schemaVersion": 1,
             "schemaID": schemaID,
@@ -1474,24 +1530,7 @@ private final class ValidationEvidenceReviewHarness {
             "reason": "agent run smoke test",
             "auditLimit": 20,
             "childCommand": ["/bin/sleep", "5"],
-            "preflight": [
-                "exitStatus": status == "blocked" ? 75 : 0,
-                "state": status == "blocked" ? "blocked" : "ready",
-                "recommendedAgentAction": status == "blocked" ? "doNotRequestCooling" : "requestCooling",
-                "recommendedRecoveryAction": status == "blocked" ? "repairHelper" : "none",
-                "safeToRequestCooling": status != "blocked",
-                "daemonControlPathReady": status != "blocked",
-                "manualControlActive": manualControlActive,
-                "capabilitiesExitStatus": status == "blocked" ? 75 : 0,
-                "capabilitiesSchemaVersion": capabilitiesSchemaVersion,
-                "capabilitiesSchemaID": capabilitiesSchemaID,
-                "diagnoseSchemaID": diagnoseSchemaID,
-                "commandErrorSchemaID": commandErrorSchemaID,
-                "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
-                "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
-                "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
-                "policyEnabled": policyEnabled
-            ],
+            "preflight": preflight,
             "run": run,
             "commands": commands
         ]
@@ -1645,6 +1684,30 @@ private final class ValidationEvidenceReviewHarness {
         try stdoutContents.write(to: directory.appendingPathComponent(stdout), atomically: true, encoding: .utf8)
         try "".write(to: directory.appendingPathComponent(stderr), atomically: true, encoding: .utf8)
         try "\(status)\n".write(to: directory.appendingPathComponent("\(name).status"), atomically: true, encoding: .utf8)
+    }
+
+    private func agentRunSmokeDiagnoseJSON(
+        state: String,
+        safeToRequestCooling: Bool,
+        daemonControlPathReady: Bool,
+        startupMode: String?,
+        startupModeSource: String?,
+        startupModeReadError: String?
+    ) throws -> String {
+        var json: [String: Any] = [
+            "state": state,
+            "safeToRequestCooling": safeToRequestCooling,
+            "daemonControlPathReady": daemonControlPathReady
+        ]
+        if startupMode != nil || startupModeSource != nil || startupModeReadError != nil {
+            json["appPreferences"] = [
+                "startupMode": startupMode as Any? ?? NSNull(),
+                "startupModeSource": startupModeSource as Any? ?? NSNull(),
+                "readError": startupModeReadError as Any? ?? NSNull()
+            ]
+        }
+        let data = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
     }
 
     private func writeAgentRunSmokeChecksums(in directory: URL) throws {
