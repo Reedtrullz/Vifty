@@ -444,6 +444,18 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     ].join("<br>")
   end
 
+  def agent_run_startup_evidence_for(row)
+    mode = row["agentRunSmokeStartupMode"].to_s.strip
+    source = row["agentRunSmokeStartupModeSource"].to_s.strip
+    read_error = row["agentRunSmokeStartupModeReadError"].to_s.strip
+    return "" if mode.empty? && source.empty? && read_error.empty?
+
+    mode_text = mode.empty? ? "unknown" : mode
+    source_text = source.empty? ? "unknown" : source
+    read_error_text = read_error.empty? ? "" : "; read error recorded"
+    "#{mode_text} (#{source_text}#{read_error_text})"
+  end
+
   def render_markdown_matrix(rows)
     hardware_rows = rows.reject { |row| row["mode"] == "release" }
     groups = Hash.new { |hash, key| hash[key] = [] }
@@ -484,11 +496,13 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       agent_sources = group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| row["agentRunSmokeSource"] }
       manual_joined = join_unique(manual_sources)
       agent_joined = join_unique(agent_sources)
+      agent_startup_joined = join_unique(group.map { |row| agent_run_startup_evidence_for(row) })
       evidence << "source: #{source_joined}" unless source_joined.empty?
       evidence << "reviewed: #{reviewed_joined}" unless reviewed_joined.empty?
       evidence << "manual: #{manual_joined}" unless manual_joined.empty?
       evidence << "manual: not recorded" if candidate_count.positive? && validated_count.zero?
       evidence << "agent-run: #{agent_joined}" unless agent_joined.empty?
+      evidence << "agent-run startup: #{agent_startup_joined}" unless agent_startup_joined.empty?
       evidence << "reviewed index only" if evidence.empty?
 
       lines << [
