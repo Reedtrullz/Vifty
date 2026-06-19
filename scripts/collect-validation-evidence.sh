@@ -176,6 +176,7 @@ EXPECTED_SCHEMA_FILES=(
   "viftyctl-capabilities.schema.json"
   "viftyctl-command-error.schema.json"
   "viftyctl-diagnose.schema.json"
+  "viftyctl-run.schema.json"
   "viftyctl-status.schema.json"
 )
 EXPECTED_EXECUTABLES=(
@@ -559,6 +560,7 @@ capture_capabilities_schema_resources() {
       "capabilities" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
       "commandError" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
       "diagnose" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+      "run" => "Contents/Resources/schemas/viftyctl-run.schema.json",
       "status" => "Contents/Resources/schemas/viftyctl-status.schema.json"
     }
 

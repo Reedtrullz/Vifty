@@ -1286,6 +1286,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1313,6 +1314,7 @@ private final class ValidationEvidenceReviewHarness {
             capabilitiesSchemaID: capabilitiesSchemaID,
             diagnoseSchemaID: diagnoseSchemaID,
             commandErrorSchemaID: commandErrorSchemaID,
+            runSchemaID: runSchemaID,
             manualControlActive: manualControlActive,
             startupMode: startupMode,
             startupModeSource: startupModeSource,
@@ -1342,6 +1344,7 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         diagnoseSchemaID: String = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1368,6 +1371,9 @@ private final class ValidationEvidenceReviewHarness {
         var commands: [[String: Any]]
         if status == "blocked" {
             run = [
+                "schemaVersion": NSNull(),
+                "schemaID": NSNull(),
+                "command": NSNull(),
                 "exitStatus": NSNull(),
                 "stdout": NSNull(),
                 "stderr": NSNull(),
@@ -1387,7 +1393,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)"},"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true,"policy":{"enabled":\#(policyEnabled)}}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)","run":"\#(runSchemaID)"},"daemonStatusAvailable":true,"policySource":"daemonStatus","policyStatusAvailable":true,"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1408,6 +1414,9 @@ private final class ValidationEvidenceReviewHarness {
             let finalRunStdout = rateLimitRetryAttempted ? (runStdoutOverride ?? "viftyctl-run-retry.json") : "viftyctl-run.json"
             let finalRunStderr = rateLimitRetryAttempted ? (runStderrOverride ?? "viftyctl-run-retry.stderr") : "viftyctl-run.stderr"
             run = [
+                "schemaVersion": 1,
+                "schemaID": runSchemaID,
+                "command": "run",
                 "exitStatus": runExitStatus,
                 "stdout": finalRunStdout,
                 "stderr": finalRunStderr,
@@ -1443,7 +1452,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)","run":"\#(runSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -1463,7 +1472,7 @@ private final class ValidationEvidenceReviewHarness {
             let initialRunStatus = rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus
             let initialRunStdoutContents = rateLimitRetryAttempted
                 ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
-                : #"{"coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
+                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"autoRestoreError":null}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
@@ -1479,7 +1488,7 @@ private final class ValidationEvidenceReviewHarness {
                     status: runExitStatus,
                     stdout: "viftyctl-run-retry.json",
                     stderr: "viftyctl-run-retry.stderr",
-                    stdoutContents: #"{"coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode)}"#
+                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"autoRestoreError":null}"#
                 )
             }
         }
@@ -1496,6 +1505,7 @@ private final class ValidationEvidenceReviewHarness {
             "capabilitiesSchemaID": capabilitiesSchemaID,
             "diagnoseSchemaID": diagnoseSchemaID,
             "commandErrorSchemaID": commandErrorSchemaID,
+            "runSchemaID": runSchemaID,
             "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
             "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
             "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
@@ -2026,6 +2036,7 @@ private final class ValidationEvidenceReviewHarness {
     viftyctl-capabilities.schema.json\t\(String(repeating: "a", count: 64))\t5170\tContents/Resources/schemas/viftyctl-capabilities.schema.json
     viftyctl-command-error.schema.json\t\(String(repeating: "b", count: 64))\t1461\tContents/Resources/schemas/viftyctl-command-error.schema.json
     viftyctl-diagnose.schema.json\t\(String(repeating: "c", count: 64))\t5697\tContents/Resources/schemas/viftyctl-diagnose.schema.json
+    viftyctl-run.schema.json\t\(String(repeating: "7", count: 64))\t1320\tContents/Resources/schemas/viftyctl-run.schema.json
     viftyctl-status.schema.json\t\(String(repeating: "d", count: 64))\t4828\tContents/Resources/schemas/viftyctl-status.schema.json
     """
 
@@ -2035,6 +2046,7 @@ private final class ValidationEvidenceReviewHarness {
     capabilities\tContents/Resources/schemas/viftyctl-capabilities.schema.json\tContents/Resources/schemas/viftyctl-capabilities.schema.json
     commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json
     diagnose\tContents/Resources/schemas/viftyctl-diagnose.schema.json\tContents/Resources/schemas/viftyctl-diagnose.schema.json
+    run\tContents/Resources/schemas/viftyctl-run.schema.json\tContents/Resources/schemas/viftyctl-run.schema.json
     status\tContents/Resources/schemas/viftyctl-status.schema.json\tContents/Resources/schemas/viftyctl-status.schema.json
     """
 

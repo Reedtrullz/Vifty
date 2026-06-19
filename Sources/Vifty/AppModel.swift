@@ -284,6 +284,7 @@ final class AppModel: ObservableObject {
         isRunning = true
 
         pollingTask = Task { [self] in
+            await pollOnce()
             await coordinator.recoverIfNeeded()
             await applyStartupModePreferenceIfNeeded()
 
@@ -827,9 +828,7 @@ final class AppModel: ObservableObject {
 
     var menuBarStatusItemText: String? {
         guard !menuBarLabelUsesFanIcon else { return nil }
-        let label = menuBarLabelText
-        guard !label.contains("--") else { return nil }
-        return label
+        return menuBarLabelText
     }
 
     var menuBarLabelNeedsTelemetryPrime: Bool {

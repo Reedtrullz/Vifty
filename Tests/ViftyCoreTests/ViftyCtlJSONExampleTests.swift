@@ -34,11 +34,13 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemas.diagnose, "docs/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemas.status, "docs/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemas.commandError, "docs/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(capabilities.schemas.run, "docs/schemas/viftyctl-run.schema.json")
         XCTAssertEqual(capabilities.schemaResources.capabilities, "Contents/Resources/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemaResources.audit, "Contents/Resources/schemas/viftyctl-audit.schema.json")
         XCTAssertEqual(capabilities.schemaResources.diagnose, "Contents/Resources/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemaResources.status, "Contents/Resources/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaResources.commandError, "Contents/Resources/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(capabilities.schemaResources.run, "Contents/Resources/schemas/viftyctl-run.schema.json")
         XCTAssertEqual(capabilities.wrapperResources.sourceDirectory, "examples/viftyctl")
         XCTAssertEqual(capabilities.wrapperResources.bundleDirectory, "Contents/Resources/viftyctl-wrappers")
         XCTAssertEqual(capabilities.wrapperResources.guardedRunScript, "guarded-run.sh")
@@ -50,6 +52,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaIDs.diagnose, "https://vifty.local/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.status, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.commandError, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(capabilities.schemaIDs.run, "https://vifty.local/schemas/viftyctl-run.schema.json")
     }
 
     func testLegacyCapabilitiesPayloadDecodesWithConservativeDefaults() throws {
@@ -299,6 +302,19 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(failed.autoRestoreSucceeded, false)
     }
 
+    func testRunSuccessExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlRunReport.self, from: "run-success.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.schemaID, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(report.command, "run")
+        XCTAssertTrue(report.coolingLeasePrepared)
+        XCTAssertTrue(report.autoRestoreAttempted)
+        XCTAssertEqual(report.autoRestoreSucceeded, true)
+        XCTAssertEqual(report.childExitCode, 0)
+        XCTAssertNil(report.autoRestoreError)
+    }
+
     func testAuditExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlAuditReport.self, from: "audit.json")
 
@@ -519,6 +535,23 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             context: "capabilities schemaIDs"
         )
 
+        let runSchema = try readJSON(schemaURL("viftyctl-run.schema.json"))
+        let runProperties = try XCTUnwrap(runSchema["properties"] as? [String: Any])
+        XCTAssertEqual((runProperties["schemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual((runProperties["command"] as? [String: Any])?["const"] as? String, "run")
+        XCTAssertNotNil(runProperties["coolingLeasePrepared"] as? [String: Any])
+        XCTAssertNotNil(runProperties["autoRestoreAttempted"] as? [String: Any])
+        XCTAssertNotNil(runProperties["autoRestoreSucceeded"] as? [String: Any])
+        XCTAssertNotNil(runProperties["childExitCode"] as? [String: Any])
+        let runExample = try readJSON(fixtureURL("run-success.json"))
+        XCTAssertEqual(runExample["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(runExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(runExample["command"] as? String, "run")
+        XCTAssertEqual(runExample["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(runExample["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(runExample["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(runExample["childExitCode"] as? Int, 0)
+
         let statusSchema = try readJSON(schemaURL("viftyctl-status.schema.json"))
         let statusDefinitions = try XCTUnwrap(statusSchema["$defs"] as? [String: Any])
         XCTAssertEqual(definitionEnumValues(named: "workload", in: statusDefinitions), ["build", "test", "render", "localModel", "custom"])
@@ -584,7 +617,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             (capabilities.schemas.audit, capabilities.schemaIDs.audit),
             (capabilities.schemas.diagnose, capabilities.schemaIDs.diagnose),
             (capabilities.schemas.status, capabilities.schemaIDs.status),
-            (capabilities.schemas.commandError, capabilities.schemaIDs.commandError)
+            (capabilities.schemas.commandError, capabilities.schemaIDs.commandError),
+            (capabilities.schemas.run, capabilities.schemaIDs.run)
         ]
         for (schemaPath, schemaID) in references {
             let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

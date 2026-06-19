@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-run.schema.json",
+  "title": "viftyctl run --json report",
+  "description": "Machine-readable report emitted by viftyctl run --json after the child command has launched and exited. Pre-child failures still use the command-error schema.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "command",
+    "coolingLeasePrepared",
+    "autoRestoreAttempted",
+    "autoRestoreSucceeded",
+    "childExitCode",
+    "autoRestoreError",
+    "generatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/viftyctl-run.schema.json"
+    },
+    "command": {
+      "const": "run"
+    },
+    "coolingLeasePrepared": {
+      "const": true
+    },
+    "autoRestoreAttempted": {
+      "const": true
+    },
+    "autoRestoreSucceeded": {
+      "type": "boolean"
+    },
+    "childExitCode": {
+      "type": "integer"
+    },
+    "autoRestoreError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "generatedAt": {
+      "type": "number"
+    }
+  },
+  "additionalProperties": false
+}

@@ -96,10 +96,17 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             preflight["commandErrorSchemaID"] as? String,
             "https://vifty.local/schemas/viftyctl-command-error.schema.json"
         )
+        XCTAssertEqual(
+            preflight["runSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-run.schema.json"
+        )
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCooling")
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
         XCTAssertEqual(run["stdout"] as? String, "viftyctl-run.json")
+        XCTAssertEqual(run["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(run["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(run["command"] as? String, "run")
         XCTAssertEqual(run["coolingLeasePrepared"] as? Bool, true)
         XCTAssertEqual(run["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
@@ -348,6 +355,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             preflight["commandErrorSchemaID"] as? String,
             "https://vifty.local/schemas/viftyctl-command-error.schema.json"
         )
+        XCTAssertEqual(
+            preflight["runSchemaID"] as? String,
+            "https://vifty.local/schemas/viftyctl-run.schema.json"
+        )
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertTrue(run["exitStatus"] is NSNull)
         XCTAssertEqual(run["skippedReason"] as? String, "capabilities preflight did not advertise safe viftyctl run")
@@ -505,7 +516,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let harness = try AgentRunSmokeEvidenceHarness(
             runJSONs: [
                 rateLimitedJSON,
-                #"{"schemaVersion":1,"command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#
+                AgentRunSmokeEvidenceHarness.runSuccessJSON
             ],
             runExitCodes: [1, 0]
         )
@@ -613,6 +624,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         let run = try XCTUnwrap(defs["run"] as? [String: Any])
         let runRequired = try XCTUnwrap(run["required"] as? [String])
         for field in [
+            "schemaVersion",
+            "schemaID",
+            "command",
             "coolingLeasePrepared",
             "autoRestoreAttempted",
             "autoRestoreSucceeded",
@@ -639,6 +653,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "capabilitiesSchemaID",
             "diagnoseSchemaID",
             "commandErrorSchemaID",
+            "runSchemaID",
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",
@@ -695,7 +710,7 @@ private final class AgentRunSmokeEvidenceHarness {
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         auditJSON: String = #"{"readOnly":true,"coolingCommandsRun":false,"events":[]}"#,
-        runJSON: String = #"{"schemaVersion":1,"command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0}"#,
+        runJSON: String = AgentRunSmokeEvidenceHarness.runSuccessJSON,
         runExitCode: Int = 0,
         runJSONs: [String]? = nil,
         runExitCodes: [Int]? = nil
@@ -735,7 +750,7 @@ private final class AgentRunSmokeEvidenceHarness {
             "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
             "VIFTY_FAKE_STATUS_JSON": statusJSON,
             "VIFTY_FAKE_AUDIT_JSON": auditJSON,
-            "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"command":"run"}"#,
+            "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"autoRestoreError":null,"generatedAt":700000000}"#,
             "VIFTY_FAKE_RUN_EXIT": "\(self.runExitCodes.last ?? 0)",
             "VIFTY_AGENT_RUN_SMOKE_SKIP_RETRY_SLEEP": "1"
         ]) { _, new in new }
@@ -846,6 +861,8 @@ private final class AgentRunSmokeEvidenceHarness {
     }
 
     static let defaultCapabilitiesJSON = """
-    {"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json"},"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}}
+    {"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"},"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}}
     """
+
+    static let runSuccessJSON = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"autoRestoreError":null,"generatedAt":700000000}"#
 }

@@ -482,6 +482,7 @@ private final class ReleaseArtifactHarness {
             "viftyctl-capabilities.schema.json": "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
             "viftyctl-command-error.schema.json": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
             "viftyctl-diagnose.schema.json": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
+            "viftyctl-run.schema.json": "https://vifty.local/schemas/viftyctl-run.schema.json",
             "viftyctl-status.schema.json": "https://vifty.local/schemas/viftyctl-status.schema.json"
         ]
         for (filename, schemaID) in schemaIDs {

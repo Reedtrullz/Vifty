@@ -187,6 +187,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
   DIAGNOSE_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
   COMMAND_ERROR_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+  RUN_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-run.schema.json"
 
   EXPECTED_EXECUTABLES = {
     "Vifty" => "Contents/MacOS/Vifty",
@@ -207,6 +208,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "viftyctl-capabilities.schema.json" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
     "viftyctl-command-error.schema.json" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
     "viftyctl-diagnose.schema.json" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+    "viftyctl-run.schema.json" => "Contents/Resources/schemas/viftyctl-run.schema.json",
     "viftyctl-status.schema.json" => "Contents/Resources/schemas/viftyctl-status.schema.json"
   }.freeze
 
@@ -215,6 +217,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "capabilities" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
     "commandError" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
     "diagnose" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
+    "run" => "Contents/Resources/schemas/viftyctl-run.schema.json",
     "status" => "Contents/Resources/schemas/viftyctl-status.schema.json"
   }.freeze
 
@@ -1062,6 +1065,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
           preflight["capabilitiesSchemaID"] == CAPABILITIES_SCHEMA_ID &&
           preflight["diagnoseSchemaID"] == DIAGNOSE_SCHEMA_ID &&
           preflight["commandErrorSchemaID"] == COMMAND_ERROR_SCHEMA_ID &&
+          preflight["runSchemaID"] == RUN_SCHEMA_ID &&
           preflight["daemonStatusAvailable"] == true &&
           preflight["policySource"] == "daemonStatus" &&
           preflight["policyStatusAvailable"] == true &&
@@ -1080,6 +1084,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless preflight["commandErrorSchemaID"] == COMMAND_ERROR_SCHEMA_ID
         failures << "passed agent-run-smoke summary must have commandErrorSchemaID=#{COMMAND_ERROR_SCHEMA_ID}"
       end
+      unless preflight["runSchemaID"] == RUN_SCHEMA_ID
+        failures << "passed agent-run-smoke summary must have runSchemaID=#{RUN_SCHEMA_ID}"
+      end
       unless preflight["policyEnabled"] == true
         failures << "passed agent-run-smoke summary must have policyEnabled=true"
       end
@@ -1089,6 +1096,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
             pre_capabilities.dig("schemaIDs", "capabilities") == CAPABILITIES_SCHEMA_ID &&
             pre_capabilities.dig("schemaIDs", "diagnose") == DIAGNOSE_SCHEMA_ID &&
             pre_capabilities.dig("schemaIDs", "commandError") == COMMAND_ERROR_SCHEMA_ID &&
+            pre_capabilities.dig("schemaIDs", "run") == RUN_SCHEMA_ID &&
             pre_capabilities["daemonStatusAvailable"] == true &&
             pre_capabilities["policySource"] == "daemonStatus" &&
             pre_capabilities["policyStatusAvailable"] == true &&
@@ -1098,6 +1106,15 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       end
       unless run["exitStatus"] == 0
         failures << "passed agent-run-smoke summary run.exitStatus must be 0"
+      end
+      unless run["schemaVersion"] == 1
+        failures << "passed agent-run-smoke summary run.schemaVersion must be 1"
+      end
+      unless run["schemaID"] == RUN_SCHEMA_ID
+        failures << "passed agent-run-smoke summary run.schemaID must be #{RUN_SCHEMA_ID}"
+      end
+      unless run["command"] == "run"
+        failures << "passed agent-run-smoke summary run.command must be run"
       end
       unless run["coolingLeasePrepared"] == true
         failures << "passed agent-run-smoke summary must report coolingLeasePrepared=true"

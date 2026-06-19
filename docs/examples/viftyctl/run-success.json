@@ -1,0 +1,11 @@
+{
+  "autoRestoreAttempted": true,
+  "autoRestoreError": null,
+  "autoRestoreSucceeded": true,
+  "childExitCode": 0,
+  "command": "run",
+  "coolingLeasePrepared": true,
+  "generatedAt": 700001000,
+  "schemaID": "https://vifty.local/schemas/viftyctl-run.schema.json",
+  "schemaVersion": 1
+}

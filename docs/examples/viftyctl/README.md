@@ -16,6 +16,11 @@ Status examples include the stable status schema ID,
 `capabilities.schemaIDs.status` before agents trust lease, policy, or decision
 fields.
 
+Run success examples include the stable run schema ID,
+`https://vifty.local/schemas/viftyctl-run.schema.json`, matching
+`capabilities.schemaIDs.run` before agents trust child-exit or Auto-restore
+status from a completed `viftyctl run --json` workload.
+
 Files:
 
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`
@@ -26,6 +31,7 @@ Files:
 - [diagnose-degraded-manual-control.json](diagnose-degraded-manual-control.json) - `viftyctl diagnose --json` when Vifty/manual fan control is active and an agent must wait for Auto restore before taking ownership
 - [diagnose-degraded-caution.json](diagnose-degraded-caution.json) - `viftyctl diagnose --json` when warning-only thermal pressure makes cooling safe only with caution
 - [status-active-lease.json](status-active-lease.json) - `viftyctl status --json` with an active lease
+- [run-success.json](run-success.json) - `viftyctl run --json` after the child command exits and Auto restore succeeds
 - [command-error.json](command-error.json) - structured `--json` command failure with `recommendedRecoveryAction`
 - [command-error-run-child-command-failed.json](command-error-run-child-command-failed.json) - `viftyctl run --json` child-command failure before any cooling lease is prepared
 - [command-error-run-cleanup-restored.json](command-error-run-cleanup-restored.json) - `viftyctl run --json` launch failure after a prepared lease with Auto restore confirmed
@@ -37,6 +43,7 @@ Schema:
 - [../../schemas/viftyctl-audit.schema.json](../../schemas/viftyctl-audit.schema.json) - agent-facing schema for the read-only audit report
 - [../../schemas/viftyctl-command-error.schema.json](../../schemas/viftyctl-command-error.schema.json) - agent-facing schema for structured command failures
 - [../../schemas/viftyctl-diagnose.schema.json](../../schemas/viftyctl-diagnose.schema.json) - agent-facing schema for the readiness report
+- [../../schemas/viftyctl-run.schema.json](../../schemas/viftyctl-run.schema.json) - agent-facing schema for completed `viftyctl run --json` reports
 - [../../schemas/viftyctl-status.schema.json](../../schemas/viftyctl-status.schema.json) - agent-facing schema for status, prepare, and restore-auto reports
 
 Blocked diagnose examples may exit `75` while still printing machine-readable JSON. `degraded` can be safe or unsafe, so agents must read `safeToRequestCooling`; `daemonControlPathReady: false` is always a helper-repair stop, and `manualControlActive: true` is always a restore-Auto stop before requesting cooling. Current diagnose examples include `appPreferences.startupMode` so integrations can distinguish a one-off manual marker from a saved Curve/Fixed default that may reassert control after launch.

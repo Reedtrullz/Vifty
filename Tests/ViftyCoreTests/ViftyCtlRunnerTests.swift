@@ -130,12 +130,14 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(schemas["diagnose"] as? String, "docs/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(schemas["status"] as? String, "docs/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemas["commandError"] as? String, "docs/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(schemas["run"] as? String, "docs/schemas/viftyctl-run.schema.json")
         let schemaResources = try XCTUnwrap(json["schemaResources"] as? [String: Any])
         XCTAssertEqual(schemaResources["capabilities"] as? String, "Contents/Resources/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(schemaResources["audit"] as? String, "Contents/Resources/schemas/viftyctl-audit.schema.json")
         XCTAssertEqual(schemaResources["diagnose"] as? String, "Contents/Resources/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(schemaResources["status"] as? String, "Contents/Resources/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemaResources["commandError"] as? String, "Contents/Resources/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(schemaResources["run"] as? String, "Contents/Resources/schemas/viftyctl-run.schema.json")
         let wrapperResources = try XCTUnwrap(json["wrapperResources"] as? [String: Any])
         XCTAssertEqual(wrapperResources["sourceDirectory"] as? String, "examples/viftyctl")
         XCTAssertEqual(wrapperResources["bundleDirectory"] as? String, "Contents/Resources/viftyctl-wrappers")
@@ -149,6 +151,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(schemaIDs["diagnose"] as? String, "https://vifty.local/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(schemaIDs["status"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemaIDs["commandError"] as? String, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
+        XCTAssertEqual(schemaIDs["run"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
         let exitCodes = try XCTUnwrap(json["exitCodes"] as? [String: Any])
         XCTAssertEqual(exitCodes["success"] as? Int, 0)
         XCTAssertEqual(exitCodes["commandFailure"] as? Int, 1)
@@ -1033,6 +1036,68 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 7"])
+        XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
+    }
+
+    func testRunJSONReportsPreparedLeaseAutoRestoreAndChildExitCode() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
+        let processRunner = FakeProcessRunner(exitCode: 0, resolvedArguments: ["/usr/bin/swift", "test"])
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(json["command"] as? String, "run")
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(json["childExitCode"] as? Int, 0)
+        XCTAssertTrue(json["autoRestoreError"] is NSNull)
+        XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
+        XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
+    }
+
+    func testRunJSONReportsAutoRestoreFailureAfterChildExit() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let restoreError = ViftyError.helperRejected("restore failed")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)], restoreError: restoreError)
+        let processRunner = FakeProcessRunner(exitCode: 0, resolvedArguments: ["/usr/bin/swift", "test"])
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(json["command"] as? String, "run")
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, false)
+        XCTAssertEqual(json["childExitCode"] as? Int, 0)
+        XCTAssertTrue((json["autoRestoreError"] as? String)?.contains("restore failed") == true)
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
         XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
     }
 

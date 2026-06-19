@@ -143,6 +143,7 @@
         "capabilitiesSchemaID",
         "diagnoseSchemaID",
         "commandErrorSchemaID",
+        "runSchemaID",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -178,6 +179,12 @@
           ]
         },
         "commandErrorSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runSchemaID": {
           "type": [
             "string",
             "null"
@@ -301,6 +308,9 @@
         "stdout",
         "stderr",
         "skippedReason",
+        "schemaVersion",
+        "schemaID",
+        "command",
         "coolingLeasePrepared",
         "autoRestoreAttempted",
         "autoRestoreSucceeded",
@@ -326,6 +336,24 @@
           ]
         },
         "skippedReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "schemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command": {
           "type": [
             "string",
             "null"

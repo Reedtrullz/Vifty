@@ -271,7 +271,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         audit: "Contents/Resources/schemas/viftyctl-audit.schema.json",
         diagnose: "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
         status: "Contents/Resources/schemas/viftyctl-status.schema.json",
-        commandError: "Contents/Resources/schemas/viftyctl-command-error.schema.json"
+        commandError: "Contents/Resources/schemas/viftyctl-command-error.schema.json",
+        run: "Contents/Resources/schemas/viftyctl-run.schema.json"
     )
 
     public static let schemaIDs = ViftyCtlSchemaReferences(
@@ -279,7 +280,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         audit: "https://vifty.local/schemas/viftyctl-audit.schema.json",
         diagnose: "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         status: "https://vifty.local/schemas/viftyctl-status.schema.json",
-        commandError: "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        commandError: "https://vifty.local/schemas/viftyctl-command-error.schema.json",
+        run: "https://vifty.local/schemas/viftyctl-run.schema.json"
     )
 
     public var capabilities: String
@@ -287,19 +289,52 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
     public var diagnose: String
     public var status: String
     public var commandError: String
+    public var run: String
 
     public init(
         capabilities: String = "docs/schemas/viftyctl-capabilities.schema.json",
         audit: String = "docs/schemas/viftyctl-audit.schema.json",
         diagnose: String = "docs/schemas/viftyctl-diagnose.schema.json",
         status: String = "docs/schemas/viftyctl-status.schema.json",
-        commandError: String = "docs/schemas/viftyctl-command-error.schema.json"
+        commandError: String = "docs/schemas/viftyctl-command-error.schema.json",
+        run: String = "docs/schemas/viftyctl-run.schema.json"
     ) {
         self.capabilities = capabilities
         self.audit = audit
         self.diagnose = diagnose
         self.status = status
         self.commandError = commandError
+        self.run = run
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case capabilities
+        case audit
+        case diagnose
+        case status
+        case commandError
+        case run
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        capabilities = try container.decode(String.self, forKey: .capabilities)
+        audit = try container.decode(String.self, forKey: .audit)
+        diagnose = try container.decode(String.self, forKey: .diagnose)
+        status = try container.decode(String.self, forKey: .status)
+        commandError = try container.decode(String.self, forKey: .commandError)
+        run = try container.decodeIfPresent(String.self, forKey: .run)
+            ?? "docs/schemas/viftyctl-run.schema.json"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(capabilities, forKey: .capabilities)
+        try container.encode(audit, forKey: .audit)
+        try container.encode(diagnose, forKey: .diagnose)
+        try container.encode(status, forKey: .status)
+        try container.encode(commandError, forKey: .commandError)
+        try container.encode(run, forKey: .run)
     }
 }
 
@@ -460,6 +495,83 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
             try container.encodeNil(forKey: .autoRestoreSucceeded)
         }
         try container.encodeIfPresent(retryAfterSeconds, forKey: .retryAfterSeconds)
+        try container.encode(generatedAt, forKey: .generatedAt)
+    }
+}
+
+public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
+    public var schemaVersion: Int
+    public var schemaID: String
+    public var command: String
+    public var coolingLeasePrepared: Bool
+    public var autoRestoreAttempted: Bool
+    public var autoRestoreSucceeded: Bool
+    public var childExitCode: Int32
+    public var autoRestoreError: String?
+    public var generatedAt: Date
+
+    public init(
+        schemaVersion: Int = 1,
+        schemaID: String = ViftyCtlSchemaReferences.schemaIDs.run,
+        command: String = "run",
+        coolingLeasePrepared: Bool = true,
+        autoRestoreAttempted: Bool = true,
+        autoRestoreSucceeded: Bool,
+        childExitCode: Int32,
+        autoRestoreError: String? = nil,
+        generatedAt: Date
+    ) {
+        self.schemaVersion = schemaVersion
+        self.schemaID = schemaID
+        self.command = command
+        self.coolingLeasePrepared = coolingLeasePrepared
+        self.autoRestoreAttempted = autoRestoreAttempted
+        self.autoRestoreSucceeded = autoRestoreSucceeded
+        self.childExitCode = childExitCode
+        self.autoRestoreError = autoRestoreError
+        self.generatedAt = generatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case schemaID
+        case command
+        case coolingLeasePrepared
+        case autoRestoreAttempted
+        case autoRestoreSucceeded
+        case childExitCode
+        case autoRestoreError
+        case generatedAt
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        schemaID = try container.decodeIfPresent(String.self, forKey: .schemaID)
+            ?? ViftyCtlSchemaReferences.schemaIDs.run
+        command = try container.decodeIfPresent(String.self, forKey: .command) ?? "run"
+        coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? true
+        autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? true
+        autoRestoreSucceeded = try container.decode(Bool.self, forKey: .autoRestoreSucceeded)
+        childExitCode = try container.decode(Int32.self, forKey: .childExitCode)
+        autoRestoreError = try container.decodeIfPresent(String.self, forKey: .autoRestoreError)
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(schemaID, forKey: .schemaID)
+        try container.encode(command, forKey: .command)
+        try container.encode(coolingLeasePrepared, forKey: .coolingLeasePrepared)
+        try container.encode(autoRestoreAttempted, forKey: .autoRestoreAttempted)
+        try container.encode(autoRestoreSucceeded, forKey: .autoRestoreSucceeded)
+        try container.encode(childExitCode, forKey: .childExitCode)
+        if let autoRestoreError {
+            try container.encode(autoRestoreError, forKey: .autoRestoreError)
+        } else {
+            try container.encodeNil(forKey: .autoRestoreError)
+        }
         try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
@@ -695,7 +807,11 @@ public struct ViftyCtlRunner: Sendable {
                 }
                 do {
                     let exitCode = try processRunner.run(resolvedChildArguments)
-                    return await restoreAfterRun(reason: "viftyctl run child exited with \(exitCode)", childExitCode: exitCode)
+                    return try await restoreAfterRun(
+                        reason: "viftyctl run child exited with \(exitCode)",
+                        childExitCode: exitCode,
+                        json: json
+                    )
                 } catch {
                     let reason = "viftyctl run failed to launch child: \(error.localizedDescription)"
                     do {
@@ -1019,11 +1135,35 @@ public struct ViftyCtlRunner: Sendable {
         return max(0, seconds)
     }
 
-    private func restoreAfterRun(reason: String, childExitCode: Int32) async -> ViftyCtlResult {
+    private func restoreAfterRun(
+        reason: String,
+        childExitCode: Int32,
+        json: Bool
+    ) async throws -> ViftyCtlResult {
         do {
             _ = try await client.restore(reason: reason)
+            if json {
+                let report = ViftyCtlRunReport(
+                    autoRestoreSucceeded: true,
+                    childExitCode: childExitCode,
+                    generatedAt: now()
+                )
+                return ViftyCtlResult(stdout: try encodeJSON(report) + "\n", exitCode: childExitCode)
+            }
             return ViftyCtlResult(exitCode: childExitCode)
         } catch {
+            if json {
+                let report = ViftyCtlRunReport(
+                    autoRestoreSucceeded: false,
+                    childExitCode: childExitCode,
+                    autoRestoreError: error.localizedDescription,
+                    generatedAt: now()
+                )
+                return ViftyCtlResult(
+                    stdout: try encodeJSON(report) + "\n",
+                    exitCode: childExitCode == 0 ? 1 : childExitCode
+                )
+            }
             let stderr = "viftyctl run: Auto restore failed after child exited with \(childExitCode): \(error.localizedDescription). The daemon lease monitor remains the safety fallback until expiry.\n"
             return ViftyCtlResult(stderr: stderr, exitCode: childExitCode == 0 ? 1 : childExitCode)
         }

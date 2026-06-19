@@ -373,6 +373,7 @@ capabilities_run_contract_safe() {
         schema_ids["capabilities"] == "https://vifty.local/schemas/viftyctl-capabilities.schema.json" &&
         schema_ids["diagnose"] == "https://vifty.local/schemas/viftyctl-diagnose.schema.json" &&
         schema_ids["commandError"] == "https://vifty.local/schemas/viftyctl-command-error.schema.json" &&
+        schema_ids["run"] == "https://vifty.local/schemas/viftyctl-run.schema.json" &&
         data["daemonStatusAvailable"] == true &&
         data["policySource"] == "daemonStatus" &&
         data["policyStatusAvailable"] == true &&
@@ -411,7 +412,7 @@ The bundle records source provenance in \`metadata.txt\` and
 \`installSource=local-ad-hoc-build\`, the current git ref, and the immutable
 40-character source SHA for the freshly built \`viftyctl\`.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, and \`schemaIDs.commandError\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
 Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, manualControlActive is true, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep
@@ -521,6 +522,9 @@ write_summary_json() {
     }
     run = if run_status.to_s.empty?
       {
+        "schemaVersion" => nil,
+        "schemaID" => nil,
+        "command" => nil,
         "exitStatus" => nil,
         "stdout" => nil,
         "stderr" => nil,
@@ -532,6 +536,9 @@ write_summary_json() {
       }
     else
       exit_status = run_status.to_i
+      run_schema_version = integer_or_nil(run_report["schemaVersion"])
+      run_schema_id = run_report["schemaID"].is_a?(String) ? run_report["schemaID"] : nil
+      run_command = run_report["command"].is_a?(String) ? run_report["command"] : nil
       cooling_lease_prepared = boolean_or_nil(run_report["coolingLeasePrepared"])
       auto_restore_attempted = boolean_or_nil(run_report["autoRestoreAttempted"])
       auto_restore_succeeded = boolean_or_nil(run_report["autoRestoreSucceeded"])
@@ -545,6 +552,9 @@ write_summary_json() {
       end
 
       {
+        "schemaVersion" => run_schema_version,
+        "schemaID" => run_schema_id,
+        "command" => run_command,
         "exitStatus" => exit_status,
         "stdout" => run_stdout_name,
         "stderr" => run_stderr_name,
@@ -589,6 +599,7 @@ write_summary_json() {
         "capabilitiesSchemaID" => capabilities.dig("schemaIDs", "capabilities"),
         "diagnoseSchemaID" => capabilities.dig("schemaIDs", "diagnose"),
         "commandErrorSchemaID" => capabilities.dig("schemaIDs", "commandError"),
+        "runSchemaID" => capabilities.dig("schemaIDs", "run"),
         "daemonStatusAvailable" => capabilities["daemonStatusAvailable"],
         "policySource" => capabilities["policySource"],
         "policyStatusAvailable" => capabilities["policyStatusAvailable"],

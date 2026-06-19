@@ -1403,7 +1403,7 @@ final class AppModelTests: XCTestCase {
         for (mode, label) in expectations {
             model.menuBarDisplayMode = mode
             XCTAssertEqual(model.menuBarLabelText, label, mode.label)
-            XCTAssertNil(model.menuBarStatusItemText, mode.label)
+            XCTAssertEqual(model.menuBarStatusItemText, label, mode.label)
             XCTAssertFalse(model.menuBarLabelUsesFanIcon, mode.label)
         }
     }
@@ -1429,7 +1429,7 @@ final class AppModelTests: XCTestCase {
         model.menuBarDisplayMode = .ownerTemperatureAndRPM
 
         XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
-        XCTAssertNil(model.menuBarStatusItemText)
+        XCTAssertEqual(model.menuBarStatusItemText, "Mac | -- C | -- RPM")
 
         await model.primeMenuBarStatusItemTelemetry()
 
@@ -1437,6 +1437,44 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
         XCTAssertEqual(model.menuBarStatusItemText, "Mac | 67 C | 3352 RPM")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testStartPublishesMenuBarTelemetryBeforeSlowUncleanExitRecovery() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 67.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        await hardware.setRestoreAutoDelayNanoseconds(300_000_000)
+        let marker = ManualControlMarker(url: temporaryMarkerPath())
+        marker.markActive()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: marker
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .ownerTemperatureAndRPM
+
+        model.start()
+        for _ in 0..<50 {
+            if await hardware.snapshotReadCount() > 0 {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertEqual(model.menuBarStatusItemText, "Mac | 67 C | 3352 RPM")
+        XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertTrue(model.hasCompletedHardwarePoll)
+        await model.stopAndRestore()
     }
 
     func testPrimeMenuBarStatusItemTelemetryRetriesUntilSelectedDisplayHasData() async {
@@ -3349,6 +3387,7 @@ private actor AppModelFakeHardware: HardwareService {
     private var snapshotFailures: [Error] = []
     private var applyFailures: [Error] = []
     private var snapshotDelayNanoseconds: UInt64?
+    private var restoreAutoDelayNanoseconds: UInt64?
     private var snapshotReads = 0
 
     init(snapshot: HardwareSnapshot) {
@@ -3374,6 +3413,10 @@ private actor AppModelFakeHardware: HardwareService {
         snapshotDelayNanoseconds = nanoseconds
     }
 
+    func setRestoreAutoDelayNanoseconds(_ nanoseconds: UInt64?) {
+        restoreAutoDelayNanoseconds = nanoseconds
+    }
+
     func snapshotReadCount() -> Int {
         snapshotReads
     }
@@ -3393,7 +3436,12 @@ private actor AppModelFakeHardware: HardwareService {
         appliedCommands.append(command)
     }
 
-    func restoreAuto(fan: Fan) async throws { restoredFanIDs.append(fan.id) }
+    func restoreAuto(fan: Fan) async throws {
+        if let restoreAutoDelayNanoseconds {
+            try? await Task.sleep(nanoseconds: restoreAutoDelayNanoseconds)
+        }
+        restoredFanIDs.append(fan.id)
+    }
 }
 
 private actor AppModelFailingHardware: HardwareService {

@@ -220,7 +220,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(statusItemController.contains("await Task.yield()"))
         XCTAssertTrue(statusItemController.contains("MenuBarView(openMainWindow: { [weak self] in"))
         XCTAssertTrue(statusItemController.contains("let statusItemText = resolvedStatusItemText"))
-        XCTAssertTrue(statusItemController.contains("guard let text = model.menuBarStatusItemText, !text.contains(\"--\") else"))
+        XCTAssertTrue(statusItemController.contains("private var resolvedStatusItemText: String? {\n        model.menuBarStatusItemText\n    }"))
         XCTAssertTrue(statusItemController.contains("button.title = statusItemText ?? \"\""))
         XCTAssertTrue(statusItemController.contains("NSImage(systemSymbolName: \"fan\""))
         XCTAssertTrue(appModel.contains("private let preferencesStore: AppPreferencesStore"))

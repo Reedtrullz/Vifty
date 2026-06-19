@@ -115,7 +115,8 @@
         "audit",
         "diagnose",
         "status",
-        "commandError"
+        "commandError",
+        "run"
       ],
       "properties": {
         "capabilities": {
@@ -132,6 +133,9 @@
         },
         "commandError": {
           "const": "docs/schemas/viftyctl-command-error.schema.json"
+        },
+        "run": {
+          "const": "docs/schemas/viftyctl-run.schema.json"
         }
       }
     },
@@ -142,7 +146,8 @@
         "audit",
         "diagnose",
         "status",
-        "commandError"
+        "commandError",
+        "run"
       ],
       "properties": {
         "capabilities": {
@@ -159,6 +164,9 @@
         },
         "commandError": {
           "const": "Contents/Resources/schemas/viftyctl-command-error.schema.json"
+        },
+        "run": {
+          "const": "Contents/Resources/schemas/viftyctl-run.schema.json"
         }
       }
     },
@@ -169,7 +177,8 @@
         "audit",
         "diagnose",
         "status",
-        "commandError"
+        "commandError",
+        "run"
       ],
       "properties": {
         "capabilities": {
@@ -186,6 +195,9 @@
         },
         "commandError": {
           "const": "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+        },
+        "run": {
+          "const": "https://vifty.local/schemas/viftyctl-run.schema.json"
         }
       }
     },

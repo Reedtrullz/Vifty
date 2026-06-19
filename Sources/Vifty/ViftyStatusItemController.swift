@@ -87,10 +87,7 @@ final class ViftyStatusItemController: NSObject {
     }
 
     private var resolvedStatusItemText: String? {
-        guard let text = model.menuBarStatusItemText, !text.contains("--") else {
-            return nil
-        }
-        return text
+        model.menuBarStatusItemText
     }
 
     private func scheduleTelemetryPrimeIfNeeded() {
