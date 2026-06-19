@@ -1212,6 +1212,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     File.basename(File.expand_path(bundle.to_s))
   end
 
+  def model_family_for(model_identifier)
+    value = model_identifier.to_s.strip
+    return nil if value.empty?
+
+    value.split(",", 2).first
+  end
+
   def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_app_preferences)
     return if path.to_s.empty?
 
@@ -1240,6 +1247,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "daemonControlPathReady" => diagnose["daemonControlPathReady"],
       "manualControlActive" => diagnose.key?("manualControlActive") ? diagnose["manualControlActive"] : nil,
       "modelIdentifier" => diagnose["modelIdentifier"],
+      "modelFamily" => model_family_for(diagnose["modelIdentifier"]),
       "isAppleSilicon" => diagnose["isAppleSilicon"],
       "isMacBookPro" => diagnose["isMacBookPro"],
       "fanCount" => diagnose["fanCount"],

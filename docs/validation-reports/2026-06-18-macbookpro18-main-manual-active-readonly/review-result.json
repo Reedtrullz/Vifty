@@ -23,6 +23,7 @@
   "daemonControlPathReady": true,
   "manualControlActive": true,
   "modelIdentifier": "MacBookPro18,1",
+  "modelFamily": "MacBookPro18",
   "isAppleSilicon": true,
   "isMacBookPro": true,
   "fanCount": 2,

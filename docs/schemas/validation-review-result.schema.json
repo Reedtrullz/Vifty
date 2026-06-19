@@ -30,6 +30,7 @@
     "daemonControlPathReady",
     "manualControlActive",
     "modelIdentifier",
+    "modelFamily",
     "isAppleSilicon",
     "isMacBookPro",
     "fanCount",
@@ -121,6 +122,10 @@
     },
     "modelIdentifier": {
       "$ref": "#/$defs/nullableString"
+    },
+    "modelFamily": {
+      "$ref": "#/$defs/nullableString",
+      "description": "Stable model identifier prefix derived from modelIdentifier, for example MacBookPro18 from MacBookPro18,3. This is a grouping key, not a chip-generation claim."
     },
     "isAppleSilicon": {
       "$ref": "#/$defs/nullableBoolean"

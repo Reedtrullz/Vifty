@@ -293,6 +293,13 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       valid = false
     end
 
+    expected_model_family = model_family_for(result["modelIdentifier"])
+    provided_model_family = result.fetch("modelFamily", "").to_s
+    if !provided_model_family.empty? && provided_model_family != expected_model_family
+      failures << "#{path} modelFamily #{provided_model_family.inspect} did not match derived modelIdentifier family #{expected_model_family.inspect}"
+      valid = false
+    end
+
     unless result["warnings"].is_a?(Array)
       failures << "#{path} warnings must be an array"
       valid = false
@@ -551,7 +558,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     agent_run_smoke_validated = result["status"].to_s == "passed" &&
       agent_run_smoke_result == "passed-auto-restored"
     model_identifier = result["modelIdentifier"].to_s
-    model_family = model_family_for(model_identifier)
+    model_family = result["modelFamily"].to_s.empty? ? model_family_for(model_identifier) : result["modelFamily"].to_s
 
     rows << {
       "source" => display_source_for(path, input_roots),

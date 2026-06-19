@@ -465,6 +465,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(summary["manualControlActive"] as? Bool, false)
         XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,3")
+        XCTAssertEqual(summary["modelFamily"] as? String, "MacBookPro18")
         XCTAssertEqual(summary["isAppleSilicon"] as? Bool, true)
         XCTAssertEqual(summary["isMacBookPro"] as? Bool, true)
         XCTAssertEqual(summary["fanCount"] as? Int, 2)

@@ -382,6 +382,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             "recommendedRecoveryAction",
             "daemonControlPathReady",
             "manualControlActive",
+            "modelIdentifier",
+            "modelFamily",
             "manualSmokeTestResult",
             "agentRunSmokeResult",
             "failures",
@@ -686,6 +688,26 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("recommendedRecoveryAction is not a supported value"))
     }
 
+    func testSummarizerRejectsReviewResultWithModelFamilyDrift() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "drifted-model-family-review.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,3",
+            safeToRequestCooling: true,
+            modelFamily: "Mac14"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains(#"modelFamily "Mac14" did not match derived modelIdentifier family "MacBookPro18""#),
+            result.stderr
+        )
+    }
+
     func testSummarizerRejectsReviewResultWithoutRecommendedAgentAction() throws {
         let harness = try ValidationReportSummaryHarness()
         let reviewURL = try harness.writeReviewResult(
@@ -800,7 +822,8 @@ private final class ValidationReportSummaryHarness {
         includeGeneratedAtUTC: Bool = true,
         sourceArtifactBytes: String = "",
         sourceRef: String = "v1.1.0",
-        sourceSHA: String = String(repeating: "a", count: 40)
+        sourceSHA: String = String(repeating: "a", count: 40),
+        modelFamily: String? = nil
     ) throws -> URL {
         let url = rootURL.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
@@ -840,6 +863,9 @@ private final class ValidationReportSummaryHarness {
             "failures": failures,
             "warnings": warnings
         ]
+        if let modelFamily {
+            json["modelFamily"] = modelFamily
+        }
         if includeGeneratedAtUTC {
             json["generatedAtUTC"] = generatedAtUTC
         }
