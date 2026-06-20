@@ -206,13 +206,29 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
 
 3. Run the daemon-backed manual smoke below only if `diagnose --json` is `ready` or safely `degraded`, `safeToRequestCooling=true`, `daemonControlPathReady=true`, and `manualControlActive=false`. The `prepare` and `restore-auto` commands write fan state through Vifty's bounded daemon path; the diagnose and probe commands are read-only.
 
-4. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
+4. Before touching Fixed or Curve smoke, run the read-only manual-smoke preflight:
 
-5. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
+   ```sh
+   make manual-smoke-readiness
+   ```
+
+   For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, records `readOnly: true` and `coolingCommandsRun: false` in JSON mode, exits `75` when smoke must be skipped, and lists blockers such as `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
+
+5. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
+
+6. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
 
 ## Manual Fan Write Smoke Test
 
 Only run this on supported Apple Silicon MacBook Pro hardware after saving the readiness report.
+
+First run the read-only gate:
+
+```sh
+make manual-smoke-readiness
+```
+
+If it prints `Manual smoke readiness: blocked`, stop. Do not run `prepare`, Fixed/Curve UI smoke, helper commands, or agent-run smoke until the blockers are cleared and the preflight exits `0`. The most common local blocker is `manual control active before manual smoke`, which means restore Auto first and wait for `manualControlActive=false`.
 
 1. Record the baseline:
 

@@ -28,7 +28,7 @@ body:
         sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
         ```
 
-        Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only. A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported safe-block reports. Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware, and restore Auto afterward.
+        Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only. A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported safe-block reports. Before manual Fixed/Curve smoke, run `make manual-smoke-readiness` or `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`; it only runs `viftyctl diagnose --json`, records `readOnly: true` and `coolingCommandsRun: false` in JSON mode, and exits `75` when smoke must be skipped. Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware after that preflight passes, and restore Auto afterward.
 
   - type: input
     id: vifty-version
@@ -154,7 +154,7 @@ body:
     id: manual-smoke
     attributes:
       label: Manual fan write smoke test
-      description: Did you run the short lease/manual fan write smoke test from docs/hardware-validation.md?
+      description: Did you run the short lease/manual fan write smoke test from docs/hardware-validation.md? Run `make manual-smoke-readiness` first and skip smoke if it reports blocked readiness.
       options:
         - Passed and Auto restore confirmed
         - Skipped because readiness was blocked
@@ -167,9 +167,10 @@ body:
     id: manual-smoke-notes
     attributes:
       label: Manual smoke test notes
-      description: If you ran the smoke test, include prepare/restore output and any observed fan mode or target changes.
+      description: If you ran the smoke test, include `make manual-smoke-readiness` output, prepare/restore output, and any observed fan mode or target changes. If blocked, paste the readiness blockers instead.
       render: text
       placeholder: |
+        manual-smoke-readiness: ...
         prepare: ...
         diagnose during lease: ...
         restore-auto: ...

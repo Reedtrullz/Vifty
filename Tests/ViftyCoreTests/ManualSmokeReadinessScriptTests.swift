@@ -1,0 +1,165 @@
+import Foundation
+import XCTest
+
+final class ManualSmokeReadinessScriptTests: XCTestCase {
+    func testReadinessPassesWhenDiagnoseSupportsHumanManualSmoke() throws {
+        let harness = try ManualSmokeReadinessHarness()
+
+        let result = try harness.runReadiness(["--viftyctl", harness.viftyctlURL.path])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Manual smoke readiness: ready"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Read-only preflight passed; no cooling command was run."), result.stdout)
+        XCTAssertTrue(result.stdout.contains("safeToRequestCooling=true daemonControlPathReady=true manualControlActive=false"), result.stdout)
+        XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
+        XCTAssertFalse(try harness.loggedArguments().contains { invocation in
+            ["prepare", "run", "restore-auto", "setFixed", "auto"].contains { invocation.hasPrefix($0) }
+        })
+    }
+
+    func testReadinessBlocksWhenManualControlIsActive() throws {
+        let harness = try ManualSmokeReadinessHarness(
+            diagnoseJSON: #"{"state":"degraded","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"restoreAutoBeforeRequestingCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"appPreferences":{"startupMode":"Curve","startupModeSource":"persisted","readError":null}}"#
+        )
+
+        let result = try harness.runReadiness(["--viftyctl", harness.viftyctlURL.path])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Manual smoke readiness: blocked"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Do not run manual Fixed/Curve fan-write smoke."), result.stdout)
+        XCTAssertTrue(result.stdout.contains("- manual control active before manual smoke"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Startup mode: Curve (persisted)"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Restore Auto in Vifty, wait until manualControlActive=false"), result.stdout)
+        XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
+    }
+
+    func testJSONOutputKeepsMachineReadableReadOnlyDecision() throws {
+        let harness = try ManualSmokeReadinessHarness(
+            diagnoseJSON: #"{"state":"degraded","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"restoreAutoBeforeRequestingCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"appPreferences":{"startupMode":"Curve","startupModeSource":"persisted","readError":null}}"#
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(ManualSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["kind"] as? String, "vifty-manual-smoke-readiness")
+        XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["manualSmokeReady"] as? Bool, false)
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(summary["diagnoseExitStatus"] as? Int, 0)
+        XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,1")
+        XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(summary["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(summary["failedCheckIDs"] as? [String], ["manualControlClear"])
+        XCTAssertEqual(summary["coolingBlockerIDs"] as? [String], ["manualControlClear"])
+        XCTAssertEqual(
+            summary["blockers"] as? [String],
+            [
+                "diagnose reported safeToRequestCooling is not true",
+                "manual control active before manual smoke",
+                "diagnose recommended action is not requestCooling or requestCoolingWithCaution"
+            ]
+        )
+        let appPreferences = try XCTUnwrap(summary["appPreferences"] as? [String: Any])
+        XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
+        XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+    }
+}
+
+private struct ManualSmokeReadinessProcessResult {
+    var exitCode: Int32
+    var stdout: String
+    var stderr: String
+}
+
+private final class ManualSmokeReadinessHarness {
+    let repositoryRoot: URL
+    let rootURL: URL
+    let viftyctlURL: URL
+    let logURL: URL
+    private let diagnoseJSON: String
+    private let diagnoseExitCode: Int
+
+    init(
+        diagnoseJSON: String = #"{"state":"ready","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}"#,
+        diagnoseExitCode: Int = 0
+    ) throws {
+        repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-manual-smoke-readiness-\(UUID().uuidString)", isDirectory: true)
+        viftyctlURL = rootURL.appendingPathComponent("fake-bin/viftyctl")
+        logURL = rootURL.appendingPathComponent("viftyctl.log")
+        self.diagnoseJSON = diagnoseJSON
+        self.diagnoseExitCode = diagnoseExitCode
+
+        try FileManager.default.createDirectory(
+            at: viftyctlURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try writeFakeViftyCtl()
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    func runReadiness(_ arguments: [String]) throws -> ManualSmokeReadinessProcessResult {
+        let script = repositoryRoot.appendingPathComponent("scripts/check-manual-smoke-readiness.sh")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.currentDirectoryURL = repositoryRoot
+        process.arguments = [script.path] + arguments
+        process.environment = ProcessInfo.processInfo.environment.merging([
+            "VIFTY_TEST_SHELL_FIXTURES": "1",
+            "VIFTY_FAKE_LOG": logURL.path,
+            "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
+            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)"
+        ]) { _, new in new }
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+
+        return ManualSmokeReadinessProcessResult(
+            exitCode: process.terminationStatus,
+            stdout: String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
+            stderr: String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        )
+    }
+
+    func loggedArguments() throws -> [String] {
+        guard FileManager.default.fileExists(atPath: logURL.path) else { return [] }
+        return try String(contentsOf: logURL, encoding: .utf8)
+            .split(separator: "\n")
+            .map(String.init)
+    }
+
+    static func parseJSON(_ text: String) throws -> [String: Any]? {
+        let data = Data(text.utf8)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private func writeFakeViftyCtl() throws {
+        let script = """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> "$VIFTY_FAKE_LOG"
+        if [ "$*" = "diagnose --json" ]; then
+          printf '%s\\n' "$VIFTY_FAKE_DIAGNOSE_JSON"
+          exit "$VIFTY_FAKE_DIAGNOSE_EXIT"
+        fi
+        echo "unexpected viftyctl args: $*" >&2
+        exit 64
+        """
+        try script.write(to: viftyctlURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: viftyctlURL.path)
+    }
+}

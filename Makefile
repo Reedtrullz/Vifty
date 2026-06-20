@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -29,6 +29,7 @@ VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE ?=
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT ?= not-recorded
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE ?=
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY ?=
+MANUAL_SMOKE_READINESS_JSON ?= 0
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_GUARDED_RUN_STDERR ?=
 AGENT_EVIDENCE_BUNDLE ?=
@@ -100,6 +101,9 @@ validation-evidence-review: ## Review a captured validation evidence bundle
 	@if [ -z "$(VALIDATION_EVIDENCE_BUNDLE)" ]; then echo "VALIDATION_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
 	./scripts/review-validation-evidence.sh --bundle "$(VALIDATION_EVIDENCE_BUNDLE)" --mode "$(VALIDATION_EVIDENCE_REVIEW_MODE)" $(if $(VALIDATION_EVIDENCE_REVIEW_SUMMARY),--summary "$(VALIDATION_EVIDENCE_REVIEW_SUMMARY)",) --manual-smoke-result "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE),--manual-smoke-source "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE)",) --agent-run-smoke-result "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE),--agent-run-smoke-source "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE)",) $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY),--agent-run-smoke-summary "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY)",)
 
+manual-smoke-readiness: ## Read-only preflight before human Fixed/Curve smoke
+	./scripts/check-manual-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" $(if $(filter 1 true yes,$(MANUAL_SMOKE_READINESS_JSON)),--json,)
+
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
 	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_STDERR),--guarded-run-stderr-file "$(AGENT_EVIDENCE_GUARDED_RUN_STDERR)",)
 
@@ -138,6 +142,7 @@ verify: ## Run local trust gates without installing
 	plutil -lint "$(DAEMON_PLIST)"
 	test -x "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
+	test -x scripts/check-manual-smoke-readiness.sh
 	test -x "$(WRAPPERS)/guarded-run.sh"
 	test -x "$(WRAPPERS)/swift-test.sh"
 	test -x "$(WRAPPERS)/make-build.sh"
