@@ -693,26 +693,16 @@ struct ContentView: View {
             }
 
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
-                let visibleSensors = topTemperatureSensors(from: sensors, selectedID: model.selectedSensor?.id, limit: compact ? 3 : 4)
-                let visibleSensorIDs = Set(visibleSensors.map(\.id))
-                let remainingSensors = sensors.filter { !visibleSensorIDs.contains($0.id) }
-                LazyVStack(spacing: compact ? 6 : 8) {
-                    ForEach(visibleSensors) { sensor in
-                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: true)
-                    }
-                }
-                if !remainingSensors.isEmpty {
-                    DisclosureGroup("All sensors") {
-                        LazyVStack(spacing: 6) {
-                            ForEach(remainingSensors) { sensor in
-                                SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: true)
-                            }
+                DisclosureGroup("All sensors") {
+                    LazyVStack(spacing: 6) {
+                        ForEach(sensors) { sensor in
+                            SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: true)
                         }
-                        .padding(.top, 6)
                     }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .padding(.top, 6)
                 }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             } else {
                 ContentUnavailableView("No Temperature Sensors", systemImage: "thermometer.slash", description: Text("Vifty needs at least one temperature sensor before fan curves can run."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -720,25 +710,6 @@ struct ContentView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private func topTemperatureSensors(
-        from sensors: [TemperatureSensor],
-        selectedID: String?,
-        limit: Int
-    ) -> [TemperatureSensor] {
-        guard sensors.count > limit else { return sensors }
-        var picked: [TemperatureSensor] = []
-        if let selectedID,
-           let selected = sensors.first(where: { $0.id == selectedID }) {
-            picked.append(selected)
-        }
-
-        for sensor in sensors.sorted(by: { $0.celsius > $1.celsius }) where picked.count < limit {
-            guard !picked.contains(where: { $0.id == sensor.id }) else { continue }
-            picked.append(sensor)
-        }
-        return picked
     }
 }
 
@@ -778,9 +749,6 @@ private struct TelemetryOverviewPanel: View {
                     }
                 }
                 if let latest = history.samples.last {
-                    if let temperatureText = summary.latestTemperatureText {
-                        PowerMetric(label: summary.latestTemperatureLabel, value: temperatureText, systemImage: "thermometer.medium")
-                    }
                     if let fanRPMText = summary.latestFanRPMText {
                         PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
                     }
