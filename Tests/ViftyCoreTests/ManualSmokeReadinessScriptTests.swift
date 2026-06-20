@@ -72,6 +72,38 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
     }
 
+    func testJSONOutputBlocksWhenExpectedDaemonDoesNotMatchInstalledDaemon() throws {
+        let harness = try ManualSmokeReadinessHarness(expectedDaemonContents: "different daemon")
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match",
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(ManualSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["kind"] as? String, "vifty-manual-smoke-readiness")
+        XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(summary["schemaID"] as? String, "https://vifty.local/schemas/manual-smoke-readiness.schema.json")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["manualSmokeReady"] as? Bool, false)
+        XCTAssertEqual(summary["readOnly"] as? Bool, true)
+        XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(summary["blockers"] as? [String], ["installed daemon does not match expected build daemon"])
+
+        let daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.path)
+        XCTAssertEqual(daemonRuntime["installedDaemonPresent"] as? Bool, true)
+        XCTAssertNotNil(daemonRuntime["installedDaemonSHA256"] as? String)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPath"] as? String, harness.expectedDaemonURL.path)
+        XCTAssertNotNil(daemonRuntime["expectedDaemonSHA256"] as? String)
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
+        XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
+        XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
+    }
+
     func testReadinessSchemaIsDocumentedForEvidenceConsumers() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/manual-smoke-readiness.schema.json")
@@ -87,6 +119,7 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
         XCTAssertNotNil(properties["coolingBlockerIDs"] as? [String: Any])
         XCTAssertNotNil(properties["appPreferences"] as? [String: Any])
+        XCTAssertNotNil(properties["daemonRuntime"] as? [String: Any])
     }
 }
 
@@ -101,18 +134,24 @@ private final class ManualSmokeReadinessHarness {
     let rootURL: URL
     let viftyctlURL: URL
     let logURL: URL
+    let installedDaemonURL: URL
+    let expectedDaemonURL: URL
     private let diagnoseJSON: String
     private let diagnoseExitCode: Int
 
     init(
         diagnoseJSON: String = #"{"state":"ready","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}"#,
-        diagnoseExitCode: Int = 0
+        diagnoseExitCode: Int = 0,
+        installedDaemonContents: String = "installed daemon",
+        expectedDaemonContents: String = "installed daemon"
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-manual-smoke-readiness-\(UUID().uuidString)", isDirectory: true)
         viftyctlURL = rootURL.appendingPathComponent("fake-bin/viftyctl")
         logURL = rootURL.appendingPathComponent("viftyctl.log")
+        installedDaemonURL = rootURL.appendingPathComponent("installed-daemon")
+        expectedDaemonURL = rootURL.appendingPathComponent("expected-daemon")
         self.diagnoseJSON = diagnoseJSON
         self.diagnoseExitCode = diagnoseExitCode
 
@@ -120,6 +159,8 @@ private final class ManualSmokeReadinessHarness {
             at: viftyctlURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        try installedDaemonContents.write(to: installedDaemonURL, atomically: true, encoding: .utf8)
+        try expectedDaemonContents.write(to: expectedDaemonURL, atomically: true, encoding: .utf8)
         try writeFakeViftyCtl()
     }
 
@@ -137,7 +178,8 @@ private final class ManualSmokeReadinessHarness {
             "VIFTY_TEST_SHELL_FIXTURES": "1",
             "VIFTY_FAKE_LOG": logURL.path,
             "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
-            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)"
+            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
+            "VIFTY_MANUAL_SMOKE_INSTALLED_DAEMON_PATH": installedDaemonURL.path
         ]) { _, new in new }
 
         let stdout = Pipe()

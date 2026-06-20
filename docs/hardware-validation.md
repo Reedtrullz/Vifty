@@ -216,7 +216,7 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
    make manual-smoke-readiness
    ```
 
-   For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, records `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false` in JSON mode, exits `75` when smoke must be skipped, and lists blockers such as `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
+   For current-source validation, prefer `make manual-smoke-readiness-current-build`; it builds `.build/Vifty.app`, runs the freshly built `viftyctl`, and blocks if the installed LaunchDaemon helper does not match the freshly built daemon. Installed-app testers without a source checkout can run `/Applications/Vifty.app/Contents/Resources/check-manual-smoke-readiness.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl`. For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, may hash the installed LaunchDaemon helper and expected daemon when asked, records `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false` in JSON mode, also records `daemonRuntime`, exits `75` when smoke must be skipped, and lists blockers such as `installed daemon does not match expected build daemon`, `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
 
 5. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
 
@@ -232,7 +232,7 @@ First run the read-only gate:
 make manual-smoke-readiness
 ```
 
-If it prints `Manual smoke readiness: blocked`, stop. Do not run `prepare`, Fixed/Curve UI smoke, helper commands, or agent-run smoke until the blockers are cleared and the preflight exits `0`. The most common local blocker is `manual control active before manual smoke`, which means restore Auto first and wait for `manualControlActive=false`.
+For clean current-source proof, use `make manual-smoke-readiness-current-build` so the preflight requires the installed LaunchDaemon helper to match `.build/Vifty.app/Contents/MacOS/ViftyDaemon`. For an installed-app report, use the bundled `/Applications/Vifty.app/Contents/Resources/check-manual-smoke-readiness.sh` with the installed `viftyctl`. If it prints `Manual smoke readiness: blocked`, stop. Do not run `prepare`, Fixed/Curve UI smoke, helper commands, or agent-run smoke until the blockers are cleared and the preflight exits `0`. The most common local blocker is `manual control active before manual smoke`, which means restore Auto first and wait for `manualControlActive=false`; for current-build reports, a daemon mismatch means reinstall or repair the freshly built helper before any fan-write evidence.
 
 1. Record the baseline:
 

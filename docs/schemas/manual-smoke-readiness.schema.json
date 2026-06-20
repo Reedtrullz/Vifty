@@ -30,6 +30,7 @@
     "failedCheckIDs",
     "coolingBlockerIDs",
     "appPreferences",
+    "daemonRuntime",
     "blockers",
     "nextAction",
     "parseError"
@@ -219,6 +220,56 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "daemonRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installedDaemonPath",
+        "installedDaemonPresent",
+        "installedDaemonSHA256",
+        "expectedDaemonPath",
+        "expectedDaemonSHA256",
+        "matchesExpectedDaemon",
+        "matchRequired"
+      ],
+      "properties": {
+        "installedDaemonPath": {
+          "type": "string"
+        },
+        "installedDaemonPresent": {
+          "type": "boolean"
+        },
+        "installedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expectedDaemonPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "matchesExpectedDaemon": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "matchRequired": {
+          "type": "boolean"
         }
       }
     },
