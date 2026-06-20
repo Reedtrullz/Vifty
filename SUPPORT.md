@@ -42,6 +42,12 @@ If the report is about a guarded wrapper refusal and you already captured the
 wrapper stderr, add it without rerunning the workload:
 
 ```sh
+AGENT_EVIDENCE_GUARDED_RUN_STDERR=/path/to/guarded-run.stderr make agent-cooling-evidence
+```
+
+Or call the collector directly:
+
+```sh
 scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl \
   --guarded-run-stderr-file /path/to/guarded-run.stderr

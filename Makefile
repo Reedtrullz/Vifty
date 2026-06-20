@@ -30,6 +30,7 @@ VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT ?= not-recorded
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE ?=
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY ?=
 AGENT_EVIDENCE_OUTPUT ?=
+AGENT_EVIDENCE_GUARDED_RUN_STDERR ?=
 AGENT_EVIDENCE_BUNDLE ?=
 AGENT_EVIDENCE_REVIEW_SUMMARY ?=
 AGENT_RUN_SMOKE_OUTPUT ?=
@@ -100,7 +101,7 @@ validation-evidence-review: ## Review a captured validation evidence bundle
 	./scripts/review-validation-evidence.sh --bundle "$(VALIDATION_EVIDENCE_BUNDLE)" --mode "$(VALIDATION_EVIDENCE_REVIEW_MODE)" $(if $(VALIDATION_EVIDENCE_REVIEW_SUMMARY),--summary "$(VALIDATION_EVIDENCE_REVIEW_SUMMARY)",) --manual-smoke-result "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE),--manual-smoke-source "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE)",) --agent-run-smoke-result "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE),--agent-run-smoke-source "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE)",) $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY),--agent-run-smoke-summary "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY)",)
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
-	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",)
+	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_STDERR),--guarded-run-stderr-file "$(AGENT_EVIDENCE_GUARDED_RUN_STDERR)",)
 
 agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle
 	@if [ -z "$(AGENT_EVIDENCE_BUNDLE)" ]; then echo "AGENT_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
