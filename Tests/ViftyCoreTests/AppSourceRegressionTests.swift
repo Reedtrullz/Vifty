@@ -360,6 +360,25 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(contentView.contains("Text(\"Fan \\(fan.id): \\(fan.name)\")"))
     }
 
+    func testCurveEditorShowsDraggableChartForActualFanCurves() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(contentView.contains("FanCurveChartEditor("))
+        XCTAssertTrue(contentView.contains("startTemp: $model.curveStartTemp"))
+        XCTAssertTrue(contentView.contains("fanOverrides: model.fanOverrides"))
+        XCTAssertTrue(contentView.contains("private struct FanCurveChartEditor: View"))
+        XCTAssertTrue(contentView.contains("DragGesture(minimumDistance: 0)"))
+        XCTAssertTrue(contentView.contains("setCurvePoint(point, from: value.location, in: geometry.size)"))
+        XCTAssertTrue(contentView.contains("private var fanCurveSeries: [FanCurveChartSeries]"))
+        XCTAssertTrue(contentView.contains("guard usePerFanOverrides else { return [] }"))
+        XCTAssertTrue(contentView.contains("FanCurveChartSeries(name: fan.name"))
+        XCTAssertTrue(contentView.contains("drawCurve(series.points, in: geometry.size)"))
+        XCTAssertTrue(contentView.contains("ChartHandle(label: point.label"))
+        XCTAssertTrue(contentView.contains("DisclosureGroup(\"Exact points\")"))
+        XCTAssertTrue(contentView.contains("CurvePointEditor(title: \"Start\""))
+        XCTAssertFalse(contentView.contains("import Charts"))
+    }
+
     func testMenuBarNotificationSettingsAreWired() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let appModel = try read("Sources/Vifty/AppModel.swift")

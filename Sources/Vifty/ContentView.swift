@@ -594,9 +594,30 @@ struct ContentView: View {
                 }
             }
 
-            CurvePointEditor(title: "Start", temp: $model.curveStartTemp, rpm: $model.curveStartRPM, rpmRange: model.fanRange)
-            CurvePointEditor(title: "Ramp", temp: $model.curveMidTemp, rpm: $model.curveMidRPM, rpmRange: model.fanRange)
-            CurvePointEditor(title: "High", temp: $model.curveMaxTemp, rpm: $model.curveMaxRPM, rpmRange: model.fanRange)
+            FanCurveChartEditor(
+                startTemp: $model.curveStartTemp,
+                midTemp: $model.curveMidTemp,
+                maxTemp: $model.curveMaxTemp,
+                startRPM: $model.curveStartRPM,
+                midRPM: $model.curveMidRPM,
+                maxRPM: $model.curveMaxRPM,
+                rpmRange: model.fanRange,
+                liveTemperature: model.selectedSensor?.celsius,
+                fans: model.snapshot?.fans ?? [],
+                fanOverrides: model.fanOverrides,
+                usePerFanOverrides: model.usePerFanOverrides
+            )
+
+            DisclosureGroup("Exact points") {
+                VStack(alignment: .leading, spacing: 10) {
+                    CurvePointEditor(title: "Start", temp: $model.curveStartTemp, rpm: $model.curveStartRPM, rpmRange: model.fanRange)
+                    CurvePointEditor(title: "Ramp", temp: $model.curveMidTemp, rpm: $model.curveMidRPM, rpmRange: model.fanRange)
+                    CurvePointEditor(title: "High", temp: $model.curveMaxTemp, rpm: $model.curveMaxRPM, rpmRange: model.fanRange)
+                }
+                .padding(.top, 6)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
 
             if let fans = model.snapshot?.fans, fans.count > 1 {
                 Toggle("Per-fan overrides", isOn: $model.usePerFanOverrides)
@@ -1149,6 +1170,271 @@ private struct SensorRow: View {
         }
         .padding(compact ? 8 : 10)
         .background(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct FanCurveChartEditor: View {
+    @Binding var startTemp: Double
+    @Binding var midTemp: Double
+    @Binding var maxTemp: Double
+    @Binding var startRPM: Double
+    @Binding var midRPM: Double
+    @Binding var maxRPM: Double
+    let rpmRange: ClosedRange<Double>
+    let liveTemperature: Double?
+    let fans: [Fan]
+    let fanOverrides: [FanCurveOverride]
+    let usePerFanOverrides: Bool
+
+    private let tempRange = 35.0...105.0
+    private let fanColors: [Color] = [.cyan, .purple, .mint, .pink]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Curve chart", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(tempRange.lowerBound))-\(Int(tempRange.upperBound)) C · \(Int(rpmLower.rounded()))-\(Int(rpmUpper.rounded())) RPM")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { geometry in
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.06))
+                    chartGrid(in: geometry.size)
+
+                    ForEach(fanCurveSeries) { series in
+                        drawCurve(series.points, in: geometry.size)
+                            .stroke(series.color.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4]))
+                    }
+
+                    drawCurve(basePoints, in: geometry.size)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                    if let liveTemperature {
+                        liveTemperatureMarker(liveTemperature, in: geometry.size)
+                    }
+
+                    ForEach(CurveChartPointKind.allCases) { point in
+                        let value = chartValue(for: point)
+                        ChartHandle(label: point.label, temperature: value.temperature, rpm: value.rpm)
+                            .position(position(for: value, in: geometry.size))
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        setCurvePoint(point, from: value.location, in: geometry.size)
+                                    }
+                            )
+                    }
+                }
+            }
+            .frame(height: 170)
+
+            HStack(spacing: 10) {
+                chartLegendSwatch(.accentColor, label: "Base")
+                ForEach(fanCurveSeries) { series in
+                    chartLegendSwatch(series.color, label: series.name)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var rpmLower: Double {
+        rpmRange.lowerBound
+    }
+
+    private var rpmUpper: Double {
+        max(rpmRange.upperBound, rpmRange.lowerBound + 100)
+    }
+
+    private var basePoints: [FanCurveChartPoint] {
+        [
+            FanCurveChartPoint(id: "start", label: "Start", temperature: startTemp, rpm: startRPM),
+            FanCurveChartPoint(id: "ramp", label: "Ramp", temperature: midTemp, rpm: midRPM),
+            FanCurveChartPoint(id: "high", label: "High", temperature: maxTemp, rpm: maxRPM)
+        ]
+    }
+
+    private var fanCurveSeries: [FanCurveChartSeries] {
+        guard usePerFanOverrides else { return [] }
+        return fans.enumerated().map { offset, fan in
+            let override = fanOverrides.first { $0.fanID == fan.id }
+            let start = override?.startRPM ?? FanCurve.clamp(Int(startRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+            let mid = override?.midRPM ?? FanCurve.clamp(Int(midRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+            let max = override?.maxRPM ?? FanCurve.clamp(Int(maxRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
+            return FanCurveChartSeries(name: fan.name, color: fanColors[offset % fanColors.count], points: [
+                FanCurveChartPoint(id: "\(fan.id)-start", label: "Start", temperature: startTemp, rpm: Double(start)),
+                FanCurveChartPoint(id: "\(fan.id)-ramp", label: "Ramp", temperature: midTemp, rpm: Double(mid)),
+                FanCurveChartPoint(id: "\(fan.id)-high", label: "High", temperature: maxTemp, rpm: Double(max))
+            ])
+        }
+    }
+
+    private func chartValue(for point: CurveChartPointKind) -> FanCurveChartPoint {
+        switch point {
+        case .start:
+            FanCurveChartPoint(id: point.id, label: point.label, temperature: startTemp, rpm: startRPM)
+        case .ramp:
+            FanCurveChartPoint(id: point.id, label: point.label, temperature: midTemp, rpm: midRPM)
+        case .high:
+            FanCurveChartPoint(id: point.id, label: point.label, temperature: maxTemp, rpm: maxRPM)
+        }
+    }
+
+    private func setCurvePoint(_ point: CurveChartPointKind, from location: CGPoint, in size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        let x = clamped(Double(location.x), tempRange.lowerBound, tempRange.upperBound, over: Double(size.width))
+        let y = clamped(Double(size.height - location.y), rpmLower, rpmUpper, over: Double(size.height))
+        let temperature = x.rounded()
+        let rpm = (y / 50).rounded() * 50
+
+        switch point {
+        case .start:
+            startTemp = temperature
+            startRPM = clampRPM(rpm)
+        case .ramp:
+            midTemp = temperature
+            midRPM = clampRPM(rpm)
+        case .high:
+            maxTemp = temperature
+            maxRPM = clampRPM(rpm)
+        }
+    }
+
+    private func clamped(_ locationValue: Double, _ lower: Double, _ upper: Double, over span: Double) -> Double {
+        guard span > 0 else { return lower }
+        let ratio = min(max(locationValue / span, 0), 1)
+        return lower + ((upper - lower) * ratio)
+    }
+
+    private func clampRPM(_ rpm: Double) -> Double {
+        min(max(rpm, rpmLower), rpmUpper)
+    }
+
+    private func position(for point: FanCurveChartPoint, in size: CGSize) -> CGPoint {
+        let temperatureRatio = ratio(point.temperature, in: tempRange.lowerBound...tempRange.upperBound)
+        let rpmRatio = ratio(point.rpm, in: rpmLower...rpmUpper)
+        return CGPoint(
+            x: size.width * CGFloat(temperatureRatio),
+            y: size.height * CGFloat(1 - rpmRatio)
+        )
+    }
+
+    private func ratio(_ value: Double, in range: ClosedRange<Double>) -> Double {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return min(max((value - range.lowerBound) / span, 0), 1)
+    }
+
+    private func drawCurve(_ points: [FanCurveChartPoint], in size: CGSize) -> Path {
+        var path = Path()
+        let sortedPoints = points.sorted { $0.temperature < $1.temperature }
+        guard let first = sortedPoints.first else { return path }
+        path.move(to: position(for: first, in: size))
+        for point in sortedPoints.dropFirst() {
+            path.addLine(to: position(for: point, in: size))
+        }
+        return path
+    }
+
+    private func chartGrid(in size: CGSize) -> some View {
+        Path { path in
+            for index in 1..<4 {
+                let x = size.width * CGFloat(index) / 4
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+
+                let y = size.height * CGFloat(index) / 4
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+            }
+        }
+        .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [2, 5]))
+    }
+
+    private func liveTemperatureMarker(_ temperature: Double, in size: CGSize) -> some View {
+        let x = size.width * CGFloat(ratio(temperature, in: tempRange.lowerBound...tempRange.upperBound))
+        return Path { path in
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: size.height))
+        }
+        .stroke(Color.orange.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+    }
+
+    private func chartLegendSwatch(_ color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 12, height: 4)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private enum CurveChartPointKind: String, CaseIterable, Identifiable {
+    case start
+    case ramp
+    case high
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .start:
+            "Start"
+        case .ramp:
+            "Ramp"
+        case .high:
+            "High"
+        }
+    }
+}
+
+private struct FanCurveChartPoint: Identifiable {
+    let id: String
+    let label: String
+    let temperature: Double
+    let rpm: Double
+}
+
+private struct FanCurveChartSeries: Identifiable {
+    var id: String { name }
+    let name: String
+    let color: Color
+    let points: [FanCurveChartPoint]
+}
+
+private struct ChartHandle: View {
+    let label: String
+    let temperature: Double
+    let rpm: Double
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: 16, height: 16)
+                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 4)
+                .background(.regularMaterial, in: Capsule())
+        }
+        .contentShape(Rectangle())
+        .accessibilityLabel("\(label) curve point")
+        .accessibilityValue("\(Int(temperature.rounded())) C, \(Int(rpm.rounded())) RPM")
     }
 }
 
