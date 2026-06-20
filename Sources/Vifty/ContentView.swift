@@ -1205,7 +1205,7 @@ private struct FanCurveChartEditor: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.06))
-                    chartGrid(in: geometry.size)
+                    chartGrid(in: plotRect(in: geometry.size))
                     chartAxisLabels(in: geometry.size)
 
                     ForEach(fanCurveSeries) { series in
@@ -1292,9 +1292,10 @@ private struct FanCurveChartEditor: View {
     }
 
     private func setCurvePoint(_ point: CurveChartPointKind, from location: CGPoint, in size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-        let x = clamped(Double(location.x), tempRange.lowerBound, tempRange.upperBound, over: Double(size.width))
-        let y = clamped(Double(size.height - location.y), rpmLower, rpmUpper, over: Double(size.height))
+        let rect = plotRect(in: size)
+        guard rect.width > 0, rect.height > 0 else { return }
+        let x = clamped(Double(location.x - rect.minX), tempRange.lowerBound, tempRange.upperBound, over: Double(rect.width))
+        let y = clamped(Double(rect.maxY - location.y), rpmLower, rpmUpper, over: Double(rect.height))
         let temperature = x.rounded()
         let rpm = (y / 50).rounded() * 50
 
@@ -1322,12 +1323,23 @@ private struct FanCurveChartEditor: View {
     }
 
     private func position(for point: FanCurveChartPoint, in size: CGSize) -> CGPoint {
+        let rect = plotRect(in: size)
         let temperatureRatio = ratio(point.temperature, in: tempRange.lowerBound...tempRange.upperBound)
         let rpmRatio = ratio(point.rpm, in: rpmLower...rpmUpper)
         return CGPoint(
-            x: size.width * CGFloat(temperatureRatio),
-            y: size.height * CGFloat(1 - rpmRatio)
+            x: rect.minX + rect.width * CGFloat(temperatureRatio),
+            y: rect.maxY - rect.height * CGFloat(rpmRatio)
         )
+    }
+
+    private func plotRect(in size: CGSize) -> CGRect {
+        let leftInset = size.width < 420 ? 48.0 : 56.0
+        let topInset = 18.0
+        let rightInset = 12.0
+        let bottomInset = 30.0
+        let width = max(size.width - leftInset - rightInset, 1)
+        let height = max(size.height - topInset - bottomInset, 1)
+        return CGRect(x: leftInset, y: topInset, width: width, height: height)
     }
 
     private func ratio(_ value: Double, in range: ClosedRange<Double>) -> Double {
@@ -1347,38 +1359,43 @@ private struct FanCurveChartEditor: View {
         return path
     }
 
-    private func chartGrid(in size: CGSize) -> some View {
+    private func chartGrid(in rect: CGRect) -> some View {
         Path { path in
             for index in 1..<4 {
-                let x = size.width * CGFloat(index) / 4
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
+                let x = rect.minX + rect.width * CGFloat(index) / 4
+                path.move(to: CGPoint(x: x, y: rect.minY))
+                path.addLine(to: CGPoint(x: x, y: rect.maxY))
 
-                let y = size.height * CGFloat(index) / 4
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
+                let y = rect.minY + rect.height * CGFloat(index) / 4
+                path.move(to: CGPoint(x: rect.minX, y: y))
+                path.addLine(to: CGPoint(x: rect.maxX, y: y))
             }
+            path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         }
         .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [2, 5]))
     }
 
     private func chartAxisLabels(in size: CGSize) -> some View {
-        ZStack {
-            Text(rpmTickLabel(Int(rpmUpper.rounded())))
-                .position(x: 32, y: 12)
-            Text(rpmTickLabel(Int(((rpmLower + rpmUpper) / 2).rounded())))
-                .position(x: 32, y: size.height / 2)
-            Text(rpmTickLabel(Int(rpmLower.rounded())))
-                .position(x: 32, y: size.height - 12)
-            Text(temperatureTickLabel(Int(tempRange.lowerBound.rounded())))
-                .position(x: 32, y: size.height - 30)
-            Text(temperatureTickLabel(Int(((tempRange.lowerBound + tempRange.upperBound) / 2).rounded())))
-                .position(x: size.width / 2, y: size.height - 12)
-            Text(temperatureTickLabel(Int(tempRange.upperBound.rounded())))
-                .position(x: size.width - 34, y: size.height - 12)
+        let rect = plotRect(in: size)
+        let rpmX = max(rect.minX - 28, 24)
+        let tempY = min(rect.maxY + 18, size.height - 10)
+        return ZStack {
+            CurveChartAxisValue(text: rpmTickLabel(Int(rpmUpper.rounded())), alignment: .trailing)
+                .position(x: rpmX, y: rect.minY)
+            CurveChartAxisValue(text: rpmTickLabel(Int(((rpmLower + rpmUpper) / 2).rounded())), alignment: .trailing)
+                .position(x: rpmX, y: rect.midY)
+            CurveChartAxisValue(text: rpmTickLabel(Int(rpmLower.rounded())), alignment: .trailing)
+                .position(x: rpmX, y: rect.maxY)
+            CurveChartAxisValue(text: temperatureTickLabel(Int(tempRange.lowerBound.rounded())), alignment: .center)
+                .position(x: rect.minX, y: tempY)
+            CurveChartAxisValue(text: temperatureTickLabel(Int(((tempRange.lowerBound + tempRange.upperBound) / 2).rounded())), alignment: .center)
+                .position(x: rect.midX, y: tempY)
+            CurveChartAxisValue(text: temperatureTickLabel(Int(tempRange.upperBound.rounded())), alignment: .center)
+                .position(x: rect.maxX, y: tempY)
         }
-        .font(.caption2.monospacedDigit())
-        .foregroundStyle(.secondary.opacity(0.85))
         .allowsHitTesting(false)
     }
 
@@ -1391,16 +1408,17 @@ private struct FanCurveChartEditor: View {
     }
 
     private func liveTemperatureMarker(_ temperature: Double, in size: CGSize) -> some View {
-        let x = size.width * CGFloat(ratio(temperature, in: tempRange.lowerBound...tempRange.upperBound))
+        let rect = plotRect(in: size)
+        let x = rect.minX + rect.width * CGFloat(ratio(temperature, in: tempRange.lowerBound...tempRange.upperBound))
         return ZStack {
             Path { path in
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
+                path.move(to: CGPoint(x: x, y: rect.minY))
+                path.addLine(to: CGPoint(x: x, y: rect.maxY))
             }
             .stroke(Color.orange.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
             liveTemperatureLabel(temperature, in: size)
-                .position(x: min(max(x, 28), size.width - 28), y: 14)
+                .position(x: min(max(x, rect.minX + 24), rect.maxX - 24), y: rect.minY + 10)
         }
         .allowsHitTesting(false)
     }
@@ -1424,6 +1442,23 @@ private struct FanCurveChartEditor: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct CurveChartAxisValue: View {
+    let text: String
+    let alignment: Alignment
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary.opacity(0.9))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: 58, alignment: alignment)
+            .padding(.horizontal, 3)
+            .padding(.vertical, 1)
+            .background(.regularMaterial, in: Capsule())
     }
 }
 
