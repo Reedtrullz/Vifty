@@ -15,6 +15,10 @@ Options:
   --ui-context-file <path>
                          Optional current Vifty UI context text file to copy
                          into the evidence bundle as ui-context.txt.
+  --guarded-run-stderr-file <path>
+                         Optional captured guarded-run stderr transcript to copy
+                         into the evidence bundle as guarded-run-stderr.txt.
+                         Used only for bracketed decision JSON; no command runs.
   --audit-limit <count>  Bounded audit event count, 1 through 200 (default: 20)
   -h, --help             Show this help.
 
@@ -41,6 +45,7 @@ VIFTYCTL="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 OUTPUT_DIR="${VIFTY_AGENT_EVIDENCE_OUTPUT_DIR:-}"
 AUDIT_LIMIT="${VIFTY_AGENT_EVIDENCE_AUDIT_LIMIT:-20}"
 UI_CONTEXT_FILE=""
+GUARDED_RUN_STDERR_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,6 +81,14 @@ while [[ $# -gt 0 ]]; do
       UI_CONTEXT_FILE="$2"
       shift 2
       ;;
+    --guarded-run-stderr-file)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --guarded-run-stderr-file requires a path" >&2
+        exit 64
+      fi
+      GUARDED_RUN_STDERR_FILE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -103,6 +116,11 @@ if [[ -n "${UI_CONTEXT_FILE}" && ! -f "${UI_CONTEXT_FILE}" ]]; then
   exit 66
 fi
 
+if [[ -n "${GUARDED_RUN_STDERR_FILE}" && ! -f "${GUARDED_RUN_STDERR_FILE}" ]]; then
+  echo "error: --guarded-run-stderr-file is not a readable file: ${GUARDED_RUN_STDERR_FILE}" >&2
+  exit 66
+fi
+
 if [[ -z "${OUTPUT_DIR}" ]]; then
   timestamp="$(date -u +"%Y%m%dT%H%M%SZ")"
   OUTPUT_DIR="${ROOT_DIR}/.build/vifty-agent-cooling-${timestamp}"
@@ -123,6 +141,10 @@ mkdir -p "${OUTPUT_DIR}"
 if [[ -n "${UI_CONTEXT_FILE}" ]]; then
   cp "${UI_CONTEXT_FILE}" "${OUTPUT_DIR}/ui-context.txt"
   chmod 600 "${OUTPUT_DIR}/ui-context.txt"
+fi
+if [[ -n "${GUARDED_RUN_STDERR_FILE}" ]]; then
+  cp "${GUARDED_RUN_STDERR_FILE}" "${OUTPUT_DIR}/guarded-run-stderr.txt"
+  chmod 600 "${OUTPUT_DIR}/guarded-run-stderr.txt"
 fi
 MANIFEST_PATH="${OUTPUT_DIR}/manifest.tsv"
 CHECKSUM_PATH="${OUTPUT_DIR}/checksums.tsv"
@@ -221,10 +243,16 @@ Attach or paste:
 - manifest.tsv
 - agent-cooling-evidence-summary.json
 - privacy-review.tsv
+- guarded-run-stderr.txt if you supplied --guarded-run-stderr-file
 
 If viftyctl-diagnose.status is 75, readiness was blocked. Do not retry prepare
 or run while diagnose reports blocked readiness, safeToRequestCooling=false, or
 daemonControlPathReady=false.
+
+If guarded-run-stderr.txt exists, maintainers should parse only the JSON between
+guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON and
+guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON. Do not parse surrounding
+recovery prose.
 
 If the helper is unreachable, launchctl-print-daemon.txt, launchdaemon-plist.txt,
 and helper-file-metadata.txt show whether launchd can see the privileged daemon,

@@ -196,6 +196,15 @@ scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+If you already captured stderr from a blocked guarded wrapper run, attach it to
+the same read-only bundle:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl \
+  --guarded-run-stderr-file /path/to/guarded-run.stderr
+```
+
 Installed app bundles include this read-only collector at
 `/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`
 for users who do not have a source checkout.
@@ -204,8 +213,9 @@ This read-only support bundle captures capabilities, diagnose, status, audit,
 command exit statuses, launchd/helper install evidence, a manifest,
 schema-backed `agent-cooling-evidence-summary.json` with
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`,
-`privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
-calling `ViftyHelper`, using `sudo`, or writing SMC keys. Check
+optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and checksums without
+requesting cooling, restoring Auto, calling `ViftyHelper`, using `sudo`, or
+writing SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`. Maintainers can review a collected
 bundle with:
@@ -217,9 +227,10 @@ scripts/review-agent-cooling-evidence.sh \
 ```
 
 The reviewer accepts blocked diagnose exit `75` as evidence and rejects privacy
-findings, schema drift, manifest/status drift, checksum drift, missing or
-contradictory diagnose decision fields, or any record that cooling commands
-were run. Its JSON summary declares
+findings, schema drift, manifest/status drift, checksum drift, malformed guarded
+wrapper decision markers, guarded-run/diagnose decision drift, missing or
+contradictory diagnose decision fields, or any record that cooling commands were
+run. Its JSON summary declares
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`.
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
@@ -232,7 +243,10 @@ persisted `Curve` or `Fixed` default, switch Vifty's default startup mode to
 `Auto` before another agent-cooling request. Legacy `v1.1.x` bundles that omit
 `daemonControlPathReady`, blocker-ID arrays, or `appPreferences` may pass only with a warning;
 `daemonControlPathReady` still has to be inferred from structured
-readiness/recovery fields. The `capabilitiesDecision` summary
+readiness/recovery fields. If `guarded-run-stderr.txt` is present, the
+`guardedRunDecision` summary records the bracketed wrapper decision and fails
+review if that decision drifts from the captured diagnose evidence. The
+`capabilitiesDecision` summary
 records the captured capabilities schema version plus stable
 `schemaIDs.capabilities`, `schemaIDs.diagnose`, `schemaIDs.commandError`, and
 `schemaIDs.run`,

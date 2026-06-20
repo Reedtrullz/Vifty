@@ -160,6 +160,81 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(try harness.read("manifest.tsv").contains("ui-context"))
     }
 
+    func testCollectorCopiesGuardedRunStderrAndReviewerSummarizesDecision() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"""
+            {
+              "state": "blocked",
+              "recommendedAgentAction": "doNotRequestCooling",
+              "safeToRequestCooling": false,
+              "daemonControlPathReady": true,
+              "manualControlActive": true,
+              "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+              "failedCheckIDs": ["manualControlClear"],
+              "coolingBlockerIDs": ["manualControlClear"],
+              "appPreferences": {
+                "startupMode": "Curve",
+                "startupModeSource": "persisted",
+                "readError": null
+              },
+              "checks": []
+            }
+            """#,
+            diagnoseExitCode: 75
+        )
+        let guardedRunStderrURL = harness.rootURL.appendingPathComponent("guarded-run-source.stderr")
+        try """
+        guarded-run: Vifty readiness state blocked does not allow cooling.
+        guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"exitCode":75,"message":"Vifty readiness state blocked does not allow cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"startupMode":"Curve","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"]}
+        guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
+        """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--guarded-run-stderr-file", guardedRunStderrURL.path
+        ])
+
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+        XCTAssertTrue(try harness.read("README.txt").contains("guarded-run-stderr.txt"))
+        XCTAssertTrue(try harness.read("guarded-run-stderr.txt").contains("BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON"))
+        XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-stderr.txt"))
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
+        XCTAssertFalse(try harness.read("manifest.tsv").contains("guarded-run-stderr"))
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["present"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["sourceFile"] as? String, "guarded-run-stderr.txt")
+        XCTAssertEqual(guardedRunDecision["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(
+            guardedRunDecision["schemaID"] as? String,
+            "https://vifty.local/schemas/guarded-run-decision.schema.json"
+        )
+        XCTAssertEqual(guardedRunDecision["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["uncooledFallbackRequested"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["exitCode"] as? Int, 75)
+        XCTAssertEqual(guardedRunDecision["recommendedAgentAction"] as? String, "doNotRequestCooling")
+        XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "restoreAutoBeforeRetry")
+        XCTAssertEqual(guardedRunDecision["diagnoseState"] as? String, "blocked")
+        XCTAssertEqual(guardedRunDecision["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["startupMode"] as? String, "Curve")
+        XCTAssertEqual(guardedRunDecision["failedCheckIDs"] as? [String], ["manualControlClear"])
+        XCTAssertEqual(guardedRunDecision["coolingBlockerIDs"] as? [String], ["manualControlClear"])
+    }
+
     func testCollectorPreservesBlockedDiagnoseExitAsEvidence() throws {
         let harness = try AgentCoolingEvidenceHarness(
             diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
@@ -319,6 +394,12 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(appInfo["bundleIdentifier"] as? String, "tech.reidar.vifty")
         XCTAssertEqual(appInfo["shortVersion"] as? String, "1.1.1")
         XCTAssertEqual(appInfo["bundleVersion"] as? String, "1")
+        let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["present"] as? Bool, false)
+        XCTAssertTrue(guardedRunDecision["sourceFile"] is NSNull)
+        XCTAssertTrue(guardedRunDecision["schemaID"] is NSNull)
+        XCTAssertEqual(guardedRunDecision["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(guardedRunDecision["coolingBlockerIDs"] as? [String], [])
         XCTAssertTrue((reviewSummary["acceptedCommandErrors"] as? [String])?.isEmpty == true)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
     }
@@ -979,6 +1060,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "diagnoseDecision",
             "capabilitiesDecision",
             "appInfo",
+            "guardedRunDecision",
             "acceptedCommandErrors",
             "failures",
             "warnings"
@@ -1044,6 +1126,32 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "bundleVersion"
         ] {
             XCTAssertTrue(appInfoRequired.contains(field), "appInfo should require \(field)")
+        }
+
+        let guardedRunDecision = try XCTUnwrap(defs["guardedRunDecision"] as? [String: Any])
+        let guardedRunRequired = try XCTUnwrap(guardedRunDecision["required"] as? [String])
+        for field in [
+            "present",
+            "sourceFile",
+            "schemaVersion",
+            "schemaID",
+            "safeToProceed",
+            "coolingRequested",
+            "uncooledFallbackRequested",
+            "uncooledFallbackAllowed",
+            "exitCode",
+            "message",
+            "recommendedAgentAction",
+            "recommendedRecoveryAction",
+            "diagnoseState",
+            "safeToRequestCooling",
+            "daemonControlPathReady",
+            "manualControlActive",
+            "startupMode",
+            "failedCheckIDs",
+            "coolingBlockerIDs"
+        ] {
+            XCTAssertTrue(guardedRunRequired.contains(field), "guardedRunDecision should require \(field)")
         }
     }
 }

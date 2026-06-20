@@ -38,13 +38,21 @@ scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+If the report is about a guarded wrapper refusal and you already captured the
+wrapper stderr, add it without rerunning the workload:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl \
+  --guarded-run-stderr-file /path/to/guarded-run.stderr
+```
+
 The script writes `viftyctl-diagnose.json`, `viftyctl-capabilities.json`,
 `viftyctl-status.json`, `viftyctl-audit.json`, command status files, a manifest,
 read-only launchd/helper install files, schema-backed
 `agent-cooling-evidence-summary.json` with
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`,
-`privacy-review.tsv`, and a checksum list. It does not request cooling, restore
-Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check
+optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and a checksum list. It does not request cooling, restore Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`.
 
@@ -70,8 +78,11 @@ or `appPreferences` may pass only with a warning; `daemonControlPathReady` must
 still be inferred from structured readiness and recovery fields. Manual-control
 reports with a persisted `Curve` or `Fixed` default are called out so triage can
 tell the user to switch Vifty's default startup mode to `Auto` before retrying
-agent cooling. It also records
-`capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
+agent cooling. The summary also records
+`guardedRunDecision` when `guarded-run-stderr.txt` contains a bracketed
+`https://vifty.local/schemas/guarded-run-decision.schema.json` payload; that
+summary is accepted only when the wrapper decision agrees with the captured
+diagnose evidence. It records `capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
 discovery, safe run/direct-control lifecycle, metadata limits, policy status
 availability, daemon status, and unavailable exit-code contract; missing or unsafe capabilities contract
 fields fail review, except absent legacy `metadataLimits` is a warning rather

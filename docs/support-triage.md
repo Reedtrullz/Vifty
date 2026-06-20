@@ -15,6 +15,11 @@ scripts/collect-agent-cooling-evidence.sh \
   --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl
 ```
 
+If the report includes output from `examples/viftyctl/guarded-run.sh`, ask for
+the stderr transcript to be copied into the bundle with
+`--guarded-run-stderr-file <path>` so the reviewer can summarize only the
+schema-backed decision payload between the guarded-run markers.
+
 Installed app bundles include the same read-only collector at
 `/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`
 for reporters who do not have a source checkout. For supervised
@@ -25,8 +30,8 @@ lease and is not the first-response path for helper failures.
 
 It captures `capabilities --json`, `diagnose --json`, `status --json`, and
 `audit --limit 20 --json` plus exit statuses, launchd/helper install evidence,
-a manifest, `privacy-review.tsv`, and checksums. It does not request cooling,
-restore Auto, invoke `ViftyHelper`, use `sudo`, or write SMC keys. Review the
+a manifest, optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and
+checksums. It does not request cooling, restore Auto, invoke `ViftyHelper`, use `sudo`, or write SMC keys. Review the
 bundle locally before triage:
 
 ```sh
@@ -114,7 +119,7 @@ evidence bundle and the fuller validation evidence bundle.
 | Unsupported hardware safe block | Non-MacBook-Pro, Intel, or unsupported Apple Silicon reports `blocked` | `diagnose --json`, optional collector bundle, [unsupported-hardware.md](unsupported-hardware.md) | Treat safe blocking as expected behavior; do not suggest bypasses. |
 | Helper install or approval | `HELPER_UNREACHABLE`, helper unreachable UI, fallback fan telemetry with daemon not responding, Login Items approval, empty fan snapshot, or manual controls blocked by helper state | Read-only agent evidence bundle, `diagnose --json`, `status --json`, helper recovery text from the app, launchd status from collector | Ask user to open Vifty, use Repair/Reinstall Helper so the app copies the daemon, strips quarantine, and restarts launchd, approve Login Items if macOS asks, then rerun read-only diagnostics. |
 | SMC key or fan telemetry drift | Fan count/range/mode missing, `hardwareMode` unknown, fan mode-key casing drift, no controllable fans on supported hardware | `probeLocal`, `diagnose --json`, model identifier, macOS version | Keep fan writes blocked until fan IDs, ranges, mode-key casing, and mode/target telemetry are understood. |
-| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` command, stdout/stderr, read-only agent evidence bundle or manual `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json`; on supported hardware with safe readiness, optional `make agent-run-smoke-evidence-current-build` for current source checkouts or `make agent-run-smoke-evidence VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl` for installed-app smoke bundles | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending, and use the supervised smoke target only after readiness is safe. |
+| Agent-cooling lifecycle | `prepare`, `run`, restore failure, expired lease, rate limit, guarded wrapper refusal, or child-command preflight issue | Agent Cooling Report issue, exact `viftyctl` or guarded-wrapper command, stdout/stderr, read-only agent evidence bundle with `--guarded-run-stderr-file <path>` when wrapper stderr exists, or manual `diagnose --json`, `capabilities --json`, `status --json`, `audit --limit 20 --json`; on supported hardware with safe readiness, optional `make agent-run-smoke-evidence-current-build` for current source checkouts or `make agent-run-smoke-evidence VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl` for installed-app smoke bundles | Follow [safe-agent-cooling.md](safe-agent-cooling.md); do not start another lease while restore is pending, and use the supervised smoke target only after readiness is safe. |
 | UI or copy | Confusing owner/helper state, profile preset behavior, power/thermal display | screenshot, macOS version, `diagnose --json` if fan state is involved | Fix copy/state without changing SMC behavior unless evidence shows a control bug. |
 
 When the UI says `Fixed request pending` or `Curve request pending`, Vifty has preserved the user's manual intent but the helper write path is blocked. Treat **Copy Support Evidence** as the safest next evidence path: the bundled collector can write `ui-context.txt` next to the read-only `viftyctl` evidence so reviewers can see selected mode, manual-run choice, helper state, hot fan-write warning, current temperature/fan summary, and last app error without requesting cooling or writing SMC keys. Do not ask the user to run a fan-write smoke test until `diagnose --json` reports `daemonControlPathReady: true`, `manualControlActive: false`, and the normal hardware-validation gates pass.

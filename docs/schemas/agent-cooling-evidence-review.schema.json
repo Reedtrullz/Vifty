@@ -17,6 +17,7 @@
     "diagnoseDecision",
     "capabilitiesDecision",
     "appInfo",
+    "guardedRunDecision",
     "acceptedCommandErrors",
     "failures",
     "warnings"
@@ -59,6 +60,9 @@
     },
     "appInfo": {
       "$ref": "#/$defs/appInfo"
+    },
+    "guardedRunDecision": {
+      "$ref": "#/$defs/guardedRunDecision"
     },
     "acceptedCommandErrors": {
       "description": "Bundle command names whose structured command-error JSON was accepted as read-only helper-unreachable evidence because diagnose reported blocked readiness and repairHelper.",
@@ -227,6 +231,178 @@
             "integer",
             "null"
           ]
+        }
+      }
+    },
+    "guardedRunDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "sourceFile",
+        "schemaVersion",
+        "schemaID",
+        "safeToProceed",
+        "coolingRequested",
+        "uncooledFallbackRequested",
+        "uncooledFallbackAllowed",
+        "exitCode",
+        "message",
+        "recommendedAgentAction",
+        "recommendedRecoveryAction",
+        "diagnoseState",
+        "safeToRequestCooling",
+        "daemonControlPathReady",
+        "manualControlActive",
+        "startupMode",
+        "failedCheckIDs",
+        "coolingBlockerIDs"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "sourceFile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "guarded-run-stderr.txt",
+            null
+          ]
+        },
+        "schemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            1,
+            null
+          ]
+        },
+        "schemaID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "https://vifty.local/schemas/guarded-run-decision.schema.json",
+            null
+          ]
+        },
+        "safeToProceed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "coolingRequested": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "uncooledFallbackRequested": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "uncooledFallbackAllowed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommendedAgentAction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "requestCooling",
+            "requestCoolingWithCaution",
+            "restoreAutoBeforeRequestingCooling",
+            "doNotRequestCooling",
+            null
+          ]
+        },
+        "recommendedRecoveryAction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "none",
+            "repairHelper",
+            "restoreAutoBeforeRetry",
+            "backOffWorkload",
+            "inspectPolicy",
+            "collectHardwareEvidence",
+            null
+          ]
+        },
+        "diagnoseState": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ready",
+            "degraded",
+            "blocked",
+            null
+          ]
+        },
+        "safeToRequestCooling": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "daemonControlPathReady": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "manualControlActive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "failedCheckIDs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "coolingBlockerIDs": {
+          "$ref": "#/$defs/stringArray"
         }
       }
     },

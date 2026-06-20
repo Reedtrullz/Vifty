@@ -72,6 +72,7 @@ REVIEW_SCHEMA_ID = "https://vifty.local/schemas/agent-cooling-evidence-review.sc
 CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
 DIAGNOSE_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
 COMMAND_ERROR_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-command-error.schema.json"
+GUARDED_RUN_DECISION_SCHEMA_ID = "https://vifty.local/schemas/guarded-run-decision.schema.json"
 DIAGNOSE_STATES = %w[ready degraded blocked].freeze
 DIAGNOSE_AGENT_ACTIONS = %w[
   requestCooling
@@ -154,6 +155,27 @@ app_info = {
   "shortVersion" => nil,
   "bundleVersion" => nil
 }
+guarded_run_decision = {
+  "present" => false,
+  "sourceFile" => nil,
+  "schemaVersion" => nil,
+  "schemaID" => nil,
+  "safeToProceed" => nil,
+  "coolingRequested" => nil,
+  "uncooledFallbackRequested" => nil,
+  "uncooledFallbackAllowed" => nil,
+  "exitCode" => nil,
+  "message" => nil,
+  "recommendedAgentAction" => nil,
+  "recommendedRecoveryAction" => nil,
+  "diagnoseState" => nil,
+  "safeToRequestCooling" => nil,
+  "daemonControlPathReady" => nil,
+  "manualControlActive" => nil,
+  "startupMode" => nil,
+  "failedCheckIDs" => [],
+  "coolingBlockerIDs" => []
+}
 accepted_command_errors = []
 
 def bundle_entry?(value)
@@ -207,6 +229,10 @@ end
 
 def string_array?(value)
   value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
+end
+
+def optional_string?(value)
+  value.nil? || value.is_a?(String)
 end
 
 def includes_all?(array, values)
@@ -297,7 +323,30 @@ def share_safe_bundle_path(bundle)
   File.basename(File.expand_path(bundle.to_s))
 end
 
-def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, app_info, accepted_command_errors, failures, warnings)
+def extract_guarded_run_decision_json(text, failures)
+  begin_marker = "guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON"
+  end_marker = "guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON"
+  begin_count = text.scan(/^#{Regexp.escape(begin_marker)}$/).length
+  end_count = text.scan(/^#{Regexp.escape(end_marker)}$/).length
+
+  if begin_count != 1 || end_count != 1
+    failures << "guarded-run-stderr.txt must contain exactly one guarded-run decision JSON marker pair"
+    return nil
+  end
+
+  match = text.match(/^#{Regexp.escape(begin_marker)}\n(?<json>.*?)^#{Regexp.escape(end_marker)}$/m)
+  unless match
+    failures << "guarded-run-stderr.txt decision JSON markers are malformed"
+    return nil
+  end
+
+  JSON.parse(match[:json])
+rescue JSON::ParserError => error
+  failures << "invalid guarded-run decision JSON: #{error.message}"
+  nil
+end
+
+def write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands_reviewed, diagnose_decision, capabilities_decision, app_info, guarded_run_decision, accepted_command_errors, failures, warnings)
   return unless summary_path
 
   FileUtils.mkdir_p(File.dirname(summary_path))
@@ -313,6 +362,7 @@ def write_review_summary(summary_path, bundle, status, read_only, cooling_comman
     "diagnoseDecision" => diagnose_decision,
     "capabilitiesDecision" => capabilities_decision,
     "appInfo" => app_info,
+    "guardedRunDecision" => guarded_run_decision,
     "acceptedCommandErrors" => accepted_command_errors,
     "failures" => failures,
     "warnings" => warnings
@@ -732,6 +782,110 @@ if helper_repair_diagnose?(diagnose_decision) &&
   warnings << "known v1.1.0 helper-unreachable issue: use the v1.1.1 source-first hotfix or current source; do not retag v1.1.0 or replace its unsigned-dev assets"
 end
 
+guarded_run_stderr_path = File.join(bundle, "guarded-run-stderr.txt")
+if File.file?(guarded_run_stderr_path)
+  guarded_run_decision["present"] = true
+  guarded_run_decision["sourceFile"] = "guarded-run-stderr.txt"
+  guarded_run_stderr_text = File.read(guarded_run_stderr_path)
+  guarded_payload = extract_guarded_run_decision_json(guarded_run_stderr_text, failures)
+
+  if guarded_payload.is_a?(Hash)
+    schema_version = guarded_payload["schemaVersion"]
+    schema_id = guarded_payload["schemaID"]
+    command = guarded_payload["command"]
+    safe_to_proceed = guarded_payload["safeToProceed"]
+    cooling_requested = guarded_payload["coolingRequested"]
+    uncooled_requested = guarded_payload["uncooledFallbackRequested"]
+    uncooled_allowed = guarded_payload["uncooledFallbackAllowed"]
+    exit_code = integer_value(guarded_payload["exitCode"])
+    message = guarded_payload["message"]
+    agent_action = guarded_payload["recommendedAgentAction"]
+    recovery_action = guarded_payload["recommendedRecoveryAction"]
+    diagnose_state = guarded_payload["diagnoseState"]
+    safe_to_request = guarded_payload["safeToRequestCooling"]
+    daemon_ready = guarded_payload["daemonControlPathReady"]
+    manual_active = guarded_payload["manualControlActive"]
+    startup_mode = guarded_payload["startupMode"]
+    failed_check_ids = guarded_payload["failedCheckIDs"]
+    cooling_blocker_ids = guarded_payload["coolingBlockerIDs"]
+
+    guarded_run_decision["schemaVersion"] = schema_version if schema_version.is_a?(Integer)
+    guarded_run_decision["schemaID"] = schema_id if schema_id.is_a?(String)
+    guarded_run_decision["safeToProceed"] = safe_to_proceed if boolean?(safe_to_proceed)
+    guarded_run_decision["coolingRequested"] = cooling_requested if boolean?(cooling_requested)
+    guarded_run_decision["uncooledFallbackRequested"] = uncooled_requested if boolean?(uncooled_requested)
+    guarded_run_decision["uncooledFallbackAllowed"] = uncooled_allowed if boolean?(uncooled_allowed)
+    guarded_run_decision["exitCode"] = exit_code
+    guarded_run_decision["message"] = message if message.is_a?(String)
+    guarded_run_decision["recommendedAgentAction"] = agent_action if optional_string?(agent_action)
+    guarded_run_decision["recommendedRecoveryAction"] = recovery_action if optional_string?(recovery_action)
+    guarded_run_decision["diagnoseState"] = diagnose_state if optional_string?(diagnose_state)
+    guarded_run_decision["safeToRequestCooling"] = safe_to_request if boolean?(safe_to_request)
+    guarded_run_decision["daemonControlPathReady"] = daemon_ready if boolean?(daemon_ready)
+    guarded_run_decision["manualControlActive"] = manual_active if boolean?(manual_active)
+    guarded_run_decision["startupMode"] = startup_mode if optional_string?(startup_mode)
+    guarded_run_decision["failedCheckIDs"] = failed_check_ids if string_array?(failed_check_ids)
+    guarded_run_decision["coolingBlockerIDs"] = cooling_blocker_ids if string_array?(cooling_blocker_ids)
+
+    failures << "guarded-run decision schemaVersion must be 1" unless schema_version == 1
+    failures << "guarded-run decision schemaID must be #{GUARDED_RUN_DECISION_SCHEMA_ID}" unless schema_id == GUARDED_RUN_DECISION_SCHEMA_ID
+    failures << "guarded-run decision command must be guarded-run" unless command == "guarded-run"
+    failures << "guarded-run decision safeToProceed must be boolean" unless boolean?(safe_to_proceed)
+    failures << "guarded-run decision coolingRequested must be false for support evidence" unless cooling_requested == false
+    failures << "guarded-run decision uncooledFallbackRequested must be boolean" unless boolean?(uncooled_requested)
+    failures << "guarded-run decision uncooledFallbackAllowed must be boolean" unless boolean?(uncooled_allowed)
+    failures << "guarded-run decision exitCode must be an integer" unless exit_code
+    failures << "guarded-run decision message must be nonempty" unless message.is_a?(String) && !message.strip.empty?
+    failures << "guarded-run decision recommendedAgentAction is unsupported" unless agent_action.nil? || DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
+    failures << "guarded-run decision recommendedRecoveryAction is unsupported" unless recovery_action.nil? || DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
+    failures << "guarded-run decision diagnoseState is unsupported" unless diagnose_state.nil? || DIAGNOSE_STATES.include?(diagnose_state)
+    failures << "guarded-run decision safeToRequestCooling must be boolean" unless boolean?(safe_to_request)
+    failures << "guarded-run decision daemonControlPathReady must be boolean" unless boolean?(daemon_ready)
+    failures << "guarded-run decision manualControlActive must be boolean" unless boolean?(manual_active)
+    failures << "guarded-run decision startupMode is unsupported" unless startup_mode.nil? || STARTUP_MODES.include?(startup_mode)
+    failures << "guarded-run decision failedCheckIDs must be an array of strings" unless string_array?(failed_check_ids)
+    failures << "guarded-run decision coolingBlockerIDs must be an array of strings" unless string_array?(cooling_blocker_ids)
+
+    if safe_to_proceed == true
+      failures << "guarded-run decision safeToProceed true requires exitCode 0" unless exit_code == 0
+      failures << "guarded-run decision safeToProceed true requires uncooled fallback allowed" unless uncooled_requested == true && uncooled_allowed == true
+    elsif safe_to_proceed == false
+      failures << "guarded-run decision safeToProceed false requires nonzero exitCode" if exit_code == 0
+    end
+    if uncooled_allowed == true && uncooled_requested != true
+      failures << "guarded-run decision cannot allow uncooled fallback unless it was requested"
+    end
+    if cooling_blocker_ids.is_a?(Array) && cooling_blocker_ids.any? && safe_to_request == true
+      failures << "guarded-run decision coolingBlockerIDs must be empty when safeToRequestCooling is true"
+    end
+    if manual_active == true && safe_to_proceed == true
+      failures << "guarded-run decision must not proceed while manualControlActive is true"
+    end
+
+    comparisons = [
+      ["diagnoseState", diagnose_state, diagnose_decision["state"]],
+      ["recommendedAgentAction", agent_action, diagnose_decision["recommendedAgentAction"]],
+      ["recommendedRecoveryAction", recovery_action, diagnose_decision["recommendedRecoveryAction"]],
+      ["safeToRequestCooling", safe_to_request, diagnose_decision["safeToRequestCooling"]],
+      ["daemonControlPathReady", daemon_ready, diagnose_decision["daemonControlPathReady"]],
+      ["manualControlActive", manual_active, diagnose_decision["manualControlActive"]],
+      ["startupMode", startup_mode, diagnose_decision.dig("appPreferences", "startupMode")]
+    ]
+    comparisons.each do |field, guarded_value, diagnose_value|
+      next if guarded_value.nil? || diagnose_value.nil?
+      failures << "guarded-run decision #{field} does not match diagnose evidence" unless guarded_value == diagnose_value
+    end
+    if string_array?(failed_check_ids) && diagnose_decision["failedCheckIDs"].any? && failed_check_ids != diagnose_decision["failedCheckIDs"]
+      failures << "guarded-run decision failedCheckIDs do not match diagnose evidence"
+    end
+    if string_array?(cooling_blocker_ids) && diagnose_decision["coolingBlockerIDs"].any? && cooling_blocker_ids != diagnose_decision["coolingBlockerIDs"]
+      failures << "guarded-run decision coolingBlockerIDs do not match diagnose evidence"
+    end
+  elsif !guarded_payload.nil?
+    failures << "guarded-run decision JSON must contain an object"
+  end
+end
+
 privacy_status = integer_value(commands_by_name.dig("privacy-review", "status"))
 failures << "privacy-review must exit 0 before sharing the bundle" unless privacy_status == 0
 privacy_rows.each do |row|
@@ -795,7 +949,7 @@ checksum_by_file.each_key do |entry|
 end
 
 status = failures.empty? ? "passed" : "failed"
-write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, app_info, accepted_command_errors, failures, warnings)
+write_review_summary(summary_path, bundle, status, read_only, cooling_commands_run, commands.length, diagnose_decision, capabilities_decision, app_info, guarded_run_decision, accepted_command_errors, failures, warnings)
 
 warnings.each { |warning| warn "warning: #{warning}" }
 
