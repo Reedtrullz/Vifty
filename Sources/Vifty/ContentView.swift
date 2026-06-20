@@ -1213,6 +1213,10 @@ private struct FanCurveChartEditor: View {
                             .stroke(series.color.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4]))
                     }
 
+                    ForEach(fanCurveSeries) { series in
+                        curvePointValueLabels(for: series, in: geometry.size)
+                    }
+
                     drawCurve(basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
@@ -1272,7 +1276,7 @@ private struct FanCurveChartEditor: View {
             let start = override?.startRPM ?? FanCurve.clamp(Int(startRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
             let mid = override?.midRPM ?? FanCurve.clamp(Int(midRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
             let max = override?.maxRPM ?? FanCurve.clamp(Int(maxRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
-            return FanCurveChartSeries(name: fan.name, color: fanColors[offset % fanColors.count], points: [
+            return FanCurveChartSeries(name: fan.name, label: fanCurveLabel(for: fan), labelOffsetIndex: offset, color: fanColors[offset % fanColors.count], points: [
                 FanCurveChartPoint(id: "\(fan.id)-start", label: "Start", temperature: startTemp, rpm: Double(start)),
                 FanCurveChartPoint(id: "\(fan.id)-ramp", label: "Ramp", temperature: midTemp, rpm: Double(mid)),
                 FanCurveChartPoint(id: "\(fan.id)-high", label: "High", temperature: maxTemp, rpm: Double(max))
@@ -1359,6 +1363,35 @@ private struct FanCurveChartEditor: View {
         return path
     }
 
+    private func curvePointValueLabels(for series: FanCurveChartSeries, in size: CGSize) -> some View {
+        ZStack {
+            ForEach(Array(series.points.enumerated()), id: \.element.id) { pointIndex, point in
+                CurveChartSeriesPointLabel(seriesLabel: series.label, point: point, color: series.color)
+                    .position(labelPosition(for: point, pointIndex: pointIndex, seriesIndex: series.labelOffsetIndex, in: size))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func labelPosition(for point: FanCurveChartPoint, pointIndex: Int, seriesIndex: Int, in size: CGSize) -> CGPoint {
+        let rect = plotRect(in: size)
+        let pointPosition = position(for: point, in: size)
+        let horizontalOffset: CGFloat
+        switch pointIndex {
+        case 0:
+            horizontalOffset = 52
+        case 2:
+            horizontalOffset = -52
+        default:
+            horizontalOffset = 0
+        }
+        let verticalDirection: CGFloat = seriesIndex.isMultiple(of: 2) ? -1 : 1
+        let verticalOffset = verticalDirection * (18 + CGFloat(seriesIndex / 2) * 14)
+        let x = min(max(pointPosition.x + horizontalOffset, rect.minX + 62), rect.maxX - 62)
+        let y = min(max(pointPosition.y + verticalOffset, rect.minY + 14), rect.maxY - 14)
+        return CGPoint(x: x, y: y)
+    }
+
     private func chartGrid(in rect: CGRect) -> some View {
         Path { path in
             for index in 1..<4 {
@@ -1405,6 +1438,16 @@ private struct FanCurveChartEditor: View {
 
     private func temperatureTickLabel(_ temperature: Int) -> String {
         "\(temperature) C"
+    }
+
+    private func fanCurveLabel(for fan: Fan) -> String {
+        if fan.name.localizedCaseInsensitiveContains("left") {
+            return "L"
+        }
+        if fan.name.localizedCaseInsensitiveContains("right") {
+            return "R"
+        }
+        return "F\(fan.id)"
     }
 
     private func liveTemperatureMarker(_ temperature: Double, in size: CGSize) -> some View {
@@ -1491,8 +1534,32 @@ private struct FanCurveChartPoint: Identifiable {
 private struct FanCurveChartSeries: Identifiable {
     var id: String { name }
     let name: String
+    let label: String
+    let labelOffsetIndex: Int
     let color: Color
     let points: [FanCurveChartPoint]
+}
+
+private struct CurveChartSeriesPointLabel: View {
+    let seriesLabel: String
+    let point: FanCurveChartPoint
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text("\(seriesLabel) \(Int(point.temperature.rounded())) C · \(Int(point.rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(.regularMaterial, in: Capsule())
+    }
 }
 
 private struct ChartHandle: View {
