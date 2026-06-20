@@ -1288,7 +1288,7 @@ private struct FanCurveChartEditor: View {
                     curvePointValueLabels(for: baseCurveValueLabelSeries, in: geometry.size)
                 }
             }
-            .frame(height: 170)
+            .frame(height: 184)
 
             HStack(spacing: 10) {
                 chartLegendSwatch(.accentColor, label: "Base")
@@ -1453,9 +1453,9 @@ private struct FanCurveChartEditor: View {
             horizontalOffset = 0
         }
         let verticalDirection: CGFloat = seriesIndex.isMultiple(of: 2) ? -1 : 1
-        let verticalOffset = verticalDirection * (18 + CGFloat(seriesIndex / 2) * 14)
+        let verticalOffset = verticalDirection * (24 + CGFloat(seriesIndex / 2) * 18)
         let x = min(max(pointPosition.x + horizontalOffset, rect.minX + 62), rect.maxX - 62)
-        let y = min(max(pointPosition.y + verticalOffset, rect.minY + 14), rect.maxY - 14)
+        let y = min(max(pointPosition.y + verticalOffset, rect.minY + 22), rect.maxY - 22)
         return CGPoint(x: x, y: y)
     }
 
@@ -1613,19 +1613,33 @@ private struct CurveChartSeriesPointLabel: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(alignment: .top, spacing: 4) {
             Circle()
                 .fill(color)
                 .frame(width: 5, height: 5)
-            Text("\(seriesLabel) \(point.label): \(Int(point.temperature.rounded())) C · \(Int(point.rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(seriesLabel) \(point.label)")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                Text(valueText)
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(width: 112, alignment: .leading)
         }
         .foregroundStyle(.primary)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
         .background(.regularMaterial, in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(seriesLabel) \(point.label) curve point")
+        .accessibilityValue(valueText)
+    }
+
+    private var valueText: String {
+        "\(Int(point.temperature.rounded())) C · \(Int(point.rpm.rounded()).formatted(.number.grouping(.automatic))) RPM"
     }
 }
 
