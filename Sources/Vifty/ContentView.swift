@@ -1262,15 +1262,11 @@ private struct FanCurveChartEditor: View {
                             .stroke(series.color.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4]))
                     }
 
-                    ForEach(fanCurveSeries) { series in
-                        curvePointValueLabels(for: series, in: geometry.size)
-                    }
-
                     drawCurve(basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                    if fanCurveSeries.isEmpty {
-                        curvePointValueLabels(for: baseCurveSeries, in: geometry.size)
+                    ForEach(fanCurveSeries) { series in
+                        curvePointValueLabels(for: series, in: geometry.size)
                     }
 
                     if let liveTemperature {
@@ -1288,6 +1284,8 @@ private struct FanCurveChartEditor: View {
                                     }
                             )
                     }
+
+                    curvePointValueLabels(for: baseCurveValueLabelSeries, in: geometry.size)
                 }
             }
             .frame(height: 170)
@@ -1324,6 +1322,18 @@ private struct FanCurveChartEditor: View {
 
     private var baseCurveSeries: FanCurveChartSeries {
         FanCurveChartSeries(name: "Base", label: "Base", labelOffsetIndex: -1, color: .accentColor, points: basePoints)
+    }
+
+    private var baseCurveValueLabelSeries: FanCurveChartSeries {
+        let offset = fanCurveSeries.isEmpty ? -1 : fanCurveSeries.count
+        let series = baseCurveSeries
+        return FanCurveChartSeries(
+            name: series.name,
+            label: series.label,
+            labelOffsetIndex: offset,
+            color: series.color,
+            points: series.points
+        )
     }
 
     private var fanCurveSeries: [FanCurveChartSeries] {
