@@ -19,6 +19,8 @@ This script only runs:
 It does not call prepare, run, restore-auto, ViftyHelper, sudo, or raw SMC
 tools. Exit 0 means the manual smoke preflight is ready. Exit 75 means the
 manual smoke test must be skipped until the printed blockers are cleared.
+JSON output uses schemaID:
+  https://vifty.local/schemas/manual-smoke-readiness.schema.json
 USAGE
 }
 
@@ -146,6 +148,7 @@ end
 summary = {
   "kind" => "vifty-manual-smoke-readiness",
   "schemaVersion" => 1,
+  "schemaID" => "https://vifty.local/schemas/manual-smoke-readiness.schema.json",
   "status" => status,
   "manualSmokeReady" => ready,
   "readOnly" => true,

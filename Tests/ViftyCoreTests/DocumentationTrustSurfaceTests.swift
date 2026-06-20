@@ -929,7 +929,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("make manual-smoke-readiness"))
         XCTAssertTrue(hardwareValidation.contains("MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness"))
         XCTAssertTrue(hardwareValidation.contains("only runs `viftyctl diagnose --json`"))
-        XCTAssertTrue(hardwareValidation.contains("`readOnly: true` and `coolingCommandsRun: false`"))
+        XCTAssertTrue(hardwareValidation.contains("`schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false`"))
         XCTAssertTrue(hardwareValidation.contains("manual control active before manual smoke"))
         XCTAssertTrue(hardwareValidation.contains("Keep Fixed and Curve smoke human-supervised in the app UI"))
         XCTAssertTrue(hardwareValidation.contains("Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion."))

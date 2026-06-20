@@ -47,6 +47,7 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         let summary = try XCTUnwrap(ManualSmokeReadinessHarness.parseJSON(result.stdout))
         XCTAssertEqual(summary["kind"] as? String, "vifty-manual-smoke-readiness")
         XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(summary["schemaID"] as? String, "https://vifty.local/schemas/manual-smoke-readiness.schema.json")
         XCTAssertEqual(summary["status"] as? String, "blocked")
         XCTAssertEqual(summary["manualSmokeReady"] as? Bool, false)
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
@@ -69,6 +70,23 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         let appPreferences = try XCTUnwrap(summary["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+    }
+
+    func testReadinessSchemaIsDocumentedForEvidenceConsumers() throws {
+        let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/manual-smoke-readiness.schema.json")
+        let schema = try XCTUnwrap(ManualSmokeReadinessHarness.readJSON(schemaURL))
+
+        XCTAssertEqual(schema["$schema"] as? String, "https://json-schema.org/draft/2020-12/schema")
+        XCTAssertEqual(schema["$id"] as? String, "https://vifty.local/schemas/manual-smoke-readiness.schema.json")
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        XCTAssertEqual((properties["schemaVersion"] as? [String: Any])?["const"] as? Int, 1)
+        XCTAssertEqual((properties["schemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/manual-smoke-readiness.schema.json")
+        XCTAssertEqual((properties["readOnly"] as? [String: Any])?["const"] as? Bool, true)
+        XCTAssertEqual((properties["coolingCommandsRun"] as? [String: Any])?["const"] as? Bool, false)
+        XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
+        XCTAssertNotNil(properties["coolingBlockerIDs"] as? [String: Any])
+        XCTAssertNotNil(properties["appPreferences"] as? [String: Any])
     }
 }
 
@@ -145,6 +163,11 @@ private final class ManualSmokeReadinessHarness {
 
     static func parseJSON(_ text: String) throws -> [String: Any]? {
         let data = Data(text.utf8)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    static func readJSON(_ url: URL) throws -> [String: Any]? {
+        let data = try Data(contentsOf: url)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 

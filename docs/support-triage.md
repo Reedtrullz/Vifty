@@ -163,7 +163,7 @@ Escalate a report before suggesting any fan-write test when:
 - the helper or daemon state is uncertain;
 - an agent lease is expired but Auto restore is still pending.
 
-For supported Apple Silicon MacBook Pro reports that are close to manual validation, ask for `make manual-smoke-readiness` first. In JSON mode (`MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`) the result is read-only evidence with `coolingCommandsRun: false`; if it exits `75`, use the listed blockers as recovery guidance and do not suggest Fixed/Curve smoke, `prepare`, or agent-run smoke yet.
+For supported Apple Silicon MacBook Pro reports that are close to manual validation, ask for `make manual-smoke-readiness` first. In JSON mode (`MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`) the result is read-only evidence with `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json` and `coolingCommandsRun: false`; if it exits `75`, use the listed blockers as recovery guidance and do not suggest Fixed/Curve smoke, `prepare`, or agent-run smoke yet.
 
 ## Compatibility Claims
 

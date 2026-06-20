@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/manual-smoke-readiness.schema.json",
+  "title": "Vifty manual smoke readiness preflight",
+  "description": "Machine-readable read-only summary emitted by scripts/check-manual-smoke-readiness.sh before any human-supervised Fixed/Curve fan-write smoke test.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "schemaID",
+    "status",
+    "manualSmokeReady",
+    "readOnly",
+    "coolingCommandsRun",
+    "diagnoseExitStatus",
+    "modelIdentifier",
+    "state",
+    "recommendedAgentAction",
+    "recommendedRecoveryAction",
+    "safeToRequestCooling",
+    "daemonControlPathReady",
+    "manualControlActive",
+    "isAppleSilicon",
+    "isMacBookPro",
+    "fanCount",
+    "controllableFanCount",
+    "temperatureSensorCount",
+    "thermalPressure",
+    "failedCheckIDs",
+    "coolingBlockerIDs",
+    "appPreferences",
+    "blockers",
+    "nextAction",
+    "parseError"
+  ],
+  "properties": {
+    "kind": {
+      "const": "vifty-manual-smoke-readiness"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/manual-smoke-readiness.schema.json"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ]
+    },
+    "manualSmokeReady": {
+      "type": "boolean"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "coolingCommandsRun": {
+      "const": false
+    },
+    "diagnoseExitStatus": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "modelIdentifier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "ready",
+        "degraded",
+        "blocked",
+        null
+      ]
+    },
+    "recommendedAgentAction": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "requestCooling",
+        "requestCoolingWithCaution",
+        "restoreAutoBeforeRequestingCooling",
+        "doNotRequestCooling",
+        null
+      ]
+    },
+    "recommendedRecoveryAction": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence",
+        null
+      ]
+    },
+    "safeToRequestCooling": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "daemonControlPathReady": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "manualControlActive": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "isAppleSilicon": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "isMacBookPro": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "fanCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "controllableFanCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "temperatureSensorCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "thermalPressure": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "failedCheckIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coolingBlockerIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "appPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startupMode",
+        "startupModeSource",
+        "readError"
+      ],
+      "properties": {
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "startupModeSource": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "persisted",
+            "legacyUserDefaults",
+            "missingFile",
+            "missingKey",
+            "unreadable",
+            null
+          ]
+        },
+        "readError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nextAction": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parseError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

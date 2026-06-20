@@ -475,6 +475,7 @@ private final class ReleaseArtifactHarness {
             "agent-cooling-evidence-review.schema.json": "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json",
             "agent-run-smoke-evidence-summary.schema.json": "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
             "guarded-run-decision.schema.json": "https://vifty.local/schemas/guarded-run-decision.schema.json",
+            "manual-smoke-readiness.schema.json": "https://vifty.local/schemas/manual-smoke-readiness.schema.json",
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
             "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "validation-report-index.schema.json": "https://vifty.local/schemas/validation-report-index.schema.json",

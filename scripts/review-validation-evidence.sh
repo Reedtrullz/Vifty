@@ -201,6 +201,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "agent-cooling-evidence-review.schema.json" => "Contents/Resources/schemas/agent-cooling-evidence-review.schema.json",
     "agent-run-smoke-evidence-summary.schema.json" => "Contents/Resources/schemas/agent-run-smoke-evidence-summary.schema.json",
     "guarded-run-decision.schema.json" => "Contents/Resources/schemas/guarded-run-decision.schema.json",
+    "manual-smoke-readiness.schema.json" => "Contents/Resources/schemas/manual-smoke-readiness.schema.json",
     "release-artifact-summary.schema.json" => "Contents/Resources/schemas/release-artifact-summary.schema.json",
     "release-readiness.schema.json" => "Contents/Resources/schemas/release-readiness.schema.json",
     "validation-report-index.schema.json" => "Contents/Resources/schemas/validation-report-index.schema.json",

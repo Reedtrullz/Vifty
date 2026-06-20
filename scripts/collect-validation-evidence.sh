@@ -169,6 +169,7 @@ EXPECTED_SCHEMA_FILES=(
   "agent-cooling-evidence-review.schema.json"
   "agent-run-smoke-evidence-summary.schema.json"
   "guarded-run-decision.schema.json"
+  "manual-smoke-readiness.schema.json"
   "release-artifact-summary.schema.json"
   "release-readiness.schema.json"
   "validation-report-index.schema.json"

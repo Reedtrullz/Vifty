@@ -57,6 +57,7 @@ final class ValidationEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(schemaResources.contains("agent-cooling-evidence-review.schema.json"))
         XCTAssertTrue(schemaResources.contains("agent-run-smoke-evidence-summary.schema.json"))
         XCTAssertTrue(schemaResources.contains("guarded-run-decision.schema.json"))
+        XCTAssertTrue(schemaResources.contains("manual-smoke-readiness.schema.json"))
         XCTAssertTrue(schemaResources.contains("release-artifact-summary.schema.json"))
         XCTAssertTrue(schemaResources.contains("release-readiness.schema.json"))
         XCTAssertTrue(schemaResources.contains("validation-report-index.schema.json"))
@@ -1184,6 +1185,7 @@ private final class ValidationEvidenceHarness {
             "agent-cooling-evidence-review.schema.json": "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json",
             "agent-run-smoke-evidence-summary.schema.json": "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
             "guarded-run-decision.schema.json": "https://vifty.local/schemas/guarded-run-decision.schema.json",
+            "manual-smoke-readiness.schema.json": "https://vifty.local/schemas/manual-smoke-readiness.schema.json",
             "release-artifact-summary.schema.json": "https://vifty.local/schemas/release-artifact-summary.schema.json",
             "release-readiness.schema.json": "https://vifty.local/schemas/release-readiness.schema.json",
             "validation-report-index.schema.json": "https://vifty.local/schemas/validation-report-index.schema.json",

@@ -212,7 +212,7 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
    make manual-smoke-readiness
    ```
 
-   For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, records `readOnly: true` and `coolingCommandsRun: false` in JSON mode, exits `75` when smoke must be skipped, and lists blockers such as `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
+   For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, records `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false` in JSON mode, exits `75` when smoke must be skipped, and lists blockers such as `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
 
 5. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
 
