@@ -263,6 +263,8 @@
         "diagnoseState",
         "recommendedAgentAction",
         "recommendedRecoveryAction",
+        "failedCheckIDs",
+        "coolingBlockerIDs",
         "safeToRequestCooling",
         "daemonControlPathReady",
         "manualControlActive",
@@ -356,6 +358,12 @@
         },
         "recommendedRecoveryAction": {
           "$ref": "#/$defs/readinessRecoveryAction"
+        },
+        "failedCheckIDs": {
+          "type": "string"
+        },
+        "coolingBlockerIDs": {
+          "type": "string"
         },
         "safeToRequestCooling": {
           "$ref": "#/$defs/booleanString"

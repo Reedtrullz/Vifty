@@ -464,6 +464,8 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(summary["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(summary["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(summary["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(summary["coolingBlockerIDs"] as? [String], [])
         XCTAssertEqual(summary["modelIdentifier"] as? String, "MacBookPro18,3")
         XCTAssertEqual(summary["modelFamily"] as? String, "MacBookPro18")
         XCTAssertEqual(summary["isAppleSilicon"] as? Bool, true)
@@ -480,6 +482,23 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.contains {
             $0.contains("manual fan-write smoke-test result")
         } == true)
+    }
+
+    func testReviewRejectsContradictoryDiagnoseCoolingBlockerIDs() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            failedCheckIDs: ["thermalPressureSafe"],
+            coolingBlockerIDs: ["manualControlClear"]
+        )
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/blocker-id-review.json")
+
+        let result = try harness.runReview(mode: "supported-hardware", summaryURL: summaryURL)
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("coolingBlockerIDs must be empty when safeToRequestCooling=true"), result.stderr)
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "failed")
+        XCTAssertEqual(summary["failedCheckIDs"] as? [String], ["thermalPressureSafe"])
+        XCTAssertEqual(summary["coolingBlockerIDs"] as? [String], ["manualControlClear"])
     }
 
     func testReviewWritesValidatedManualSmokeSummary() throws {
@@ -1136,6 +1155,8 @@ private final class ValidationEvidenceReviewHarness {
         capabilitiesContractText: String? = nil,
         daemonControlPathReady: Bool? = nil,
         manualControlActive: Bool = false,
+        failedCheckIDs: [String] = [],
+        coolingBlockerIDs: [String] = [],
         includeRecommendedRecoveryAction: Bool = true,
         includeReleaseSummary: Bool = false,
         includeReleaseChecklist: Bool = false,
@@ -1218,6 +1239,8 @@ private final class ValidationEvidenceReviewHarness {
             diagnose,
             daemonControlPathReady: daemonControlPathReady ?? diagnose.daemonControlPathReady,
             manualControlActive: manualControlActive,
+            failedCheckIDs: failedCheckIDs,
+            coolingBlockerIDs: coolingBlockerIDs,
             includeRecommendedRecoveryAction: includeRecommendedRecoveryAction
         )
         try writeJSON(
@@ -1865,6 +1888,8 @@ private final class ValidationEvidenceReviewHarness {
         _ fixture: ValidationEvidenceDiagnoseFixture,
         daemonControlPathReady: Bool,
         manualControlActive: Bool,
+        failedCheckIDs: [String],
+        coolingBlockerIDs: [String],
         includeRecommendedRecoveryAction: Bool
     ) throws {
         let supportedPasses = fixture.supportedHardwareCheckPasses
@@ -1876,6 +1901,8 @@ private final class ValidationEvidenceReviewHarness {
             "safeToRequestCooling": fixture.safeToRequestCooling,
             "daemonControlPathReady": daemonControlPathReady,
             "manualControlActive": manualControlActive,
+            "failedCheckIDs": failedCheckIDs,
+            "coolingBlockerIDs": coolingBlockerIDs,
             "modelIdentifier": supportedPasses ? "MacBookPro18,3" : "Mac14,2",
             "isAppleSilicon": fixture.isAppleSilicon,
             "isMacBookPro": fixture.isMacBookPro,

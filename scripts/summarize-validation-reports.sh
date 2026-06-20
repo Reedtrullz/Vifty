@@ -293,6 +293,21 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       valid = false
     end
 
+    if result.key?("failedCheckIDs") && !string_array?(result["failedCheckIDs"])
+      failures << "#{path} failedCheckIDs must be an array of strings"
+      valid = false
+    end
+
+    if result.key?("coolingBlockerIDs") && !string_array?(result["coolingBlockerIDs"])
+      failures << "#{path} coolingBlockerIDs must be an array of strings"
+      valid = false
+    end
+
+    if string_array?(result["coolingBlockerIDs"]) && !result["coolingBlockerIDs"].empty? && result["safeToRequestCooling"] == true
+      failures << "#{path} coolingBlockerIDs must be empty when safeToRequestCooling is true"
+      valid = false
+    end
+
     expected_model_family = model_family_for(result["modelIdentifier"])
     provided_model_family = result.fetch("modelFamily", "").to_s
     if !provided_model_family.empty? && provided_model_family != expected_model_family
@@ -370,6 +385,16 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     end
   end
 
+  def string_array?(value)
+    value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
+  end
+
+  def joined_string_array(value)
+    return "" unless string_array?(value)
+
+    value.join(",")
+  end
+
   def model_family_for(model_identifier)
     value = model_identifier.to_s.strip
     return "" if value.empty?
@@ -442,13 +467,18 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
   end
 
   def readiness_evidence_for(group)
-    [
+    lines = [
       "safeToRequestCooling=#{join_presence(group.map { |row| row["safeToRequestCooling"] })}",
       "daemonControlPathReady=#{join_presence(group.map { |row| row["daemonControlPathReady"] })}",
       "manualControlActive=#{join_presence(group.map { |row| row["manualControlActive"] })}",
       "agentAction=#{join_presence(group.map { |row| row["recommendedAgentAction"] })}",
       "recoveryAction=#{join_presence(group.map { |row| row["recommendedRecoveryAction"] })}"
-    ].join("<br>")
+    ]
+    failed_ids = join_unique(group.map { |row| row["failedCheckIDs"] })
+    blocker_ids = join_unique(group.map { |row| row["coolingBlockerIDs"] })
+    lines << "failedCheckIDs=#{failed_ids}" unless failed_ids.empty?
+    lines << "coolingBlockerIDs=#{blocker_ids}" unless blocker_ids.empty?
+    lines.join("<br>")
   end
 
   def agent_run_startup_evidence_for(row)
@@ -587,6 +617,8 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "diagnoseState" => result["diagnoseState"].to_s,
       "recommendedAgentAction" => result["recommendedAgentAction"].to_s,
       "recommendedRecoveryAction" => result["recommendedRecoveryAction"].to_s,
+      "failedCheckIDs" => joined_string_array(result["failedCheckIDs"]),
+      "coolingBlockerIDs" => joined_string_array(result["coolingBlockerIDs"]),
       "safeToRequestCooling" => boolean_string(result["safeToRequestCooling"]),
       "daemonControlPathReady" => boolean_string(result["daemonControlPathReady"]),
       "manualControlActive" => boolean_string(result["manualControlActive"]),
@@ -683,6 +715,8 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     diagnoseState
     recommendedAgentAction
     recommendedRecoveryAction
+    failedCheckIDs
+    coolingBlockerIDs
     safeToRequestCooling
     daemonControlPathReady
     manualControlActive

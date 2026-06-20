@@ -69,8 +69,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
         XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\ttrue\tAuto\tpersisted\t\"\"\tMacBookPro18,3\tMacBookPro18"))
-        XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\ttrue\ttrue"))
-        XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\tfalse\ttrue"))
+        XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\t\"\"\t\"\"\ttrue\ttrue"))
+        XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\t\"\"\t\"\"\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("release-trust-evidence\tlocal-developer-id-build\tv1.1.0"))
         XCTAssertTrue(tsv.contains("rejected\tsource-build-tag\tv1.1.0"))
@@ -238,6 +238,44 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertFalse(markdown.contains("manualControlActive=false"))
     }
 
+    func testSummarizerCarriesDiagnoseCheckIDsIntoIndexAndMarkdown() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "blocked/review-result.json",
+            status: "passed",
+            mode: "unsupported-hardware",
+            modelIdentifier: "Mac14,2",
+            safeToRequestCooling: false,
+            failedCheckIDs: ["supportedHardware", "controllableFansPresent"],
+            coolingBlockerIDs: ["supportedHardware", "controllableFansPresent"]
+        )
+        let jsonURL = harness.rootURL.appendingPathComponent("summary/report-index.json")
+        let tsvURL = harness.rootURL.appendingPathComponent("summary/report-index.tsv")
+        let markdownURL = harness.rootURL.appendingPathComponent("summary/compatibility-matrix.md")
+
+        let result = try harness.runSummarizer([
+            "--input", reviewURL.path,
+            "--output-json", jsonURL.path,
+            "--output-tsv", tsvURL.path,
+            "--output-markdown", markdownURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        let json = try harness.readJSON(jsonURL)
+        let reports = try XCTUnwrap(json["reports"] as? [[String: Any]])
+        let report = try XCTUnwrap(reports.first)
+        XCTAssertEqual(report["failedCheckIDs"] as? String, "supportedHardware,controllableFansPresent")
+        XCTAssertEqual(report["coolingBlockerIDs"] as? String, "supportedHardware,controllableFansPresent")
+
+        let tsv = try String(contentsOf: tsvURL, encoding: .utf8)
+        XCTAssertTrue(tsv.contains("\tfailedCheckIDs\tcoolingBlockerIDs\t"))
+        XCTAssertTrue(tsv.contains("supportedHardware,controllableFansPresent\tsupportedHardware,controllableFansPresent"))
+
+        let markdown = try String(contentsOf: markdownURL, encoding: .utf8)
+        XCTAssertTrue(markdown.contains("failedCheckIDs=supportedHardware,controllableFansPresent"))
+        XCTAssertTrue(markdown.contains("coolingBlockerIDs=supportedHardware,controllableFansPresent"))
+    }
+
     func testSummarizerRejectsValidatedManualSmokeWithoutSource() throws {
         let harness = try ValidationReportSummaryHarness()
         let reviewURL = try harness.writeReviewResult(
@@ -312,6 +350,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reportRequired.contains("modelFamily"))
         XCTAssertTrue(reportRequired.contains("daemonControlPathReady"))
         XCTAssertTrue(reportRequired.contains("manualControlActive"))
+        XCTAssertTrue(reportRequired.contains("failedCheckIDs"))
+        XCTAssertTrue(reportRequired.contains("coolingBlockerIDs"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupMode"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeSource"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeReadError"))
@@ -332,6 +372,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         let utcTimestamp = try XCTUnwrap(defs["utcTimestamp"] as? [String: Any])
         XCTAssertEqual(utcTimestamp["pattern"] as? String, "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")
         let reportProperties = try XCTUnwrap(report["properties"] as? [String: Any])
+        XCTAssertEqual(reportProperties["failedCheckIDs"] as? [String: String], ["type": "string"])
+        XCTAssertEqual(reportProperties["coolingBlockerIDs"] as? [String: String], ["type": "string"])
         let reportGeneratedAt = try XCTUnwrap(reportProperties["reviewGeneratedAtUTC"] as? [String: Any])
         XCTAssertEqual(reportGeneratedAt["$ref"] as? String, "#/$defs/utcTimestamp")
         let reportStartupMode = try XCTUnwrap(reportProperties["agentRunSmokeStartupMode"] as? [String: Any])
@@ -394,8 +436,12 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertFalse(required.contains("agentRunSmokeStartupMode"))
         XCTAssertFalse(required.contains("agentRunSmokeStartupModeSource"))
         XCTAssertFalse(required.contains("agentRunSmokeStartupModeReadError"))
+        XCTAssertFalse(required.contains("failedCheckIDs"))
+        XCTAssertFalse(required.contains("coolingBlockerIDs"))
 
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        XCTAssertEqual(properties["failedCheckIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
+        XCTAssertEqual(properties["coolingBlockerIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         let startupMode = try XCTUnwrap(properties["agentRunSmokeStartupMode"] as? [String: Any])
         XCTAssertEqual(startupMode["$ref"] as? String, "#/$defs/agentRunSmokeStartupMode")
 
@@ -812,6 +858,8 @@ private final class ValidationReportSummaryHarness {
         agentRunSmokeStartupMode: String = "",
         agentRunSmokeStartupModeSource: String = "",
         agentRunSmokeStartupModeReadError: String = "",
+        failedCheckIDs: [String] = [],
+        coolingBlockerIDs: [String] = [],
         failures: [String] = [],
         warnings: [String] = [],
         readOnly: Bool = true,
@@ -846,6 +894,8 @@ private final class ValidationReportSummaryHarness {
             "sourceArtifactBytes": sourceArtifactBytes,
             "diagnoseState": mode == "unsupported-hardware" ? "blocked" : "ready",
             "safeToRequestCooling": safeToRequestCooling,
+            "failedCheckIDs": failedCheckIDs,
+            "coolingBlockerIDs": coolingBlockerIDs,
             "modelIdentifier": modelIdentifier,
             "isAppleSilicon": modelIdentifier.hasPrefix("MacBookPro") || modelIdentifier.hasPrefix("Mac"),
             "isMacBookPro": modelIdentifier.hasPrefix("MacBookPro"),

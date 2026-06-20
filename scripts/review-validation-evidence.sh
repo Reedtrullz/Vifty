@@ -557,6 +557,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "#{field} must be a nonnegative integer"
   end
 
+  def string_array?(value)
+    value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
+  end
+
   def require_sha256(value, field, failures)
     return if value.to_s.match?(/\A[0-9a-f]{64}\z/)
 
@@ -1239,6 +1243,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_app_preferences)
     return if path.to_s.empty?
 
+    failed_check_ids = string_array?(diagnose["failedCheckIDs"]) ? diagnose["failedCheckIDs"] : []
+    cooling_blocker_ids = string_array?(diagnose["coolingBlockerIDs"]) ? diagnose["coolingBlockerIDs"] : []
+
     payload = {
       "schemaVersion" => 1,
       "schemaID" => VALIDATION_REVIEW_RESULT_SCHEMA_ID,
@@ -1263,6 +1270,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "safeToRequestCooling" => diagnose["safeToRequestCooling"],
       "daemonControlPathReady" => diagnose["daemonControlPathReady"],
       "manualControlActive" => diagnose.key?("manualControlActive") ? diagnose["manualControlActive"] : nil,
+      "failedCheckIDs" => failed_check_ids,
+      "coolingBlockerIDs" => cooling_blocker_ids,
       "modelIdentifier" => diagnose["modelIdentifier"],
       "modelFamily" => model_family_for(diagnose["modelIdentifier"]),
       "isAppleSilicon" => diagnose["isAppleSilicon"],
@@ -1415,6 +1424,25 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "viftyctl-diagnose.json recommendedRecoveryAction",
     failures
   )
+  failed_check_ids = diagnose["failedCheckIDs"]
+  failed_check_ids_present = diagnose.key?("failedCheckIDs")
+  cooling_blocker_ids = diagnose["coolingBlockerIDs"]
+  cooling_blocker_ids_present = diagnose.key?("coolingBlockerIDs")
+  if failed_check_ids_present
+    failures << "viftyctl-diagnose.json failedCheckIDs must be an array of strings" unless string_array?(failed_check_ids)
+  else
+    warnings << "viftyctl-diagnose.json is missing failedCheckIDs; legacy reports may require checks[] parsing for failed readiness IDs"
+    failed_check_ids = []
+  end
+  if cooling_blocker_ids_present
+    failures << "viftyctl-diagnose.json coolingBlockerIDs must be an array of strings" unless string_array?(cooling_blocker_ids)
+  else
+    warnings << "viftyctl-diagnose.json is missing coolingBlockerIDs; legacy reports may require checks[] parsing for hard cooling blockers"
+    cooling_blocker_ids = []
+  end
+  if string_array?(cooling_blocker_ids) && !cooling_blocker_ids.empty? && diagnose["safeToRequestCooling"] == true
+    failures << "viftyctl-diagnose.json coolingBlockerIDs must be empty when safeToRequestCooling=true"
+  end
 
   agent_run_smoke_app_preferences = {
     "startupMode" => "",
