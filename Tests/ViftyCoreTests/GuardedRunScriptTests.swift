@@ -624,6 +624,43 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunEmitsStructuredDecisionWhenReadinessBlocksCooling() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "restoreAutoBeforeRetry",
+            safeToRequestCooling: true,
+            manualControlActive: true,
+            startupMode: "Curve"
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(decision["schemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertEqual(decision["command"] as? String, "guarded-run")
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(decision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(decision["exitCode"] as? Int, 75)
+        XCTAssertEqual(decision["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(decision["recommendedRecoveryAction"] as? String, "restoreAutoBeforeRetry")
+        XCTAssertEqual(decision["diagnoseState"] as? String, "degraded")
+        XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(decision["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(decision["startupMode"] as? String, "Curve")
+        XCTAssertEqual(decision["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(decision["coolingBlockerIDs"] as? [String], [])
+        XCTAssertTrue((decision["message"] as? String)?.contains("manual fan control is active") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunCanRunChildWithoutViftyCoolingWhenUserAllowsUncooledFallback() throws {
         let harness = try ScriptHarness(
             state: "degraded",
@@ -644,6 +681,12 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stderr.contains("Vifty recommends not requesting cooling"), result.stderr)
         XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling"), result.stderr)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, true)
+        XCTAssertEqual(decision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackRequested"] as? Bool, true)
+        XCTAssertEqual(decision["uncooledFallbackAllowed"] as? Bool, true)
+        XCTAssertEqual(decision["exitCode"] as? Int, 0)
         XCTAssertEqual(try String(contentsOf: markerURL, encoding: .utf8), "child-ran")
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
@@ -882,6 +925,38 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunDecisionMarksBlockedUncooledFallback() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "none",
+            safeToRequestCooling: true,
+            daemonControlPathReady: true,
+            manualControlActive: false,
+            coolingBlockerIDs: ["manualControlClear"]
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-blocked-decision.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(decision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackRequested"] as? Bool, true)
+        XCTAssertEqual(decision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(decision["coolingBlockerIDs"] as? [String], ["manualControlClear"])
+        XCTAssertEqual(decision["exitCode"] as? Int, 75)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunFailsClosedWhenReadinessRecoveryActionIsMissing() throws {
         let harness = try ScriptHarness(
             state: "degraded",
@@ -1083,6 +1158,23 @@ final class GuardedRunScriptTests: XCTestCase {
                 XCTAssertTrue(contents.contains("guarded-run.sh"), script.lastPathComponent)
             }
         }
+    }
+
+    private func guardedRunDecisionJSON(from stderr: String) throws -> [String: Any] {
+        let begin = "guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON"
+        let end = "guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON"
+        guard let beginRange = stderr.range(of: begin),
+              let endRange = stderr.range(of: end, range: beginRange.upperBound..<stderr.endIndex) else {
+            XCTFail("Missing guarded-run decision JSON markers in stderr:\n\(stderr)")
+            return [:]
+        }
+
+        let jsonText = stderr[beginRange.upperBound..<endRange.lowerBound]
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .joined(separator: "\n")
+        let data = Data(jsonText.utf8)
+        let object = try JSONSerialization.jsonObject(with: data)
+        return try XCTUnwrap(object as? [String: Any])
     }
 }
 

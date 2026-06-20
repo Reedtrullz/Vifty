@@ -93,8 +93,13 @@ On guarded-run failure paths, extract captured JSON from stderr only between
 the stable markers `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
 `guarded-run: END_VIFTY_CAPABILITIES_JSON` or
 `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` /
-`guarded-run: END_VIFTY_DIAGNOSE_JSON`; do not parse surrounding human recovery
-text.
+`guarded-run: END_VIFTY_DIAGNOSE_JSON` or
+`guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` /
+`guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`; do not parse surrounding
+human recovery text. The wrapper decision payload declares `schemaID:
+https://vifty.local/schemas/guarded-run-decision.schema.json` and tells agents
+whether cooling was requested, whether an uncooled fallback was requested or
+allowed, and which readiness fields blocked the safe path.
 
 ## Codex
 

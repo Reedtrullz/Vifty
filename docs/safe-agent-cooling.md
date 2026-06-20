@@ -56,8 +56,12 @@ machine-readable payload extractable from stderr: capabilities payloads are
 bracketed by `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` and
 `guarded-run: END_VIFTY_CAPABILITIES_JSON`, while diagnose payloads are bracketed
 by `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` and
-`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Agents and support tooling should extract
-the exact JSON between those markers instead of parsing surrounding prose.
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Wrapper no-cooling decisions are
+bracketed by `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` and
+`guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`, with `schemaID:
+https://vifty.local/schemas/guarded-run-decision.schema.json`. Agents and
+support tooling should extract the exact JSON between those markers instead of
+parsing surrounding prose.
 
 The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
@@ -65,8 +69,11 @@ The guarded wrapper also does not fall back to an uncooled workload by default.
 When the user explicitly wants the child command to run without Vifty after a
 structured readiness block, set `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`. The
 wrapper still performs read-only capabilities/readiness checks, prints the
-diagnose JSON, refuses to request cooling, and only then execs the child directly.
-It still refuses uncooled execution when Vifty recommends `repairHelper`,
+diagnose JSON and wrapper decision JSON, refuses to request cooling, and only
+then execs the child directly. The decision JSON sets `coolingRequested: false`,
+`uncooledFallbackRequested: true`, and `uncooledFallbackAllowed: true` only for
+that explicit no-cooling exec path. It still refuses uncooled execution when
+Vifty recommends `repairHelper`,
 `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, or
 `collectHardwareEvidence`; when `daemonControlPathReady` is false; or when
 `manualControlActive` is true. The

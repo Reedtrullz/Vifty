@@ -162,6 +162,77 @@ print_diagnose_json_evidence() {
   print_json_evidence "VIFTY_DIAGNOSE_JSON" "${diagnose_json:-}"
 }
 
+guarded_run_decision_json() {
+  decision_message="$1"
+  decision_safe_to_proceed="$2"
+  decision_uncooled_allowed="$3"
+  decision_exit_code="$4"
+
+  VIFTY_GUARDED_RUN_DECISION_MESSAGE="$decision_message" \
+  VIFTY_GUARDED_RUN_DECISION_SAFE_TO_PROCEED="$decision_safe_to_proceed" \
+  VIFTY_GUARDED_RUN_DECISION_UNCOOLED_REQUESTED="${allow_uncooled:-0}" \
+  VIFTY_GUARDED_RUN_DECISION_UNCOOLED_ALLOWED="$decision_uncooled_allowed" \
+  VIFTY_GUARDED_RUN_DECISION_EXIT_CODE="$decision_exit_code" \
+  VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION="${recommended_action:-}" \
+  VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_RECOVERY_ACTION="${recommended_recovery_action:-}" \
+  VIFTY_GUARDED_RUN_DECISION_STATE="${state:-}" \
+  VIFTY_GUARDED_RUN_DECISION_SAFE_TO_REQUEST="${safe_to_request:-}" \
+  VIFTY_GUARDED_RUN_DECISION_DAEMON_READY="${daemon_control_path_ready:-}" \
+  VIFTY_GUARDED_RUN_DECISION_MANUAL_ACTIVE="${manual_control_active:-}" \
+  VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE="${startup_mode:-}" \
+  VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS="${failed_check_ids_compact:-[]}" \
+  VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS="${cooling_blocker_ids_compact:-[]}" \
+  /usr/bin/ruby -rjson <<'RUBY'
+def bool_value(name)
+  value = ENV[name]
+  return true if value == "true" || value == "1"
+  return false if value == "false" || value == "0"
+  nil
+end
+
+def optional_string(name)
+  value = ENV[name].to_s
+  value.empty? ? nil : value
+end
+
+def string_array(name)
+  value = JSON.parse(ENV[name].to_s)
+  return value if value.is_a?(Array) && value.all? { |item| item.is_a?(String) }
+  []
+rescue JSON::ParserError
+  []
+end
+
+payload = {
+  "schemaVersion" => 1,
+  "schemaID" => "https://vifty.local/schemas/guarded-run-decision.schema.json",
+  "command" => "guarded-run",
+  "safeToProceed" => bool_value("VIFTY_GUARDED_RUN_DECISION_SAFE_TO_PROCEED"),
+  "coolingRequested" => false,
+  "uncooledFallbackRequested" => bool_value("VIFTY_GUARDED_RUN_DECISION_UNCOOLED_REQUESTED"),
+  "uncooledFallbackAllowed" => bool_value("VIFTY_GUARDED_RUN_DECISION_UNCOOLED_ALLOWED"),
+  "exitCode" => ENV["VIFTY_GUARDED_RUN_DECISION_EXIT_CODE"].to_i,
+  "message" => ENV["VIFTY_GUARDED_RUN_DECISION_MESSAGE"].to_s,
+  "recommendedAgentAction" => optional_string("VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION"),
+  "recommendedRecoveryAction" => optional_string("VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_RECOVERY_ACTION"),
+  "diagnoseState" => optional_string("VIFTY_GUARDED_RUN_DECISION_STATE"),
+  "safeToRequestCooling" => bool_value("VIFTY_GUARDED_RUN_DECISION_SAFE_TO_REQUEST"),
+  "daemonControlPathReady" => bool_value("VIFTY_GUARDED_RUN_DECISION_DAEMON_READY"),
+  "manualControlActive" => bool_value("VIFTY_GUARDED_RUN_DECISION_MANUAL_ACTIVE"),
+  "startupMode" => optional_string("VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE"),
+  "failedCheckIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS"),
+  "coolingBlockerIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS")
+}
+
+puts JSON.generate(payload)
+RUBY
+}
+
+print_guarded_run_decision_json() {
+  decision_payload="$(guarded_run_decision_json "$@" 2>/dev/null || printf '')"
+  print_json_evidence "VIFTY_GUARDED_RUN_DECISION_JSON" "$decision_payload"
+}
+
 finish_without_cooling_request() {
   message="$1"
   shift
@@ -174,35 +245,45 @@ finish_without_cooling_request() {
   if [ "$allow_uncooled" -eq 1 ]; then
     case "$recommended_recovery_action" in
       repairHelper|backOffWorkload|restoreAutoBeforeRetry|inspectPolicy|collectHardwareEvidence)
-        echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling." >&2
+        uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling."
+        echo "guarded-run: $uncooled_message" >&2
         print_no_direct_uncooled_rerun_guidance
+        print_guarded_run_decision_json "$uncooled_message" false false 75
         exit 75
         ;;
     esac
 
     if [ "${manual_control_active:-}" = "true" ]; then
-      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but manualControlActive is true; not running workload without cooling." >&2
+      uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but manualControlActive is true; not running workload without cooling."
+      echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
+      print_guarded_run_decision_json "$uncooled_message" false false 75
       exit 75
     fi
 
     if [ "${daemon_control_path_ready:-}" != "true" ]; then
-      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling." >&2
+      uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling."
+      echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
+      print_guarded_run_decision_json "$uncooled_message" false false 75
       exit 75
     fi
 
     if [ "${cooling_blockers_present:-0}" -ne 0 ]; then
-      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but coolingBlockerIDs is non-empty: ${cooling_blocker_ids_compact:-unknown}; not running workload without cooling." >&2
+      uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but coolingBlockerIDs is non-empty: ${cooling_blocker_ids_compact:-unknown}; not running workload without cooling."
+      echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
+      print_guarded_run_decision_json "$uncooled_message" false false 75
       exit 75
     fi
 
     echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling." >&2
+    print_guarded_run_decision_json "$message" true true 0
     exec "$@"
   fi
 
   print_no_direct_uncooled_rerun_guidance
+  print_guarded_run_decision_json "$message" false false 75
   exit 75
 }
 

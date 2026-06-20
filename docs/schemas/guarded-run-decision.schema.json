@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/guarded-run-decision.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "command",
+    "safeToProceed",
+    "coolingRequested",
+    "uncooledFallbackRequested",
+    "uncooledFallbackAllowed",
+    "exitCode",
+    "message",
+    "recommendedAgentAction",
+    "recommendedRecoveryAction",
+    "diagnoseState",
+    "safeToRequestCooling",
+    "daemonControlPathReady",
+    "manualControlActive",
+    "startupMode",
+    "failedCheckIDs",
+    "coolingBlockerIDs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/guarded-run-decision.schema.json"
+    },
+    "command": {
+      "const": "guarded-run"
+    },
+    "safeToProceed": {
+      "type": "boolean",
+      "description": "True only when the wrapper is about to exec the child without Vifty cooling after explicit uncooled fallback approval."
+    },
+    "coolingRequested": {
+      "const": false,
+      "description": "The guarded-run decision payload is emitted only for no-cooling paths, before the wrapper exits or execs the child uncooled."
+    },
+    "uncooledFallbackRequested": {
+      "type": "boolean"
+    },
+    "uncooledFallbackAllowed": {
+      "type": "boolean"
+    },
+    "exitCode": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recommendedAgentAction": {
+      "type": ["string", "null"],
+      "enum": [
+        "requestCooling",
+        "requestCoolingWithCaution",
+        "restoreAutoBeforeRequestingCooling",
+        "doNotRequestCooling",
+        null
+      ]
+    },
+    "recommendedRecoveryAction": {
+      "type": ["string", "null"],
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence",
+        null
+      ]
+    },
+    "diagnoseState": {
+      "type": ["string", "null"],
+      "enum": ["ready", "degraded", "blocked", null]
+    },
+    "safeToRequestCooling": {
+      "type": ["boolean", "null"]
+    },
+    "daemonControlPathReady": {
+      "type": ["boolean", "null"]
+    },
+    "manualControlActive": {
+      "type": ["boolean", "null"]
+    },
+    "startupMode": {
+      "type": ["string", "null"],
+      "enum": ["Auto", "Curve", "Fixed", null]
+    },
+    "failedCheckIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coolingBlockerIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

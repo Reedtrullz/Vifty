@@ -16,8 +16,15 @@ When the wrapper prints captured JSON on a failure path, it wraps capabilities
 evidence with `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
 `guarded-run: END_VIFTY_CAPABILITIES_JSON` and diagnose evidence with
 `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` /
-`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Extract the exact JSON between those
-markers instead of scraping human recovery text.
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`. It also wraps wrapper-level no-cooling
+decisions with `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` /
+`guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`; those payloads use
+`schemaID: https://vifty.local/schemas/guarded-run-decision.schema.json` and
+summarize `coolingRequested`, `uncooledFallbackRequested`,
+`uncooledFallbackAllowed`, `recommendedAgentAction`,
+`recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`,
+`manualControlActive`, `failedCheckIDs`, and `coolingBlockerIDs`. Extract the
+exact JSON between those markers instead of scraping human recovery text.
 
 If a capabilities payload does not advertise schema version `1`, the stable
 capabilities, diagnose, command-error, and run schema IDs, `runLifecycle`,
