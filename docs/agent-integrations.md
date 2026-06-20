@@ -99,7 +99,7 @@ the stable markers `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
 human recovery text. The wrapper decision payload declares `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json` and tells agents
 whether cooling was requested, whether an uncooled fallback was requested or
-allowed, and which readiness fields blocked the safe path.
+allowed, which stable `decisionReason` category applies, and which readiness fields blocked the safe path.
 
 ## Codex
 

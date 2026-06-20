@@ -87,8 +87,9 @@ tell the user to switch Vifty's default startup mode to `Auto` before retrying
 agent cooling. The summary also records
 `guardedRunDecision` when `guarded-run-stderr.txt` contains a bracketed
 `https://vifty.local/schemas/guarded-run-decision.schema.json` payload; that
-summary is accepted only when the wrapper decision agrees with the captured
-diagnose evidence. It records `capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
+summary includes `decisionReason` when current wrappers provide it and is
+accepted only when the wrapper decision agrees with the captured diagnose
+evidence. It records `capabilitiesDecision` for the advertised `viftyctl run` support, force-retry
 discovery, safe run/direct-control lifecycle, metadata limits, policy status
 availability, daemon status, and unavailable exit-code contract; missing or unsafe capabilities contract
 fields fail review, except absent legacy `metadataLimits` is a warning rather

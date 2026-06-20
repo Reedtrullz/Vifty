@@ -47,6 +47,20 @@
     "uncooledFallbackAllowed": {
       "type": "boolean"
     },
+    "decisionReason": {
+      "type": "string",
+      "enum": [
+        "readinessBlocked",
+        "safeToRequestCoolingFalse",
+        "daemonControlPathNotReady",
+        "manualControlActive",
+        "coolingBlockersPresent",
+        "recoveryActionBlocksUncooledFallback",
+        "uncooledFallbackAllowed",
+        "unknownNoCoolingDecision"
+      ],
+      "description": "Machine-readable reason for the wrapper-level no-cooling decision so agents do not classify failures by parsing message text."
+    },
     "exitCode": {
       "type": "integer",
       "minimum": 0,

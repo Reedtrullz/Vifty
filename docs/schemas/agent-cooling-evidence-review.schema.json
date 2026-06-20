@@ -246,6 +246,7 @@
         "coolingRequested",
         "uncooledFallbackRequested",
         "uncooledFallbackAllowed",
+        "decisionReason",
         "exitCode",
         "message",
         "recommendedAgentAction",
@@ -314,6 +315,23 @@
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "decisionReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "readinessBlocked",
+            "safeToRequestCoolingFalse",
+            "daemonControlPathNotReady",
+            "manualControlActive",
+            "coolingBlockersPresent",
+            "recoveryActionBlocksUncooledFallback",
+            "uncooledFallbackAllowed",
+            "unknownNoCoolingDecision",
+            null
           ]
         },
         "exitCode": {

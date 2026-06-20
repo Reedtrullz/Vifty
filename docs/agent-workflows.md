@@ -313,7 +313,9 @@ and only then execs the child directly; it refuses that fallback for
 `collectHardwareEvidence`, `manualControlActive: true`,
 `daemonControlPathReady: false`, and force-retry combinations. The decision
 payload uses `schemaID:
-https://vifty.local/schemas/guarded-run-decision.schema.json`.
+https://vifty.local/schemas/guarded-run-decision.schema.json` and includes
+`decisionReason` so agents can classify the wrapper-level no-cooling decision
+without parsing `message`.
 
 Set `VIFTYCTL` to point at a development bundle:
 

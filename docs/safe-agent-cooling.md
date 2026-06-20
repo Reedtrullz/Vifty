@@ -61,7 +61,10 @@ bracketed by `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` and
 `guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`, with `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json`. Agents and
 support tooling should extract the exact JSON between those markers instead of
-parsing surrounding prose.
+parsing surrounding prose. Current wrapper decision payloads include
+`decisionReason` so agents can classify readiness-blocked, manual-control,
+daemon-control, hard-blocker, and uncooled-fallback decisions without scraping
+the human `message`.
 
 The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
@@ -250,8 +253,9 @@ persisted `Curve` or `Fixed` default, switch Vifty's default startup mode to
 `daemonControlPathReady`, blocker-ID arrays, or `appPreferences` may pass only with a warning;
 `daemonControlPathReady` still has to be inferred from structured
 readiness/recovery fields. If `guarded-run-stderr.txt` is present, the
-`guardedRunDecision` summary records the bracketed wrapper decision and fails
-review if that decision drifts from the captured diagnose evidence. The
+`guardedRunDecision` summary records the bracketed wrapper decision, preserves
+`decisionReason` when current wrappers provide it, and fails review if that
+decision drifts from the captured diagnose evidence. The
 `capabilitiesDecision` summary
 records the captured capabilities schema version plus stable
 `schemaIDs.capabilities`, `schemaIDs.diagnose`, `schemaIDs.commandError`, and

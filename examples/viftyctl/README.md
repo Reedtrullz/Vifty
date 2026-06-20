@@ -21,7 +21,7 @@ decisions with `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` /
 `guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`; those payloads use
 `schemaID: https://vifty.local/schemas/guarded-run-decision.schema.json` and
 summarize `coolingRequested`, `uncooledFallbackRequested`,
-`uncooledFallbackAllowed`, `recommendedAgentAction`,
+`uncooledFallbackAllowed`, `decisionReason`, `recommendedAgentAction`,
 `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`,
 `manualControlActive`, `failedCheckIDs`, and `coolingBlockerIDs`. Extract the
 exact JSON between those markers instead of scraping human recovery text.

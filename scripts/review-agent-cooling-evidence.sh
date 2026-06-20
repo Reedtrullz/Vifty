@@ -89,6 +89,16 @@ DIAGNOSE_RECOVERY_ACTIONS = %w[
   collectHardwareEvidence
 ].freeze
 STARTUP_MODES = %w[Auto Curve Fixed].freeze
+GUARDED_RUN_DECISION_REASONS = %w[
+  readinessBlocked
+  safeToRequestCoolingFalse
+  daemonControlPathNotReady
+  manualControlActive
+  coolingBlockersPresent
+  recoveryActionBlocksUncooledFallback
+  uncooledFallbackAllowed
+  unknownNoCoolingDecision
+].freeze
 STARTUP_MODE_SOURCES = %w[
   persisted
   defaultMissingFile
@@ -164,6 +174,7 @@ guarded_run_decision = {
   "coolingRequested" => nil,
   "uncooledFallbackRequested" => nil,
   "uncooledFallbackAllowed" => nil,
+  "decisionReason" => nil,
   "exitCode" => nil,
   "message" => nil,
   "recommendedAgentAction" => nil,
@@ -797,6 +808,7 @@ if File.file?(guarded_run_stderr_path)
     cooling_requested = guarded_payload["coolingRequested"]
     uncooled_requested = guarded_payload["uncooledFallbackRequested"]
     uncooled_allowed = guarded_payload["uncooledFallbackAllowed"]
+    decision_reason = guarded_payload["decisionReason"]
     exit_code = integer_value(guarded_payload["exitCode"])
     message = guarded_payload["message"]
     agent_action = guarded_payload["recommendedAgentAction"]
@@ -815,6 +827,7 @@ if File.file?(guarded_run_stderr_path)
     guarded_run_decision["coolingRequested"] = cooling_requested if boolean?(cooling_requested)
     guarded_run_decision["uncooledFallbackRequested"] = uncooled_requested if boolean?(uncooled_requested)
     guarded_run_decision["uncooledFallbackAllowed"] = uncooled_allowed if boolean?(uncooled_allowed)
+    guarded_run_decision["decisionReason"] = decision_reason if optional_string?(decision_reason)
     guarded_run_decision["exitCode"] = exit_code
     guarded_run_decision["message"] = message if message.is_a?(String)
     guarded_run_decision["recommendedAgentAction"] = agent_action if optional_string?(agent_action)
@@ -834,6 +847,7 @@ if File.file?(guarded_run_stderr_path)
     failures << "guarded-run decision coolingRequested must be false for support evidence" unless cooling_requested == false
     failures << "guarded-run decision uncooledFallbackRequested must be boolean" unless boolean?(uncooled_requested)
     failures << "guarded-run decision uncooledFallbackAllowed must be boolean" unless boolean?(uncooled_allowed)
+    failures << "guarded-run decision decisionReason is unsupported" unless decision_reason.nil? || GUARDED_RUN_DECISION_REASONS.include?(decision_reason)
     failures << "guarded-run decision exitCode must be an integer" unless exit_code
     failures << "guarded-run decision message must be nonempty" unless message.is_a?(String) && !message.strip.empty?
     failures << "guarded-run decision recommendedAgentAction is unsupported" unless agent_action.nil? || DIAGNOSE_AGENT_ACTIONS.include?(agent_action)

@@ -19,7 +19,8 @@ If the report includes output from `examples/viftyctl/guarded-run.sh`, ask for
 the stderr transcript to be copied into the bundle with
 `AGENT_EVIDENCE_GUARDED_RUN_STDERR=/path/to/guarded-run.stderr make agent-cooling-evidence`
 or `--guarded-run-stderr-file <path>` so the reviewer can summarize only the
-schema-backed decision payload between the guarded-run markers.
+schema-backed decision payload between the guarded-run markers, including the
+stable `decisionReason` category when current wrappers provide it.
 
 Installed app bundles include the same read-only collector at
 `/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`

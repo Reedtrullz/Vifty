@@ -167,12 +167,14 @@ guarded_run_decision_json() {
   decision_safe_to_proceed="$2"
   decision_uncooled_allowed="$3"
   decision_exit_code="$4"
+  decision_reason="$5"
 
   VIFTY_GUARDED_RUN_DECISION_MESSAGE="$decision_message" \
   VIFTY_GUARDED_RUN_DECISION_SAFE_TO_PROCEED="$decision_safe_to_proceed" \
   VIFTY_GUARDED_RUN_DECISION_UNCOOLED_REQUESTED="${allow_uncooled:-0}" \
   VIFTY_GUARDED_RUN_DECISION_UNCOOLED_ALLOWED="$decision_uncooled_allowed" \
   VIFTY_GUARDED_RUN_DECISION_EXIT_CODE="$decision_exit_code" \
+  VIFTY_GUARDED_RUN_DECISION_REASON="$decision_reason" \
   VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION="${recommended_action:-}" \
   VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_RECOVERY_ACTION="${recommended_recovery_action:-}" \
   VIFTY_GUARDED_RUN_DECISION_STATE="${state:-}" \
@@ -211,6 +213,7 @@ payload = {
   "coolingRequested" => false,
   "uncooledFallbackRequested" => bool_value("VIFTY_GUARDED_RUN_DECISION_UNCOOLED_REQUESTED"),
   "uncooledFallbackAllowed" => bool_value("VIFTY_GUARDED_RUN_DECISION_UNCOOLED_ALLOWED"),
+  "decisionReason" => ENV["VIFTY_GUARDED_RUN_DECISION_REASON"].to_s,
   "exitCode" => ENV["VIFTY_GUARDED_RUN_DECISION_EXIT_CODE"].to_i,
   "message" => ENV["VIFTY_GUARDED_RUN_DECISION_MESSAGE"].to_s,
   "recommendedAgentAction" => optional_string("VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION"),
@@ -234,8 +237,9 @@ print_guarded_run_decision_json() {
 }
 
 finish_without_cooling_request() {
-  message="$1"
-  shift
+  decision_reason="$1"
+  message="$2"
+  shift 2
 
   echo "guarded-run: $message" >&2
   print_readiness_recovery_action "$recommended_recovery_action"
@@ -248,7 +252,7 @@ finish_without_cooling_request() {
         uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling."
         echo "guarded-run: $uncooled_message" >&2
         print_no_direct_uncooled_rerun_guidance
-        print_guarded_run_decision_json "$uncooled_message" false false 75
+        print_guarded_run_decision_json "$uncooled_message" false false 75 "recoveryActionBlocksUncooledFallback"
         exit 75
         ;;
     esac
@@ -257,7 +261,7 @@ finish_without_cooling_request() {
       uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but manualControlActive is true; not running workload without cooling."
       echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
-      print_guarded_run_decision_json "$uncooled_message" false false 75
+      print_guarded_run_decision_json "$uncooled_message" false false 75 "manualControlActive"
       exit 75
     fi
 
@@ -265,7 +269,7 @@ finish_without_cooling_request() {
       uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemonControlPathReady is ${daemon_control_path_ready:-unknown}; not running workload without cooling."
       echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
-      print_guarded_run_decision_json "$uncooled_message" false false 75
+      print_guarded_run_decision_json "$uncooled_message" false false 75 "daemonControlPathNotReady"
       exit 75
     fi
 
@@ -273,17 +277,17 @@ finish_without_cooling_request() {
       uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but coolingBlockerIDs is non-empty: ${cooling_blocker_ids_compact:-unknown}; not running workload without cooling."
       echo "guarded-run: $uncooled_message" >&2
       print_no_direct_uncooled_rerun_guidance
-      print_guarded_run_decision_json "$uncooled_message" false false 75
+      print_guarded_run_decision_json "$uncooled_message" false false 75 "coolingBlockersPresent"
       exit 75
     fi
 
     echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling." >&2
-    print_guarded_run_decision_json "$message" true true 0
+    print_guarded_run_decision_json "$message" true true 0 "uncooledFallbackAllowed"
     exec "$@"
   fi
 
   print_no_direct_uncooled_rerun_guidance
-  print_guarded_run_decision_json "$message" false false 75
+  print_guarded_run_decision_json "$message" false false 75 "$decision_reason"
   exit 75
 }
 
@@ -853,11 +857,11 @@ case "$recommended_recovery_action" in
 esac
 
 if [ "$cooling_blockers_present" -ne 0 ]; then
-  finish_without_cooling_request "Vifty diagnose coolingBlockerIDs is non-empty: $cooling_blocker_ids_compact; refusing to request cooling." "$@"
+  finish_without_cooling_request "coolingBlockersPresent" "Vifty diagnose coolingBlockerIDs is non-empty: $cooling_blocker_ids_compact; refusing to request cooling." "$@"
 fi
 
 if [ "$state" = "blocked" ]; then
-  finish_without_cooling_request "Vifty readiness is blocked; refusing to request cooling." "$@"
+  finish_without_cooling_request "readinessBlocked" "Vifty readiness is blocked; refusing to request cooling." "$@"
 fi
 
 if [ "$safe_to_request" != "true" ]; then
@@ -872,15 +876,15 @@ if [ "$safe_to_request" != "true" ]; then
       no_cooling_message="Vifty reports safeToRequestCooling=$safe_to_request for action '$recommended_action'; refusing to request cooling."
       ;;
   esac
-  finish_without_cooling_request "$no_cooling_message" "$@"
+  finish_without_cooling_request "safeToRequestCoolingFalse" "$no_cooling_message" "$@"
 fi
 
 if [ "$daemon_control_path_ready" != "true" ]; then
-  finish_without_cooling_request "Vifty daemon control path is not ready; refusing to request cooling." "$@"
+  finish_without_cooling_request "daemonControlPathNotReady" "Vifty daemon control path is not ready; refusing to request cooling." "$@"
 fi
 
 if [ "$manual_control_active" = "true" ]; then
-  finish_without_cooling_request "Vifty/manual fan control is active; restore Auto once, re-run diagnose, inspect appPreferences.startupMode, and switch Vifty/default mode to Auto if manualControlActive stays true." "$@"
+  finish_without_cooling_request "manualControlActive" "Vifty/manual fan control is active; restore Auto once, re-run diagnose, inspect appPreferences.startupMode, and switch Vifty/default mode to Auto if manualControlActive stays true." "$@"
 fi
 
 case "$recommended_action" in
