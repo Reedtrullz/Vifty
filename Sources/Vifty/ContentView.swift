@@ -1269,6 +1269,10 @@ private struct FanCurveChartEditor: View {
                     drawCurve(basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
+                    if fanCurveSeries.isEmpty {
+                        curvePointValueLabels(for: baseCurveSeries, in: geometry.size)
+                    }
+
                     if let liveTemperature {
                         liveTemperatureMarker(liveTemperature, in: geometry.size)
                     }
@@ -1316,6 +1320,10 @@ private struct FanCurveChartEditor: View {
             FanCurveChartPoint(id: "ramp", label: "Ramp", temperature: midTemp, rpm: midRPM),
             FanCurveChartPoint(id: "high", label: "High", temperature: maxTemp, rpm: maxRPM)
         ]
+    }
+
+    private var baseCurveSeries: FanCurveChartSeries {
+        FanCurveChartSeries(name: "Base", label: "Base", labelOffsetIndex: -1, color: .accentColor, points: basePoints)
     }
 
     private var fanCurveSeries: [FanCurveChartSeries] {
@@ -1599,7 +1607,7 @@ private struct CurveChartSeriesPointLabel: View {
             Circle()
                 .fill(color)
                 .frame(width: 5, height: 5)
-            Text("\(seriesLabel) \(Int(point.temperature.rounded())) C · \(Int(point.rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+            Text("\(seriesLabel) \(point.label): \(Int(point.temperature.rounded())) C · \(Int(point.rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
@@ -1617,28 +1625,16 @@ private struct ChartHandle: View {
     let rpm: Double
 
     var body: some View {
-        VStack(spacing: 2) {
-            Circle()
-                .fill(Color.accentColor)
-                .frame(width: 16, height: 16)
-                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-            VStack(spacing: 1) {
-                Text(label)
-                    .font(.caption2.weight(.semibold))
-                Text("\(Int(temperature.rounded())) C")
-                    .font(.caption2.monospacedDigit())
-                Text("\(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
-                    .font(.caption2.monospacedDigit())
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 18, height: 18)
+            .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+            .contentShape(Rectangle())
+            .accessibilityLabel("\(label) curve point")
+            .accessibilityValue("\(Int(temperature.rounded())) C, \(Int(rpm.rounded())) RPM")
         }
-        .contentShape(Rectangle())
-        .accessibilityLabel("\(label) curve point")
-        .accessibilityValue("\(Int(temperature.rounded())) C, \(Int(rpm.rounded())) RPM")
-    }
 }
 
 private struct CompactFanOverrideEditor: View {
