@@ -832,6 +832,56 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunBlocksBeforeRunWhenCoolingBlockerIDsAreNonEmpty() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "none",
+            safeToRequestCooling: true,
+            daemonControlPathReady: true,
+            manualControlActive: false,
+            failedCheckIDs: ["thermalPressureSafe"],
+            coolingBlockerIDs: ["manualControlClear"]
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("coolingBlockerIDs is non-empty"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("manualControlClear"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""coolingBlockerIDs":["manualControlClear"]"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenCoolingBlockerIDsAreNonEmpty() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "none",
+            safeToRequestCooling: true,
+            daemonControlPathReady: true,
+            manualControlActive: false,
+            coolingBlockerIDs: ["manualControlClear"]
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-blocker-ids.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("coolingBlockerIDs is non-empty"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunFailsClosedWhenReadinessRecoveryActionIsMissing() throws {
         let harness = try ScriptHarness(
             state: "degraded",
@@ -1056,6 +1106,8 @@ private final class ScriptHarness {
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false,
         startupMode: String? = nil,
+        failedCheckIDs: [String] = [],
+        coolingBlockerIDs: [String] = [],
         diagnoseExitCode: Int = 0,
         diagnoseSchemaVersion: Int = 1,
         emitReadinessOnDiagnoseFailure: Bool = false,
@@ -1102,6 +1154,8 @@ private final class ScriptHarness {
                 daemonControlPathReady: daemonControlPathReady,
                 manualControlActive: manualControlActive,
                 startupMode: startupMode,
+                failedCheckIDs: failedCheckIDs,
+                coolingBlockerIDs: coolingBlockerIDs,
                 diagnoseExitCode: diagnoseExitCode,
                 diagnoseSchemaVersion: diagnoseSchemaVersion,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
@@ -1219,6 +1273,8 @@ private final class ScriptHarness {
         daemonControlPathReady: Bool,
         manualControlActive: Bool,
         startupMode: String?,
+        failedCheckIDs: [String],
+        coolingBlockerIDs: [String],
         diagnoseExitCode: Int,
         diagnoseSchemaVersion: Int,
         emitReadinessOnDiagnoseFailure: Bool,
@@ -1250,6 +1306,7 @@ private final class ScriptHarness {
         let appPreferences = startupMode.map {
             #","appPreferences":{"startupMode":"\#($0)","startupModeSource":"persisted","readError":null}"#
         } ?? ""
+        let readinessIDs = #","failedCheckIDs":\#(Self.jsonStringArray(failedCheckIDs)),"coolingBlockerIDs":\#(Self.jsonStringArray(coolingBlockerIDs))"#
         let commandError = commandErrorOverride ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-command-error.schema.json","command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
             ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
@@ -1290,7 +1347,7 @@ private final class ScriptHarness {
 
         if [ "$#" -ge 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then
-            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(appPreferences),"checks":[]}\n'
+            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(readinessIDs)\(appPreferences),"checks":[]}\n'
           else
             printf '\(commandError)\n'
           fi

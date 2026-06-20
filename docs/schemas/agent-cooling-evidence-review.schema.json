@@ -241,6 +241,8 @@
         "safeToRequestCooling",
         "daemonControlPathReady",
         "manualControlActive",
+        "failedCheckIDs",
+        "coolingBlockerIDs",
         "appPreferences"
       ],
       "properties": {
@@ -307,6 +309,12 @@
             "boolean",
             "null"
           ]
+        },
+        "failedCheckIDs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "coolingBlockerIDs": {
+          "$ref": "#/$defs/stringArray"
         },
         "appPreferences": {
           "$ref": "#/$defs/appPreferencesDiagnostic"

@@ -216,12 +216,14 @@ were run. Its JSON summary declares
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-review.schema.json`.
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and
-`appPreferences.startupMode` so maintainers can route blocked readiness without
-parsing human text. If `manualControlActive` is true and the summary shows a
+`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`,
+`failedCheckIDs`, `coolingBlockerIDs`, and `appPreferences.startupMode` so
+maintainers can route blocked readiness without parsing human text. A non-empty
+`coolingBlockerIDs` list is a hard stop and must not be paired with
+`safeToRequestCooling: true` in reviewed evidence. If `manualControlActive` is true and the summary shows a
 persisted `Curve` or `Fixed` default, switch Vifty's default startup mode to
 `Auto` before another agent-cooling request. Legacy `v1.1.x` bundles that omit
-`daemonControlPathReady` or `appPreferences` may pass only with a warning;
+`daemonControlPathReady`, blocker-ID arrays, or `appPreferences` may pass only with a warning;
 `daemonControlPathReady` still has to be inferred from structured
 readiness/recovery fields. The `capabilitiesDecision` summary
 records the captured capabilities schema version plus stable

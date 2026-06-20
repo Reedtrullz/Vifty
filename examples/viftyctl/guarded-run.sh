@@ -192,6 +192,12 @@ finish_without_cooling_request() {
       exit 75
     fi
 
+    if [ "${cooling_blockers_present:-0}" -ne 0 ]; then
+      echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but coolingBlockerIDs is non-empty: ${cooling_blocker_ids_compact:-unknown}; not running workload without cooling." >&2
+      print_no_direct_uncooled_rerun_guidance
+      exit 75
+    fi
+
     echo "guarded-run: VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set; running child without Vifty cooling." >&2
     exec "$@"
   fi
@@ -618,6 +624,8 @@ recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil 
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
 manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract manualControlActive raw -o - - 2>/dev/null || printf '')"
+failed_check_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract failedCheckIDs json -o - - 2>/dev/null || printf '')"
+cooling_blocker_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract coolingBlockerIDs json -o - - 2>/dev/null || printf '')"
 startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPreferences.startupMode raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
@@ -628,7 +636,12 @@ startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPre
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 [ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
 [ "$manual_control_active" = "null" ] && manual_control_active=""
+[ "$failed_check_ids" = "null" ] && failed_check_ids=""
+[ "$cooling_blocker_ids" = "null" ] && cooling_blocker_ids=""
 [ "$startup_mode" = "null" ] && startup_mode=""
+failed_check_ids_compact="$(printf '%s' "$failed_check_ids" | /usr/bin/tr -d '[:space:]')"
+cooling_blocker_ids_compact="$(printf '%s' "$cooling_blocker_ids" | /usr/bin/tr -d '[:space:]')"
+cooling_blockers_present=0
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
   if [ "$diagnose_schema_version" != "1" ] ||
@@ -675,10 +688,37 @@ if [ -z "$recommended_action" ] ||
    [ -z "$recommended_recovery_action" ] ||
    [ -z "$safe_to_request" ] ||
    [ -z "$daemon_control_path_ready" ] ||
-   [ -z "$manual_control_active" ]; then
+   [ -z "$manual_control_active" ] ||
+   [ -z "$failed_check_ids" ] ||
+   [ -z "$cooling_blocker_ids" ]; then
   echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
   print_diagnose_json_evidence
   exit 75
+fi
+
+case "$failed_check_ids_compact" in
+  \[*\])
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    print_diagnose_json_evidence
+    exit 75
+    ;;
+esac
+
+if [ "$cooling_blocker_ids_compact" = "[]" ]; then
+  cooling_blockers_present=0
+else
+  case "$cooling_blocker_ids_compact" in
+    \[*\])
+      cooling_blockers_present=1
+      ;;
+    *)
+      echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+      print_diagnose_json_evidence
+      exit 75
+      ;;
+  esac
 fi
 
 case "$safe_to_request" in
@@ -730,6 +770,10 @@ case "$recommended_recovery_action" in
     exit 75
     ;;
 esac
+
+if [ "$cooling_blockers_present" -ne 0 ]; then
+  finish_without_cooling_request "Vifty diagnose coolingBlockerIDs is non-empty: $cooling_blocker_ids_compact; refusing to request cooling." "$@"
+fi
 
 if [ "$state" = "blocked" ]; then
   finish_without_cooling_request "Vifty readiness is blocked; refusing to request cooling." "$@"

@@ -123,6 +123,8 @@ diagnose_decision = {
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil,
   "manualControlActive" => nil,
+  "failedCheckIDs" => [],
+  "coolingBlockerIDs" => [],
   "appPreferences" => {
     "startupMode" => nil,
     "startupModeSource" => nil,
@@ -201,6 +203,10 @@ end
 
 def boolean?(value)
   value == true || value == false
+end
+
+def string_array?(value)
+  value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
 end
 
 def includes_all?(array, values)
@@ -552,6 +558,10 @@ if File.file?(diagnose_path)
       daemon_ready_present = diagnose.key?("daemonControlPathReady")
       manual_control_active = diagnose["manualControlActive"]
       manual_control_active_present = diagnose.key?("manualControlActive")
+      failed_check_ids = diagnose["failedCheckIDs"]
+      failed_check_ids_present = diagnose.key?("failedCheckIDs")
+      cooling_blocker_ids = diagnose["coolingBlockerIDs"]
+      cooling_blocker_ids_present = diagnose.key?("coolingBlockerIDs")
       app_preferences = diagnose["appPreferences"]
       app_preferences_present = diagnose.key?("appPreferences")
 
@@ -560,6 +570,24 @@ if File.file?(diagnose_path)
       diagnose_decision["recommendedRecoveryAction"] = recovery_action if DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
       diagnose_decision["safeToRequestCooling"] = safe_to_request if [true, false].include?(safe_to_request)
       diagnose_decision["manualControlActive"] = manual_control_active if [true, false].include?(manual_control_active)
+      if failed_check_ids_present
+        if string_array?(failed_check_ids)
+          diagnose_decision["failedCheckIDs"] = failed_check_ids
+        else
+          failures << "viftyctl-diagnose.json failedCheckIDs must be an array of strings"
+        end
+      else
+        warnings << "viftyctl-diagnose.json is missing failedCheckIDs; legacy reports may require checks[] parsing for failed readiness IDs"
+      end
+      if cooling_blocker_ids_present
+        if string_array?(cooling_blocker_ids)
+          diagnose_decision["coolingBlockerIDs"] = cooling_blocker_ids
+        else
+          failures << "viftyctl-diagnose.json coolingBlockerIDs must be an array of strings"
+        end
+      else
+        warnings << "viftyctl-diagnose.json is missing coolingBlockerIDs; legacy reports may require checks[] parsing for hard cooling blockers"
+      end
       if [true, false].include?(daemon_ready)
         diagnose_decision["daemonControlPathReady"] = daemon_ready
       elsif daemon_ready_present
@@ -647,6 +675,9 @@ if File.file?(diagnose_path)
       end
       if manual_control_active == true && %w[requestCooling requestCoolingWithCaution].include?(agent_action)
         failures << "manualControlActive true must not recommend agent cooling"
+      end
+      if diagnose_decision["coolingBlockerIDs"].any? && safe_to_request == true
+        failures << "coolingBlockerIDs must be empty when safeToRequestCooling is true"
       end
     end
   rescue JSON::ParserError => error

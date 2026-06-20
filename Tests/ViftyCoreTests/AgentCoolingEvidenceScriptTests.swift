@@ -283,6 +283,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(diagnoseDecision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(diagnoseDecision["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(diagnoseDecision["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(diagnoseDecision["coolingBlockerIDs"] as? [String], [])
         let appPreferences = try XCTUnwrap(diagnoseDecision["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferences["startupMode"] as? String, "Auto")
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
@@ -319,6 +321,34 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(appInfo["bundleVersion"] as? String, "1")
         XCTAssertTrue((reviewSummary["acceptedCommandErrors"] as? [String])?.isEmpty == true)
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewerSummarizesDiagnoseCheckIDsAndRejectsContradictoryCoolingBlockers() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"{"state":"degraded","recommendedAgentAction":"requestCoolingWithCaution","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","failedCheckIDs":["thermalPressureSafe"],"coolingBlockerIDs":["manualControlClear"],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#
+        )
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("coolingBlockerIDs must be empty when safeToRequestCooling is true"), reviewResult.stderr)
+
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "failed")
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        XCTAssertEqual(diagnoseDecision["failedCheckIDs"] as? [String], ["thermalPressureSafe"])
+        XCTAssertEqual(diagnoseDecision["coolingBlockerIDs"] as? [String], ["manualControlClear"])
+        XCTAssertTrue((reviewSummary["failures"] as? [String])?.contains("coolingBlockerIDs must be empty when safeToRequestCooling is true") == true)
     }
 
     func testReviewerAcceptsBlockedDiagnoseAsReadOnlyEvidence() throws {
@@ -967,12 +997,16 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "safeToRequestCooling",
             "daemonControlPathReady",
             "manualControlActive",
+            "failedCheckIDs",
+            "coolingBlockerIDs",
             "appPreferences"
         ] {
             XCTAssertTrue(diagnoseRequired.contains(field), "diagnoseDecision should require \(field)")
         }
 
         let diagnoseProperties = try XCTUnwrap(diagnoseDecision["properties"] as? [String: Any])
+        XCTAssertEqual(diagnoseProperties["failedCheckIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
+        XCTAssertEqual(diagnoseProperties["coolingBlockerIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["appPreferences"] as? [String: String], ["$ref": "#/$defs/appPreferencesDiagnostic"])
 
         let appPreferencesDiagnostic = try XCTUnwrap(defs["appPreferencesDiagnostic"] as? [String: Any])
@@ -1045,7 +1079,7 @@ private final class AgentCoolingEvidenceHarness {
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
         capabilitiesExitCode: Int = 0,
-        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
+        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         statusExitCode: Int = 0,

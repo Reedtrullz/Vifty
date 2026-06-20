@@ -42,10 +42,15 @@ Its JSON summary declares
 It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 summarizes the reviewed diagnose contract in `diagnoseDecision`: exit status,
 readiness state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and
-`appPreferences.startupMode`. If those fields are missing or contradict the
-diagnose exit code, the review fails, except legacy `v1.1.x` reports that omit
-`daemonControlPathReady` or `appPreferences` may pass only with a warning;
+`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`,
+`failedCheckIDs`, `coolingBlockerIDs`, and `appPreferences.startupMode`. If
+those fields are missing or contradict the diagnose exit code or each other, the
+review fails; malformed blocker-ID arrays fail the same way. A non-empty
+`coolingBlockerIDs` list must never be paired with `safeToRequestCooling: true`;
+route those reports as hard blocked readiness instead of agent-safe evidence.
+Legacy `v1.1.x` reports that omit
+`daemonControlPathReady`, blocker-ID arrays, or `appPreferences` may pass only
+with a warning;
 `daemonControlPathReady` must still be inferred from structured
 readiness/recovery fields. When `manualControlActive` is true and the saved
 startup mode is `Curve` or `Fixed`, the reviewer warning should be routed as a
