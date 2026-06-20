@@ -1206,6 +1206,7 @@ private struct FanCurveChartEditor: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.06))
                     chartGrid(in: geometry.size)
+                    chartAxisLabels(in: geometry.size)
 
                     ForEach(fanCurveSeries) { series in
                         drawCurve(series.points, in: geometry.size)
@@ -1361,13 +1362,57 @@ private struct FanCurveChartEditor: View {
         .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [2, 5]))
     }
 
+    private func chartAxisLabels(in size: CGSize) -> some View {
+        ZStack {
+            Text(rpmTickLabel(Int(rpmUpper.rounded())))
+                .position(x: 32, y: 12)
+            Text(rpmTickLabel(Int(((rpmLower + rpmUpper) / 2).rounded())))
+                .position(x: 32, y: size.height / 2)
+            Text(rpmTickLabel(Int(rpmLower.rounded())))
+                .position(x: 32, y: size.height - 12)
+            Text(temperatureTickLabel(Int(tempRange.lowerBound.rounded())))
+                .position(x: 32, y: size.height - 30)
+            Text(temperatureTickLabel(Int(((tempRange.lowerBound + tempRange.upperBound) / 2).rounded())))
+                .position(x: size.width / 2, y: size.height - 12)
+            Text(temperatureTickLabel(Int(tempRange.upperBound.rounded())))
+                .position(x: size.width - 34, y: size.height - 12)
+        }
+        .font(.caption2.monospacedDigit())
+        .foregroundStyle(.secondary.opacity(0.85))
+        .allowsHitTesting(false)
+    }
+
+    private func rpmTickLabel(_ rpm: Int) -> String {
+        "\(rpm.formatted(.number.grouping(.automatic))) RPM"
+    }
+
+    private func temperatureTickLabel(_ temperature: Int) -> String {
+        "\(temperature) C"
+    }
+
     private func liveTemperatureMarker(_ temperature: Double, in size: CGSize) -> some View {
         let x = size.width * CGFloat(ratio(temperature, in: tempRange.lowerBound...tempRange.upperBound))
-        return Path { path in
-            path.move(to: CGPoint(x: x, y: 0))
-            path.addLine(to: CGPoint(x: x, y: size.height))
+        return ZStack {
+            Path { path in
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            .stroke(Color.orange.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+            liveTemperatureLabel(temperature, in: size)
+                .position(x: min(max(x, 28), size.width - 28), y: 14)
         }
-        .stroke(Color.orange.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        .allowsHitTesting(false)
+    }
+
+    private func liveTemperatureLabel(_ temperature: Double, in size: CGSize) -> some View {
+        Text("\(Int(temperature.rounded())) C")
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(.regularMaterial, in: Capsule())
+            .frame(maxWidth: min(max(size.width - 8, 42), 70))
     }
 
     private func chartLegendSwatch(_ color: Color, label: String) -> some View {
@@ -1426,11 +1471,18 @@ private struct ChartHandle: View {
                 .fill(Color.accentColor)
                 .frame(width: 16, height: 16)
                 .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 4)
-                .background(.regularMaterial, in: Capsule())
+            VStack(spacing: 1) {
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                Text("\(Int(temperature.rounded())) C")
+                    .font(.caption2.monospacedDigit())
+                Text("\(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+                    .font(.caption2.monospacedDigit())
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
         }
         .contentShape(Rectangle())
         .accessibilityLabel("\(label) curve point")
