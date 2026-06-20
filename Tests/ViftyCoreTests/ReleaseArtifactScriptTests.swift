@@ -473,6 +473,7 @@ private final class ReleaseArtifactHarness {
         let schemaIDs = [
             "agent-cooling-evidence-summary.schema.json": "https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json",
             "agent-cooling-evidence-review.schema.json": "https://vifty.local/schemas/agent-cooling-evidence-review.schema.json",
+            "agent-run-smoke-readiness.schema.json": "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json",
             "agent-run-smoke-evidence-summary.schema.json": "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json",
             "guarded-run-decision.schema.json": "https://vifty.local/schemas/guarded-run-decision.schema.json",
             "manual-smoke-readiness.schema.json": "https://vifty.local/schemas/manual-smoke-readiness.schema.json",

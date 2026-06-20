@@ -2125,6 +2125,7 @@ private final class ValidationEvidenceReviewHarness {
     schema\tsha256\tbytes\tbundlePath
     agent-cooling-evidence-summary.schema.json\t\(String(repeating: "1", count: 64))\t2100\tContents/Resources/schemas/agent-cooling-evidence-summary.schema.json
     agent-cooling-evidence-review.schema.json\t\(String(repeating: "2", count: 64))\t1700\tContents/Resources/schemas/agent-cooling-evidence-review.schema.json
+    agent-run-smoke-readiness.schema.json\t\(String(repeating: "5", count: 64))\t2600\tContents/Resources/schemas/agent-run-smoke-readiness.schema.json
     agent-run-smoke-evidence-summary.schema.json\t\(String(repeating: "3", count: 64))\t2600\tContents/Resources/schemas/agent-run-smoke-evidence-summary.schema.json
     guarded-run-decision.schema.json\t\(String(repeating: "6", count: 64))\t3200\tContents/Resources/schemas/guarded-run-decision.schema.json
     manual-smoke-readiness.schema.json\t\(String(repeating: "4", count: 64))\t2600\tContents/Resources/schemas/manual-smoke-readiness.schema.json

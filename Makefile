@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -30,6 +30,7 @@ VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT ?= not-recorded
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE ?=
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY ?=
 MANUAL_SMOKE_READINESS_JSON ?= 0
+AGENT_RUN_SMOKE_READINESS_JSON ?= 0
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_GUARDED_RUN_STDERR ?=
 AGENT_EVIDENCE_BUNDLE ?=
@@ -70,6 +71,7 @@ app: ## Build the release app bundle
 	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
 	install -m 755 scripts/collect-agent-cooling-evidence.sh "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
+	install -m 755 scripts/check-agent-run-smoke-readiness.sh "$(CONTENTS)/Resources/check-agent-run-smoke-readiness.sh"
 	install -m 755 scripts/collect-agent-run-smoke-evidence.sh "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	install -m 755 examples/viftyctl/*.sh "$(WRAPPERS)/"
 	install -m 644 examples/viftyctl/README.md "$(WRAPPERS)/README.md"
@@ -111,6 +113,14 @@ agent-cooling-evidence-review: ## Review a read-only agent/helper support eviden
 	@if [ -z "$(AGENT_EVIDENCE_BUNDLE)" ]; then echo "AGENT_EVIDENCE_BUNDLE is required" >&2; exit 64; fi
 	./scripts/review-agent-cooling-evidence.sh --bundle "$(AGENT_EVIDENCE_BUNDLE)" $(if $(AGENT_EVIDENCE_REVIEW_SUMMARY),--summary "$(AGENT_EVIDENCE_REVIEW_SUMMARY)",)
 
+agent-run-smoke-readiness: ## Read-only preflight before supervised viftyctl run smoke
+	./scripts/check-agent-run-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" $(if $(AGENT_RUN_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(AGENT_RUN_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_READINESS_JSON)),--json,)
+
+agent-run-smoke-readiness-current-build: ## Build current app and run read-only agent smoke preflight
+	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "agent-run-smoke-readiness-current-build requires a clean git worktree so the preflight uses the built app from the current source ref; commit or stash changes first, or use make agent-run-smoke-readiness with an explicit VIFTYCTL for exploratory local preflight." >&2; exit 65; fi
+	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
+	$(MAKE) agent-run-smoke-readiness VIFTYCTL="$(MACOS)/viftyctl" AGENT_RUN_SMOKE_EXPECTED_DAEMON="$(MACOS)/ViftyDaemon" AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH=1
+
 agent-run-smoke-evidence: ## Collect supervised supported-hardware viftyctl run smoke evidence
 	./scripts/collect-agent-run-smoke-evidence.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" --audit-limit "$(AGENT_RUN_SMOKE_AUDIT_LIMIT)" --install-source "$(AGENT_RUN_SMOKE_INSTALL_SOURCE)" $(if $(AGENT_RUN_SMOKE_SOURCE_REF),--source-ref "$(AGENT_RUN_SMOKE_SOURCE_REF)",) $(if $(AGENT_RUN_SMOKE_SOURCE_SHA),--source-sha "$(AGENT_RUN_SMOKE_SOURCE_SHA)",) $(if $(AGENT_RUN_SMOKE_SOURCE_ARTIFACT),--source-artifact "$(AGENT_RUN_SMOKE_SOURCE_ARTIFACT)",) $(if $(AGENT_RUN_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(AGENT_RUN_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(AGENT_RUN_SMOKE_OUTPUT),--output "$(AGENT_RUN_SMOKE_OUTPUT)",)
 
@@ -141,8 +151,10 @@ verify: ## Run local trust gates without installing
 	plutil -lint "$(CONTENTS)/Info.plist"
 	plutil -lint "$(DAEMON_PLIST)"
 	test -x "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
+	test -x "$(CONTENTS)/Resources/check-agent-run-smoke-readiness.sh"
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	test -x scripts/check-manual-smoke-readiness.sh
+	test -x scripts/check-agent-run-smoke-readiness.sh
 	test -x "$(WRAPPERS)/guarded-run.sh"
 	test -x "$(WRAPPERS)/swift-test.sh"
 	test -x "$(WRAPPERS)/make-build.sh"

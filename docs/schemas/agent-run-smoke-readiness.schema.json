@@ -1,0 +1,491 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json",
+  "title": "Vifty agent-run smoke readiness preflight",
+  "description": "Machine-readable read-only summary emitted by scripts/check-agent-run-smoke-readiness.sh before supervised viftyctl run smoke evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "schemaID",
+    "status",
+    "agentRunSmokeReady",
+    "readOnly",
+    "coolingCommandsRun",
+    "duration",
+    "durationSeconds",
+    "maxRPMPercent",
+    "reason",
+    "capabilitiesExitStatus",
+    "diagnoseExitStatus",
+    "modelIdentifier",
+    "state",
+    "recommendedAgentAction",
+    "recommendedRecoveryAction",
+    "safeToRequestCooling",
+    "daemonControlPathReady",
+    "manualControlActive",
+    "isAppleSilicon",
+    "isMacBookPro",
+    "fanCount",
+    "controllableFanCount",
+    "temperatureSensorCount",
+    "thermalPressure",
+    "failedCheckIDs",
+    "coolingBlockerIDs",
+    "appPreferences",
+    "capabilities",
+    "daemonRuntime",
+    "blockers",
+    "nextAction",
+    "parseErrors"
+  ],
+  "properties": {
+    "kind": {
+      "const": "vifty-agent-run-smoke-readiness"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ]
+    },
+    "agentRunSmokeReady": {
+      "type": "boolean"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "coolingCommandsRun": {
+      "const": false
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+[mh]$"
+    },
+    "durationSeconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 60
+    },
+    "maxRPMPercent": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilitiesExitStatus": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "diagnoseExitStatus": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "modelIdentifier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "ready",
+        "degraded",
+        "blocked",
+        null
+      ]
+    },
+    "recommendedAgentAction": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "requestCooling",
+        "requestCoolingWithCaution",
+        "restoreAutoBeforeRequestingCooling",
+        "doNotRequestCooling",
+        null
+      ]
+    },
+    "recommendedRecoveryAction": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "none",
+        "repairHelper",
+        "restoreAutoBeforeRetry",
+        "backOffWorkload",
+        "inspectPolicy",
+        "collectHardwareEvidence",
+        null
+      ]
+    },
+    "safeToRequestCooling": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "daemonControlPathReady": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "manualControlActive": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "isAppleSilicon": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "isMacBookPro": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "fanCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "controllableFanCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "temperatureSensorCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "thermalPressure": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "failedCheckIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coolingBlockerIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "appPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startupMode",
+        "startupModeSource",
+        "readError"
+      ],
+      "properties": {
+        "startupMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Auto",
+            "Curve",
+            "Fixed",
+            null
+          ]
+        },
+        "startupModeSource": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "persisted",
+            "legacyUserDefaults",
+            "missingFile",
+            "missingKey",
+            "unreadable",
+            null
+          ]
+        },
+        "readError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "capabilitiesSchemaID",
+        "diagnoseSchemaID",
+        "commandErrorSchemaID",
+        "runSchemaID",
+        "daemonStatusAvailable",
+        "policySource",
+        "policyStatusAvailable",
+        "policyEnabled",
+        "supportsForceRetry",
+        "runCommandAvailable",
+        "testWorkloadAvailable",
+        "runLifecycleSafe",
+        "wrapperResourcesSafe",
+        "metadataLimitsAvailable",
+        "requestedDurationWithinPolicy",
+        "requestedRPMPercentWithinPolicy",
+        "reasonWithinMetadataLimit",
+        "maxDurationSeconds",
+        "minimumAgentRPMPercent",
+        "maximumAllowedRPMPercent",
+        "maximumReasonLength",
+        "resolvedChildExecutableReported"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "capabilitiesSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnoseSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commandErrorSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runSchemaID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "daemonStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policySource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policyStatusAvailable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policyEnabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "supportsForceRetry": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "runCommandAvailable": {
+          "type": "boolean"
+        },
+        "testWorkloadAvailable": {
+          "type": "boolean"
+        },
+        "runLifecycleSafe": {
+          "type": "boolean"
+        },
+        "wrapperResourcesSafe": {
+          "type": "boolean"
+        },
+        "metadataLimitsAvailable": {
+          "type": "boolean"
+        },
+        "requestedDurationWithinPolicy": {
+          "type": "boolean"
+        },
+        "requestedRPMPercentWithinPolicy": {
+          "type": "boolean"
+        },
+        "reasonWithinMetadataLimit": {
+          "type": "boolean"
+        },
+        "maxDurationSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "minimumAgentRPMPercent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maximumAllowedRPMPercent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maximumReasonLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "resolvedChildExecutableReported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "daemonRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installedDaemonPath",
+        "installedDaemonPresent",
+        "installedDaemonSHA256",
+        "expectedDaemonPath",
+        "expectedDaemonSHA256",
+        "matchesExpectedDaemon",
+        "matchRequired"
+      ],
+      "properties": {
+        "installedDaemonPath": {
+          "type": "string"
+        },
+        "installedDaemonPresent": {
+          "type": "boolean"
+        },
+        "installedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expectedDaemonPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedDaemonSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "matchesExpectedDaemon": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "matchRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nextAction": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parseErrors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capabilities",
+        "diagnose"
+      ],
+      "properties": {
+        "capabilities": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

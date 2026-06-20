@@ -167,6 +167,7 @@ RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/release-artifact
 EXPECTED_SCHEMA_FILES=(
   "agent-cooling-evidence-summary.schema.json"
   "agent-cooling-evidence-review.schema.json"
+  "agent-run-smoke-readiness.schema.json"
   "agent-run-smoke-evidence-summary.schema.json"
   "guarded-run-decision.schema.json"
   "manual-smoke-readiness.schema.json"

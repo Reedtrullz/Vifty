@@ -83,7 +83,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (748 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (838 tests)."))
+        XCTAssertTrue(agents.contains("`scripts/check-agent-run-smoke-readiness.sh`"))
+        XCTAssertTrue(agents.contains("read-only preflight before supervised `viftyctl run` smoke evidence"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
         XCTAssertTrue(agents.contains("No UserDefaults for structured data except legacy migration reads"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
@@ -935,6 +937,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion."))
         XCTAssertTrue(hardwareValidation.contains("does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`"))
         XCTAssertTrue(hardwareValidation.contains("## Supervised Agent Run Smoke Test"))
+        XCTAssertTrue(hardwareValidation.contains("make agent-run-smoke-readiness"))
+        XCTAssertTrue(hardwareValidation.contains("AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness"))
+        XCTAssertTrue(hardwareValidation.contains("`schemaID: https://vifty.local/schemas/agent-run-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false`"))
+        XCTAssertTrue(hardwareValidation.contains("only runs `viftyctl capabilities --json` and `viftyctl diagnose --json`"))
+        XCTAssertTrue(hardwareValidation.contains("make agent-run-smoke-readiness-current-build"))
         XCTAssertTrue(hardwareValidation.contains("scripts/collect-agent-run-smoke-evidence.sh"))
         XCTAssertTrue(hardwareValidation.contains("make agent-run-smoke-evidence-current-build"))
         XCTAssertTrue(hardwareValidation.contains("make agent-run-smoke-evidence \\"))

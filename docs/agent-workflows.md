@@ -300,6 +300,8 @@ The wrapper:
 - then delegates to `viftyctl run --json`,
 - and lets `viftyctl run` handle prepare, child launch, signal forwarding, and Auto restore.
 
+For hardware-validation or maintainer triage where you need to know whether the supervised smoke collector may cross the cooling boundary, run `make agent-run-smoke-readiness` first. `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness` emits `schemaID: https://vifty.local/schemas/agent-run-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false`; it validates daemon-backed capabilities, policy limits, wrapper lifecycle, `safeToRequestCooling`, helper readiness, manual-control state, and optional daemon hash matching without calling `viftyctl run`.
+
 The wrapper does not pass `--force` by default. If a supervised human workflow wants the CLI to wait once for `retryAfterSeconds` and retry a rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`; the wrapper still checks `supportsForceRetry` before passing `--force`. Local agents should leave that off unless the user explicitly asks them to retry after a rate limit. Do not combine it with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper refuses that ambiguous mix.
 
 The wrapper also does not silently rerun workloads without cooling. If the user
