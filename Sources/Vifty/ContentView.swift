@@ -909,6 +909,7 @@ private struct TelemetryHistoryChart: View {
                     title: "Temp",
                     values: summary.temperatureValues,
                     color: .orange,
+                    currentValueText: summary.latestTemperatureText,
                     rangeText: summary.temperatureRangeText,
                     changeText: summary.temperatureChangeText,
                     compact: compact
@@ -919,6 +920,7 @@ private struct TelemetryHistoryChart: View {
                     title: summary.fanRPMSparklineTitle,
                     values: summary.fanRPMValues,
                     color: .blue,
+                    currentValueText: summary.latestFanRPMText,
                     rangeText: summary.fanRPMRangeText,
                     changeText: summary.fanRPMChangeText,
                     compact: compact
@@ -929,6 +931,7 @@ private struct TelemetryHistoryChart: View {
                     title: "Power",
                     values: summary.batteryPowerValues,
                     color: .green,
+                    currentValueText: nil,
                     rangeText: summary.batteryPowerRangeText,
                     changeText: summary.batteryPowerChangeText,
                     compact: compact
@@ -948,6 +951,7 @@ private struct HistorySparkline: View {
     let title: String
     let values: [Double]
     let color: Color
+    let currentValueText: String?
     let rangeText: String
     let changeText: String?
     let compact: Bool
@@ -958,8 +962,8 @@ private struct HistorySparkline: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: compact ? 34 : 42, alignment: .leading)
-            SparklinePath(values: values, color: color)
-                .frame(height: compact ? 16 : 20)
+            SparklinePath(values: values, color: color, valueLabelText: currentValueText)
+                .frame(height: compact ? 20 : 24)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(rangeText)
                     .font(.caption2.monospacedDigit())
@@ -990,47 +994,74 @@ private struct HistorySparkline: View {
 private struct SparklinePath: View {
     let values: [Double]
     let color: Color
+    let valueLabelText: String?
 
     var body: some View {
         GeometryReader { geometry in
-            Path { path in
-                let plottedValues = smoothedValues(values)
-                guard plottedValues.count > 1,
-                      let minValue = plottedValues.min(),
-                      let maxValue = plottedValues.max() else { return }
-                let isFlat = abs(maxValue - minValue) < 0.0001
-                let valueRange = max(maxValue - minValue, 0.0001)
-                let width = max(geometry.size.width, 1)
-                let height = max(geometry.size.height, 1)
-                let xStep = width / CGFloat(plottedValues.count - 1)
-                var previousPoint: CGPoint?
+            let plottedValues = smoothedValues(values)
+            let points = points(for: plottedValues, in: geometry.size)
+            ZStack {
+                Path { path in
+                    addSmoothedLine(to: &path, points: points)
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
 
-                for (index, value) in plottedValues.enumerated() {
-                    let normalized = isFlat ? 0.5 : (value - minValue) / valueRange
-                    let point = CGPoint(
-                        x: CGFloat(index) * xStep,
-                        y: height - (CGFloat(normalized) * height)
-                    )
-                    if index == 0 {
-                        path.move(to: point)
-                    } else if let previousPoint {
-                        let midPoint = CGPoint(
-                            x: (previousPoint.x + point.x) / 2,
-                            y: (previousPoint.y + point.y) / 2
-                        )
-                        path.addQuadCurve(to: midPoint, control: previousPoint)
-                        if index == plottedValues.count - 1 {
-                            path.addQuadCurve(to: point, control: point)
-                        }
-                    } else {
-                        path.addLine(to: point)
-                    }
-                    previousPoint = point
+                if let valueLabelText, let endpoint = points.last {
+                    SparklineValueBadge(text: valueLabelText, color: color)
+                        .position(labelPosition(near: endpoint, in: geometry.size))
                 }
             }
-            .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }
         .accessibilityHidden(true)
+    }
+
+    private func points(for plottedValues: [Double], in size: CGSize) -> [CGPoint] {
+        guard plottedValues.count > 1,
+              let minValue = plottedValues.min(),
+              let maxValue = plottedValues.max() else { return [] }
+
+        let isFlat = abs(maxValue - minValue) < 0.0001
+        let valueRange = max(maxValue - minValue, 0.0001)
+        let width = max(size.width, 1)
+        let height = max(size.height, 1)
+        let xStep = width / CGFloat(plottedValues.count - 1)
+
+        return plottedValues.enumerated().map { index, value in
+            let normalized = isFlat ? 0.5 : (value - minValue) / valueRange
+            return CGPoint(
+                x: CGFloat(index) * xStep,
+                y: height - (CGFloat(normalized) * height)
+            )
+        }
+    }
+
+    private func addSmoothedLine(to path: inout Path, points: [CGPoint]) {
+        var previousPoint: CGPoint?
+        for (index, point) in points.enumerated() {
+            if index == 0 {
+                path.move(to: point)
+            } else if let previousPoint {
+                let midPoint = CGPoint(
+                    x: (previousPoint.x + point.x) / 2,
+                    y: (previousPoint.y + point.y) / 2
+                )
+                path.addQuadCurve(to: midPoint, control: previousPoint)
+                if index == points.count - 1 {
+                    path.addQuadCurve(to: point, control: point)
+                }
+            } else {
+                path.addLine(to: point)
+            }
+            previousPoint = point
+        }
+    }
+
+    private func labelPosition(near point: CGPoint, in size: CGSize) -> CGPoint {
+        let horizontalInset: CGFloat = 44
+        let verticalInset: CGFloat = 9
+        let x = min(max(point.x - 40, horizontalInset), max(size.width - horizontalInset, horizontalInset))
+        let y = min(max(point.y - 10, verticalInset), max(size.height - verticalInset, verticalInset))
+        return CGPoint(x: x, y: y)
     }
 
     private func smoothedValues(_ rawValues: [Double]) -> [Double] {
@@ -1041,6 +1072,24 @@ private struct SparklinePath: View {
             let window = rawValues[lowerBound...upperBound]
             return window.reduce(0, +) / Double(window.count)
         }
+    }
+}
+
+private struct SparklineValueBadge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(color.opacity(0.45), lineWidth: 0.75))
+            .allowsHitTesting(false)
     }
 }
 
