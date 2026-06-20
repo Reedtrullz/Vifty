@@ -493,9 +493,6 @@ struct ContentView: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
-                        Text("Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
                         Slider(
                             value: Binding(
                                 get: { Double(model.fixedFanSliderRPM(for: fan)) },
@@ -612,65 +609,26 @@ struct ContentView: View {
 
                 if model.usePerFanOverrides {
                     ForEach(fans) { fan in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Fan \(fan.id): \(fan.name)")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                            if let override = model.fanOverride(for: fan.id) {
-                                HStack {
-                                    Text("Start")
-                                        .font(.caption)
-                                        .frame(width: 40)
-                                    Slider(
-                                        value: Binding(
-                                            get: { Double(model.fanOverride(for: fan.id)?.startRPM ?? override.startRPM) },
-                                            set: { model.setOverrideStartRPM(Int($0.rounded()), for: fan) }
-                                        ),
-                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
-                                        step: 50
-                                    )
-                                    .onChange(of: model.fanOverride(for: fan.id)?.startRPM) { model.applyCurveOverrides() }
-                                    Text("\(model.fanOverride(for: fan.id)?.startRPM ?? override.startRPM)")
-                                        .font(.caption.monospacedDigit())
-                                        .frame(width: 50)
+                        if let override = model.fanOverride(for: fan.id) {
+                            CompactFanOverrideEditor(
+                                fan: fan,
+                                startRPM: model.fanOverride(for: fan.id)?.startRPM ?? override.startRPM,
+                                midRPM: model.fanOverride(for: fan.id)?.midRPM ?? override.midRPM,
+                                maxRPM: model.fanOverride(for: fan.id)?.maxRPM ?? override.maxRPM,
+                                setStartRPM: { rpm in
+                                    model.setOverrideStartRPM(rpm, for: fan)
+                                    model.applyCurveOverrides()
+                                },
+                                setMidRPM: { rpm in
+                                    model.setOverrideMidRPM(rpm, for: fan)
+                                    model.applyCurveOverrides()
+                                },
+                                setMaxRPM: { rpm in
+                                    model.setOverrideMaxRPM(rpm, for: fan)
+                                    model.applyCurveOverrides()
                                 }
-                                HStack {
-                                    Text("Ramp")
-                                        .font(.caption)
-                                        .frame(width: 40)
-                                    Slider(
-                                        value: Binding(
-                                            get: { Double(model.fanOverride(for: fan.id)?.midRPM ?? override.midRPM) },
-                                            set: { model.setOverrideMidRPM(Int($0.rounded()), for: fan) }
-                                        ),
-                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
-                                        step: 50
-                                    )
-                                    .onChange(of: model.fanOverride(for: fan.id)?.midRPM) { model.applyCurveOverrides() }
-                                    Text("\(model.fanOverride(for: fan.id)?.midRPM ?? override.midRPM)")
-                                        .font(.caption.monospacedDigit())
-                                        .frame(width: 50)
-                                }
-                                HStack {
-                                    Text("High")
-                                        .font(.caption)
-                                        .frame(width: 40)
-                                    Slider(
-                                        value: Binding(
-                                            get: { Double(model.fanOverride(for: fan.id)?.maxRPM ?? override.maxRPM) },
-                                            set: { model.setOverrideMaxRPM(Int($0.rounded()), for: fan) }
-                                        ),
-                                        in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
-                                        step: 50
-                                    )
-                                    .onChange(of: model.fanOverride(for: fan.id)?.maxRPM) { model.applyCurveOverrides() }
-                                    Text("\(model.fanOverride(for: fan.id)?.maxRPM ?? override.maxRPM)")
-                                        .font(.caption.monospacedDigit())
-                                        .frame(width: 50)
-                                }
-                            }
+                            )
                         }
-                        .padding(.vertical, 4)
                     }
                     .onAppear {
                         model.ensureFanOverrides(for: fans)
@@ -721,11 +679,7 @@ struct ContentView: View {
 
     private func sensorsPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let power = model.powerSnapshot {
-                PowerPanel(snapshot: power, compact: compact)
-            }
-
-            HistoryPanel(history: model.telemetryHistory, compact: compact)
+            TelemetryOverviewPanel(power: model.powerSnapshot, history: model.telemetryHistory, compact: compact)
 
             HStack {
                 Text("Temperatures")
@@ -739,10 +693,25 @@ struct ContentView: View {
             }
 
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
+                let visibleSensors = topTemperatureSensors(from: sensors, selectedID: model.selectedSensor?.id, limit: compact ? 3 : 4)
+                let visibleSensorIDs = Set(visibleSensors.map(\.id))
+                let remainingSensors = sensors.filter { !visibleSensorIDs.contains($0.id) }
                 LazyVStack(spacing: compact ? 6 : 8) {
-                    ForEach(sensors) { sensor in
-                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: compact)
+                    ForEach(visibleSensors) { sensor in
+                        SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: true)
                     }
+                }
+                if !remainingSensors.isEmpty {
+                    DisclosureGroup("All sensors") {
+                        LazyVStack(spacing: 6) {
+                            ForEach(remainingSensors) { sensor in
+                                SensorRow(sensor: sensor, selected: sensor.id == model.selectedSensor?.id, compact: true)
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
             } else {
                 ContentUnavailableView("No Temperature Sensors", systemImage: "thermometer.slash", description: Text("Vifty needs at least one temperature sensor before fan curves can run."))
@@ -752,39 +721,133 @@ struct ContentView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
+
+    private func topTemperatureSensors(
+        from sensors: [TemperatureSensor],
+        selectedID: String?,
+        limit: Int
+    ) -> [TemperatureSensor] {
+        guard sensors.count > limit else { return sensors }
+        var picked: [TemperatureSensor] = []
+        if let selectedID,
+           let selected = sensors.first(where: { $0.id == selectedID }) {
+            picked.append(selected)
+        }
+
+        for sensor in sensors.sorted(by: { $0.celsius > $1.celsius }) where picked.count < limit {
+            guard !picked.contains(where: { $0.id == sensor.id }) else { continue }
+            picked.append(sensor)
+        }
+        return picked
+    }
 }
 
-private struct PowerPanel: View {
+private struct TelemetryOverviewPanel: View {
+    let power: PowerSnapshot?
+    let history: TelemetryHistory
+    let compact: Bool
+
+    private var summary: TelemetryHistorySummary {
+        TelemetryHistorySummary(
+            history: history,
+            sampleLimit: compact ? 90 : 180,
+            thermalPressureLimit: compact ? 24 : 36
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 10) {
+            HStack {
+                Label("Power & History", systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                    .foregroundStyle(power?.isPluggedIn == true ? .green : .primary)
+                Spacer()
+                Text(summaryHeaderText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 104 : 118), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
+                if let power {
+                    PowerMetric(label: "Battery", value: batteryPercentText(for: power), systemImage: "battery.75")
+                    if let adapter = power.adapter, adapter.powerWatts >= 0.5 {
+                        PowerMetric(label: "Adapter", value: adapterValue(adapter), systemImage: "powerplug")
+                    }
+                    if let health = power.healthPercent {
+                        PowerMetric(label: "Health", value: "\(health)%", systemImage: "heart")
+                    }
+                }
+                if let latest = history.samples.last {
+                    if let temperatureText = summary.latestTemperatureText {
+                        PowerMetric(label: summary.latestTemperatureLabel, value: temperatureText, systemImage: "thermometer.medium")
+                    }
+                    if let fanRPMText = summary.latestFanRPMText {
+                        PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
+                    }
+                    if let batteryPowerLabel = summary.latestBatteryPowerLabel,
+                       let batteryPowerText = summary.latestBatteryPowerText,
+                       let watts = latest.batteryPowerWatts {
+                        PowerMetric(label: batteryPowerLabel, value: batteryPowerText, systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
+                    }
+                    PowerMetric(label: "Thermal", value: summary.latestThermalPressureText, systemImage: "speedometer")
+                }
+            }
+
+            if let power,
+               let warning = PowerInsights(snapshot: power).chargerWarning {
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+
+            if history.samples.count > 1 {
+                TelemetryHistoryChart(summary: summary, compact: compact)
+            } else {
+                Text("History appears after the first successful poll.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let power {
+                PowerDetailDisclosure(snapshot: power, compact: compact)
+            }
+        }
+        .padding(compact ? 10 : 12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var summaryHeaderText: String {
+        var parts: [String] = []
+        if let power {
+            parts.append(PowerDisplayFormatter.panelHeadline(for: power))
+        }
+        if let sampleWindowText = summary.sampleWindowText {
+            parts.append("\(summary.sampleCountText) · last \(sampleWindowText)")
+        } else {
+            parts.append(summary.sampleCountText)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func batteryPercentText(for snapshot: PowerSnapshot) -> String {
+        snapshot.percent.map { "\($0)%" } ?? "Unknown"
+    }
+
+    private func adapterValue(_ adapter: PowerAdapter) -> String {
+        if let rated = adapter.ratedWatts { return "\(rated) W" }
+        return PowerDisplayFormatter.watts(adapter.powerWatts)
+    }
+}
+
+private struct PowerDetailDisclosure: View {
     let snapshot: PowerSnapshot
     let compact: Bool
 
     private var insights: PowerInsights { PowerInsights(snapshot: snapshot) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
-            HStack {
-                Label("Power", systemImage: snapshot.isPluggedIn ? "bolt.fill" : "battery.50")
-                    .font(.headline)
-                    .foregroundStyle(snapshot.isPluggedIn ? .green : .primary)
-                Spacer()
-                Text(PowerDisplayFormatter.panelHeadline(for: snapshot))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 128), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
-                PowerMetric(label: "Battery", value: batteryPercentText, systemImage: "battery.75")
-                if let flow = PowerDisplayFormatter.batteryFlow(for: snapshot) {
-                    PowerMetric(label: "Battery flow", value: flow.replacingOccurrences(of: "Battery ", with: ""), systemImage: snapshot.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
-                }
-                if let adapter = snapshot.adapter, adapter.powerWatts >= 0.5, adapterLine == nil {
-                    PowerMetric(label: "Adapter", value: adapterValue(adapter), systemImage: "powerplug")
-                }
-                if let health = snapshot.healthPercent {
-                    PowerMetric(label: "Health", value: "\(health)%", systemImage: "heart")
-                }
-            }
-
+        DisclosureGroup("Power details") {
             VStack(alignment: .leading, spacing: 6) {
                 if let batteryLine {
                     Text(batteryLine)
@@ -802,22 +865,14 @@ private struct PowerPanel: View {
                     Text("Estimate: \(eta)")
                         .lineLimit(1)
                 }
-                if let warning = insights.chargerWarning {
-                    Text(warning)
-                        .foregroundStyle(.orange)
-                        .lineLimit(compact ? 2 : 3)
-                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }
-        .padding(compact ? 10 : 12)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var batteryPercentText: String {
-        snapshot.percent.map { "\($0)%" } ?? "Unknown"
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .padding(.top, compact ? 0 : 2)
     }
 
     private var batteryLine: String? {
@@ -851,71 +906,6 @@ private struct PowerPanel: View {
             "\(PowerDisplayFormatter.volts(profile.voltageVolts))×\(PowerDisplayFormatter.amps(profile.currentAmps))"
         }
         return "USB-C PD: " + profiles.joined(separator: ", ")
-    }
-
-    private func adapterValue(_ adapter: PowerAdapter) -> String {
-        if let rated = adapter.ratedWatts { return "\(rated) W" }
-        return PowerDisplayFormatter.watts(adapter.powerWatts)
-    }
-}
-
-private struct HistoryPanel: View {
-    let history: TelemetryHistory
-    let compact: Bool
-
-    private var summary: TelemetryHistorySummary {
-        TelemetryHistorySummary(
-            history: history,
-            sampleLimit: compact ? 90 : 180,
-            thermalPressureLimit: compact ? 24 : 36
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
-            HStack {
-                Label("History", systemImage: "chart.xyaxis.line")
-                    .font(.headline)
-                Spacer()
-                Text(summaryHeaderText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let latest = history.samples.last {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 108 : 120), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
-                    if let temperatureText = summary.latestTemperatureText {
-                        PowerMetric(label: summary.latestTemperatureLabel, value: temperatureText, systemImage: "thermometer.medium")
-                    }
-                    if let fanRPMText = summary.latestFanRPMText {
-                        PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
-                    }
-                    if let batteryPowerLabel = summary.latestBatteryPowerLabel,
-                       let batteryPowerText = summary.latestBatteryPowerText,
-                       let watts = latest.batteryPowerWatts {
-                        PowerMetric(label: batteryPowerLabel, value: batteryPowerText, systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
-                    }
-                    PowerMetric(label: "Thermal", value: summary.latestThermalPressureText, systemImage: "speedometer")
-                }
-
-                if history.samples.count > 1 {
-                    TelemetryHistoryChart(summary: summary, compact: compact)
-                }
-            } else {
-                Text("History appears after the first successful poll.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(compact ? 10 : 12)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var summaryHeaderText: String {
-        guard let sampleWindowText = summary.sampleWindowText else {
-            return summary.sampleCountText
-        }
-        return "\(summary.sampleCountText) · last \(sampleWindowText)"
     }
 }
 
@@ -1015,16 +1005,18 @@ private struct SparklinePath: View {
     var body: some View {
         GeometryReader { geometry in
             Path { path in
-                guard values.count > 1,
-                      let minValue = values.min(),
-                      let maxValue = values.max() else { return }
+                let plottedValues = smoothedValues(values)
+                guard plottedValues.count > 1,
+                      let minValue = plottedValues.min(),
+                      let maxValue = plottedValues.max() else { return }
                 let isFlat = abs(maxValue - minValue) < 0.0001
                 let valueRange = max(maxValue - minValue, 0.0001)
                 let width = max(geometry.size.width, 1)
                 let height = max(geometry.size.height, 1)
-                let xStep = width / CGFloat(values.count - 1)
+                let xStep = width / CGFloat(plottedValues.count - 1)
+                var previousPoint: CGPoint?
 
-                for (index, value) in values.enumerated() {
+                for (index, value) in plottedValues.enumerated() {
                     let normalized = isFlat ? 0.5 : (value - minValue) / valueRange
                     let point = CGPoint(
                         x: CGFloat(index) * xStep,
@@ -1032,14 +1024,34 @@ private struct SparklinePath: View {
                     )
                     if index == 0 {
                         path.move(to: point)
+                    } else if let previousPoint {
+                        let midPoint = CGPoint(
+                            x: (previousPoint.x + point.x) / 2,
+                            y: (previousPoint.y + point.y) / 2
+                        )
+                        path.addQuadCurve(to: midPoint, control: previousPoint)
+                        if index == plottedValues.count - 1 {
+                            path.addQuadCurve(to: point, control: point)
+                        }
                     } else {
                         path.addLine(to: point)
                     }
+                    previousPoint = point
                 }
             }
             .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }
         .accessibilityHidden(true)
+    }
+
+    private func smoothedValues(_ rawValues: [Double]) -> [Double] {
+        guard rawValues.count > 4 else { return rawValues }
+        return rawValues.indices.map { index in
+            let lowerBound = max(rawValues.startIndex, index - 2)
+            let upperBound = min(rawValues.index(before: rawValues.endIndex), index + 2)
+            let window = rawValues[lowerBound...upperBound]
+            return window.reduce(0, +) / Double(window.count)
+        }
     }
 }
 
@@ -1169,6 +1181,67 @@ private struct SensorRow: View {
         }
         .padding(compact ? 8 : 10)
         .background(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct CompactFanOverrideEditor: View {
+    let fan: Fan
+    let startRPM: Int
+    let midRPM: Int
+    let maxRPM: Int
+    let setStartRPM: (Int) -> Void
+    let setMidRPM: (Int) -> Void
+    let setMaxRPM: (Int) -> Void
+
+    var body: some View {
+        let startBinding = Binding<Int>(
+            get: { startRPM },
+            set: { newValue in setStartRPM(newValue) }
+        )
+        let midBinding = Binding<Int>(
+            get: { midRPM },
+            set: { newValue in setMidRPM(newValue) }
+        )
+        let maxBinding = Binding<Int>(
+            get: { maxRPM },
+            set: { newValue in setMaxRPM(newValue) }
+        )
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(fan.name)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(fan.minimumRPM)-\(fan.maximumRPM) RPM")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 6) {
+                Stepper(value: startBinding, in: fan.minimumRPM...fan.maximumRPM, step: 50) {
+                    fanOverrideValueLabel("Start", rpm: startRPM)
+                }
+                Stepper(value: midBinding, in: fan.minimumRPM...fan.maximumRPM, step: 50) {
+                    fanOverrideValueLabel("Ramp", rpm: midRPM)
+                }
+                Stepper(value: maxBinding, in: fan.minimumRPM...fan.maximumRPM, step: 50) {
+                    fanOverrideValueLabel("High", rpm: maxRPM)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func fanOverrideValueLabel(_ label: String, rpm: Int) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+            Text("\(rpm)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
