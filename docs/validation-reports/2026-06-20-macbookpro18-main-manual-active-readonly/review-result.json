@@ -38,6 +38,7 @@
   "thermalPressure": "nominal",
   "manualSmokeTestResult": "not-recorded",
   "manualSmokeTestSource": "",
+  "manualSmokeReadinessSource": "",
   "agentRunSmokeResult": "not-recorded",
   "agentRunSmokeSource": "",
   "agentRunSmokeStartupMode": "",

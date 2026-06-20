@@ -249,6 +249,7 @@
         "sourceArtifactSHA256",
         "manualSmokeTestResult",
         "manualSmokeTestSource",
+        "manualSmokeReadinessSource",
         "manualSmokeValidated",
         "agentRunSmokeResult",
         "agentRunSmokeSource",
@@ -312,6 +313,10 @@
         },
         "manualSmokeTestSource": {
           "type": "string"
+        },
+        "manualSmokeReadinessSource": {
+          "type": "string",
+          "description": "Share-safe source path to the manual-smoke-readiness JSON reviewed before accepting local-ad-hoc manual smoke evidence."
         },
         "manualSmokeValidated": {
           "$ref": "#/$defs/booleanString"
@@ -465,6 +470,29 @@
           "then": {
             "properties": {
               "manualSmokeTestSource": {
+                "$ref": "#/$defs/requiredNonEmptyString"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "installSource": {
+                "const": "local-ad-hoc-build"
+              },
+              "manualSmokeTestResult": {
+                "const": "passed-auto-restored"
+              }
+            },
+            "required": [
+              "installSource",
+              "manualSmokeTestResult"
+            ]
+          },
+          "then": {
+            "properties": {
+              "manualSmokeReadinessSource": {
                 "$ref": "#/$defs/requiredNonEmptyString"
               }
             }

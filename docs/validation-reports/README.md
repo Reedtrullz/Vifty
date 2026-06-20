@@ -20,6 +20,10 @@ scripts/summarize-validation-reports.sh \
 
 Candidate supported-hardware rows remain **Needs manual smoke** until a
 reviewed report records `manualSmokeTestResult: "passed-auto-restored"`.
+Passed local-ad-hoc manual smoke summaries must also carry a
+`manualSmokeReadinessSource` from the read-only manual-smoke preflight, proving
+the installed daemon matched the expected build before the smoke result was
+accepted.
 Source-first, unsigned-dev, and local ad-hoc reports are compatibility evidence
 only; they are not Developer ID, notarization, Homebrew, or trusted binary
 evidence.

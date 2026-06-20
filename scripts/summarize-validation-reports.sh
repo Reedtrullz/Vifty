@@ -335,6 +335,12 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       failures << "#{path} manualSmokeTestSource is required when manualSmokeTestResult is passed-auto-restored"
       valid = false
     end
+    if install_source == "local-ad-hoc-build" &&
+        result["manualSmokeTestResult"].to_s == "passed-auto-restored" &&
+        result.fetch("manualSmokeReadinessSource", "").to_s.strip.empty?
+      failures << "#{path} manualSmokeReadinessSource is required for passed local-ad-hoc manual smoke evidence"
+      valid = false
+    end
 
     valid
   end
@@ -603,6 +609,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "sourceArtifactSHA256" => result["sourceArtifactSHA256"].to_s,
       "manualSmokeTestResult" => manual_smoke_result,
       "manualSmokeTestSource" => result["manualSmokeTestSource"].to_s,
+      "manualSmokeReadinessSource" => result["manualSmokeReadinessSource"].to_s,
       "manualSmokeValidated" => boolean_string(manual_smoke_validated),
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
@@ -701,6 +708,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     sourceArtifactSHA256
     manualSmokeTestResult
     manualSmokeTestSource
+    manualSmokeReadinessSource
     manualSmokeValidated
     agentRunSmokeResult
     agentRunSmokeSource

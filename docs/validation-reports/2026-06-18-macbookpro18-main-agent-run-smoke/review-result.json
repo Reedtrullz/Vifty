@@ -32,6 +32,7 @@
   "thermalPressure": "nominal",
   "manualSmokeTestResult": "not-recorded",
   "manualSmokeTestSource": "",
+  "manualSmokeReadinessSource": "",
   "agentRunSmokeResult": "passed-auto-restored",
   "agentRunSmokeSource": "2026-06-18-macbookpro18-main-agent-run-smoke/agent-run-smoke-evidence-summary.json",
   "failures": [

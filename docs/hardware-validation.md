@@ -84,7 +84,7 @@ make validation-evidence-review \
   VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
-`make validation-evidence-review` wraps `scripts/review-validation-evidence.sh`; use `VALIDATION_EVIDENCE_REVIEW_MODE=release` for installed public-release trust evidence and `VALIDATION_EVIDENCE_REVIEW_MODE=unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `VALIDATION_EVIDENCE_REVIEW_SUMMARY` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, `failedCheckIDs`, `coolingBlockerIDs`, explicit manual smoke-test evidence, optional supervised agent-run smoke evidence, and any failures or warnings. Current diagnose reports must not pair non-empty `coolingBlockerIDs` with `safeToRequestCooling=true`; the reviewer fails that contradiction instead of letting it become compatibility evidence.
+`make validation-evidence-review` wraps `scripts/review-validation-evidence.sh`; use `VALIDATION_EVIDENCE_REVIEW_MODE=release` for installed public-release trust evidence and `VALIDATION_EVIDENCE_REVIEW_MODE=unsupported-hardware` for reports that prove unsupported machines block safely. The reviewer checks only captured files; it does not call `viftyctl`, `ViftyHelper`, `launchctl`, `codesign`, `stapler`, `spctl`, or fan-write commands. In release mode it requires the release artifact summary to identify the `release-artifact-summary.schema.json` contract and rejects `source-build-tag`, `source-first-unsigned-dev-zip`, local ad-hoc, unrecorded, or other install sources as release-trust proof. In unsupported-hardware mode, passing review is safe-block evidence only; it does not expand fan-control support. When `VALIDATION_EVIDENCE_REVIEW_SUMMARY` is supplied, it writes `review-result.json` with `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the review mode, pass/fail status, install/source provenance fields, key diagnose decision fields, `failedCheckIDs`, `coolingBlockerIDs`, explicit manual smoke-test evidence, reviewed `manualSmokeReadinessSource` when supplied, optional supervised agent-run smoke evidence, and any failures or warnings. Current diagnose reports must not pair non-empty `coolingBlockerIDs` with `safeToRequestCooling=true`; the reviewer fails that contradiction instead of letting it become compatibility evidence. Passed `local-ad-hoc-build` manual smoke must include `VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY` so the reviewer can prove the manual-smoke preflight was read-only, ready, and daemon-matched before accepting the smoke claim.
 
 For a supported-hardware report, leave the default `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=not-recorded` until the GitHub issue template says **Passed and Auto restore confirmed**. After that, rerun the review with the issue URL or note:
 
@@ -94,6 +94,18 @@ make validation-evidence-review \
   VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
   VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored \
   VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE=<hardware-validation-issue-url> \
+  VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
+```
+
+For `local-ad-hoc-build` evidence, also pass the captured read-only manual-smoke preflight JSON:
+
+```sh
+make validation-evidence-review \
+  VALIDATION_EVIDENCE_BUNDLE=.build/vifty-validation-<timestamp> \
+  VALIDATION_EVIDENCE_REVIEW_MODE=supported-hardware \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE=<hardware-validation-issue-url> \
+  VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY=.build/manual-smoke-readiness.json \
   VALIDATION_EVIDENCE_REVIEW_SUMMARY=.build/vifty-validation-<timestamp>/review-result.json
 ```
 
@@ -216,11 +228,11 @@ Use this path for the available `MacBookPro18,1` / M1 Pro machine before changin
    make manual-smoke-readiness
    ```
 
-   For current-source validation, prefer `make manual-smoke-readiness-current-build`; it builds `.build/Vifty.app`, runs the freshly built `viftyctl`, and blocks if the installed LaunchDaemon helper does not match the freshly built daemon. Installed-app testers without a source checkout can run `/Applications/Vifty.app/Contents/Resources/check-manual-smoke-readiness.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl`. For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. The preflight only runs `viftyctl diagnose --json`, may hash the installed LaunchDaemon helper and expected daemon when asked, records `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false` in JSON mode, also records `daemonRuntime`, exits `75` when smoke must be skipped, and lists blockers such as `installed daemon does not match expected build daemon`, `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
+   For current-source validation, prefer `make manual-smoke-readiness-current-build`; it builds `.build/Vifty.app`, runs the freshly built `viftyctl`, and blocks if the installed LaunchDaemon helper does not match the freshly built daemon. Installed-app testers without a source checkout can run `/Applications/Vifty.app/Contents/Resources/check-manual-smoke-readiness.sh --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl`. For automation or issue triage, use `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`. Save that JSON and pass it back to the reviewer as `VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY=<path>` for local-ad-hoc manual smoke. The preflight only runs `viftyctl diagnose --json`, may hash the installed LaunchDaemon helper and expected daemon when asked, records `schemaID: https://vifty.local/schemas/manual-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false` in JSON mode, also records `daemonRuntime`, exits `75` when smoke must be skipped, and lists blockers such as `installed daemon does not match expected build daemon`, `manual control active before manual smoke`, `daemonControlPathReady=false`, unsupported hardware, missing fans/sensors, or critical thermal pressure.
 
 5. Keep Fixed and Curve smoke human-supervised in the app UI: apply one conservative Fixed target, collect diagnose/probe evidence, restore Auto, then repeat with one conservative Curve profile and restore Auto again. Do not automate UI clicking, raw `ViftyHelper setFixed`, raw `ViftyHelper auto`, or third-party SMC writes for support promotion.
 
-6. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored`, then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
+6. After the issue/template note records **Passed and Auto restore confirmed**, rerun the reviewer with `VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT=passed-auto-restored`; for `local-ad-hoc-build` evidence, include `VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY=<path-to-ready-json>` so the review result records `manualSmokeReadinessSource`. Then regenerate the compatibility index and matrix. A supervised agent-run smoke bundle can be attached as developer-workload proof, but it does not replace manual Auto/Fixed/Curve smoke for `validated-hardware-evidence`.
 
 ## Manual Fan Write Smoke Test
 

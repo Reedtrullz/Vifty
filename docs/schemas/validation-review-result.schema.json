@@ -39,6 +39,7 @@
     "thermalPressure",
     "manualSmokeTestResult",
     "manualSmokeTestSource",
+    "manualSmokeReadinessSource",
     "agentRunSmokeResult",
     "agentRunSmokeSource",
     "failures",
@@ -157,6 +158,10 @@
     "manualSmokeTestSource": {
       "type": "string"
     },
+    "manualSmokeReadinessSource": {
+      "type": "string",
+      "description": "Share-safe path to the read-only manual-smoke-readiness JSON reviewed before accepting local-ad-hoc manual smoke evidence. Empty when no captured readiness summary was reviewed."
+    },
     "agentRunSmokeResult": {
       "$ref": "#/$defs/manualSmokeTestResult"
     },
@@ -243,6 +248,29 @@
       "then": {
         "properties": {
           "manualSmokeTestSource": {
+            "$ref": "#/$defs/requiredNonEmptyString"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "installSource": {
+            "const": "local-ad-hoc-build"
+          },
+          "manualSmokeTestResult": {
+            "const": "passed-auto-restored"
+          }
+        },
+        "required": [
+          "installSource",
+          "manualSmokeTestResult"
+        ]
+      },
+      "then": {
+        "properties": {
+          "manualSmokeReadinessSource": {
             "$ref": "#/$defs/requiredNonEmptyString"
           }
         }
