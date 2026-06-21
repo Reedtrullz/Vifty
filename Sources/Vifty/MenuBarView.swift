@@ -183,6 +183,28 @@ struct MenuBarView: View {
             .controlSize(.small)
             .help("Mode Vifty selects when the app starts")
 
+            Toggle("Start Vifty at startup", isOn: launchAtLoginBinding)
+                .controlSize(.small)
+                .help("Open Vifty automatically at macOS login")
+
+            if let launchAtLoginStatusMessage = model.launchAtLoginStatusMessage {
+                HStack(alignment: .top, spacing: 6) {
+                    Label(
+                        launchAtLoginStatusMessage,
+                        systemImage: model.launchAtLoginStatus == .requiresApproval ? "exclamationmark.triangle" : "info.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(model.launchAtLoginStatus == .requiresApproval ? .orange : .secondary)
+                    .lineLimit(2)
+                    if model.launchAtLoginStatus == .requiresApproval {
+                        Button("Open Login Items") {
+                            model.openLaunchAtLoginSettings()
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+
             Picker("Menu bar", selection: $model.menuBarDisplayMode) {
                 ForEach(MenuBarDisplayMode.allCases) { mode in
                     Text(mode.label).tag(mode)
@@ -231,6 +253,7 @@ struct MenuBarView: View {
         .frame(width: 320)
         .onAppear {
             daemonInstaller.refresh()
+            model.refreshLaunchAtLoginStatus()
         }
         .onDisappear {
             helperRefreshTask?.cancel()
@@ -256,6 +279,13 @@ struct MenuBarView: View {
     private func copyHelperDiagnosticsCommand() {
         HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { model.launchAtLoginEnabled },
+            set: { model.setLaunchAtLoginEnabled($0) }
+        )
     }
 
     private var helperHealthSystemImage: String {

@@ -32,6 +32,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
+- **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
 - **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
 
@@ -104,6 +105,8 @@ open /Applications/Vifty.app
 ```
 
 `make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
+
+In Vifty, enable **Start Vifty at startup** from the main window or menu-bar popover to register the app with macOS Login Items. If macOS shows a pending approval state, approve Vifty in System Settings > General > Login Items.
 
 ### Unsigned tester zip
 

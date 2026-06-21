@@ -268,6 +268,33 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(appModel.contains("preferences.set("))
     }
 
+    func testLaunchAtLoginToggleIsWiredThroughSystemLoginItems() throws {
+        let launchAtLogin = try read("Sources/Vifty/LaunchAtLogin.swift")
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+
+        XCTAssertTrue(launchAtLogin.contains("SMAppService.mainApp.status"))
+        XCTAssertTrue(launchAtLogin.contains("try service.register()"))
+        XCTAssertTrue(launchAtLogin.contains("try service.unregister()"))
+        XCTAssertTrue(launchAtLogin.contains("SMAppService.openSystemSettingsLoginItems()"))
+        XCTAssertTrue(appModel.contains("private let launchAtLoginManager: LaunchAtLoginManaging"))
+        XCTAssertTrue(appModel.contains("@Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled"))
+        XCTAssertTrue(appModel.contains("var launchAtLoginEnabled: Bool"))
+        XCTAssertTrue(appModel.contains("func setLaunchAtLoginEnabled(_ enabled: Bool)"))
+        XCTAssertTrue(appModel.contains("launchAtLoginError = \"Could not update startup item: \\(error.localizedDescription)\""))
+        XCTAssertFalse(appModel.contains("UserDefaults.standard.set(launchAtLogin"))
+        XCTAssertFalse(appModel.contains("preferencesStore.save(AppPreferences(\n            launchAtLogin"))
+        XCTAssertTrue(contentView.contains("private var launchAtLoginSettings: some View"))
+        XCTAssertTrue(contentView.contains("Label(\"Start Vifty at startup\", systemImage: \"power\")"))
+        XCTAssertTrue(contentView.contains("Toggle(isOn: launchAtLoginBinding)"))
+        XCTAssertTrue(contentView.contains("model.openLaunchAtLoginSettings()"))
+        XCTAssertTrue(contentView.contains("model.refreshLaunchAtLoginStatus()"))
+        XCTAssertTrue(menuBarView.contains("Toggle(\"Start Vifty at startup\", isOn: launchAtLoginBinding)"))
+        XCTAssertTrue(menuBarView.contains("model.openLaunchAtLoginSettings()"))
+        XCTAssertTrue(menuBarView.contains("model.refreshLaunchAtLoginStatus()"))
+    }
+
     func testLocalInstallerRestartsRunningAppBeforeCopyingBundle() throws {
         let installScript = try read("scripts/install-vifty.sh")
         let readme = try read("README.md")

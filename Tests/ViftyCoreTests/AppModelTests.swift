@@ -1733,6 +1733,60 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(relaunched.startupMode, .curve)
     }
 
+    func testLaunchAtLoginStatusComesFromSystemManagerNotPrivatePreferences() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let launchAtLoginManager = AppModelLaunchAtLoginRecorder(status: .disabled)
+        let model = AppModel(
+            preferencesStore: store,
+            launchAtLoginManager: launchAtLoginManager
+        )
+
+        XCTAssertFalse(model.launchAtLoginEnabled)
+        XCTAssertEqual(model.launchAtLoginStatus, .disabled)
+
+        model.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(launchAtLoginManager.requestedValues, [true])
+        XCTAssertEqual(model.launchAtLoginStatus, .enabled)
+        XCTAssertTrue(model.launchAtLoginEnabled)
+        XCTAssertNil(model.launchAtLoginStatusMessage)
+        let savedPreferences = FileManager.default.fileExists(atPath: preferencesURL.path)
+            ? try String(contentsOf: preferencesURL, encoding: .utf8)
+            : ""
+        XCTAssertFalse(savedPreferences.contains("launchAtLogin"))
+    }
+
+    func testLaunchAtLoginApprovalStateKeepsToggleOnAndOpensLoginItems() {
+        let launchAtLoginManager = AppModelLaunchAtLoginRecorder(status: .disabled)
+        launchAtLoginManager.statusAfterEnable = .requiresApproval
+        let model = AppModel(launchAtLoginManager: launchAtLoginManager)
+
+        model.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(model.launchAtLoginStatus, .requiresApproval)
+        XCTAssertTrue(model.launchAtLoginEnabled)
+        XCTAssertEqual(model.launchAtLoginStatusMessage, "Approve Vifty in Login Items to start at startup.")
+        XCTAssertEqual(launchAtLoginManager.openSettingsCount, 1)
+    }
+
+    func testLaunchAtLoginFailureRestoresObservedStatusAndSurfacesError() {
+        let launchAtLoginManager = AppModelLaunchAtLoginRecorder(status: .disabled)
+        launchAtLoginManager.setError = NSError(
+            domain: "LaunchAtLogin",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Registration denied"]
+        )
+        let model = AppModel(launchAtLoginManager: launchAtLoginManager)
+
+        model.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(launchAtLoginManager.requestedValues, [true])
+        XCTAssertEqual(model.launchAtLoginStatus, .disabled)
+        XCTAssertFalse(model.launchAtLoginEnabled)
+        XCTAssertEqual(model.launchAtLoginStatusMessage, "Could not update startup item: Registration denied")
+    }
+
     func testNotificationSettingsMigrateLegacyDefaultsAndPersistPrivately() throws {
         let suiteName = "tech.reidar.vifty.tests.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suiteName)!
@@ -3426,6 +3480,32 @@ private final class AppModelPingSequence: @unchecked Sendable {
         defer { lock.unlock() }
         guard !values.isEmpty else { return false }
         return values.removeFirst()
+    }
+}
+
+@MainActor
+private final class AppModelLaunchAtLoginRecorder: LaunchAtLoginManaging {
+    private(set) var requestedValues: [Bool] = []
+    private(set) var openSettingsCount = 0
+    var status: LaunchAtLoginStatus
+    var statusAfterEnable: LaunchAtLoginStatus = .enabled
+    var statusAfterDisable: LaunchAtLoginStatus = .disabled
+    var setError: Error?
+
+    init(status: LaunchAtLoginStatus) {
+        self.status = status
+    }
+
+    func setEnabled(_ enabled: Bool) throws {
+        requestedValues.append(enabled)
+        if let setError {
+            throw setError
+        }
+        status = enabled ? statusAfterEnable : statusAfterDisable
+    }
+
+    func openLoginItemsSettings() {
+        openSettingsCount += 1
     }
 }
 

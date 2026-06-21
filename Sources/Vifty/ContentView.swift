@@ -152,6 +152,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 18) {
             modePicker
             startupModeSettings
+            launchAtLoginSettings
             menuBarDisplaySettings
 
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
@@ -433,6 +434,50 @@ struct ContentView: View {
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { model.launchAtLoginEnabled },
+            set: { model.setLaunchAtLoginEnabled($0) }
+        )
+    }
+
+    private var launchAtLoginSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Toggle(isOn: launchAtLoginBinding) {
+                    Label("Start Vifty at startup", systemImage: "power")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("Open Vifty automatically at macOS login")
+                Spacer()
+            }
+
+            if let message = model.launchAtLoginStatusMessage {
+                HStack(spacing: 8) {
+                    Label(message, systemImage: model.launchAtLoginStatus == .requiresApproval ? "exclamationmark.triangle" : "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(model.launchAtLoginStatus == .requiresApproval ? .orange : .secondary)
+                        .lineLimit(2)
+                    Spacer()
+                    if model.launchAtLoginStatus == .requiresApproval {
+                        Button("Open Login Items") {
+                            model.openLaunchAtLoginSettings()
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .onAppear {
+            model.refreshLaunchAtLoginStatus()
+        }
     }
 
     private var menuBarDisplaySettings: some View {

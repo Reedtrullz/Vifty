@@ -194,6 +194,8 @@ final class AppModel: ObservableObject {
             persistAppPreferences()
         }
     }
+    @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
+    @Published private(set) var launchAtLoginError: String?
     @Published var telemetryHistory = TelemetryHistory()
     @Published var manualRunLimit: ManualRunLimit = .indefinitely {
         didSet {
@@ -226,6 +228,7 @@ final class AppModel: ObservableObject {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
     private let notificationDeliverer: LocalNotificationDelivering
+    private let launchAtLoginManager: LaunchAtLoginManaging
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
@@ -258,13 +261,15 @@ final class AppModel: ObservableObject {
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
         },
         profileStore: CurveProfileStore = CurveProfileStore(),
-        preferencesStore: AppPreferencesStore = AppPreferencesStore()
+        preferencesStore: AppPreferencesStore = AppPreferencesStore(),
+        launchAtLoginManager: LaunchAtLoginManaging = SMAppLaunchAtLoginManager()
     ) {
         self.coordinator = coordinator
         self.powerReader = powerReader
         self.thermalReader = thermalReader
         self.now = now
         self.notificationDeliverer = notificationDeliverer
+        self.launchAtLoginManager = launchAtLoginManager
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
         self.agentRestore = agentRestore
@@ -276,6 +281,7 @@ final class AppModel: ObservableObject {
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
         fixedFanTargets = appPreferences.fixedFanTargets
+        launchAtLoginStatus = launchAtLoginManager.status
         savedProfiles = profileStore.load()
     }
 
@@ -309,6 +315,40 @@ final class AppModel: ObservableObject {
                 try? await Task.sleep(for: retryDelay)
             }
         }
+    }
+
+    var launchAtLoginEnabled: Bool {
+        launchAtLoginStatus.isToggleOn
+    }
+
+    var launchAtLoginStatusMessage: String? {
+        launchAtLoginError ?? launchAtLoginStatus.message
+    }
+
+    func refreshLaunchAtLoginStatus() {
+        launchAtLoginStatus = launchAtLoginManager.status
+        if launchAtLoginStatus == .enabled || launchAtLoginStatus == .disabled {
+            launchAtLoginError = nil
+        }
+    }
+
+    func setLaunchAtLoginEnabled(_ enabled: Bool) {
+        do {
+            try launchAtLoginManager.setEnabled(enabled)
+            launchAtLoginStatus = launchAtLoginManager.status
+            launchAtLoginError = nil
+            if launchAtLoginStatus == .requiresApproval {
+                launchAtLoginManager.openLoginItemsSettings()
+            }
+        } catch {
+            launchAtLoginStatus = launchAtLoginManager.status
+            launchAtLoginError = "Could not update startup item: \(error.localizedDescription)"
+        }
+    }
+
+    func openLaunchAtLoginSettings() {
+        launchAtLoginManager.openLoginItemsSettings()
+        refreshLaunchAtLoginStatus()
     }
 
     func applyStartupModePreferenceIfNeeded() async {
