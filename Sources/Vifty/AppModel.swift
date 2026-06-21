@@ -906,7 +906,7 @@ final class AppModel: ObservableObject {
         case .adapterWattage:
             return menuBarLabelWithAttention(menuBarPowerText ?? "-- W")
         case .codexUsage:
-            return CodexUsageFormatter.menuBarText(for: codexUsageSnapshot)
+            return CodexUsageFormatter.menuBarText(for: codexUsageSnapshot, now: now)
         case .temperatureAndRPM:
             return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
         case .ownerTemperatureAndRPM:
@@ -937,6 +937,10 @@ final class AppModel: ObservableObject {
 
     var codexUsageDetailSummary: String? {
         CodexUsageFormatter.detailText(for: codexUsageSnapshot)
+    }
+
+    var codexUsageDetailLines: [String] {
+        CodexUsageFormatter.detailLines(for: codexUsageSnapshot, now: now)
     }
 
     var menuBarFanOwnerText: String {

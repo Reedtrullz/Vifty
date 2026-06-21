@@ -1,15 +1,53 @@
 import Foundation
 
+struct CodexUsageLimitWindow: Equatable, Sendable {
+    var name: String
+    var windowLabel: String?
+    var usedPercent: Double?
+    var resetDate: Date?
+}
+
 struct CodexUsageSnapshot: Equatable, Sendable {
     var usedPercent: Double
     var resetDate: Date?
+    var windowLabel: String?
     var updatedAt: Date?
     var planType: String?
     var creditsSummary: String?
+    var resetCreditsSummary: String?
+    var monthlySummary: String?
+    var limitWindows: [CodexUsageLimitWindow]
     var sourceFileName: String?
+    var sourceSummary: String?
 
     var leftPercent: Double {
         max(0, min(100, 100 - usedPercent))
+    }
+
+    init(
+        usedPercent: Double,
+        resetDate: Date? = nil,
+        windowLabel: String? = nil,
+        updatedAt: Date? = nil,
+        planType: String? = nil,
+        creditsSummary: String? = nil,
+        resetCreditsSummary: String? = nil,
+        monthlySummary: String? = nil,
+        limitWindows: [CodexUsageLimitWindow] = [],
+        sourceFileName: String? = nil,
+        sourceSummary: String? = nil
+    ) {
+        self.usedPercent = usedPercent
+        self.resetDate = resetDate
+        self.windowLabel = windowLabel
+        self.updatedAt = updatedAt
+        self.planType = planType
+        self.creditsSummary = creditsSummary
+        self.resetCreditsSummary = resetCreditsSummary
+        self.monthlySummary = monthlySummary
+        self.limitWindows = limitWindows
+        self.sourceFileName = sourceFileName
+        self.sourceSummary = sourceSummary
     }
 }
 
@@ -30,6 +68,11 @@ struct CodexUsageReader {
 
     static func readDefault() -> CodexUsageSnapshot? {
         guard shouldReadDefaultCodexHome else { return nil }
+        let sourceMode = ProcessInfo.processInfo.environment["VIFTY_CODEX_USAGE_SOURCE"]?.lowercased()
+        if sourceMode != "local",
+           let snapshot = CodexUsageAppServerClient().read() {
+            return snapshot
+        }
         return CodexUsageReader().read()
     }
 
@@ -115,27 +158,185 @@ struct CodexUsageReader {
               let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let payload = event["payload"] as? [String: Any],
               payload["type"] as? String == "token_count",
-              let rateLimits = payload["rate_limits"] as? [String: Any],
-              let primary = rateLimits["primary"] as? [String: Any],
-              let usedPercent = numericValue(primary["used_percent"]) else {
+              let rateLimits = payload["rate_limits"] as? [String: Any] else {
             return nil
         }
 
         let timestamp = event["timestamp"] as? String ?? ""
-        let resetDate = numericValue(primary["resets_at"]).map(Date.init(timeIntervalSince1970:))
         let updatedAt = Self.parseTimestamp(timestamp)
-        let snapshot = CodexUsageSnapshot(
-            usedPercent: usedPercent,
-            resetDate: resetDate,
+        let sourceName = sourceURL.lastPathComponent
+        let snapshot = Self.snapshot(
+            fromLegacyRateLimits: rateLimits,
             updatedAt: updatedAt,
-            planType: rateLimits["plan_type"] as? String,
-            creditsSummary: creditsSummary(rateLimits["credits"]),
-            sourceFileName: sourceURL.lastPathComponent
+            sourceFileName: sourceName,
+            sourceSummary: "Local JSONL: \(sourceName)"
+        ) ?? Self.snapshot(
+            fromAppServerSnapshot: rateLimits,
+            updatedAt: updatedAt,
+            sourceSummary: "Local JSONL: \(sourceName)"
+        ) ?? Self.snapshot(
+            fromAppServerResult: rateLimits,
+            updatedAt: updatedAt,
+            sourceSummary: "Local JSONL: \(sourceName)"
         )
+        guard let snapshot else { return nil }
         return (timestamp, snapshot)
     }
 
-    private func numericValue(_ value: Any?) -> Double? {
+    static func snapshot(
+        fromAppServerResult result: [String: Any],
+        updatedAt: Date? = Date(),
+        sourceSummary: String = "Codex app-server"
+    ) -> CodexUsageSnapshot? {
+        guard let preferred = preferredAppServerSnapshot(in: result) else { return nil }
+        var snapshot = buildSnapshot(
+            from: preferred,
+            keyStyle: .appServer,
+            updatedAt: updatedAt,
+            sourceFileName: nil,
+            sourceSummary: sourceSummary,
+            limitWindows: appServerLimitWindows(in: result)
+        )
+        snapshot?.resetCreditsSummary = resetCreditsSummary(result["rateLimitResetCredits"])
+        return snapshot
+    }
+
+    private static func snapshot(
+        fromLegacyRateLimits rateLimits: [String: Any],
+        updatedAt: Date?,
+        sourceFileName: String?,
+        sourceSummary: String
+    ) -> CodexUsageSnapshot? {
+        buildSnapshot(
+            from: rateLimits,
+            keyStyle: .legacy,
+            updatedAt: updatedAt,
+            sourceFileName: sourceFileName,
+            sourceSummary: sourceSummary,
+            limitWindows: limitWindows(in: rateLimits, keyStyle: .legacy, fallbackName: nil)
+        )
+    }
+
+    private static func snapshot(
+        fromAppServerSnapshot rateLimits: [String: Any],
+        updatedAt: Date?,
+        sourceSummary: String
+    ) -> CodexUsageSnapshot? {
+        buildSnapshot(
+            from: rateLimits,
+            keyStyle: .appServer,
+            updatedAt: updatedAt,
+            sourceFileName: nil,
+            sourceSummary: sourceSummary,
+            limitWindows: limitWindows(in: rateLimits, keyStyle: .appServer, fallbackName: nil)
+        )
+    }
+
+    private static func buildSnapshot(
+        from rawSnapshot: [String: Any],
+        keyStyle: RateLimitKeyStyle,
+        updatedAt: Date?,
+        sourceFileName: String?,
+        sourceSummary: String,
+        limitWindows: [CodexUsageLimitWindow]
+    ) -> CodexUsageSnapshot? {
+        guard let primary = rawSnapshot["primary"] as? [String: Any],
+              let usedPercent = numericValue(primary[keyStyle.usedPercentKey]) else {
+            return nil
+        }
+
+        let resetDate = numericValue(primary[keyStyle.resetDateKey]).map(Date.init(timeIntervalSince1970:))
+        let windowLabel = windowLabel(for: primary, keyStyle: keyStyle)
+        return CodexUsageSnapshot(
+            usedPercent: usedPercent,
+            resetDate: resetDate,
+            windowLabel: windowLabel,
+            updatedAt: updatedAt,
+            planType: stringValue(rawSnapshot[keyStyle.planTypeKey]),
+            creditsSummary: creditsSummary(rawSnapshot["credits"]),
+            resetCreditsSummary: nil,
+            monthlySummary: monthlySummary(rawSnapshot["individualLimit"]),
+            limitWindows: limitWindows,
+            sourceFileName: sourceFileName,
+            sourceSummary: sourceSummary
+        )
+    }
+
+    private static func preferredAppServerSnapshot(in result: [String: Any]) -> [String: Any]? {
+        if let byLimitID = result["rateLimitsByLimitId"] as? [String: Any] {
+            if let codex = byLimitID["codex"] as? [String: Any] {
+                return codex
+            }
+            for key in sortedLimitKeys(byLimitID.keys) {
+                if let snapshot = byLimitID[key] as? [String: Any] {
+                    return snapshot
+                }
+            }
+        }
+        return result["rateLimits"] as? [String: Any]
+    }
+
+    private static func appServerLimitWindows(in result: [String: Any]) -> [CodexUsageLimitWindow] {
+        if let byLimitID = result["rateLimitsByLimitId"] as? [String: Any] {
+            return sortedLimitKeys(byLimitID.keys).flatMap { key -> [CodexUsageLimitWindow] in
+                guard let snapshot = byLimitID[key] as? [String: Any] else { return [] }
+                return limitWindows(in: snapshot, keyStyle: .appServer, fallbackName: key)
+            }
+        }
+        if let rateLimits = result["rateLimits"] as? [String: Any] {
+            return limitWindows(in: rateLimits, keyStyle: .appServer, fallbackName: "Codex")
+        }
+        return []
+    }
+
+    private static func sortedLimitKeys(_ keys: Dictionary<String, Any>.Keys) -> [String] {
+        keys.sorted { left, right in
+            if left == "codex" {
+                return right != "codex"
+            }
+            if right == "codex" {
+                return false
+            }
+            return left < right
+        }
+    }
+
+    private static func limitWindows(
+        in snapshot: [String: Any],
+        keyStyle: RateLimitKeyStyle,
+        fallbackName: String?
+    ) -> [CodexUsageLimitWindow] {
+        let name = stringValue(snapshot[keyStyle.limitNameKey])
+            ?? stringValue(snapshot[keyStyle.limitIDKey])
+            ?? fallbackName
+            ?? "Codex"
+        return ["primary", "secondary"].compactMap { key in
+            guard let window = snapshot[key] as? [String: Any] else { return nil }
+            let label = windowLabel(for: window, keyStyle: keyStyle)
+            let qualifiedName = label.map { "\(name) \($0)" } ?? name
+            return CodexUsageLimitWindow(
+                name: qualifiedName,
+                windowLabel: label,
+                usedPercent: numericValue(window[keyStyle.usedPercentKey]),
+                resetDate: numericValue(window[keyStyle.resetDateKey]).map(Date.init(timeIntervalSince1970:))
+            )
+        }
+    }
+
+    private static func windowLabel(for window: [String: Any], keyStyle: RateLimitKeyStyle) -> String? {
+        guard let minutes = numericValue(window[keyStyle.windowMinutesKey]) else { return nil }
+        let value = Int(minutes.rounded())
+        guard value > 0 else { return nil }
+        if value % 1440 == 0 {
+            return "\(value / 1440)d"
+        }
+        if value % 60 == 0 {
+            return "\(value / 60)h"
+        }
+        return "\(value)m"
+    }
+
+    private static func numericValue(_ value: Any?) -> Double? {
         switch value {
         case let number as NSNumber:
             return number.doubleValue
@@ -146,13 +347,48 @@ struct CodexUsageReader {
         }
     }
 
-    private func creditsSummary(_ value: Any?) -> String? {
+    private static func stringValue(_ value: Any?) -> String? {
+        guard let value = value as? String, !value.isEmpty else { return nil }
+        return value
+    }
+
+    private static func creditsSummary(_ value: Any?) -> String? {
         guard let credits = value as? [String: Any] else { return nil }
         if (credits["unlimited"] as? Bool) == true {
             return "Credits: unlimited"
         }
-        guard let balance = numericValue(credits["balance"]) else { return nil }
-        return "Credits: \(String(format: "%.2f", balance))"
+        if let balance = stringValue(credits["balance"]) {
+            return "Credits: \(balance)"
+        }
+        if let balance = numericValue(credits["balance"]) {
+            return "Credits: \(String(format: "%.2f", balance))"
+        }
+        if let hasCredits = credits["hasCredits"] as? Bool, !hasCredits {
+            return "Credits: none"
+        }
+        return nil
+    }
+
+    private static func resetCreditsSummary(_ value: Any?) -> String? {
+        guard let resetCredits = value as? [String: Any],
+              let available = numericValue(resetCredits["availableCount"]) else {
+            return nil
+        }
+        return "Usage resets: \(Int(available)) available"
+    }
+
+    private static func monthlySummary(_ value: Any?) -> String? {
+        guard let monthly = value as? [String: Any] else { return nil }
+        var parts: [String] = []
+        if let used = stringValue(monthly["used"]),
+           let limit = stringValue(monthly["limit"]) {
+            parts.append("\(used) of \(limit)")
+        }
+        if let remaining = numericValue(monthly["remainingPercent"]) {
+            parts.append("\(Int(remaining.rounded()))% left")
+        }
+        guard !parts.isEmpty else { return nil }
+        return "Monthly: \(parts.joined(separator: ", "))"
     }
 
     private static func parseTimestamp(_ value: String) -> Date? {
@@ -193,10 +429,137 @@ struct CodexUsageReader {
     }
 }
 
+private struct RateLimitKeyStyle {
+    var usedPercentKey: String
+    var resetDateKey: String
+    var windowMinutesKey: String
+    var planTypeKey: String
+    var limitNameKey: String
+    var limitIDKey: String
+
+    static let legacy = RateLimitKeyStyle(
+        usedPercentKey: "used_percent",
+        resetDateKey: "resets_at",
+        windowMinutesKey: "window_minutes",
+        planTypeKey: "plan_type",
+        limitNameKey: "limit_name",
+        limitIDKey: "limit_id"
+    )
+
+    static let appServer = RateLimitKeyStyle(
+        usedPercentKey: "usedPercent",
+        resetDateKey: "resetsAt",
+        windowMinutesKey: "windowDurationMins",
+        planTypeKey: "planType",
+        limitNameKey: "limitName",
+        limitIDKey: "limitId"
+    )
+}
+
+struct CodexUsageAppServerClient {
+    private static let requestID = "vifty-codex-usage"
+    private let executableURL: URL?
+    private let timeout: TimeInterval
+
+    init(executableURL: URL? = nil, timeout: TimeInterval = 2.5) {
+        self.executableURL = executableURL ?? Self.defaultExecutableURL()
+        self.timeout = timeout
+    }
+
+    func read() -> CodexUsageSnapshot? {
+        guard let executableURL else { return nil }
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["app-server", "proxy"]
+
+        let stdin = Pipe()
+        let stdout = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            let request: [String: Any] = [
+                "id": Self.requestID,
+                "method": "account/rateLimits/read",
+                "params": NSNull()
+            ]
+            let requestData = try JSONSerialization.data(withJSONObject: request)
+            stdin.fileHandleForWriting.write(requestData)
+            stdin.fileHandleForWriting.write(Data("\n".utf8))
+            try? stdin.fileHandleForWriting.close()
+        } catch {
+            return nil
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+        if process.isRunning {
+            process.terminate()
+            return nil
+        }
+
+        let responseData = stdout.fileHandleForReading.readDataToEndOfFile()
+        guard let result = Self.resultPayload(from: responseData, requestID: Self.requestID) else {
+            return nil
+        }
+        return CodexUsageReader.snapshot(
+            fromAppServerResult: result,
+            updatedAt: Date(),
+            sourceSummary: "Codex app-server"
+        )
+    }
+
+    private static func resultPayload(from data: Data, requestID: String) -> [String: Any]? {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           object["id"] as? String == requestID,
+           let result = object["result"] as? [String: Any] {
+            return result
+        }
+
+        for line in String(decoding: data, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: true) {
+            guard let lineData = String(line).data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  object["id"] as? String == requestID,
+                  let result = object["result"] as? [String: Any] else {
+                continue
+            }
+            return result
+        }
+        return nil
+    }
+
+    private static func defaultExecutableURL() -> URL? {
+        let environment = ProcessInfo.processInfo.environment
+        if let override = environment["CODEX_CLI"], !override.isEmpty {
+            return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+        }
+
+        let candidates = [
+            "/Applications/Codex.app/Contents/Resources/codex",
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex"
+        ]
+        return candidates
+            .map(URL.init(fileURLWithPath:))
+            .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+}
+
 enum CodexUsageFormatter {
-    static func menuBarText(for snapshot: CodexUsageSnapshot?) -> String {
+    static func menuBarText(
+        for snapshot: CodexUsageSnapshot?,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) -> String {
         guard let snapshot else { return "Codex --" }
-        return "Codex \(roundedPercent(snapshot.leftPercent))% left"
+        var text = "Codex \(roundedPercent(snapshot.leftPercent))% left"
+        if let resetDate = snapshot.resetDate {
+            text += " · \(compactCountdownText(until: resetDate, now: now()))"
+        }
+        return text
     }
 
     static func summaryText(
@@ -204,7 +567,8 @@ enum CodexUsageFormatter {
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> String {
         guard let snapshot else { return "Codex usage unavailable" }
-        var text = "Codex: \(roundedPercent(snapshot.leftPercent))% left, \(roundedPercent(snapshot.usedPercent))% used"
+        let scope = snapshot.windowLabel.map { " \($0)" } ?? ""
+        var text = "Codex\(scope): \(roundedPercent(snapshot.leftPercent))% left, \(roundedPercent(snapshot.usedPercent))% used"
         if let resetDate = snapshot.resetDate {
             text += " · resets in \(countdownText(until: resetDate, now: now()))"
         }
@@ -212,15 +576,34 @@ enum CodexUsageFormatter {
     }
 
     static func detailText(for snapshot: CodexUsageSnapshot?) -> String? {
-        guard let snapshot else { return nil }
-        return [
-            snapshot.planType.map { "Plan: \($0)" },
-            snapshot.creditsSummary,
-            snapshot.sourceFileName.map { "Source: \($0)" }
-        ]
-        .compactMap(\.self)
-        .joined(separator: " · ")
-        .nilIfEmpty
+        detailLines(for: snapshot).joined(separator: " · ").nilIfEmpty
+    }
+
+    static func detailLines(
+        for snapshot: CodexUsageSnapshot?,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) -> [String] {
+        guard let snapshot else { return [] }
+        var lines: [String] = []
+        if let planType = snapshot.planType {
+            lines.append("Plan: \(planType)")
+        }
+        if let creditsSummary = snapshot.creditsSummary {
+            lines.append(creditsSummary)
+        }
+        if let resetCreditsSummary = snapshot.resetCreditsSummary {
+            lines.append(resetCreditsSummary)
+        }
+        if let monthlySummary = snapshot.monthlySummary {
+            lines.append(monthlySummary)
+        }
+        lines.append(contentsOf: limitSummaryLines(for: snapshot, now: now))
+        if let sourceSummary = snapshot.sourceSummary {
+            lines.append("Source: \(sourceSummary)")
+        } else if let sourceFileName = snapshot.sourceFileName {
+            lines.append("Source: \(sourceFileName)")
+        }
+        return lines
     }
 
     private static func roundedPercent(_ value: Double) -> Int {
@@ -233,6 +616,28 @@ enum CodexUsageFormatter {
         let minutes = (remaining % 3600) / 60
         let seconds = remaining % 60
         return "\(hours):\(String(format: "%02d", minutes)):\(String(format: "%02d", seconds))"
+    }
+
+    private static func compactCountdownText(until date: Date, now: Date) -> String {
+        let remainingSeconds = max(0, date.timeIntervalSince(now))
+        let totalMinutes = Int((remainingSeconds / 60).rounded(.up))
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0 {
+            return minutes == 0 ? "\(hours)h" : "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
+    }
+
+    private static func limitSummaryLines(
+        for snapshot: CodexUsageSnapshot,
+        now: @escaping @Sendable () -> Date
+    ) -> [String] {
+        snapshot.limitWindows.map { window in
+            let usedText = window.usedPercent.map { "\(roundedPercent($0))% used" } ?? "--% used"
+            let resetText = window.resetDate.map { "resets in \(countdownText(until: $0, now: now()))" } ?? "reset unknown"
+            return "\(window.name): \(usedText), \(resetText)"
+        }
     }
 }
 

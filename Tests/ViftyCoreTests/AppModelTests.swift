@@ -1421,8 +1421,8 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageSnapshot(model)
 
-        XCTAssertEqual(model.menuBarLabelText, "Codex 58% left")
-        XCTAssertEqual(model.menuBarStatusItemText, "Codex 58% left")
+        XCTAssertEqual(model.menuBarLabelText, "Codex 58% left · 1h")
+        XCTAssertEqual(model.menuBarStatusItemText, "Codex 58% left · 1h")
         XCTAssertEqual(model.codexUsageSummary, "Codex: 58% left, 42% used · resets in 1:00:00")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }

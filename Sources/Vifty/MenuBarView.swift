@@ -46,11 +46,15 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(model.codexUsageSnapshot == nil ? .secondary : .primary)
                     .lineLimit(2)
-                if let codexUsageDetailSummary = model.codexUsageDetailSummary {
-                    Text(codexUsageDetailSummary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                if !model.codexUsageDetailLines.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(model.codexUsageDetailLines, id: \.self) { line in
+                            Text(line)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
                 }
             }
 
