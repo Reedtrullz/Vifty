@@ -1268,6 +1268,7 @@ private struct FanCurveChartEditor: View {
                     ForEach(fanCurveSeries) { series in
                         curvePointValueLabels(for: series, in: geometry.size)
                     }
+                    curvePointValueLabels(for: baseCurveValueLabelSeries, in: geometry.size)
 
                     if let liveTemperature {
                         liveTemperatureMarker(liveTemperature, in: geometry.size)
@@ -1279,10 +1280,7 @@ private struct FanCurveChartEditor: View {
                             label: point.label,
                             temperature: value.temperature,
                             rpm: value.rpm,
-                            temperatureText: value.temperatureText,
-                            rpmText: value.rpmText,
-                            accessibilityValueText: value.accessibilityValueText,
-                            valueLabelOffset: valueLabelOffset(for: value, in: geometry.size)
+                            accessibilityValueText: value.accessibilityValueText
                         )
                             .position(position(for: value, in: geometry.size))
                             .gesture(
@@ -1325,6 +1323,16 @@ private struct FanCurveChartEditor: View {
             FanCurveChartPoint(id: "ramp", label: "Ramp", temperature: midTemp, rpm: midRPM),
             FanCurveChartPoint(id: "high", label: "High", temperature: maxTemp, rpm: maxRPM)
         ]
+    }
+
+    private var baseCurveValueLabelSeries: FanCurveChartSeries {
+        FanCurveChartSeries(
+            name: "Base",
+            label: "Base",
+            labelOffsetIndex: fanCurveSeries.count,
+            color: .accentColor,
+            points: basePoints
+        )
     }
 
     private var fanCurveSeries: [FanCurveChartSeries] {
@@ -1448,21 +1456,6 @@ private struct FanCurveChartEditor: View {
         let x = min(max(pointPosition.x + horizontalOffset, rect.minX + 62), rect.maxX - 62)
         let y = min(max(pointPosition.y + verticalOffset, rect.minY + 22), rect.maxY - 22)
         return CGPoint(x: x, y: y)
-    }
-
-    private func valueLabelOffset(for point: FanCurveChartPoint, in size: CGSize) -> CGSize {
-        let rect = plotRect(in: size)
-        let pointPosition = position(for: point, in: size)
-        let xOffset: CGFloat
-        if pointPosition.x < rect.minX + 58 {
-            xOffset = 66
-        } else if pointPosition.x > rect.maxX - 58 {
-            xOffset = -66
-        } else {
-            xOffset = 0
-        }
-        let yOffset: CGFloat = pointPosition.y < rect.minY + 42 ? 34 : -34
-        return CGSize(width: xOffset, height: yOffset)
     }
 
     private func chartGrid(in rect: CGRect) -> some View {
@@ -1672,10 +1665,7 @@ private struct ChartHandle: View {
     let label: String
     let temperature: Double
     let rpm: Double
-    let temperatureText: String
-    let rpmText: String
     let accessibilityValueText: String
-    let valueLabelOffset: CGSize
 
     var body: some View {
         Circle()
@@ -1683,42 +1673,10 @@ private struct ChartHandle: View {
             .frame(width: 18, height: 18)
             .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
             .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-            .overlay(alignment: .top) {
-                ChartHandleValueLabel(label: label, temperatureText: temperatureText, rpmText: rpmText)
-                    .offset(valueLabelOffset)
-            }
             .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
             .contentShape(Rectangle())
             .accessibilityLabel("\(label) curve point")
             .accessibilityValue(accessibilityValueText)
-    }
-}
-
-private struct ChartHandleValueLabel: View {
-    let label: String
-    let temperatureText: String
-    let rpmText: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            HStack(spacing: 5) {
-                Text(temperatureText)
-                Text(rpmText)
-            }
-            .font(.caption2.weight(.semibold).monospacedDigit())
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-        }
-        .frame(width: 126, alignment: .leading)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-        .allowsHitTesting(false)
     }
 }
 
