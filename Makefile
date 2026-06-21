@@ -116,7 +116,7 @@ manual-smoke-readiness-current-build: ## Build current app and run read-only man
 	$(MAKE) manual-smoke-readiness VIFTYCTL="$(MACOS)/viftyctl" MANUAL_SMOKE_EXPECTED_DAEMON="$(MACOS)/ViftyDaemon" MANUAL_SMOKE_REQUIRE_DAEMON_MATCH=1
 
 agent-cooling-evidence: ## Collect read-only agent/helper support evidence
-	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_STDERR),--guarded-run-stderr-file "$(AGENT_EVIDENCE_GUARDED_RUN_STDERR)",)
+	./scripts/collect-agent-cooling-evidence.sh --viftyctl "$(VIFTYCTL)" $(if $(AGENT_EVIDENCE_OUTPUT),--output "$(AGENT_EVIDENCE_OUTPUT)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_STDERR),--guarded-run-stderr-file "$(AGENT_EVIDENCE_GUARDED_RUN_STDERR)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_SCRIPT),--guarded-run-script "$(AGENT_EVIDENCE_GUARDED_RUN_SCRIPT)",) $(if $(AGENT_EVIDENCE_GUARDED_RUN_PREFLIGHT),--guarded-run-preflight $(AGENT_EVIDENCE_GUARDED_RUN_PREFLIGHT),)
 
 agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle
 	@if [ -z "$(AGENT_EVIDENCE_BUNDLE)" ]; then echo "AGENT_EVIDENCE_BUNDLE is required" >&2; exit 64; fi

@@ -234,6 +234,22 @@ scripts/collect-agent-cooling-evidence.sh \
   --guarded-run-stderr-file /path/to/guarded-run.stderr
 ```
 
+To capture the exact guarded workload path without requesting cooling or
+launching the child command, let the collector run the wrapper in
+preflight-only mode:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --viftyctl /Applications/Vifty.app/Contents/MacOS/viftyctl \
+  --guarded-run-preflight test 20m 70 "swift test" -- swift test
+```
+
+Source checkouts can use the same path through Make:
+
+```sh
+AGENT_EVIDENCE_GUARDED_RUN_PREFLIGHT='test 20m 70 "swift test" -- swift test' make agent-cooling-evidence
+```
+
 Installed app bundles include this read-only collector at
 `/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh`
 for users who do not have a source checkout.
@@ -242,9 +258,10 @@ This read-only support bundle captures capabilities, diagnose, status, audit,
 command exit statuses, launchd/helper install evidence, a manifest,
 schema-backed `agent-cooling-evidence-summary.json` with
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`,
-optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and checksums without
-requesting cooling, restoring Auto, calling `ViftyHelper`, using `sudo`, or
-writing SMC keys. Check
+optional `guarded-run-stderr.txt`, `guarded-run-preflight.status`,
+`privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
+calling `ViftyHelper`, using `sudo`, launching the guarded workload, or writing
+SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`. Maintainers can review a collected
 bundle with:

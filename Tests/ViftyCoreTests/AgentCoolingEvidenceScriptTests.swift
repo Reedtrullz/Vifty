@@ -26,7 +26,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         })
 
         XCTAssertTrue(try harness.read("README.txt").contains("does not request cooling leases"))
-        XCTAssertTrue(try harness.read("README.txt").contains("use sudo, or write SMC keys"))
+        XCTAssertTrue(try harness.read("README.txt").contains("use sudo"))
+        XCTAssertTrue(try harness.read("README.txt").contains("launch guarded-run child workloads"))
+        XCTAssertTrue(try harness.read("README.txt").contains("write SMC keys"))
         XCTAssertTrue(try harness.read("README.txt").contains("safeToRequestCooling=false"))
         XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         XCTAssertTrue(try harness.read("README.txt").contains("app-info-plist.txt"))
@@ -296,6 +298,71 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(guardedRunDecision["startupMode"] as? String, "Auto")
         XCTAssertEqual(guardedRunDecision["failedCheckIDs"] as? [String], [])
         XCTAssertEqual(guardedRunDecision["coolingBlockerIDs"] as? [String], [])
+    }
+
+    func testCollectorRunsGuardedRunPreflightOnlyEvidenceWithoutCoolingOrChildLaunch() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let childMarkerURL = harness.rootURL.appendingPathComponent("child-was-launched.txt")
+        let childURL = harness.rootURL.appendingPathComponent("fake-child-command.sh")
+        try """
+        #!/bin/sh
+        printf 'child launched\\n' > "\(childMarkerURL.path)"
+        """.write(to: childURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: childURL.path)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--guarded-run-script", harness.repositoryRoot
+                .appendingPathComponent("examples/viftyctl/guarded-run.sh")
+                .path,
+            "--guarded-run-preflight",
+            "test", "20m", "70", "swift test preflight",
+            "--", childURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: childMarkerURL.path))
+        XCTAssertEqual(
+            try harness.loggedArguments(),
+            [
+                "capabilities --json",
+                "diagnose --json",
+                "capabilities --json",
+                "diagnose --json",
+                "status --json",
+                "audit --limit 20 --json"
+            ]
+        )
+        XCTAssertFalse(try harness.loggedArguments().contains { invocation in
+            ["prepare", "run", "restore-auto", "setFixed", "auto"].contains { invocation.hasPrefix($0) }
+        })
+
+        XCTAssertEqual(try harness.read("guarded-run-preflight.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertTrue(try harness.read("guarded-run-stderr.txt").contains("BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON"))
+        XCTAssertTrue(try harness.read("guarded-run-stderr.txt").contains(#""decisionReason":"preflightReady""#))
+        XCTAssertTrue(try harness.read("guarded-run-stderr.txt").contains(#""coolingRequested":false"#))
+        XCTAssertEqual(try harness.read("guarded-run-stdout.txt"), "")
+        XCTAssertTrue(try harness.read("metadata.txt").contains("guardedRunPreflight=true"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("guardedRunPreflightStatus=0"))
+        XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-stderr.txt"))
+        XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-preflight.status"))
+        XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-stdout.txt"))
+        XCTAssertFalse(try harness.read("manifest.tsv").contains("guarded-run-preflight"))
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["safeToProceed"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "preflightReady")
+        XCTAssertEqual(guardedRunDecision["exitCode"] as? Int, 0)
     }
 
     func testReviewerRejectsUnsupportedGuardedRunDecisionReason() throws {
@@ -1346,7 +1413,7 @@ private final class AgentCoolingEvidenceHarness {
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
         capabilitiesExitCode: Int = 0,
-        diagnoseJSON: String = #"{"state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
+        diagnoseJSON: String = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         statusExitCode: Int = 0,
@@ -1568,11 +1635,11 @@ private final class AgentCoolingEvidenceHarness {
     }
 
     fileprivate static let defaultCapabilitiesJSON = """
-    {"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","agentControlStatusError":null,"commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json","run":"docs/schemas/viftyctl-run.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","run":"Contents/Resources/schemas/viftyctl-run.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"}}
+    {"schemaVersion":1,"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","agentControlStatusError":null,"commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json","run":"docs/schemas/viftyctl-run.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","run":"Contents/Resources/schemas/viftyctl-run.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"}}
     """
 
     fileprivate static let defaultUnavailableCapabilitiesJSON = """
-    {"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":false,"policySource":"fallbackUnavailable","agentControlStatusError":"daemon unavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":false,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json","run":"docs/schemas/viftyctl-run.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","run":"Contents/Resources/schemas/viftyctl-run.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"}}
+    {"schemaVersion":1,"daemonStatusAvailable":false,"policyStatusAvailable":false,"policySource":"fallbackUnavailable","agentControlStatusError":"daemon unavailable","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":false,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]},"schemas":{"capabilities":"docs/schemas/viftyctl-capabilities.schema.json","audit":"docs/schemas/viftyctl-audit.schema.json","diagnose":"docs/schemas/viftyctl-diagnose.schema.json","status":"docs/schemas/viftyctl-status.schema.json","commandError":"docs/schemas/viftyctl-command-error.schema.json","run":"docs/schemas/viftyctl-run.schema.json"},"schemaResources":{"capabilities":"Contents/Resources/schemas/viftyctl-capabilities.schema.json","audit":"Contents/Resources/schemas/viftyctl-audit.schema.json","diagnose":"Contents/Resources/schemas/viftyctl-diagnose.schema.json","status":"Contents/Resources/schemas/viftyctl-status.schema.json","commandError":"Contents/Resources/schemas/viftyctl-command-error.schema.json","run":"Contents/Resources/schemas/viftyctl-run.schema.json"},"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"}}
     """
 
     fileprivate static func commandErrorJSON(command: String) -> String {

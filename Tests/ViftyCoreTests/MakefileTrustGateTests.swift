@@ -142,6 +142,8 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("agent-cooling-evidence: ## Collect read-only agent/helper support evidence"))
         XCTAssertTrue(makefile.contains("scripts/collect-agent-cooling-evidence.sh --viftyctl \"$(VIFTYCTL)\""))
         XCTAssertTrue(makefile.contains("$(if $(AGENT_EVIDENCE_GUARDED_RUN_STDERR),--guarded-run-stderr-file \"$(AGENT_EVIDENCE_GUARDED_RUN_STDERR)\",)"))
+        XCTAssertTrue(makefile.contains("$(if $(AGENT_EVIDENCE_GUARDED_RUN_SCRIPT),--guarded-run-script \"$(AGENT_EVIDENCE_GUARDED_RUN_SCRIPT)\",)"))
+        XCTAssertTrue(makefile.contains("$(if $(AGENT_EVIDENCE_GUARDED_RUN_PREFLIGHT),--guarded-run-preflight $(AGENT_EVIDENCE_GUARDED_RUN_PREFLIGHT),)"))
         XCTAssertTrue(makefile.contains("agent-cooling-evidence-review: ## Review a read-only agent/helper support evidence bundle"))
         XCTAssertTrue(makefile.contains("scripts/review-agent-cooling-evidence.sh --bundle \"$(AGENT_EVIDENCE_BUNDLE)\""))
         XCTAssertTrue(makefile.contains("agent-run-smoke-readiness: ## Read-only preflight before supervised viftyctl run smoke"))

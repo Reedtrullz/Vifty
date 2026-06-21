@@ -19,6 +19,12 @@ Options:
                          Optional captured guarded-run stderr transcript to copy
                          into the evidence bundle as guarded-run-stderr.txt.
                          Used only for bracketed decision JSON; no command runs.
+  --guarded-run-script <path>
+                         Optional guarded-run.sh path for --guarded-run-preflight
+                         (default: source examples or bundled resources).
+  --guarded-run-preflight <workload> <duration> <max-rpm-percent> <reason> -- <command> [args...]
+                         Final option. Runs guarded-run.sh in read-only
+                         preflight-only mode and captures guarded-run-stderr.txt.
   --audit-limit <count>  Bounded audit event count, 1 through 200 (default: 20)
   -h, --help             Show this help.
 
@@ -32,9 +38,14 @@ This script is read-only. It runs only:
   ls -ldO@ /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
            /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
 
-It does not request cooling leases, restore Auto, call ViftyHelper, use sudo, or
-write SMC keys. If diagnose exits nonzero because readiness is blocked, the JSON
-and exit status are still captured for maintainers.
+With --guarded-run-preflight, it also runs guarded-run.sh --preflight-only,
+which validates the exact workload command through read-only capabilities and
+diagnose checks without requesting cooling or launching the child command.
+
+It does not request cooling leases, restore Auto, call ViftyHelper, use sudo,
+launch the guarded-run child command, or write SMC keys. If diagnose exits
+nonzero because readiness is blocked, the JSON and exit status are still
+captured for maintainers.
 USAGE
 }
 
@@ -46,6 +57,10 @@ OUTPUT_DIR="${VIFTY_AGENT_EVIDENCE_OUTPUT_DIR:-}"
 AUDIT_LIMIT="${VIFTY_AGENT_EVIDENCE_AUDIT_LIMIT:-20}"
 UI_CONTEXT_FILE=""
 GUARDED_RUN_STDERR_FILE=""
+GUARDED_RUN_SCRIPT="${VIFTY_GUARDED_RUN_SCRIPT:-}"
+GUARDED_RUN_PREFLIGHT=0
+GUARDED_RUN_PREFLIGHT_ARGS=()
+GUARDED_RUN_PREFLIGHT_STATUS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -89,6 +104,24 @@ while [[ $# -gt 0 ]]; do
       GUARDED_RUN_STDERR_FILE="$2"
       shift 2
       ;;
+    --guarded-run-script)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --guarded-run-script requires a path" >&2
+        exit 64
+      fi
+      GUARDED_RUN_SCRIPT="$2"
+      shift 2
+      ;;
+    --guarded-run-preflight)
+      shift
+      if [[ $# -lt 6 ]]; then
+        echo "error: --guarded-run-preflight requires: <workload> <duration> <max-rpm-percent> <reason> -- <command> [args...]" >&2
+        exit 64
+      fi
+      GUARDED_RUN_PREFLIGHT=1
+      GUARDED_RUN_PREFLIGHT_ARGS=("$@")
+      set --
+      ;;
     -h|--help)
       usage
       exit 0
@@ -119,6 +152,47 @@ fi
 if [[ -n "${GUARDED_RUN_STDERR_FILE}" && ! -f "${GUARDED_RUN_STDERR_FILE}" ]]; then
   echo "error: --guarded-run-stderr-file is not a readable file: ${GUARDED_RUN_STDERR_FILE}" >&2
   exit 66
+fi
+
+if [[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 && -n "${GUARDED_RUN_STDERR_FILE}" ]]; then
+  echo "error: --guarded-run-preflight and --guarded-run-stderr-file are mutually exclusive" >&2
+  exit 64
+fi
+
+resolve_guarded_run_script() {
+  if [[ -n "${GUARDED_RUN_SCRIPT}" ]]; then
+    printf '%s\n' "${GUARDED_RUN_SCRIPT}"
+    return
+  fi
+
+  if [[ -x "${ROOT_DIR}/examples/viftyctl/guarded-run.sh" ]]; then
+    printf '%s\n' "${ROOT_DIR}/examples/viftyctl/guarded-run.sh"
+    return
+  fi
+
+  if [[ -x "${SCRIPT_DIR}/viftyctl-wrappers/guarded-run.sh" ]]; then
+    printf '%s\n' "${SCRIPT_DIR}/viftyctl-wrappers/guarded-run.sh"
+    return
+  fi
+
+  if [[ -x "${ROOT_DIR}/Resources/viftyctl-wrappers/guarded-run.sh" ]]; then
+    printf '%s\n' "${ROOT_DIR}/Resources/viftyctl-wrappers/guarded-run.sh"
+    return
+  fi
+
+  printf '%s\n' ""
+}
+
+if [[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]]; then
+  GUARDED_RUN_SCRIPT="$(resolve_guarded_run_script)"
+  if [[ -z "${GUARDED_RUN_SCRIPT}" ]]; then
+    echo "error: guarded-run.sh was not found; pass --guarded-run-script <path>" >&2
+    exit 66
+  fi
+  if [[ ! -x "${GUARDED_RUN_SCRIPT}" ]]; then
+    echo "error: guarded-run.sh is not executable: ${GUARDED_RUN_SCRIPT}" >&2
+    exit 69
+  fi
 fi
 
 if [[ -z "${OUTPUT_DIR}" ]]; then
@@ -205,6 +279,30 @@ run_viftyctl_capture() {
   fi
 }
 
+run_guarded_run_preflight_capture() {
+  local stdout_path="${OUTPUT_DIR}/guarded-run-stdout.txt"
+  local stderr_path="${OUTPUT_DIR}/guarded-run-stderr.txt"
+  local status_path="${OUTPUT_DIR}/guarded-run-preflight.status"
+  local status
+
+  set +e
+  VIFTYCTL="${VIFTYCTL}" \
+  VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1 \
+  VIFTY_GUARDED_RUN_FORCE_RETRY=0 \
+  VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=0 \
+    "${GUARDED_RUN_SCRIPT}" --preflight-only "${GUARDED_RUN_PREFLIGHT_ARGS[@]}" > "${stdout_path}" 2> "${stderr_path}"
+  status=$?
+  set -e
+
+  GUARDED_RUN_PREFLIGHT_STATUS="${status}"
+  printf '%s\n' "${status}" > "${status_path}"
+  chmod 600 "${stdout_path}" "${stderr_path}" "${status_path}"
+}
+
+if [[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]]; then
+  run_guarded_run_preflight_capture
+fi
+
 run_viftyctl_capture "viftyctl-capabilities" "viftyctl-capabilities.json" capabilities --json
 run_viftyctl_capture "viftyctl-diagnose" "viftyctl-diagnose.json" diagnose --json
 run_viftyctl_capture "viftyctl-status" "viftyctl-status.json" status --json
@@ -229,7 +327,8 @@ This bundle was generated by scripts/collect-agent-cooling-evidence.sh.
 It is read-only evidence for Agent Cooling reports, helper-unreachable reports,
 rate limits, expired leases, restore failures, and guarded-run issues.
 
-It does not request cooling leases, restore Auto, call ViftyHelper, use sudo, or write SMC keys.
+It does not request cooling leases, restore Auto, call ViftyHelper, use sudo,
+launch guarded-run child workloads, or write SMC keys.
 
 Attach or paste:
 - viftyctl-diagnose.json
@@ -244,6 +343,9 @@ Attach or paste:
 - agent-cooling-evidence-summary.json
 - privacy-review.tsv
 - guarded-run-stderr.txt if you supplied --guarded-run-stderr-file
+  or --guarded-run-preflight
+- guarded-run-preflight.status and guarded-run-stdout.txt if you supplied
+  --guarded-run-preflight
 
 If viftyctl-diagnose.status is 75, readiness was blocked. Do not retry prepare
 or run while diagnose reports blocked readiness, safeToRequestCooling=false, or
@@ -282,7 +384,15 @@ readOnly=true
 coolingCommandsRun=false
 viftyctl=${VIFTYCTL}
 auditLimit=${AUDIT_LIMIT}
+guardedRunPreflight=$([[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]] && printf 'true' || printf 'false')
 EOF
+
+if [[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]]; then
+  cat >> "${OUTPUT_DIR}/metadata.txt" <<EOF
+guardedRunPreflightStatus=${GUARDED_RUN_PREFLIGHT_STATUS}
+guardedRunPreflightTranscript=guarded-run-stderr.txt
+EOF
+fi
 
 write_summary_json() {
   ruby -rjson -e '
