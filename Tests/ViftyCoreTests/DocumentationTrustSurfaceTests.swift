@@ -95,7 +95,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (861 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (862 tests)."))
         XCTAssertTrue(agents.contains("`scripts/check-agent-run-smoke-readiness.sh`"))
         XCTAssertTrue(agents.contains("read-only preflight before supervised `viftyctl run` smoke evidence"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
@@ -103,6 +103,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
+        XCTAssertTrue(agents.contains("convenience wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, pytest, local-model, and custom workloads"))
+        XCTAssertTrue(agents.contains("Swift/Xcode/Make/npm/pnpm/Bun/Go/cargo/pytest/local-model/custom workload shortcut scripts"))
     }
 
     func testAgentInstructionsTrackCurrentSourceFirstReleaseBoundary() throws {

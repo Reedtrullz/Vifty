@@ -62,6 +62,16 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaIDs.run, "https://vifty.local/schemas/viftyctl-run.schema.json")
     }
 
+    func testWorkloadWrapperContractMatchesSourceScriptsAndSchema() throws {
+        let sourceScripts = try sourceWorkloadWrapperScripts()
+        let capabilities = try decode(ViftyCtlCapabilities.self, from: "capabilities.json")
+        let schemaScripts = try capabilitiesSchemaWorkloadScripts()
+
+        XCTAssertEqual(ViftyCtlWrapperResources.workloadScriptNames.sorted(), sourceScripts)
+        XCTAssertEqual(capabilities.wrapperResources.workloadScripts.sorted(), sourceScripts)
+        XCTAssertEqual(schemaScripts.sorted(), sourceScripts)
+    }
+
     func testLegacyCapabilitiesPayloadDecodesWithConservativeDefaults() throws {
         var payload = try readJSON(fixtureURL("capabilities.json"))
         payload.removeValue(forKey: "supportsForceRetry")
@@ -723,6 +733,28 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
     private func readJSON(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func sourceWorkloadWrapperScripts() throws -> [String] {
+        let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(ViftyCtlWrapperResources().sourceDirectory)
+        let filenames = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        return filenames
+            .filter { $0.hasSuffix(".sh") && $0 != ViftyCtlWrapperResources().guardedRunScript }
+            .sorted()
+    }
+
+    private func capabilitiesSchemaWorkloadScripts() throws -> [String] {
+        let schema = try readJSON(schemaURL("viftyctl-capabilities.schema.json"))
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let definitions = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let wrapperReference = try XCTUnwrap(properties["wrapperResources"] as? [String: Any])
+        let wrapperDefinitionName = try XCTUnwrap((wrapperReference["$ref"] as? String)?.split(separator: "/").last)
+        let wrapperResources = try XCTUnwrap(definitions[String(wrapperDefinitionName)] as? [String: Any])
+        let wrapperProperties = try XCTUnwrap(wrapperResources["properties"] as? [String: Any])
+        let workloadScripts = try XCTUnwrap(wrapperProperties["workloadScripts"] as? [String: Any])
+        let items = try XCTUnwrap(workloadScripts["items"] as? [String: Any])
+        return try XCTUnwrap(items["enum"] as? [String])
     }
 
     private func enumValues(named propertyName: String, in properties: [String: Any]) -> [String] {
