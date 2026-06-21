@@ -44,6 +44,8 @@ enum AgentWorkflowSupport {
         \(preflightCommand)
         ```
 
+        When guarded-run refuses before cooling or completes preflight-only, extract only the JSON payload between `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` / `guarded-run: END_VIFTY_CAPABILITIES_JSON`, `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` / `guarded-run: END_VIFTY_DIAGNOSE_JSON`, or `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` / `guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`. Decision payloads use `schemaID: https://vifty.local/schemas/guarded-run-decision.schema.json`, include `decisionReason`, and preflight-only success must report `coolingRequested: false`. Do not parse surrounding recovery prose.
+
         Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` and `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approves that supervised behavior after seeing Vifty's structured readiness output. Do not catch a guarded-run failure and rerun the same workload without Vifty.
 
         Never call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, direct fan RPM writes, or unguarded `viftyctl prepare` from an agent.
