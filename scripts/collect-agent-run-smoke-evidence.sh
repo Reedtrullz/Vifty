@@ -418,6 +418,8 @@ capabilities_run_contract_safe() {
         cargo-build.sh
         cargo-test.sh
         custom-workload.sh
+        go-build.sh
+        go-test.sh
         local-model.sh
         make-build.sh
         make-test.sh

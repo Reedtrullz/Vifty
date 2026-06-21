@@ -336,7 +336,7 @@ Tests:
 
 Tasks:
 
-- Move examples for Swift, Xcode, Make, npm, cargo, pytest, local-model, and custom workloads higher in README.
+- Move examples for Swift, Xcode, Make, npm, Go, cargo, pytest, local-model, and custom workloads higher in README.
 - Add an "agent readiness checklist" near the CLI docs.
 - Keep `diagnose`, `capabilities`, `status`, `audit`, command-error, and run lifecycle JSON contracts stable.
 - Add report links or sample transcripts after the M1 Pro validation produces real evidence.

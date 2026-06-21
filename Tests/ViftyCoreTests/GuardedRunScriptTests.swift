@@ -1230,6 +1230,16 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
             ),
             (
+                "examples/viftyctl/go-build.sh",
+                ["./..."],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "go build", "--", "go", "build", "./..."]
+            ),
+            (
+                "examples/viftyctl/go-test.sh",
+                ["./..."],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "go test", "--", "go", "test", "./..."]
+            ),
+            (
                 "examples/viftyctl/cargo-build.sh",
                 ["--release"],
                 ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "cargo build", "--", "cargo", "build", "--release"]
@@ -1471,7 +1481,7 @@ private final class ScriptHarness {
     }
 
     private func writeFakeChildTools() throws {
-        for tool in ["swift", "xcodebuild", "make", "npm", "cargo", "python3", "local-model-runner", "custom-runner"] {
+        for tool in ["swift", "xcodebuild", "make", "npm", "go", "cargo", "python3", "local-model-runner", "custom-runner"] {
             try writeFakeExecutable(named: tool, in: binURL)
         }
 
@@ -1546,7 +1556,7 @@ private final class ScriptHarness {
         let metadataLimits = metadataLimitsOverride
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let wrapperResources = wrapperResourcesOverride
-            ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}"#
+            ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}"#
         var schemaIDs = #""capabilities":"\#(capabilitiesSchemaID)""#
         if let capabilitiesDiagnoseSchemaID {
             schemaIDs += #","diagnose":"\#(capabilitiesDiagnoseSchemaID)""#

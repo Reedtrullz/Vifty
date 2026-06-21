@@ -144,6 +144,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(wrapperResources["guardedRunScript"] as? String, "guarded-run.sh")
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("swift-test.sh") == true)
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("make-build.sh") == true)
+        XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("go-build.sh") == true)
+        XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("go-test.sh") == true)
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("custom-workload.sh") == true)
         let schemaIDs = try XCTUnwrap(json["schemaIDs"] as? [String: Any])
         XCTAssertEqual(schemaIDs["capabilities"] as? String, "https://vifty.local/schemas/viftyctl-capabilities.schema.json")

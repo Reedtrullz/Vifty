@@ -111,6 +111,8 @@ Do not catch guarded-run failures and rerun the child command yourself.
 | `make-verify.sh [make-args...]` | `guarded-run.sh test 30m 75 "make verify" -- make verify ...` |
 | `npm-build.sh [npm-build-args...]` | `guarded-run.sh build 25m 75 "npm run build" -- npm run build ...` |
 | `npm-test.sh [npm-test-args...]` | `guarded-run.sh test 20m 70 "npm test" -- npm test ...` |
+| `go-build.sh [go-build-args...]` | `guarded-run.sh build 25m 75 "go build" -- go build ...` |
+| `go-test.sh [go-test-args...]` | `guarded-run.sh test 20m 70 "go test" -- go test ...` |
 | `cargo-build.sh [cargo-build-args...]` | `guarded-run.sh build 25m 75 "cargo build" -- cargo build ...` |
 | `cargo-test.sh [cargo-test-args...]` | `guarded-run.sh test 20m 70 "cargo test" -- cargo test ...` |
 | `pytest.sh [pytest-args...]` | `guarded-run.sh test 20m 70 "pytest" -- python3 -m pytest ...` |

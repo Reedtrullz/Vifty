@@ -115,6 +115,8 @@ examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh
 examples/viftyctl/npm-test.sh
+examples/viftyctl/go-build.sh ./...
+examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh
 examples/viftyctl/pytest.sh

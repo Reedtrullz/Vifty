@@ -462,6 +462,8 @@ private final class ReleaseArtifactHarness {
         "make-verify.sh",
         "npm-build.sh",
         "npm-test.sh",
+        "go-build.sh",
+        "go-test.sh",
         "cargo-build.sh",
         "cargo-test.sh",
         "pytest.sh",

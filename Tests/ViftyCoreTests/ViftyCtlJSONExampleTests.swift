@@ -47,6 +47,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.wrapperResources.guardedRunScript, "guarded-run.sh")
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("swift-test.sh"))
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("make-build.sh"))
+        XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("go-build.sh"))
+        XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("go-test.sh"))
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("custom-workload.sh"))
         XCTAssertEqual(capabilities.schemaIDs.capabilities, "https://vifty.local/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.audit, "https://vifty.local/schemas/viftyctl-audit.schema.json")

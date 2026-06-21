@@ -631,6 +631,8 @@ for expected_wrapper_script in \
   cargo-build.sh \
   cargo-test.sh \
   custom-workload.sh \
+  go-build.sh \
+  go-test.sh \
   local-model.sh \
   make-build.sh \
   make-test.sh \

@@ -723,6 +723,8 @@ capture_capabilities_contract() {
       cargo-build.sh
       cargo-test.sh
       custom-workload.sh
+      go-build.sh
+      go-test.sh
       local-model.sh
       make-build.sh
       make-test.sh
