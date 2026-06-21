@@ -24,7 +24,7 @@ Agents and scripts must not:
 
 ## Preferred Command
 
-Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract, `wrapperResources` discovery metadata, `policyStatusAvailable: true`, `policy.enabled: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, requires diagnose readiness schema version `1` or a recognized command-error schema identity when diagnose fails, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe. Current completed run JSON includes `resolvedChildExecutable` when `capabilities.runLifecycle.resolvedChildExecutableReported` is true, so agents can audit which absolute executable Vifty cooled:
+Prefer the guarded wrapper. It checks that the child command is a regular executable path or resolves to one on `PATH`, rejects malformed wrapper arguments before contacting Vifty, including blank reasons, checks the read-only `capabilities --json` output for schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, advertised `run` command support, requested workload support, the advertised unavailable exit code, the `runLifecycle` contract including `resolvedChildExecutableReported=true`, `wrapperResources` discovery metadata, `policyStatusAvailable: true`, `policy.enabled: true`, policy duration/RPM limits, and `metadataLimits`, rejects durations and RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling, requires diagnose readiness schema version `1` or a recognized command-error schema identity when diagnose fails, runs read-only readiness, and delegates to `viftyctl run --json` only when Vifty says cooling is safe. Current completed run JSON includes `resolvedChildExecutable`, so agents can audit which absolute executable Vifty cooled:
 
 ```sh
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
@@ -188,7 +188,7 @@ with exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless
 `capabilities --json` reports schema version `1`, the stable capabilities,
 diagnose, command-error, and run schema IDs, daemon-backed policy status,
-`policy.enabled: true`, advertised `run` support, wrapper resource discovery, and the safe run lifecycle used by guarded wrappers. Use it for
+`policy.enabled: true`, advertised `run` support, wrapper resource discovery, and the safe run lifecycle used by guarded wrappers, including `resolvedChildExecutableReported=true`. Use it for
 supported-hardware validation and developer-workload proof, not as the first response to helper-unreachable or blocked readiness states.
 If Vifty/manual ownership is still active, the blocked summary's `run.skippedReason` is `manual control active before smoke run`; restore Auto before collecting supervised run evidence.
 

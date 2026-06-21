@@ -270,7 +270,8 @@
         "signalsForwardedToChild",
         "autoRestoreAfterChildExit",
         "structuredPreChildFailures",
-        "cleanupStateReportedOnLaunchFailure"
+        "cleanupStateReportedOnLaunchFailure",
+        "resolvedChildExecutableReported"
       ],
       "properties": {
         "childCommandPreflightBeforeCooling": {

@@ -226,6 +226,38 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunFailsClosedWhenRunLifecycleDoesNotReportResolvedChildExecutable() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            runLifecycleOverride: #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":false}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("safe run lifecycle"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"resolvedChildExecutableReported\":false"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunFailsClosedWhenRunLifecycleOmitsResolvedChildExecutableReporting() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            runLifecycleOverride: #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("safe run lifecycle"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("\"runLifecycle\""), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRequiresCapabilitiesRunCommandSupport() throws {
         let harness = try ScriptHarness(
             state: "ready",
@@ -1404,7 +1436,7 @@ private final class ScriptHarness {
         let readinessIDs = #","failedCheckIDs":\#(Self.jsonStringArray(failedCheckIDs)),"coolingBlockerIDs":\#(Self.jsonStringArray(coolingBlockerIDs))"#
         let commandError = commandErrorOverride ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-command-error.schema.json","command":"diagnose","safeToProceed":false,"message":"daemon unavailable"}"#
         let runLifecycle = runLifecycleOverride ?? (includeRunLifecycle
-            ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true}"#
+            ? #""runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true}"#
             : "")
         let policyStatus = includePolicyStatusAvailable ? #""policyStatusAvailable":\#(policyStatusAvailable),"# : ""
         let supportsForceRetryValue = supportsForceRetry ? "true" : "false"

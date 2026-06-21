@@ -441,6 +441,7 @@ run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -ext
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
 cleanup_state_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.cleanupStateReportedOnLaunchFailure raw -o - - 2>/dev/null || printf '')"
+resolved_child_executable_reported="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.resolvedChildExecutableReported raw -o - - 2>/dev/null || printf '')"
 signals_forwarded="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.signalsForwardedToChild json -o - - 2>/dev/null || printf '')"
 supports_force_retry="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract supportsForceRetry raw -o - - 2>/dev/null || printf '')"
 minimum_agent_rpm_percent="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract policy.minimumAgentRPMPercent raw -o - - 2>/dev/null || printf '')"
@@ -453,6 +454,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$auto_restore_after_child" = "null" ] && auto_restore_after_child=""
 [ "$structured_pre_child_failures" = "null" ] && structured_pre_child_failures=""
 [ "$cleanup_state_reported" = "null" ] && cleanup_state_reported=""
+[ "$resolved_child_executable_reported" = "null" ] && resolved_child_executable_reported=""
 [ "$supports_force_retry" = "null" ] && supports_force_retry=""
 [ "$capabilities_schema_version" = "null" ] && capabilities_schema_version=""
 [ "$capabilities_schema_id" = "null" ] && capabilities_schema_id=""
@@ -617,6 +619,7 @@ if [ "$run_child_preflight" != "true" ] ||
    [ "$auto_restore_after_child" != "true" ] ||
    [ "$structured_pre_child_failures" != "true" ] ||
    [ "$cleanup_state_reported" != "true" ] ||
+   [ "$resolved_child_executable_reported" != "true" ] ||
    [ "$forwards_int" -ne 1 ] ||
    [ "$forwards_term" -ne 1 ] ||
    [ "$forwards_hup" -ne 1 ]; then

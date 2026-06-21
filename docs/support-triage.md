@@ -63,7 +63,7 @@ readiness/recovery fields. When `manualControlActive` is true and the saved
 startup mode is `Curve` or `Fixed`, the reviewer warning should be routed as a
 default-mode issue before another agent-cooling request. It also
 writes `capabilitiesDecision` for advertised `viftyctl run` support,
-force-retry discovery, safe `runLifecycle`, safe direct prepare/restore
+force-retry discovery, safe `runLifecycle` including `resolvedChildExecutableReported=true`, safe direct prepare/restore
 lifecycle, wrapper resource discovery, metadata limits, policy status availability, daemon status, and unavailable-exit metadata;
 missing or unsafe capabilities contract fields fail review, except absent
 legacy `metadataLimits` is recorded as a warning for read-only triage evidence.
