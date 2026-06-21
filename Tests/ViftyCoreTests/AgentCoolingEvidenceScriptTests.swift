@@ -141,6 +141,73 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertFalse(checksums.contains("\tchecksums.tsv"))
     }
 
+    func testCollectorClassifiesSourceCheckoutViftyCtlWithoutLeakingPath() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let sourceViftyCtlURL = harness.repositoryRoot
+            .appendingPathComponent(".build/agent-evidence-test-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("viftyctl")
+        defer {
+            try? FileManager.default.removeItem(at: sourceViftyCtlURL.deletingLastPathComponent())
+        }
+        try harness.copyFakeViftyCtl(to: sourceViftyCtlURL)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", sourceViftyCtlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let metadata = try harness.read("metadata.txt")
+        XCTAssertTrue(metadata.contains("viftyctl=viftyctl"))
+        XCTAssertTrue(metadata.contains("viftyctlPathKind=sourceCheckout"))
+        XCTAssertTrue(metadata.contains("viftyctlPathPrivacy=basenameOnly"))
+        XCTAssertFalse(metadata.contains(sourceViftyCtlURL.path))
+
+        let summaryText = try harness.read("agent-cooling-evidence-summary.json")
+        let summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        XCTAssertEqual(summary["viftyctl"] as? String, "viftyctl")
+        XCTAssertEqual(summary["viftyctlPathKind"] as? String, "sourceCheckout")
+        XCTAssertEqual(summary["viftyctlPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertFalse(summaryText.contains(sourceViftyCtlURL.path))
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+    }
+
+    func testCollectorClassifiesCustomViftyCtlWithoutLeakingPath() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let customViftyCtlURL = harness.rootURL
+            .appendingPathComponent("external-tools", isDirectory: true)
+            .appendingPathComponent("viftyctl")
+        try harness.copyFakeViftyCtl(to: customViftyCtlURL)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", customViftyCtlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let metadata = try harness.read("metadata.txt")
+        XCTAssertTrue(metadata.contains("viftyctl=viftyctl"))
+        XCTAssertTrue(metadata.contains("viftyctlPathKind=customExecutable"))
+        XCTAssertTrue(metadata.contains("viftyctlPathPrivacy=basenameOnly"))
+        XCTAssertFalse(metadata.contains(customViftyCtlURL.path))
+
+        let summaryText = try harness.read("agent-cooling-evidence-summary.json")
+        let summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        XCTAssertEqual(summary["viftyctl"] as? String, "viftyctl")
+        XCTAssertEqual(summary["viftyctlPathKind"] as? String, "customExecutable")
+        XCTAssertEqual(summary["viftyctlPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertFalse(summaryText.contains(customViftyCtlURL.path))
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+    }
+
     func testCollectorCopiesOptionalUIContextIntoEvidenceBundle() throws {
         let harness = try AgentCoolingEvidenceHarness()
         let contextURL = harness.rootURL.appendingPathComponent("ui-context-source.txt", isDirectory: false)
@@ -1607,6 +1674,21 @@ private final class AgentCoolingEvidenceHarness {
         return try String(contentsOf: logURL, encoding: .utf8)
             .split(separator: "\n")
             .map(String.init)
+    }
+
+    func copyFakeViftyCtl(to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+        try FileManager.default.copyItem(at: viftyctlURL, to: url)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: url.path
+        )
     }
 
     private func writeFakeJSONFixtures() throws {
