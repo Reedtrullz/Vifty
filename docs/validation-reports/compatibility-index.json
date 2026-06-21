@@ -1,52 +1,52 @@
 {
   "schemaVersion": 1,
   "schemaID": "https://vifty.local/schemas/validation-report-index.schema.json",
-  "generatedAtUTC": "2026-06-20T21:58:29Z",
+  "generatedAtUTC": "2026-06-21T03:56:39Z",
   "readOnly": true,
   "coolingCommandsRun": false,
-  "totalReports": 6,
+  "totalReports": 7,
   "passedReports": 4,
-  "failedReports": 2,
+  "failedReports": 3,
   "manualSmokeRequiredReports": 4,
   "manualSmokePassedReports": 0,
   "agentRunSmokePassedReports": 1,
   "validatedHardwareReports": 0,
   "countsByMode": {
-    "supported-hardware": 6
+    "supported-hardware": 7
   },
   "countsByClaim": {
-    "rejected": 2,
+    "rejected": 3,
     "supported-hardware-evidence-needs-manual-smoke": 4
   },
   "countsByInstallSource": {
-    "local-ad-hoc-build": 6
+    "local-ad-hoc-build": 7
   },
   "countsByModelIdentifier": {
-    "MacBookPro18,1": 6
+    "MacBookPro18,1": 7
   },
   "countsByModelFamily": {
-    "MacBookPro18": 6
+    "MacBookPro18": 7
   },
   "validatedHardwareReportsByModelFamily": {
   },
   "countsByRecommendedAgentAction": {
     "requestCooling": 3,
     "requestCoolingWithCaution": 1,
-    "restoreAutoBeforeRequestingCooling": 2
+    "restoreAutoBeforeRequestingCooling": 3
   },
   "countsByRecommendedRecoveryAction": {
     "none": 4,
-    "restoreAutoBeforeRetry": 2
+    "restoreAutoBeforeRetry": 3
   },
   "countsBySafeToRequestCooling": {
-    "false": 2,
+    "false": 3,
     "true": 4
   },
   "countsByDaemonControlPathReady": {
-    "true": 6
+    "true": 7
   },
   "countsByManualControlActive": {
-    "true": 2
+    "true": 3
   },
   "reports": [
     {
@@ -243,6 +243,43 @@
       "installSource": "local-ad-hoc-build",
       "sourceRef": "main",
       "sourceSHA": "3e7970ba4b7e837dabcf6ea544081c1819ec60e6",
+      "sourceArtifactName": "",
+      "sourceArtifactSHA256": "",
+      "manualSmokeTestResult": "not-recorded",
+      "manualSmokeTestSource": "",
+      "manualSmokeReadinessSource": "",
+      "manualSmokeValidated": "false",
+      "agentRunSmokeResult": "not-recorded",
+      "agentRunSmokeSource": "",
+      "agentRunSmokeValidated": "false",
+      "agentRunSmokeStartupMode": "",
+      "agentRunSmokeStartupModeSource": "",
+      "agentRunSmokeStartupModeReadError": "",
+      "modelIdentifier": "MacBookPro18,1",
+      "modelFamily": "MacBookPro18",
+      "isAppleSilicon": "true",
+      "isMacBookPro": "true",
+      "diagnoseState": "degraded",
+      "recommendedAgentAction": "restoreAutoBeforeRequestingCooling",
+      "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+      "failedCheckIDs": "manualControlClear",
+      "coolingBlockerIDs": "manualControlClear",
+      "safeToRequestCooling": "false",
+      "daemonControlPathReady": "true",
+      "manualControlActive": "true",
+      "manualSmokeRequired": "false",
+      "warningCount": "2",
+      "failureCount": "3"
+    },
+    {
+      "source": "docs/validation-reports/2026-06-21-macbookpro18-main-manual-active-readonly/review-result.json",
+      "reviewGeneratedAtUTC": "2026-06-21T03:55:35Z",
+      "status": "failed",
+      "mode": "supported-hardware",
+      "claim": "rejected",
+      "installSource": "local-ad-hoc-build",
+      "sourceRef": "main",
+      "sourceSHA": "afa792926f598d187f1f0f1fba7c9a73d7336352",
       "sourceArtifactName": "",
       "sourceArtifactSHA256": "",
       "manualSmokeTestResult": "not-recorded",
