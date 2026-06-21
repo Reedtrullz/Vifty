@@ -30,11 +30,22 @@ Paste this into an agent instruction file such as `AGENTS.md`, `CLAUDE.md`, or a
 ````md
 For long local build/test/model workloads on this Mac, use Vifty only through the safe CLI contract.
 
-Before requesting cooling, run:
+Before trusting readiness or policy limits, run:
 
 ```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl capabilities --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
+
+From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`,
+`schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`,
+`runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable:
+true`, `policy.enabled: true`, and support for the requested workload before
+trusting the diagnose result for a cooling request. Use
+`wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`,
+`wrapperResources.guardedRunScript`, and `wrapperResources.workloadScripts` to
+choose the installed or source wrapper instead of inventing unaudited
+fan-control commands.
 
 If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop. If the user explicitly approves running the child command without Vifty cooling after seeing that JSON, use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` with the guarded wrapper so Vifty can still enforce recovery-action, daemon-control, manual-ownership, blocker-ID, and force-retry blocks; do not catch a guarded-run failure and rerun the child yourself.
 

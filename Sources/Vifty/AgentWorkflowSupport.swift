@@ -30,6 +30,8 @@ enum AgentWorkflowSupport {
 
         From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits or wrapper output.
 
+        Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, and `wrapperResources.workloadScripts` to choose the installed or source wrapper instead of inventing unaudited fan-control commands.
+
         If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
 
         Prefer the guarded wrapper for one child workload:
