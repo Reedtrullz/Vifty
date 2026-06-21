@@ -12,8 +12,9 @@ checkouts can use the same scripts from `examples/viftyctl/`.
 
 The Vifty main window and menu-bar popover include **Copy Agent Rule** for a
 short AGENTS.md/Codex starter rule that points at the installed
-`diagnose --json` and guarded-wrapper path. Use the longer shared rule below
-when a project needs the full failure-handling policy in version control.
+`capabilities --json`, `diagnose --json`, and guarded-wrapper path. Use the
+longer shared rule below when a project needs the full failure-handling policy
+in version control.
 
 Agents that want machine-readable discovery should read
 `viftyctl capabilities --json` first and use `wrapperResources.bundleDirectory`,

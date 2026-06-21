@@ -4,13 +4,24 @@ import XCTest
 final class AgentWorkflowSupportTests: XCTestCase {
     func testAgentRuleExplainsGuardedLocalCoolingContract() {
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("AGENTS.md"))
+        XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("viftyctl capabilities"))
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("viftyctl diagnose"))
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("guarded-run"))
         XCTAssertTrue(AgentWorkflowSupport.copiedMessage.contains("Copied"))
 
         let rule = AgentWorkflowSupport.agentRule()
 
+        XCTAssertTrue(rule.contains("capabilities --json"))
         XCTAssertTrue(rule.contains("diagnose --json"))
+        XCTAssertTrue(rule.contains("schemaVersion: 1"))
+        XCTAssertTrue(rule.contains("schemaIDs.diagnose"))
+        XCTAssertTrue(rule.contains("schemaIDs.commandError"))
+        XCTAssertTrue(rule.contains("schemaIDs.run"))
+        XCTAssertTrue(rule.contains("wrapperResources"))
+        XCTAssertTrue(rule.contains("runLifecycle.resolvedChildExecutableReported: true"))
+        XCTAssertTrue(rule.contains("policyStatusAvailable: true"))
+        XCTAssertTrue(rule.contains("policy.enabled: true"))
+        XCTAssertTrue(rule.contains("support for the requested workload"))
         XCTAssertTrue(rule.contains("safeToRequestCooling"))
         XCTAssertTrue(rule.contains("daemonControlPathReady"))
         XCTAssertTrue(rule.contains("manualControlActive"))
@@ -39,6 +50,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         let rule = AgentWorkflowSupport.agentRule(bundleURL: appURL)
 
+        XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' diagnose --json"))
         XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' test 20m 70 'swift test' -- swift test"))
         XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' --preflight-only test 20m 70 'swift test' -- swift test"))
@@ -60,6 +72,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         let rule = AgentWorkflowSupport.agentRule(bundleURL: appURL)
 
+        XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' diagnose --json"))
         XCTAssertTrue(rule.contains("'\(guardedRunURL.path.replacingOccurrences(of: "'", with: "'\\''"))' test 20m 70 'swift test' -- swift test"))
     }
@@ -71,6 +84,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         let rule = AgentWorkflowSupport.agentRule(bundleURL: appURL)
 
+        XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' capabilities --json"))
         XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json"))
         XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' test 20m 70 'swift test' -- swift test"))
         XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' --preflight-only test 20m 70 'swift test' -- swift test"))

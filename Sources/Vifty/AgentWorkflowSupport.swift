@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 enum AgentWorkflowSupport {
-    static let copyHelp = "Copy a pasteable AGENTS.md/Codex rule that uses viftyctl diagnose and guarded-run wrappers before any agent/build/test cooling."
+    static let copyHelp = "Copy a pasteable AGENTS.md/Codex rule that checks viftyctl capabilities, viftyctl diagnose readiness, and guarded-run wrappers before any agent/build/test cooling."
     static let copiedMessage = "Copied safe agent rule"
 
     private static let canonicalAppPath = "/Applications/Vifty.app"
@@ -13,6 +13,7 @@ enum AgentWorkflowSupport {
         fileManager: FileManager = .default
     ) -> String {
         let paths = agentWorkflowPaths(bundleURL: bundleURL, fileManager: fileManager)
+        let capabilitiesCommand = "\(shellQuote(paths.viftyCtlPath)) capabilities --json"
         let diagnoseCommand = "\(shellQuote(paths.viftyCtlPath)) diagnose --json"
         let runCommand = "\(shellQuote(paths.guardedRunPath)) test 20m 70 'swift test' -- swift test"
         let preflightCommand = "\(shellQuote(paths.guardedRunPath)) --preflight-only test 20m 70 'swift test' -- swift test"
@@ -23,8 +24,11 @@ enum AgentWorkflowSupport {
         Before requesting cooling, run:
 
         ```sh
+        \(capabilitiesCommand)
         \(diagnoseCommand)
         ```
+
+        From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits or wrapper output.
 
         If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
 
