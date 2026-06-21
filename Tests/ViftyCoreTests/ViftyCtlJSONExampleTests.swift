@@ -351,6 +351,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.autoRestoreError)
         XCTAssertEqual(report.resolvedChildExecutable, "/usr/bin/true")
         XCTAssertNil(report.resolvedChildExecutableSHA256)
+        XCTAssertEqual(report.resolvedChildExecutableSHA256Status, .unavailable)
     }
 
     func testAuditExampleDecodesAgainstCurrentModel() throws {
@@ -612,6 +613,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(runProperties["resolvedChildExecutable"] as? [String: Any])
         let executableDigest = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256"] as? [String: Any])
         XCTAssertEqual(executableDigest["pattern"] as? String, "^[a-f0-9]{64}$")
+        let executableDigestStatus = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256Status"] as? [String: Any])
+        XCTAssertEqual(executableDigestStatus["enum"] as? [String], ["computed", "unavailable"])
         let runExample = try readJSON(fixtureURL("run-success.json"))
         XCTAssertEqual(runExample["schemaVersion"] as? Int, 1)
         XCTAssertEqual(runExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
@@ -620,6 +623,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(runExample["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(runExample["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(runExample["childExitCode"] as? Int, 0)
+        XCTAssertEqual(runExample["resolvedChildExecutableSHA256Status"] as? String, "unavailable")
         XCTAssertEqual(runExample["resolvedChildExecutable"] as? String, "/usr/bin/true")
 
         let statusSchema = try readJSON(schemaURL("viftyctl-status.schema.json"))

@@ -901,6 +901,51 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWhenExecutableDigestStatusDiffersFromFinalRunJSON() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            resolvedChildExecutableSHA256: nil,
+            resolvedChildExecutableSHA256Status: "unavailable",
+            finalRunResolvedChildExecutableSHA256Status: "computed"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke final run JSON resolvedChildExecutableSHA256Status must match summary run.resolvedChildExecutableSHA256Status"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsPassedAgentRunSmokeWhenDigestStatusComputedWithoutDigest() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            resolvedChildExecutableSHA256: nil,
+            resolvedChildExecutableSHA256Status: "computed"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke summary resolvedChildExecutableSHA256Status computed requires resolvedChildExecutableSHA256"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithoutDaemonBackedCapabilities() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1513,6 +1558,7 @@ private final class ValidationEvidenceReviewHarness {
         resolvedChildExecutableReported: Bool? = true,
         resolvedChildExecutable: String? = "/bin/sleep",
         resolvedChildExecutableSHA256: String? = String(repeating: "a", count: 64),
+        resolvedChildExecutableSHA256Status: String? = "computed",
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1546,6 +1592,7 @@ private final class ValidationEvidenceReviewHarness {
             resolvedChildExecutableReported: resolvedChildExecutableReported,
             resolvedChildExecutable: resolvedChildExecutable,
             resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
+            resolvedChildExecutableSHA256Status: resolvedChildExecutableSHA256Status,
             manualControlActive: manualControlActive,
             startupMode: startupMode,
             startupModeSource: startupModeSource,
@@ -1582,6 +1629,8 @@ private final class ValidationEvidenceReviewHarness {
         resolvedChildExecutable: String? = "/bin/sleep",
         resolvedChildExecutableSHA256: String? = String(repeating: "a", count: 64),
         finalRunResolvedChildExecutableSHA256: String? = nil,
+        resolvedChildExecutableSHA256Status: String? = "computed",
+        finalRunResolvedChildExecutableSHA256Status: String? = nil,
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1622,7 +1671,8 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreSucceeded": NSNull(),
                 "childExitCode": NSNull(),
                 "resolvedChildExecutable": NSNull(),
-                "resolvedChildExecutableSHA256": NSNull()
+                "resolvedChildExecutableSHA256": NSNull(),
+                "resolvedChildExecutableSHA256Status": NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -1667,7 +1717,8 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreSucceeded": autoRestoreSucceeded,
                 "childExitCode": childExitCode,
                 "resolvedChildExecutable": resolvedChildExecutable as Any? ?? NSNull(),
-                "resolvedChildExecutableSHA256": resolvedChildExecutableSHA256 as Any? ?? NSNull()
+                "resolvedChildExecutableSHA256": resolvedChildExecutableSHA256 as Any? ?? NSNull(),
+                "resolvedChildExecutableSHA256Status": resolvedChildExecutableSHA256Status as Any? ?? NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -1715,9 +1766,11 @@ private final class ValidationEvidenceReviewHarness {
             let initialRunStatus = rateLimitRetryAttempted ? rateLimitInitialExitStatus : runExitStatus
             let finalRunDigest = finalRunResolvedChildExecutableSHA256 ?? resolvedChildExecutableSHA256
             let finalRunDigestField = finalRunDigest.map { #","resolvedChildExecutableSHA256":"\#($0)""# } ?? ""
+            let finalRunDigestStatus = finalRunResolvedChildExecutableSHA256Status ?? resolvedChildExecutableSHA256Status
+            let finalRunDigestStatusField = finalRunDigestStatus.map { #","resolvedChildExecutableSHA256Status":"\#($0)""# } ?? ""
             let initialRunStdoutContents = rateLimitRetryAttempted
                 ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
-                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField),"autoRestoreError":null}"#
+                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
@@ -1733,7 +1786,7 @@ private final class ValidationEvidenceReviewHarness {
                     status: runExitStatus,
                     stdout: "viftyctl-run-retry.json",
                     stderr: "viftyctl-run-retry.stderr",
-                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField),"autoRestoreError":null}"#
+                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
                 )
             }
         }

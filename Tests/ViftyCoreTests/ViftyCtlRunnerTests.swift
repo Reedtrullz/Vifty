@@ -1118,12 +1118,42 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["resolvedChildExecutable"] as? String, executableURL.path)
         let executableDigest = try XCTUnwrap(json["resolvedChildExecutableSHA256"] as? String)
         XCTAssertNotNil(executableDigest.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression))
+        XCTAssertEqual(json["resolvedChildExecutableSHA256Status"] as? String, "computed")
         XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
         let prepareRequests = await client.prepareRequests
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
         XCTAssertEqual(processRunner.runArguments, [[executableURL.path, "test"]])
+    }
+
+    func testRunJSONReportsUnavailableDigestStatusWhenResolvedExecutableCannotBeRead() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
+        let missingExecutable = FileManager.default.temporaryDirectory
+            .appendingPathComponent("viftyctl-missing-child-\(UUID().uuidString)")
+            .path
+        let processRunner = FakeProcessRunner(exitCode: 0, resolvedArguments: [missingExecutable, "test"])
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["resolvedChildExecutable"] as? String, missingExecutable)
+        XCTAssertNil(json["resolvedChildExecutableSHA256"])
+        XCTAssertEqual(json["resolvedChildExecutableSHA256Status"] as? String, "unavailable")
+        let prepareRequests = await client.prepareRequests
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(prepareRequests, [request])
+        XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
+        XCTAssertEqual(processRunner.runArguments, [[missingExecutable, "test"]])
     }
 
     func testRunJSONReportsAutoRestoreFailureAfterChildExit() async throws {

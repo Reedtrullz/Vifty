@@ -1665,20 +1665,19 @@ private struct ChartHandle: View {
     let valueLabelOffset: CGSize
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Circle()
-                .fill(Color.accentColor)
-                .frame(width: 18, height: 18)
-                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-
-            ChartHandleValueLabel(label: label, valueText: valueText)
-                .offset(valueLabelOffset)
-        }
-        .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
-        .contentShape(Rectangle())
-        .accessibilityLabel("\(label) curve point")
-        .accessibilityValue(accessibilityValueText)
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 18, height: 18)
+            .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .overlay(alignment: .top) {
+                ChartHandleValueLabel(label: label, valueText: valueText)
+                    .offset(valueLabelOffset)
+            }
+            .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+            .contentShape(Rectangle())
+            .accessibilityLabel("\(label) curve point")
+            .accessibilityValue(accessibilityValueText)
     }
 }
 

@@ -469,6 +469,18 @@
           ],
           "pattern": "^[a-f0-9]{64}$",
           "description": "Lowercase SHA-256 digest copied from completed viftyctl run --json output when the resolved executable file was readable."
+        },
+        "resolvedChildExecutableSHA256Status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "computed",
+            "unavailable",
+            null
+          ],
+          "description": "Digest availability status copied from completed viftyctl run --json output. computed means resolvedChildExecutableSHA256 is present; unavailable means Vifty could not read or hash the executable bytes; null means the run was skipped or the report is legacy."
         }
       }
     },

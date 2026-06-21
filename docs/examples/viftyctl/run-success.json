@@ -7,6 +7,7 @@
   "coolingLeasePrepared": true,
   "generatedAt": 700001000,
   "resolvedChildExecutable": "/usr/bin/true",
+  "resolvedChildExecutableSHA256Status": "unavailable",
   "schemaID": "https://vifty.local/schemas/viftyctl-run.schema.json",
   "schemaVersion": 1
 }

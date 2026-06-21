@@ -1320,6 +1320,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
           failures << "passed agent-run-smoke final run JSON resolvedChildExecutable must match summary run.resolvedChildExecutable"
         end
         resolved_child_executable_sha256 = run["resolvedChildExecutableSHA256"]
+        resolved_child_executable_sha256_status = run["resolvedChildExecutableSHA256Status"]
         if run.key?("resolvedChildExecutableSHA256") && !resolved_child_executable_sha256.nil?
           unless resolved_child_executable_sha256.is_a?(String) && resolved_child_executable_sha256.match?(/\A[a-f0-9]{64}\z/)
             failures << "passed agent-run-smoke summary resolvedChildExecutableSHA256 must be a lowercase SHA-256 digest when present"
@@ -1329,11 +1330,23 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
           end
         elsif final_run_json && final_run_json.key?("resolvedChildExecutableSHA256") && !final_run_json["resolvedChildExecutableSHA256"].nil?
           failures << "passed agent-run-smoke summary must preserve final run JSON resolvedChildExecutableSHA256 when present"
-        else
-          warnings << "agent-run-smoke summary did not include resolvedChildExecutableSHA256; executable byte-level provenance is unavailable"
         end
-      elsif !preflight.key?("resolvedChildExecutableReported") || preflight["resolvedChildExecutableReported"].nil?
-        warnings << "agent-run-smoke summary did not record resolvedChildExecutableReported; keep executable provenance claims conservative"
+        if run.key?("resolvedChildExecutableSHA256Status") && !resolved_child_executable_sha256_status.nil?
+          unless ["computed", "unavailable"].include?(resolved_child_executable_sha256_status)
+            failures << "passed agent-run-smoke summary resolvedChildExecutableSHA256Status must be computed or unavailable when present"
+          end
+          if final_run_json && final_run_json["resolvedChildExecutableSHA256Status"] != resolved_child_executable_sha256_status
+            failures << "passed agent-run-smoke final run JSON resolvedChildExecutableSHA256Status must match summary run.resolvedChildExecutableSHA256Status"
+          end
+          if resolved_child_executable_sha256_status == "computed" && !(resolved_child_executable_sha256.is_a?(String) && resolved_child_executable_sha256.match?(/\A[a-f0-9]{64}\z/))
+            failures << "passed agent-run-smoke summary resolvedChildExecutableSHA256Status computed requires resolvedChildExecutableSHA256"
+          end
+          if resolved_child_executable_sha256_status == "unavailable" && !resolved_child_executable_sha256.nil?
+            failures << "passed agent-run-smoke summary resolvedChildExecutableSHA256Status unavailable must not include resolvedChildExecutableSHA256"
+          end
+        elsif final_run_json && final_run_json.key?("resolvedChildExecutableSHA256Status") && !final_run_json["resolvedChildExecutableSHA256Status"].nil?
+          failures << "passed agent-run-smoke summary must preserve final run JSON resolvedChildExecutableSHA256Status when present"
+        end
       end
       "passed-auto-restored"
     when "failed"
