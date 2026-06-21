@@ -1114,6 +1114,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(json["childExitCode"] as? Int, 0)
+        XCTAssertEqual(json["childTerminationReason"] as? String, "exited")
+        XCTAssertNil(json["childSignal"] as? Int)
+        XCTAssertNil(json["childSignalName"] as? String)
         XCTAssertTrue(json["autoRestoreError"] is NSNull)
         XCTAssertEqual(json["resolvedChildExecutable"] as? String, executableURL.path)
         let executableDigest = try XCTUnwrap(json["resolvedChildExecutableSHA256"] as? String)
@@ -1125,6 +1128,32 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
         XCTAssertEqual(processRunner.runArguments, [[executableURL.path, "test"]])
+    }
+
+    func testRunJSONInfersSignalTerminationFromShellStyleExitCode() async throws {
+        let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
+        let processRunner = FakeProcessRunner(exitCode: 143, resolvedArguments: ["/usr/bin/swift", "test"])
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.run(request, childArguments: ["swift", "test"], json: true, force: false))
+
+        XCTAssertEqual(result.exitCode, 143)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(json["childExitCode"] as? Int, 143)
+        XCTAssertEqual(json["childTerminationReason"] as? String, "signalInferred")
+        XCTAssertEqual(json["childSignal"] as? Int, 15)
+        XCTAssertEqual(json["childSignalName"] as? String, "TERM")
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 143"])
     }
 
     func testRunJSONReportsUnavailableDigestStatusWhenResolvedExecutableCannotBeRead() async throws {

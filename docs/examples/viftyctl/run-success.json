@@ -3,6 +3,7 @@
   "autoRestoreError": null,
   "autoRestoreSucceeded": true,
   "childExitCode": 0,
+  "childTerminationReason": "exited",
   "command": "run",
   "coolingLeasePrepared": true,
   "generatedAt": 700001000,

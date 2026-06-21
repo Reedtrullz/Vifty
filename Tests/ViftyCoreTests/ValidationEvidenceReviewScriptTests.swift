@@ -946,6 +946,34 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsPassedAgentRunSmokeWhenChildTerminationDiffersFromFinalRunJSON() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            childTerminationReason: "exited",
+            finalRunChildTerminationReason: "signalInferred",
+            finalRunChildSignal: 15,
+            finalRunChildSignalName: "TERM"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke final run JSON childTerminationReason must match summary run.childTerminationReason"),
+            result.stderr
+        )
+        XCTAssertTrue(
+            result.stderr.contains("passed agent-run-smoke final run JSON childSignal must match summary run.childSignal"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsPassedAgentRunSmokeWithoutDaemonBackedCapabilities() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1559,6 +1587,9 @@ private final class ValidationEvidenceReviewHarness {
         resolvedChildExecutable: String? = "/bin/sleep",
         resolvedChildExecutableSHA256: String? = String(repeating: "a", count: 64),
         resolvedChildExecutableSHA256Status: String? = "computed",
+        childTerminationReason: String? = "exited",
+        childSignal: Int? = nil,
+        childSignalName: String? = nil,
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1593,6 +1624,9 @@ private final class ValidationEvidenceReviewHarness {
             resolvedChildExecutable: resolvedChildExecutable,
             resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
             resolvedChildExecutableSHA256Status: resolvedChildExecutableSHA256Status,
+            childTerminationReason: childTerminationReason,
+            childSignal: childSignal,
+            childSignalName: childSignalName,
             manualControlActive: manualControlActive,
             startupMode: startupMode,
             startupModeSource: startupModeSource,
@@ -1631,6 +1665,12 @@ private final class ValidationEvidenceReviewHarness {
         finalRunResolvedChildExecutableSHA256: String? = nil,
         resolvedChildExecutableSHA256Status: String? = "computed",
         finalRunResolvedChildExecutableSHA256Status: String? = nil,
+        childTerminationReason: String? = "exited",
+        finalRunChildTerminationReason: String? = nil,
+        childSignal: Int? = nil,
+        finalRunChildSignal: Int? = nil,
+        childSignalName: String? = nil,
+        finalRunChildSignalName: String? = nil,
         manualControlActive: Bool = false,
         startupMode: String? = nil,
         startupModeSource: String? = nil,
@@ -1670,6 +1710,9 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreAttempted": NSNull(),
                 "autoRestoreSucceeded": NSNull(),
                 "childExitCode": NSNull(),
+                "childTerminationReason": NSNull(),
+                "childSignal": NSNull(),
+                "childSignalName": NSNull(),
                 "resolvedChildExecutable": NSNull(),
                 "resolvedChildExecutableSHA256": NSNull(),
                 "resolvedChildExecutableSHA256Status": NSNull()
@@ -1716,6 +1759,9 @@ private final class ValidationEvidenceReviewHarness {
                 "autoRestoreAttempted": autoRestoreAttempted,
                 "autoRestoreSucceeded": autoRestoreSucceeded,
                 "childExitCode": childExitCode,
+                "childTerminationReason": childTerminationReason as Any? ?? NSNull(),
+                "childSignal": childSignal as Any? ?? NSNull(),
+                "childSignalName": childSignalName as Any? ?? NSNull(),
                 "resolvedChildExecutable": resolvedChildExecutable as Any? ?? NSNull(),
                 "resolvedChildExecutableSHA256": resolvedChildExecutableSHA256 as Any? ?? NSNull(),
                 "resolvedChildExecutableSHA256Status": resolvedChildExecutableSHA256Status as Any? ?? NSNull()
@@ -1768,9 +1814,15 @@ private final class ValidationEvidenceReviewHarness {
             let finalRunDigestField = finalRunDigest.map { #","resolvedChildExecutableSHA256":"\#($0)""# } ?? ""
             let finalRunDigestStatus = finalRunResolvedChildExecutableSHA256Status ?? resolvedChildExecutableSHA256Status
             let finalRunDigestStatusField = finalRunDigestStatus.map { #","resolvedChildExecutableSHA256Status":"\#($0)""# } ?? ""
+            let finalRunTermination = finalRunChildTerminationReason ?? childTerminationReason
+            let finalRunTerminationField = finalRunTermination.map { #","childTerminationReason":"\#($0)""# } ?? ""
+            let finalRunSignal = finalRunChildSignal ?? childSignal
+            let finalRunSignalField = finalRunSignal.map { #","childSignal":\#($0)"# } ?? ""
+            let finalRunSignalName = finalRunChildSignalName ?? childSignalName
+            let finalRunSignalNameField = finalRunSignalName.map { #","childSignalName":"\#($0)""# } ?? ""
             let initialRunStdoutContents = rateLimitRetryAttempted
                 ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
-                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
+                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
@@ -1786,7 +1838,7 @@ private final class ValidationEvidenceReviewHarness {
                     status: runExitStatus,
                     stdout: "viftyctl-run-retry.json",
                     stderr: "viftyctl-run-retry.stderr",
-                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
+                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(resolvedChildExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
                 )
             }
         }

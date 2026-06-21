@@ -610,6 +610,10 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(runProperties["autoRestoreAttempted"] as? [String: Any])
         XCTAssertNotNil(runProperties["autoRestoreSucceeded"] as? [String: Any])
         XCTAssertNotNil(runProperties["childExitCode"] as? [String: Any])
+        let childTerminationReason = try XCTUnwrap(runProperties["childTerminationReason"] as? [String: Any])
+        XCTAssertEqual(childTerminationReason["enum"] as? [String], ["exited", "signalInferred"])
+        XCTAssertNotNil(runProperties["childSignal"] as? [String: Any])
+        XCTAssertNotNil(runProperties["childSignalName"] as? [String: Any])
         XCTAssertNotNil(runProperties["resolvedChildExecutable"] as? [String: Any])
         let executableDigest = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256"] as? [String: Any])
         XCTAssertEqual(executableDigest["pattern"] as? String, "^[a-f0-9]{64}$")
@@ -623,6 +627,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(runExample["autoRestoreAttempted"] as? Bool, true)
         XCTAssertEqual(runExample["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(runExample["childExitCode"] as? Int, 0)
+        XCTAssertEqual(runExample["childTerminationReason"] as? String, "exited")
         XCTAssertEqual(runExample["resolvedChildExecutableSHA256Status"] as? String, "unavailable")
         XCTAssertEqual(runExample["resolvedChildExecutable"] as? String, "/usr/bin/true")
 

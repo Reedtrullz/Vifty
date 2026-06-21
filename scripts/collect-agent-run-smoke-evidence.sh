@@ -625,6 +625,9 @@ write_summary_json() {
         "autoRestoreAttempted" => nil,
         "autoRestoreSucceeded" => nil,
         "childExitCode" => nil,
+        "childTerminationReason" => nil,
+        "childSignal" => nil,
+        "childSignalName" => nil,
         "resolvedChildExecutable" => nil,
         "resolvedChildExecutableSHA256" => nil,
         "resolvedChildExecutableSHA256Status" => nil
@@ -638,6 +641,9 @@ write_summary_json() {
       auto_restore_attempted = boolean_or_nil(run_report["autoRestoreAttempted"])
       auto_restore_succeeded = boolean_or_nil(run_report["autoRestoreSucceeded"])
       child_exit_code = integer_or_nil(run_report["childExitCode"])
+      child_termination_reason = run_report["childTerminationReason"].is_a?(String) ? run_report["childTerminationReason"] : nil
+      child_signal = integer_or_nil(run_report["childSignal"])
+      child_signal_name = run_report["childSignalName"].is_a?(String) ? run_report["childSignalName"] : nil
       resolved_child_executable = run_report["resolvedChildExecutable"].is_a?(String) ? run_report["resolvedChildExecutable"] : nil
       resolved_child_executable_sha256 = run_report["resolvedChildExecutableSHA256"].is_a?(String) ? run_report["resolvedChildExecutableSHA256"] : nil
       resolved_child_executable_sha256_status = run_report["resolvedChildExecutableSHA256Status"].is_a?(String) ? run_report["resolvedChildExecutableSHA256Status"] : nil
@@ -647,6 +653,7 @@ write_summary_json() {
         auto_restore_attempted = true if auto_restore_attempted.nil?
         auto_restore_succeeded = true if auto_restore_succeeded.nil?
         child_exit_code = 0 if child_exit_code.nil?
+        child_termination_reason = "exited" if child_termination_reason.nil?
       end
 
       {
@@ -662,6 +669,9 @@ write_summary_json() {
         "autoRestoreAttempted" => auto_restore_attempted,
         "autoRestoreSucceeded" => auto_restore_succeeded,
         "childExitCode" => child_exit_code,
+        "childTerminationReason" => child_termination_reason,
+        "childSignal" => child_signal,
+        "childSignalName" => child_signal_name,
         "resolvedChildExecutable" => resolved_child_executable,
         "resolvedChildExecutableSHA256" => resolved_child_executable_sha256,
         "resolvedChildExecutableSHA256Status" => resolved_child_executable_sha256_status

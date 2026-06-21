@@ -1319,6 +1319,36 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
         if final_run_json && final_run_json["resolvedChildExecutable"] != resolved_child_executable
           failures << "passed agent-run-smoke final run JSON resolvedChildExecutable must match summary run.resolvedChildExecutable"
         end
+        child_termination_reason = run["childTerminationReason"]
+        child_signal = run["childSignal"]
+        child_signal_name = run["childSignalName"]
+        if run.key?("childTerminationReason") && !child_termination_reason.nil?
+          unless ["exited", "signalInferred"].include?(child_termination_reason)
+            failures << "passed agent-run-smoke summary childTerminationReason must be exited or signalInferred when present"
+          end
+          if final_run_json && final_run_json["childTerminationReason"] != child_termination_reason
+            failures << "passed agent-run-smoke final run JSON childTerminationReason must match summary run.childTerminationReason"
+          end
+          if child_termination_reason == "exited" && (!child_signal.nil? || !child_signal_name.nil?)
+            failures << "passed agent-run-smoke summary childSignal fields must be null when childTerminationReason is exited"
+          end
+          if child_termination_reason == "signalInferred"
+            unless child_signal.is_a?(Integer) && child_signal >= 1 && child_signal <= 64
+              failures << "passed agent-run-smoke summary childSignal must be an integer from 1 through 64 when childTerminationReason is signalInferred"
+            end
+            if child_signal.is_a?(Integer) && run["childExitCode"] != 128 + child_signal
+              failures << "passed agent-run-smoke summary childExitCode must equal 128 + childSignal when childTerminationReason is signalInferred"
+            end
+          end
+        elsif final_run_json && final_run_json.key?("childTerminationReason") && !final_run_json["childTerminationReason"].nil?
+          failures << "passed agent-run-smoke summary must preserve final run JSON childTerminationReason when present"
+        end
+        if final_run_json && final_run_json["childSignal"] != child_signal
+          failures << "passed agent-run-smoke final run JSON childSignal must match summary run.childSignal"
+        end
+        if final_run_json && final_run_json["childSignalName"] != child_signal_name
+          failures << "passed agent-run-smoke final run JSON childSignalName must match summary run.childSignalName"
+        end
         resolved_child_executable_sha256 = run["resolvedChildExecutableSHA256"]
         resolved_child_executable_sha256_status = run["resolvedChildExecutableSHA256Status"]
         if run.key?("resolvedChildExecutableSHA256") && !resolved_child_executable_sha256.nil?

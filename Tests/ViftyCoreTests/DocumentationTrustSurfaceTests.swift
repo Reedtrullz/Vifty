@@ -92,7 +92,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (850 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (852 tests)."))
         XCTAssertTrue(agents.contains("`scripts/check-agent-run-smoke-readiness.sh`"))
         XCTAssertTrue(agents.contains("read-only preflight before supervised `viftyctl run` smoke evidence"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
@@ -1019,7 +1019,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(hardwareValidation.contains("safe `runLifecycle` contract, `policyStatusAvailable: true`, wrapper resource discovery, and policy/metadata limits"))
         XCTAssertTrue(hardwareValidation.contains("It records the run proof fields"))
         XCTAssertTrue(hardwareValidation.contains("`coolingLeasePrepared`, `autoRestoreAttempted`, `autoRestoreSucceeded`,"))
-        XCTAssertTrue(hardwareValidation.contains("`childExitCode`, and, when advertised by capabilities, `resolvedChildExecutable`"))
+        XCTAssertTrue(hardwareValidation.contains("`childExitCode=0`, and, when `preflight.resolvedChildExecutableReported=true`, an absolute `resolvedChildExecutable`"))
+        XCTAssertTrue(hardwareValidation.contains("When present, `childTerminationReason`, `childSignal`, `childSignalName`, and `resolvedChildExecutableSHA256Status` must also match the final run JSON"))
+        XCTAssertTrue(hardwareValidation.contains("child exit/termination classification"))
         XCTAssertTrue(hardwareValidation.contains("validates the child command before cooling"))
         XCTAssertTrue(hardwareValidation.contains("validated-hardware-evidence"))
         XCTAssertTrue(hardwareValidation.contains("review-summary.json"))

@@ -454,6 +454,34 @@
             "null"
           ]
         },
+        "childTerminationReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "exited",
+            "signalInferred",
+            null
+          ],
+          "description": "Best-effort child termination classification copied from completed viftyctl run --json output. signalInferred means the child exit code looked like 128 + signal; null means the run was skipped or the report is legacy."
+        },
+        "childSignal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Signal number copied from completed viftyctl run --json output when childTerminationReason is signalInferred."
+        },
+        "childSignalName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Short signal name copied from completed viftyctl run --json output when Vifty recognized the inferred childSignal."
+        },
         "resolvedChildExecutable": {
           "type": [
             "string",

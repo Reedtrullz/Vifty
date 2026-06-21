@@ -18,9 +18,20 @@ public enum ViftyCtlExecutableDigestStatus: String, Codable, Equatable, Sendable
     case unavailable
 }
 
+public enum ViftyCtlChildTerminationReason: String, Codable, Equatable, Sendable {
+    case exited
+    case signalInferred
+}
+
 private struct ViftyCtlExecutableDigest: Equatable, Sendable {
     var sha256: String?
     var status: ViftyCtlExecutableDigestStatus
+}
+
+private struct ViftyCtlChildTermination: Equatable, Sendable {
+    var reason: ViftyCtlChildTerminationReason
+    var signal: Int32?
+    var signalName: String?
 }
 
 public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
@@ -551,6 +562,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
     public var autoRestoreAttempted: Bool
     public var autoRestoreSucceeded: Bool
     public var childExitCode: Int32
+    public var childTerminationReason: ViftyCtlChildTerminationReason?
+    public var childSignal: Int32?
+    public var childSignalName: String?
     public var autoRestoreError: String?
     public var resolvedChildExecutable: String?
     public var resolvedChildExecutableSHA256: String?
@@ -565,6 +579,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         autoRestoreAttempted: Bool = true,
         autoRestoreSucceeded: Bool,
         childExitCode: Int32,
+        childTerminationReason: ViftyCtlChildTerminationReason? = nil,
+        childSignal: Int32? = nil,
+        childSignalName: String? = nil,
         autoRestoreError: String? = nil,
         resolvedChildExecutable: String? = nil,
         resolvedChildExecutableSHA256: String? = nil,
@@ -578,6 +595,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         self.autoRestoreAttempted = autoRestoreAttempted
         self.autoRestoreSucceeded = autoRestoreSucceeded
         self.childExitCode = childExitCode
+        self.childTerminationReason = childTerminationReason
+        self.childSignal = childSignal
+        self.childSignalName = childSignalName
         self.autoRestoreError = autoRestoreError
         self.resolvedChildExecutable = resolvedChildExecutable
         self.resolvedChildExecutableSHA256 = resolvedChildExecutableSHA256
@@ -593,6 +613,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         case autoRestoreAttempted
         case autoRestoreSucceeded
         case childExitCode
+        case childTerminationReason
+        case childSignal
+        case childSignalName
         case autoRestoreError
         case resolvedChildExecutable
         case resolvedChildExecutableSHA256
@@ -610,6 +633,12 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? true
         autoRestoreSucceeded = try container.decode(Bool.self, forKey: .autoRestoreSucceeded)
         childExitCode = try container.decode(Int32.self, forKey: .childExitCode)
+        childTerminationReason = try container.decodeIfPresent(
+            ViftyCtlChildTerminationReason.self,
+            forKey: .childTerminationReason
+        )
+        childSignal = try container.decodeIfPresent(Int32.self, forKey: .childSignal)
+        childSignalName = try container.decodeIfPresent(String.self, forKey: .childSignalName)
         autoRestoreError = try container.decodeIfPresent(String.self, forKey: .autoRestoreError)
         resolvedChildExecutable = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutable)
         resolvedChildExecutableSHA256 = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutableSHA256)
@@ -626,6 +655,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         try container.encode(autoRestoreAttempted, forKey: .autoRestoreAttempted)
         try container.encode(autoRestoreSucceeded, forKey: .autoRestoreSucceeded)
         try container.encode(childExitCode, forKey: .childExitCode)
+        try container.encodeIfPresent(childTerminationReason, forKey: .childTerminationReason)
+        try container.encodeIfPresent(childSignal, forKey: .childSignal)
+        try container.encodeIfPresent(childSignalName, forKey: .childSignalName)
         if let autoRestoreError {
             try container.encode(autoRestoreError, forKey: .autoRestoreError)
         } else {
@@ -1210,12 +1242,16 @@ public struct ViftyCtlRunner: Sendable {
         resolvedChildExecutableSHA256Status: ViftyCtlExecutableDigestStatus,
         json: Bool
     ) async throws -> ViftyCtlResult {
+        let childTermination = Self.childTermination(forExitCode: childExitCode)
         do {
             _ = try await client.restore(reason: reason)
             if json {
                 let report = ViftyCtlRunReport(
                     autoRestoreSucceeded: true,
                     childExitCode: childExitCode,
+                    childTerminationReason: childTermination.reason,
+                    childSignal: childTermination.signal,
+                    childSignalName: childTermination.signalName,
                     resolvedChildExecutable: resolvedChildExecutable,
                     resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
                     resolvedChildExecutableSHA256Status: resolvedChildExecutableSHA256Status,
@@ -1229,6 +1265,9 @@ public struct ViftyCtlRunner: Sendable {
                 let report = ViftyCtlRunReport(
                     autoRestoreSucceeded: false,
                     childExitCode: childExitCode,
+                    childTerminationReason: childTermination.reason,
+                    childSignal: childTermination.signal,
+                    childSignalName: childTermination.signalName,
                     autoRestoreError: error.localizedDescription,
                     resolvedChildExecutable: resolvedChildExecutable,
                     resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
@@ -1242,6 +1281,30 @@ public struct ViftyCtlRunner: Sendable {
             }
             let stderr = "viftyctl run: Auto restore failed after child exited with \(childExitCode): \(error.localizedDescription). The daemon lease monitor remains the safety fallback until expiry.\n"
             return ViftyCtlResult(stderr: stderr, exitCode: childExitCode == 0 ? 1 : childExitCode)
+        }
+    }
+
+    private static func childTermination(forExitCode exitCode: Int32) -> ViftyCtlChildTermination {
+        let signal = exitCode - 128
+        guard signal >= 1 && signal <= 64 else {
+            return ViftyCtlChildTermination(reason: .exited, signal: nil, signalName: nil)
+        }
+        return ViftyCtlChildTermination(
+            reason: .signalInferred,
+            signal: signal,
+            signalName: signalName(for: signal)
+        )
+    }
+
+    private static func signalName(for signal: Int32) -> String? {
+        switch signal {
+        case 1: return "HUP"
+        case 2: return "INT"
+        case 3: return "QUIT"
+        case 6: return "ABRT"
+        case 9: return "KILL"
+        case 15: return "TERM"
+        default: return nil
         }
     }
 

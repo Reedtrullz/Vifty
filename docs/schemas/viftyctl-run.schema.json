@@ -37,6 +37,24 @@
     "childExitCode": {
       "type": "integer"
     },
+    "childTerminationReason": {
+      "type": "string",
+      "enum": [
+        "exited",
+        "signalInferred"
+      ],
+      "description": "Best-effort classification for the wrapped child result. `exited` means no shell-style signal mapping was inferred from childExitCode; `signalInferred` means childExitCode looked like 128 + signal. Omitted in legacy reports."
+    },
+    "childSignal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "Signal number inferred from a shell-style childExitCode when childTerminationReason is signalInferred. Omitted otherwise and in legacy reports."
+    },
+    "childSignalName": {
+      "type": "string",
+      "description": "Short signal name such as INT, TERM, or HUP when Vifty recognizes the inferred childSignal. Omitted otherwise and in legacy reports."
+    },
     "autoRestoreError": {
       "type": [
         "string",
