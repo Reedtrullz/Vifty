@@ -123,6 +123,8 @@ examples/viftyctl/go-build.sh ./...
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh
+examples/viftyctl/uv-build.sh
+examples/viftyctl/uv-test.sh
 examples/viftyctl/pytest.sh
 examples/viftyctl/local-model.sh -- ./run-local-model.sh
 ```
@@ -173,8 +175,8 @@ These are starting points, not rights to exceed daemon policy:
 | Release build | `25m` | `75` | `swift build -c release` |
 | Xcode build/test | `30m` | `75` | `xcodebuild build ...`, `xcodebuild test ...` |
 | Make build/test/verify | `25m`/`20m`/`30m` | `75`/`70`/`75` | `make build`, `make test`, `make verify` |
-| npm/cargo builds | `25m` | `75` | `npm run build`, `cargo build --release` |
-| npm/cargo/pytest tests | `20m` | `70` | `npm test`, `cargo test`, `python3 -m pytest` |
+| npm/cargo/uv builds | `25m` | `75` | `npm run build`, `cargo build --release`, `uv build` |
+| npm/cargo/uv/pytest tests | `20m` | `70` | `npm test`, `cargo test`, `uv run pytest`, `python3 -m pytest` |
 | Local model run | `20m` | `75` | local inference or eval command |
 | Unknown/custom workload | `10m` | `65` | only with a clear human-readable reason |
 

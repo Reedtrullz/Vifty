@@ -65,6 +65,8 @@ equivalent safe wrappers around `guarded-run.sh`:
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/go-test.sh ./...
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/cargo-build.sh --release
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/cargo-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/uv-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/uv-test.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/pytest.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/local-model.sh -- ./run-local-model.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/custom-workload.sh 10m 65 "project smoke test" -- ./scripts/smoke-test.sh
@@ -90,6 +92,8 @@ examples/viftyctl/go-build.sh ./...
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh
+examples/viftyctl/uv-build.sh
+examples/viftyctl/uv-test.sh
 examples/viftyctl/pytest.sh
 examples/viftyctl/local-model.sh -- ./run-local-model.sh
 examples/viftyctl/custom-workload.sh 10m 65 "project smoke test" -- ./scripts/smoke-test.sh
@@ -154,6 +158,7 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
 For `CLAUDE.md`, use the shared rule and prefer explicit one-shot commands:
 
 ```sh
+examples/viftyctl/uv-test.sh
 examples/viftyctl/pytest.sh
 examples/viftyctl/xcode-test.sh -scheme MyApp -destination 'platform=macOS'
 ```

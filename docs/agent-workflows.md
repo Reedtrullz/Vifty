@@ -363,6 +363,8 @@ examples/viftyctl/go-build.sh ./...
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
 examples/viftyctl/cargo-test.sh --locked
+examples/viftyctl/uv-build.sh
+examples/viftyctl/uv-test.sh Tests
 examples/viftyctl/pytest.sh Tests
 examples/viftyctl/local-model.sh -- ./run-local-model.sh
 examples/viftyctl/custom-workload.sh 15m 65 "project smoke test" -- ./scripts/smoke-test.sh
@@ -470,6 +472,18 @@ Cargo test:
 
 ```sh
 examples/viftyctl/cargo-test.sh
+```
+
+uv build:
+
+```sh
+examples/viftyctl/uv-build.sh
+```
+
+uv pytest:
+
+```sh
+examples/viftyctl/uv-test.sh
 ```
 
 pytest:

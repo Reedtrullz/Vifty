@@ -433,6 +433,8 @@ capabilities_run_contract_safe() {
         pytest.sh
         swift-release-build.sh
         swift-test.sh
+        uv-build.sh
+        uv-test.sh
         xcode-build.sh
         xcode-test.sh
       ]

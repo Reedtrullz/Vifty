@@ -119,6 +119,8 @@ Do not catch guarded-run failures and rerun the child command yourself.
 | `go-test.sh [go-test-args...]` | `guarded-run.sh test 20m 70 "go test" -- go test ...` |
 | `cargo-build.sh [cargo-build-args...]` | `guarded-run.sh build 25m 75 "cargo build" -- cargo build ...` |
 | `cargo-test.sh [cargo-test-args...]` | `guarded-run.sh test 20m 70 "cargo test" -- cargo test ...` |
+| `uv-build.sh [uv-build-args...]` | `guarded-run.sh build 25m 75 "uv build" -- uv build ...` |
+| `uv-test.sh [pytest-args...]` | `guarded-run.sh test 20m 70 "uv pytest" -- uv run pytest ...` |
 | `pytest.sh [pytest-args...]` | `guarded-run.sh test 20m 70 "pytest" -- python3 -m pytest ...` |
 | `local-model.sh -- <command> [args...]` | `guarded-run.sh localModel 30m 75 "local model run" -- ...` |
 | `custom-workload.sh <duration> <max-rpm-percent> <reason> -- <command> [args...]` | `guarded-run.sh custom ...` |

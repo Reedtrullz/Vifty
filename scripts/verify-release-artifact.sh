@@ -380,6 +380,8 @@ for workload_wrapper in \
   cargo-build.sh \
   cargo-test.sh \
   pytest.sh \
+  uv-build.sh \
+  uv-test.sh \
   local-model.sh \
   custom-workload.sh
 do

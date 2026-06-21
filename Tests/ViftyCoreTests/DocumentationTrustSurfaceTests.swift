@@ -32,7 +32,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("`guarded-run.sh --preflight-only ...`"))
         XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`"))
         XCTAssertTrue(readme.contains("`decisionReason: \"preflightReady\"`"))
-        XCTAssertTrue(readme.contains("workload wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, pytest, local-model, and custom runs"))
+        XCTAssertTrue(readme.contains("workload wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom runs"))
         XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`"))
         XCTAssertTrue(readme.contains("Use `VIFTY_GUARDED_RUN_FORCE_RETRY=1` only for supervised runs where the user approved waiting for `retryAfterSeconds` and retrying one rate-limited prepare."))
         XCTAssertTrue(readme.contains("`guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON`"))
@@ -103,8 +103,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agents.contains("`Sources/Vifty/LocalNotifications.swift`"))
         XCTAssertTrue(agents.contains("administrator fallback install staging, bootout ordering"))
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
-        XCTAssertTrue(agents.contains("convenience wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, pytest, local-model, and custom workloads"))
-        XCTAssertTrue(agents.contains("Swift/Xcode/Make/npm/pnpm/Bun/Go/cargo/pytest/local-model/custom workload shortcut scripts"))
+        XCTAssertTrue(agents.contains("convenience wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workloads"))
+        XCTAssertTrue(agents.contains("Swift/Xcode/Make/npm/pnpm/Bun/Go/cargo/uv/pytest/local-model/custom workload shortcut scripts"))
     }
 
     func testAgentInstructionsTrackCurrentSourceFirstReleaseBoundary() throws {
@@ -1223,6 +1223,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/go-test.sh"))
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/cargo-build.sh"))
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/cargo-test.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/uv-build.sh"))
+        XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/uv-test.sh"))
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/pytest.sh"))
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/local-model.sh"))
         XCTAssertTrue(agentWorkflows.contains("examples/viftyctl/custom-workload.sh"))
@@ -1391,6 +1393,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("go-build.sh"))
         XCTAssertTrue(exampleReadme.contains("go-test.sh"))
         XCTAssertTrue(exampleReadme.contains("cargo-build.sh"))
+        XCTAssertTrue(exampleReadme.contains("uv-build.sh"))
+        XCTAssertTrue(exampleReadme.contains("uv-test.sh"))
         XCTAssertTrue(exampleReadme.contains("custom-workload.sh"))
         XCTAssertTrue(exampleReadme.contains("Do not edit these wrappers to call `sudo`, `ViftyHelper`, raw SMC tools"))
 

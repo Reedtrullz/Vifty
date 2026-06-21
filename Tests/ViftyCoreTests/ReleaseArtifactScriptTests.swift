@@ -471,6 +471,8 @@ private final class ReleaseArtifactHarness {
         "cargo-build.sh",
         "cargo-test.sh",
         "pytest.sh",
+        "uv-build.sh",
+        "uv-test.sh",
         "local-model.sh",
         "custom-workload.sh"
     ]

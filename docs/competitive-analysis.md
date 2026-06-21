@@ -44,7 +44,7 @@ The concrete execution plan for the next cycle is [plans/2026-06-13-next-workpla
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, menu-bar display modes, compact power/history/temperature surfaces, and a better screenshot/demo.
 5. **Local observability:** keep optional local notifications for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; defaults should remain conservative and local-only.
 6. **Trusted updater:** add Sparkle auto-update only in the future trusted binary lane, after Developer ID signing, notarization, EdDSA appcast signing, and canonical artifact verification exist.
-7. **Developer and agent workflow:** make Swift, Xcode, npm, pnpm, Bun, Go, cargo, pytest, local-model, and custom guarded-run examples easy to find; defer MCP and Shortcuts until real users prove the CLI contract.
+7. **Developer and agent workflow:** make Swift, Xcode, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom guarded-run examples easy to find; defer MCP and Shortcuts until real users prove the CLI contract.
 
 ## Interface Boundaries
 
