@@ -7,7 +7,13 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("viftyctl capabilities"))
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("viftyctl diagnose"))
         XCTAssertTrue(AgentWorkflowSupport.copyHelp.contains("guarded-run"))
+        XCTAssertTrue(AgentWorkflowSupport.copyCommandHelp.contains("audited guarded-run"))
         XCTAssertTrue(AgentWorkflowSupport.copiedMessage.contains("Copied"))
+        XCTAssertTrue(AgentWorkflowSupport.copiedCommandMessage.contains("Copied"))
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "swift-test" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "swift-release-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "make-verify" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "local-model-template" })
 
         let rule = AgentWorkflowSupport.agentRule()
 
@@ -33,7 +39,8 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(rule.contains("coolingBlockerIDs"))
         XCTAssertTrue(rule.contains("guarded-run.sh"))
         XCTAssertTrue(rule.contains("--preflight-only"))
-        XCTAssertTrue(rule.contains("test 20m 70 'swift test' -- swift test"))
+        XCTAssertTrue(rule.contains("swift-test.sh"))
+        XCTAssertTrue(rule.contains("'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
         XCTAssertTrue(rule.contains("extract only the JSON payload between"))
         XCTAssertTrue(rule.contains("guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON"))
         XCTAssertTrue(rule.contains("guarded-run: END_VIFTY_CAPABILITIES_JSON"))
@@ -59,17 +66,20 @@ final class AgentWorkflowSupportTests: XCTestCase {
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
         let viftyCtlURL = macOSURL.appendingPathComponent("viftyctl", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
+        let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
         try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
+        try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
 
         let rule = AgentWorkflowSupport.agentRule(bundleURL: appURL)
 
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' diagnose --json"))
-        XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' test 20m 70 'swift test' -- swift test"))
-        XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' --preflight-only test 20m 70 'swift test' -- swift test"))
+        XCTAssertTrue(rule.contains("'\(swiftTestURL.path)'"))
+        XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
     }
 
     func testAgentRuleShellQuotesBundledPaths() throws {
@@ -81,16 +91,20 @@ final class AgentWorkflowSupportTests: XCTestCase {
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
         let viftyCtlURL = macOSURL.appendingPathComponent("viftyctl", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
+        let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
         try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
+        try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
 
         let rule = AgentWorkflowSupport.agentRule(bundleURL: appURL)
 
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' diagnose --json"))
-        XCTAssertTrue(rule.contains("'\(guardedRunURL.path.replacingOccurrences(of: "'", with: "'\\''"))' test 20m 70 'swift test' -- swift test"))
+        XCTAssertTrue(rule.contains("'\(swiftTestURL.path.replacingOccurrences(of: "'", with: "'\\''"))'"))
+        XCTAssertTrue(rule.contains("'\(guardedRunURL.path.replacingOccurrences(of: "'", with: "'\\''"))' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
     }
 
     func testAgentRuleFallsBackToCanonicalInstalledAppPaths() throws {
@@ -102,8 +116,48 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' capabilities --json"))
         XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json"))
-        XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' test 20m 70 'swift test' -- swift test"))
-        XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' --preflight-only test 20m 70 'swift test' -- swift test"))
+        XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-test.sh'"))
+        XCTAssertTrue(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
+    }
+
+    func testWorkloadCommandTemplatesCopyAuditedRunAndReadOnlyPreflightCommands() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Vifty Dev.app", isDirectory: true)
+        let macOSURL = appURL.appendingPathComponent("Contents/MacOS", isDirectory: true)
+        let wrappersURL = appURL.appendingPathComponent("Contents/Resources/viftyctl-wrappers", isDirectory: true)
+        try FileManager.default.createDirectory(at: macOSURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
+
+        for relativePath in [
+            "Contents/MacOS/viftyctl",
+            "Contents/Resources/viftyctl-wrappers/guarded-run.sh",
+            "Contents/Resources/viftyctl-wrappers/swift-test.sh",
+            "Contents/Resources/viftyctl-wrappers/local-model.sh"
+        ] {
+            let url = appURL.appendingPathComponent(relativePath, isDirectory: false)
+            try Data("#!/bin/sh\n".utf8).write(to: url)
+            try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: url.path)
+        }
+
+        let swiftTest = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "swift-test" })
+        let localModel = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "local-model-template" })
+
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(swiftTest, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("swift-test.sh").path)'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(swiftTest, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(localModel, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("local-model.sh").path)' '--' './run-local-model.sh'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(localModel, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'localModel' '30m' '75' 'local model run' '--' './run-local-model.sh'"
+        )
     }
 
     private func temporaryDirectory() throws -> URL {

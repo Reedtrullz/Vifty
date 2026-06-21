@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
     @State private var agentRuleCopied = false
+    @State private var agentCommandCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -365,6 +366,16 @@ struct ContentView: View {
     private func copyAgentWorkflowRule() {
         AgentWorkflowSupport.copyAgentRule()
         agentRuleCopied = true
+        agentCommandCopied = false
+    }
+
+    private func copyAgentWorkflowCommand(
+        _ template: AgentWorkflowSupport.WorkloadCommandTemplate,
+        mode: AgentWorkflowSupport.WorkloadCommandMode
+    ) {
+        AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
+        agentRuleCopied = false
+        agentCommandCopied = true
     }
 
     private var modePicker: some View {
@@ -512,6 +523,21 @@ struct ContentView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Spacer()
+            Menu {
+                ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
+                    Section(mode.menuTitle) {
+                        ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
+                            Button(template.title) {
+                                copyAgentWorkflowCommand(template, mode: mode)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Copy Command", systemImage: "terminal")
+            }
+            .controlSize(.small)
+            .help(AgentWorkflowSupport.copyCommandHelp)
             Button {
                 copyAgentWorkflowRule()
             } label: {
@@ -521,6 +547,11 @@ struct ContentView: View {
             .help(AgentWorkflowSupport.copyHelp)
             if agentRuleCopied {
                 Text(AgentWorkflowSupport.copiedMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if agentCommandCopied {
+                Text(AgentWorkflowSupport.copiedCommandMessage)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

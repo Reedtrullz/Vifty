@@ -10,6 +10,7 @@ struct MenuBarView: View {
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
     @State private var agentRuleCopied = false
+    @State private var agentCommandCopied = false
     @State private var selectedMenuCurveProfileID: UUID?
 
     var body: some View {
@@ -231,6 +232,22 @@ struct MenuBarView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
 
+            Menu {
+                ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
+                    Section(mode.menuTitle) {
+                        ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
+                            Button(template.title) {
+                                copyAgentWorkflowCommand(template, mode: mode)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Copy Safe Command", systemImage: "terminal")
+            }
+            .controlSize(.small)
+            .help(AgentWorkflowSupport.copyCommandHelp)
+
             Button {
                 copyAgentWorkflowRule()
             } label: {
@@ -241,6 +258,11 @@ struct MenuBarView: View {
 
             if agentRuleCopied {
                 Text(AgentWorkflowSupport.copiedMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if agentCommandCopied {
+                Text(AgentWorkflowSupport.copiedCommandMessage)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -316,6 +338,16 @@ struct MenuBarView: View {
     private func copyAgentWorkflowRule() {
         AgentWorkflowSupport.copyAgentRule()
         agentRuleCopied = true
+        agentCommandCopied = false
+    }
+
+    private func copyAgentWorkflowCommand(
+        _ template: AgentWorkflowSupport.WorkloadCommandTemplate,
+        mode: AgentWorkflowSupport.WorkloadCommandMode
+    ) {
+        AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
+        agentRuleCopied = false
+        agentCommandCopied = true
     }
 
     private var launchAtLoginBinding: Binding<Bool> {

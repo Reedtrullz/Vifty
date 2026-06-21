@@ -22,6 +22,13 @@ Installed app bundles include the same wrappers under `Contents/Resources/viftyc
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+The Vifty main window and menu-bar popover can copy both a short agent rule and
+common guarded command templates. Use **Copy Safe Command** when you want an
+audited wrapper command for Swift tests, release builds, `make verify`, npm,
+cargo, or a local-model template; use the read-only preflight entries when an
+agent only needs to check readiness without requesting cooling or launching the
+child command.
+
 ## Contract
 
 Agents should treat `viftyctl` as a local safety contract:
