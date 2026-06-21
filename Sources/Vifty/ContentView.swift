@@ -909,6 +909,7 @@ private struct TelemetryHistoryChart: View {
                     title: "Temp",
                     values: summary.temperatureValues,
                     color: .orange,
+                    startValueText: summary.temperatureValues.first.map(TelemetryHistorySummary.temperatureText),
                     currentValueText: summary.latestTemperatureText,
                     rangeText: summary.temperatureRangeText,
                     changeText: summary.temperatureChangeText,
@@ -920,6 +921,7 @@ private struct TelemetryHistoryChart: View {
                     title: summary.fanRPMSparklineTitle,
                     values: summary.fanRPMValues,
                     color: .blue,
+                    startValueText: summary.fanRPMValues.first.map(TelemetryHistorySummary.fanRPMText),
                     currentValueText: summary.latestFanRPMText,
                     rangeText: summary.fanRPMRangeText,
                     changeText: summary.fanRPMChangeText,
@@ -931,6 +933,7 @@ private struct TelemetryHistoryChart: View {
                     title: "Power",
                     values: summary.batteryPowerValues,
                     color: .green,
+                    startValueText: nil,
                     currentValueText: nil,
                     rangeText: summary.batteryPowerRangeText,
                     changeText: summary.batteryPowerChangeText,
@@ -951,6 +954,7 @@ private struct HistorySparkline: View {
     let title: String
     let values: [Double]
     let color: Color
+    let startValueText: String?
     let currentValueText: String?
     let rangeText: String
     let changeText: String?
@@ -962,7 +966,12 @@ private struct HistorySparkline: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: compact ? 34 : 42, alignment: .leading)
-            SparklinePath(values: values, color: color, valueLabelText: currentValueText)
+            SparklinePath(
+                values: values,
+                color: color,
+                startValueLabelText: startValueText,
+                valueLabelText: currentValueText
+            )
                 .frame(height: compact ? 20 : 24)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(rangeText)
@@ -984,16 +993,25 @@ private struct HistorySparkline: View {
     }
 
     private var accessibilityText: String {
-        if let changeText {
-            return "\(title) history \(rangeText), change \(changeText)"
+        let valueText: String
+        if let startValueText, let currentValueText, startValueText != currentValueText {
+            valueText = ", from \(startValueText) to \(currentValueText)"
+        } else if let currentValueText {
+            valueText = ", current \(currentValueText)"
+        } else {
+            valueText = ""
         }
-        return "\(title) history \(rangeText)"
+        if let changeText {
+            return "\(title) history \(rangeText)\(valueText), change \(changeText)"
+        }
+        return "\(title) history \(rangeText)\(valueText)"
     }
 }
 
 private struct SparklinePath: View {
     let values: [Double]
     let color: Color
+    let startValueLabelText: String?
     let valueLabelText: String?
 
     var body: some View {
@@ -1005,6 +1023,11 @@ private struct SparklinePath: View {
                     addSmoothedLine(to: &path, points: points)
                 }
                 .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+
+                if let startValueLabelText, let startPoint = points.first {
+                    SparklineValueBadge(text: startValueLabelText, color: color)
+                        .position(startLabelPosition(near: startPoint, in: geometry.size))
+                }
 
                 if let valueLabelText, let endpoint = points.last {
                     SparklineValueBadge(text: valueLabelText, color: color)
@@ -1054,6 +1077,14 @@ private struct SparklinePath: View {
             }
             previousPoint = point
         }
+    }
+
+    private func startLabelPosition(near point: CGPoint, in size: CGSize) -> CGPoint {
+        let horizontalInset: CGFloat = 44
+        let verticalInset: CGFloat = 9
+        let x = min(max(point.x + 40, horizontalInset), max(size.width - horizontalInset, horizontalInset))
+        let y = min(max(point.y - 10, verticalInset), max(size.height - verticalInset, verticalInset))
+        return CGPoint(x: x, y: y)
     }
 
     private func labelPosition(near point: CGPoint, in size: CGSize) -> CGPoint {
