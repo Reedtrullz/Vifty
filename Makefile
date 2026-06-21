@@ -165,10 +165,20 @@ verify: ## Run local trust gates without installing
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	test -x scripts/check-manual-smoke-readiness.sh
 	test -x scripts/check-agent-run-smoke-readiness.sh
-	test -x "$(WRAPPERS)/guarded-run.sh"
-	test -x "$(WRAPPERS)/swift-test.sh"
-	test -x "$(WRAPPERS)/make-build.sh"
-	test -x "$(WRAPPERS)/custom-workload.sh"
+	@source_wrappers="$$(find examples/viftyctl -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
+	bundle_wrappers="$$(find "$(WRAPPERS)" -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
+	if [ "$$source_wrappers" != "$$bundle_wrappers" ]; then \
+		echo "Bundled viftyctl wrapper list does not match source examples." >&2; \
+		echo "Source wrappers:" >&2; \
+		printf '%s\n' "$$source_wrappers" >&2; \
+		echo "Bundled wrappers:" >&2; \
+		printf '%s\n' "$$bundle_wrappers" >&2; \
+		exit 1; \
+	fi; \
+	for wrapper in $$source_wrappers; do \
+		test -x "examples/viftyctl/$$wrapper"; \
+		test -x "$(WRAPPERS)/$$wrapper"; \
+	done
 	test -f "$(WRAPPERS)/README.md"
 	codesign --verify --deep --strict "$(APP_DIR)"
 	codesign -dvvv "$(MACOS)/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'

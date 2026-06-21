@@ -1313,6 +1313,8 @@ private struct FanCurveChartEditor: View {
                         let value = chartValue(for: point)
                         ChartHandle(
                             label: point.label,
+                            valueText: value.chartValueText,
+                            valueLabelOffsetY: valueLabelOffsetY(for: value),
                             temperature: value.temperature,
                             rpm: value.rpm,
                             accessibilityValueText: value.accessibilityValueText
@@ -1590,6 +1592,11 @@ private struct FanCurveChartEditor: View {
         return CGPoint(x: x, y: y)
     }
 
+    private func valueLabelOffsetY(for point: FanCurveChartPoint) -> CGFloat {
+        let midpoint = (rpmLower + rpmUpper) / 2
+        return point.rpm >= midpoint ? 24 : -24
+    }
+
     private func rpmTickLabel(_ rpm: Int) -> String {
         "\(rpm.formatted(.number.grouping(.automatic))) RPM"
     }
@@ -1787,20 +1794,50 @@ private struct CurveChartSeriesPointLabel: View {
 
 private struct ChartHandle: View {
     let label: String
+    let valueText: String
+    let valueLabelOffsetY: CGFloat
     let temperature: Double
     let rpm: Double
     let accessibilityValueText: String
 
     var body: some View {
-        Circle()
-            .fill(Color.accentColor)
-            .frame(width: 18, height: 18)
-            .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-            .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
-            .contentShape(Rectangle())
-            .accessibilityLabel("\(label) curve point")
-            .accessibilityValue(accessibilityValueText)
+        ZStack {
+            CurveChartHandleValueLabel(label: label, valueText: valueText)
+                .offset(y: valueLabelOffsetY)
+
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: 18, height: 18)
+                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        }
+        .frame(width: 130, height: 58)
+        .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
+        .accessibilityLabel("\(label) curve point")
+        .accessibilityValue(accessibilityValueText)
+    }
+}
+
+private struct CurveChartHandleValueLabel: View {
+    let label: String
+    let valueText: String
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+            Text(valueText)
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.68)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Color.accentColor.opacity(0.45), lineWidth: 0.75))
+        .allowsHitTesting(false)
     }
 }
 
