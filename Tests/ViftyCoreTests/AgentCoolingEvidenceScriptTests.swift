@@ -39,6 +39,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("Do not retag v1.1.0 or replace its unsigned-dev assets"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=true"))
         XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=false"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("viftyctl=viftyctl"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("viftyctlPathKind=appBundle"))
+        XCTAssertTrue(try harness.read("metadata.txt").contains("viftyctlPathPrivacy=basenameOnly"))
+        XCTAssertFalse(try harness.read("metadata.txt").contains(harness.viftyctlURL.path))
         XCTAssertTrue(try harness.read("metadata.txt").contains("auditLimit=20"))
 
         let manifest = try harness.read("manifest.tsv")
@@ -81,6 +85,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         )
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(summary["viftyctl"] as? String, "viftyctl")
+        XCTAssertEqual(summary["viftyctlPathKind"] as? String, "appBundle")
+        XCTAssertEqual(summary["viftyctlPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertFalse(try harness.read("agent-cooling-evidence-summary.json").contains(harness.viftyctlURL.path))
         XCTAssertEqual(summary["auditLimit"] as? Int, 20)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
         XCTAssertEqual(commands.count, 9)
@@ -1221,6 +1229,28 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(reviewResult.stderr.contains("schemaID"), reviewResult.stderr)
     }
 
+    func testReviewerRejectsSummaryThatLeaksViftyCtlPath() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        var summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        summary["viftyctl"] = harness.viftyctlURL.path
+        let driftedSummary = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+        try driftedSummary.write(to: harness.outputURL.appendingPathComponent("agent-cooling-evidence-summary.json"))
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(reviewResult.stderr.contains("summary viftyctl must be a basename only"), reviewResult.stderr)
+    }
+
     func testReviewerRejectsMissingChecksumEntry() throws {
         let harness = try AgentCoolingEvidenceHarness()
 
@@ -1265,6 +1295,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "readOnly",
             "coolingCommandsRun",
             "viftyctl",
+            "viftyctlPathKind",
+            "viftyctlPathPrivacy",
             "auditLimit",
             "commands"
         ] {

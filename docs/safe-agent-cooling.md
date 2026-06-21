@@ -265,7 +265,9 @@ schema-backed `agent-cooling-evidence-summary.json` with
 optional `guarded-run-stderr.txt`, `guarded-run-preflight.status`,
 `privacy-review.tsv`, and checksums without requesting cooling, restoring Auto,
 calling `ViftyHelper`, using `sudo`, launching the guarded workload, or writing
-SMC keys. Check
+SMC keys. The summary stores the `viftyctl` basename, `viftyctlPathKind`, and
+`viftyctlPathPrivacy: basenameOnly` instead of local executable directory paths.
+Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`. Maintainers can review a collected
 bundle with:

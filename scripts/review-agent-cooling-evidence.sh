@@ -410,6 +410,17 @@ if summary.is_a?(Hash)
   failures << "summary readOnly must be true" unless summary["readOnly"] == true
   failures << "summary coolingCommandsRun must be false" unless summary["coolingCommandsRun"] == false
 
+  viftyctl_name = summary["viftyctl"]
+  unless bundle_entry?(viftyctl_name)
+    failures << "summary viftyctl must be a basename only, not a local path"
+  end
+  unless %w[appBundle sourceCheckout customExecutable].include?(summary["viftyctlPathKind"])
+    failures << "summary viftyctlPathKind is missing or unsupported"
+  end
+  unless summary["viftyctlPathPrivacy"] == "basenameOnly"
+    failures << "summary viftyctlPathPrivacy must be basenameOnly"
+  end
+
   audit_limit = integer_value(summary["auditLimit"])
   failures << "summary auditLimit must be an integer from 1 through 200" unless audit_limit && audit_limit.between?(1, 200)
 

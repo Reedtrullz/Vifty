@@ -11,6 +11,8 @@
     "readOnly",
     "coolingCommandsRun",
     "viftyctl",
+    "viftyctlPathKind",
+    "viftyctlPathPrivacy",
     "auditLimit",
     "commands"
   ],
@@ -31,7 +33,18 @@
       "const": false
     },
     "viftyctl": {
-      "type": "string"
+      "type": "string",
+      "description": "Basename of the viftyctl executable used for collection. This intentionally omits local directory paths."
+    },
+    "viftyctlPathKind": {
+      "enum": [
+        "appBundle",
+        "sourceCheckout",
+        "customExecutable"
+      ]
+    },
+    "viftyctlPathPrivacy": {
+      "const": "basenameOnly"
     },
     "auditLimit": {
       "type": "integer",

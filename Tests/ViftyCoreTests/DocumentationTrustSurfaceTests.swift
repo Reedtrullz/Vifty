@@ -141,6 +141,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(support.contains("schema-backed"))
         XCTAssertTrue(support.contains("agent-cooling-evidence-summary.json"))
         XCTAssertTrue(support.contains("https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json"))
+        XCTAssertTrue(support.contains("viftyctlPathKind"))
+        XCTAssertTrue(support.contains("viftyctlPathPrivacy: basenameOnly"))
+        XCTAssertTrue(support.contains("does not store local executable directory paths"))
         XCTAssertTrue(support.contains("https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"))
         XCTAssertTrue(support.contains("diagnoseDecision"))
         XCTAssertTrue(support.contains("capabilitiesDecision"))
@@ -233,6 +236,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(triage.contains("read-only agent evidence bundle"))
         XCTAssertTrue(triage.contains("scripts/collect-agent-cooling-evidence.sh"))
         XCTAssertTrue(triage.contains("scripts/review-agent-cooling-evidence.sh"))
+        XCTAssertTrue(triage.contains("viftyctlPathKind"))
+        XCTAssertTrue(triage.contains("viftyctlPathPrivacy: basenameOnly"))
+        XCTAssertTrue(triage.contains("not local executable directory paths"))
         XCTAssertTrue(triage.contains("agent-cooling-evidence-review.json"))
         XCTAssertTrue(triage.contains("https://vifty.local/schemas/agent-cooling-evidence-review.schema.json"))
         XCTAssertTrue(triage.contains("diagnoseDecision"))
@@ -767,6 +773,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(agentWorkflows.contains("This pattern still has more moving parts than `viftyctl run`"))
         XCTAssertTrue(safeAgentCooling.contains("Direct prepare is the exception because the shell now owns cleanup"))
+        XCTAssertTrue(safeAgentCooling.contains("viftyctlPathKind"))
+        XCTAssertTrue(safeAgentCooling.contains("viftyctlPathPrivacy: basenameOnly"))
+        XCTAssertTrue(safeAgentCooling.contains("instead of local executable directory paths"))
         XCTAssertFalse(agentWorkflows.contains("show what Vifty actually did without requesting cooling or reading raw SMC state.\n- `generatedAt`"))
     }
 

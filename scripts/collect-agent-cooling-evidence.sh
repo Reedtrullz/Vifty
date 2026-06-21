@@ -243,7 +243,30 @@ resolve_app_info_plist() {
   esac
 }
 
+classify_viftyctl_path_kind() {
+  local viftyctl_dir=""
+  local viftyctl_real=""
+
+  viftyctl_dir="$(cd "$(dirname "${VIFTYCTL}")" && pwd -P)"
+  viftyctl_real="${viftyctl_dir}/$(basename "${VIFTYCTL}")"
+
+  case "${viftyctl_real}" in
+    */Contents/MacOS/viftyctl)
+      printf 'appBundle'
+      ;;
+    "${ROOT_DIR}"/*)
+      printf 'sourceCheckout'
+      ;;
+    *)
+      printf 'customExecutable'
+      ;;
+  esac
+}
+
 APP_INFO_PLIST="$(resolve_app_info_plist)"
+VIFTYCTL_COMMAND_NAME="$(basename "${VIFTYCTL}")"
+VIFTYCTL_PATH_PRIVACY="basenameOnly"
+VIFTYCTL_PATH_KIND="$(classify_viftyctl_path_kind)"
 
 printf 'name\tstatus\tstdout\tstderr\n' > "${MANIFEST_PATH}"
 
@@ -382,7 +405,9 @@ cat > "${OUTPUT_DIR}/metadata.txt" <<EOF
 generatedAtUTC=${GENERATED_AT_UTC}
 readOnly=true
 coolingCommandsRun=false
-viftyctl=${VIFTYCTL}
+viftyctl=${VIFTYCTL_COMMAND_NAME}
+viftyctlPathKind=${VIFTYCTL_PATH_KIND}
+viftyctlPathPrivacy=${VIFTYCTL_PATH_PRIVACY}
 auditLimit=${AUDIT_LIMIT}
 guardedRunPreflight=$([[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]] && printf 'true' || printf 'false')
 EOF
@@ -396,7 +421,7 @@ fi
 
 write_summary_json() {
   ruby -rjson -e '
-    manifest_path, generated_at, viftyctl, audit_limit, schema_id = ARGV
+    manifest_path, generated_at, viftyctl, viftyctl_path_kind, viftyctl_path_privacy, audit_limit, schema_id = ARGV
     checks = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
       name, status, stdout, stderr = line.split("\t", 4)
       {
@@ -414,10 +439,12 @@ write_summary_json() {
       "readOnly" => true,
       "coolingCommandsRun" => false,
       "viftyctl" => viftyctl,
+      "viftyctlPathKind" => viftyctl_path_kind,
+      "viftyctlPathPrivacy" => viftyctl_path_privacy,
       "auditLimit" => audit_limit.to_i,
       "commands" => checks
     })
-  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" "${AUDIT_LIMIT}" "${AGENT_COOLING_EVIDENCE_SUMMARY_SCHEMA_ID}" > "${SUMMARY_JSON_PATH}"
+  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL_COMMAND_NAME}" "${VIFTYCTL_PATH_KIND}" "${VIFTYCTL_PATH_PRIVACY}" "${AUDIT_LIMIT}" "${AGENT_COOLING_EVIDENCE_SUMMARY_SCHEMA_ID}" > "${SUMMARY_JSON_PATH}"
 }
 
 capture_privacy_review() {

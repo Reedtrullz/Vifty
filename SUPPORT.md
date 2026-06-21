@@ -58,7 +58,11 @@ The script writes `viftyctl-diagnose.json`, `viftyctl-capabilities.json`,
 read-only launchd/helper install files, schema-backed
 `agent-cooling-evidence-summary.json` with
 `schemaID: https://vifty.local/schemas/agent-cooling-evidence-summary.schema.json`,
-optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and a checksum list. It does not request cooling, restore Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check
+optional `guarded-run-stderr.txt`, `privacy-review.tsv`, and a checksum list.
+The summary records only the `viftyctl` command basename plus
+`viftyctlPathKind` and `viftyctlPathPrivacy: basenameOnly`; it intentionally
+does not store local executable directory paths. It does not request cooling,
+restore Auto, call `ViftyHelper`, use `sudo`, or write SMC keys. Check
 `privacy-review.tsv` before posting the bundle publicly; redact or share
 privately if it reports `redaction-needed`.
 
