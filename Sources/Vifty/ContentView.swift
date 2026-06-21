@@ -1287,6 +1287,7 @@ private struct FanCurveChartEditor: View {
                         .fill(Color.secondary.opacity(0.06))
                     chartGrid(in: plotRect(in: geometry.size))
                     chartAxisLabels(in: geometry.size)
+                    chartAxisUnitLabels(in: geometry.size)
                     curvePointAxisGuides(for: basePoints, color: .accentColor, in: geometry.size)
 
                     ForEach(fanCurveSeries) { series in
@@ -1563,6 +1564,17 @@ private struct FanCurveChartEditor: View {
         .allowsHitTesting(false)
     }
 
+    private func chartAxisUnitLabels(in size: CGSize) -> some View {
+        let rect = plotRect(in: size)
+        return ZStack {
+            CurveChartAxisTitle(text: "RPM")
+                .position(x: rect.minX + 18, y: rect.minY + 10)
+            CurveChartAxisTitle(text: "Temp C")
+                .position(x: rect.maxX - 30, y: rect.maxY - 10)
+        }
+        .allowsHitTesting(false)
+    }
+
     private func rpmAxisReadoutPosition(near pointPosition: CGPoint, pointIndex: Int, in rect: CGRect) -> CGPoint {
         let xOffset = CGFloat(pointIndex % 2) * 14
         let yOffset = CGFloat(pointIndex - 1) * 10
@@ -1647,6 +1659,20 @@ private struct CurveChartAxisValue: View {
             .frame(width: 58, alignment: alignment)
             .padding(.horizontal, 3)
             .padding(.vertical, 1)
+            .background(.regularMaterial, in: Capsule())
+    }
+}
+
+private struct CurveChartAxisTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.bold).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
             .background(.regularMaterial, in: Capsule())
     }
 }
