@@ -362,6 +362,8 @@ done
 
 for workload_wrapper in \
   guarded-run.sh \
+  bun-build.sh \
+  bun-test.sh \
   swift-test.sh \
   swift-release-build.sh \
   xcode-build.sh \
@@ -371,6 +373,8 @@ for workload_wrapper in \
   make-verify.sh \
   npm-build.sh \
   npm-test.sh \
+  pnpm-build.sh \
+  pnpm-test.sh \
   go-build.sh \
   go-test.sh \
   cargo-build.sh \

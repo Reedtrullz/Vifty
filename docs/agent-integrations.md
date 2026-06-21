@@ -57,6 +57,10 @@ equivalent safe wrappers around `guarded-run.sh`:
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/make-verify.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/npm-build.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/npm-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/pnpm-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/pnpm-test.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/bun-build.sh
+/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/bun-test.sh
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/go-build.sh ./...
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/go-test.sh ./...
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/cargo-build.sh --release
@@ -78,6 +82,10 @@ examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh
 examples/viftyctl/npm-test.sh
+examples/viftyctl/pnpm-build.sh
+examples/viftyctl/pnpm-test.sh
+examples/viftyctl/bun-build.sh
+examples/viftyctl/bun-test.sh
 examples/viftyctl/go-build.sh ./...
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
@@ -162,6 +170,10 @@ When running long local tests or builds, prefer:
 ```sh
 examples/viftyctl/npm-test.sh
 examples/viftyctl/npm-build.sh
+examples/viftyctl/pnpm-test.sh
+examples/viftyctl/pnpm-build.sh
+examples/viftyctl/bun-test.sh
+examples/viftyctl/bun-build.sh
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/go-build.sh ./...
 examples/viftyctl/cargo-test.sh

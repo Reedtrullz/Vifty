@@ -275,6 +275,8 @@ workloads = strings(capabilities["workloads"])
 signals = strings(lifecycle["signalsForwardedToChild"])
 workload_scripts = strings(wrapper_resources["workloadScripts"])
 expected_workload_scripts = %w[
+  bun-build.sh
+  bun-test.sh
   cargo-build.sh
   cargo-test.sh
   custom-workload.sh
@@ -286,6 +288,8 @@ expected_workload_scripts = %w[
   make-verify.sh
   npm-build.sh
   npm-test.sh
+  pnpm-build.sh
+  pnpm-test.sh
   pytest.sh
   swift-release-build.sh
   swift-test.sh

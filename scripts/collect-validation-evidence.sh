@@ -720,6 +720,8 @@ capture_capabilities_contract() {
     end
 
     expected_workload_scripts = %w[
+      bun-build.sh
+      bun-test.sh
       cargo-build.sh
       cargo-test.sh
       custom-workload.sh
@@ -731,6 +733,8 @@ capture_capabilities_contract() {
       make-verify.sh
       npm-build.sh
       npm-test.sh
+      pnpm-build.sh
+      pnpm-test.sh
       pytest.sh
       swift-release-build.sh
       swift-test.sh

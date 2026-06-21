@@ -1230,6 +1230,26 @@ final class GuardedRunScriptTests: XCTestCase {
                 ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "npm test", "--", "npm", "test", "--", "--watch=false"]
             ),
             (
+                "examples/viftyctl/pnpm-build.sh",
+                ["--", "--mode=production"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "pnpm build", "--", "pnpm", "build", "--", "--mode=production"]
+            ),
+            (
+                "examples/viftyctl/pnpm-test.sh",
+                ["--", "--runInBand=false"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "pnpm test", "--", "pnpm", "test", "--", "--runInBand=false"]
+            ),
+            (
+                "examples/viftyctl/bun-build.sh",
+                ["--minify"],
+                ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "bun run build", "--", "bun", "run", "build", "--minify"]
+            ),
+            (
+                "examples/viftyctl/bun-test.sh",
+                ["--timeout", "10000"],
+                ["run", "--json", "--workload", "test", "--duration", "20m", "--max-rpm-percent", "70", "--reason", "bun test", "--", "bun", "test", "--timeout", "10000"]
+            ),
+            (
                 "examples/viftyctl/go-build.sh",
                 ["./..."],
                 ["run", "--json", "--workload", "build", "--duration", "25m", "--max-rpm-percent", "75", "--reason", "go build", "--", "go", "build", "./..."]
@@ -1481,7 +1501,7 @@ private final class ScriptHarness {
     }
 
     private func writeFakeChildTools() throws {
-        for tool in ["swift", "xcodebuild", "make", "npm", "go", "cargo", "python3", "local-model-runner", "custom-runner"] {
+        for tool in ["swift", "xcodebuild", "make", "npm", "pnpm", "bun", "go", "cargo", "python3", "local-model-runner", "custom-runner"] {
             try writeFakeExecutable(named: tool, in: binURL)
         }
 
@@ -1556,7 +1576,7 @@ private final class ScriptHarness {
         let metadataLimits = metadataLimitsOverride
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let wrapperResources = wrapperResourcesOverride
-            ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}"#
+            ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["bun-build.sh","bun-test.sh","cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pnpm-build.sh","pnpm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","xcode-build.sh","xcode-test.sh"]}"#
         var schemaIDs = #""capabilities":"\#(capabilitiesSchemaID)""#
         if let capabilitiesDiagnoseSchemaID {
             schemaIDs += #","diagnose":"\#(capabilitiesDiagnoseSchemaID)""#

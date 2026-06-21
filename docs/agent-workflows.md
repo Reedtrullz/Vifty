@@ -355,6 +355,10 @@ examples/viftyctl/make-test.sh
 examples/viftyctl/make-verify.sh
 examples/viftyctl/npm-build.sh -- --mode=production
 examples/viftyctl/npm-test.sh -- --watch=false
+examples/viftyctl/pnpm-build.sh -- --mode=production
+examples/viftyctl/pnpm-test.sh -- --runInBand=false
+examples/viftyctl/bun-build.sh
+examples/viftyctl/bun-test.sh
 examples/viftyctl/go-build.sh ./...
 examples/viftyctl/go-test.sh ./...
 examples/viftyctl/cargo-build.sh --release
@@ -418,6 +422,30 @@ npm build:
 
 ```sh
 examples/viftyctl/npm-build.sh
+```
+
+pnpm test:
+
+```sh
+examples/viftyctl/pnpm-test.sh
+```
+
+pnpm build:
+
+```sh
+examples/viftyctl/pnpm-build.sh
+```
+
+Bun test:
+
+```sh
+examples/viftyctl/bun-test.sh
+```
+
+Bun build:
+
+```sh
+examples/viftyctl/bun-build.sh
 ```
 
 Go build:

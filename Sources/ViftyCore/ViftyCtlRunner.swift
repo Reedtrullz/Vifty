@@ -143,6 +143,8 @@ public struct ViftyCtlMetadataLimits: Codable, Equatable, Sendable {
 
 public struct ViftyCtlWrapperResources: Codable, Equatable, Sendable {
     public static let workloadScriptNames = [
+        "bun-build.sh",
+        "bun-test.sh",
         "cargo-build.sh",
         "cargo-test.sh",
         "custom-workload.sh",
@@ -154,6 +156,8 @@ public struct ViftyCtlWrapperResources: Codable, Equatable, Sendable {
         "make-verify.sh",
         "npm-build.sh",
         "npm-test.sh",
+        "pnpm-build.sh",
+        "pnpm-test.sh",
         "pytest.sh",
         "swift-release-build.sh",
         "swift-test.sh",

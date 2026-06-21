@@ -628,6 +628,8 @@ fi
 
 missing_wrapper_script=0
 for expected_wrapper_script in \
+  bun-build.sh \
+  bun-test.sh \
   cargo-build.sh \
   cargo-test.sh \
   custom-workload.sh \
@@ -639,6 +641,8 @@ for expected_wrapper_script in \
   make-verify.sh \
   npm-build.sh \
   npm-test.sh \
+  pnpm-build.sh \
+  pnpm-test.sh \
   pytest.sh \
   swift-release-build.sh \
   swift-test.sh \

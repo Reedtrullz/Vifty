@@ -2437,6 +2437,6 @@ private final class ValidationEvidenceReviewHarness {
     wrapperResources.sourceDirectory\texamples/viftyctl\texamples/viftyctl
     wrapperResources.bundleDirectory\tContents/Resources/viftyctl-wrappers\tContents/Resources/viftyctl-wrappers
     wrapperResources.guardedRunScript\tguarded-run.sh\tguarded-run.sh
-    wrapperResources.workloadScripts\tcargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh\tcargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh
+    wrapperResources.workloadScripts\tbun-build.sh,bun-test.sh,cargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pnpm-build.sh,pnpm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh\tbun-build.sh,bun-test.sh,cargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pnpm-build.sh,pnpm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,xcode-build.sh,xcode-test.sh
     """
 }

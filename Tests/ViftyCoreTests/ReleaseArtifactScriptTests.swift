@@ -453,6 +453,8 @@ private final class ReleaseArtifactHarness {
 
     private static let workloadWrapperScripts = [
         "guarded-run.sh",
+        "bun-build.sh",
+        "bun-test.sh",
         "swift-test.sh",
         "swift-release-build.sh",
         "xcode-build.sh",
@@ -462,6 +464,8 @@ private final class ReleaseArtifactHarness {
         "make-verify.sh",
         "npm-build.sh",
         "npm-test.sh",
+        "pnpm-build.sh",
+        "pnpm-test.sh",
         "go-build.sh",
         "go-test.sh",
         "cargo-build.sh",

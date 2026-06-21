@@ -415,6 +415,8 @@ capabilities_run_contract_safe() {
       signals = lifecycle["signalsForwardedToChild"].is_a?(Array) ? lifecycle["signalsForwardedToChild"].map(&:to_s) : []
       workload_scripts = wrapper_resources["workloadScripts"].is_a?(Array) ? wrapper_resources["workloadScripts"].map(&:to_s) : []
       expected_workload_scripts = %w[
+        bun-build.sh
+        bun-test.sh
         cargo-build.sh
         cargo-test.sh
         custom-workload.sh
@@ -426,6 +428,8 @@ capabilities_run_contract_safe() {
         make-verify.sh
         npm-build.sh
         npm-test.sh
+        pnpm-build.sh
+        pnpm-test.sh
         pytest.sh
         swift-release-build.sh
         swift-test.sh
