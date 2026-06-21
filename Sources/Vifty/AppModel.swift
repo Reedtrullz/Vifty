@@ -246,6 +246,8 @@ final class AppModel: ObservableObject {
     private let preferencesStore: AppPreferencesStore
     private var pollingTask: Task<Void, Never>?
     private var activePollTask: Task<Void, Never>?
+    private var codexUsageRefreshTask: Task<Void, Never>?
+    private var codexUsageRefreshGeneration = 0
     private var startupModeApplied = false
     private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
     private var previousHelperNeedsAttention = false
@@ -385,6 +387,9 @@ final class AppModel: ObservableObject {
     func stopAndRestore() async {
         pollingTask?.cancel()
         pollingTask = nil
+        codexUsageRefreshGeneration &+= 1
+        codexUsageRefreshTask?.cancel()
+        codexUsageRefreshTask = nil
         isRunning = false
         selectedMode = .auto
         manualSessionExpiresAt = nil
@@ -461,6 +466,7 @@ final class AppModel: ObservableObject {
 
     private func refreshCodexUsageIfNeeded() {
         guard menuBarDisplayMode == .codexUsage else { return }
+        guard codexUsageRefreshTask == nil else { return }
 
         let currentTime = now()
         if let lastCodexUsageRefreshAt,
@@ -469,7 +475,24 @@ final class AppModel: ObservableObject {
         }
 
         lastCodexUsageRefreshAt = currentTime
-        codexUsageSnapshot = codexUsageReader()
+        let reader = codexUsageReader
+        codexUsageRefreshGeneration &+= 1
+        let generation = codexUsageRefreshGeneration
+        codexUsageRefreshTask = Task { [weak self] in
+            let snapshot = await Task.detached(priority: .utility) {
+                reader()
+            }.value
+            let wasCancelled = Task.isCancelled
+
+            guard let self else { return }
+            guard self.codexUsageRefreshGeneration == generation else { return }
+            self.codexUsageRefreshTask = nil
+            guard !wasCancelled else { return }
+
+            let previousLabel = self.menuBarLabelText
+            self.codexUsageSnapshot = snapshot
+            self.refreshMenuBarStatusItemIfNeeded(previousLabel: previousLabel)
+        }
     }
 
     private func refreshMenuBarStatusItemIfNeeded(previousLabel: String) {

@@ -1419,6 +1419,7 @@ final class AppModelTests: XCTestCase {
 
         model.menuBarDisplayMode = .codexUsage
         await model.pollOnce()
+        await waitForCodexUsageSnapshot(model)
 
         XCTAssertEqual(model.menuBarLabelText, "Codex 58% left")
         XCTAssertEqual(model.menuBarStatusItemText, "Codex 58% left")
@@ -1455,6 +1456,7 @@ final class AppModelTests: XCTestCase {
 
         model.menuBarDisplayMode = .codexUsage
         await model.pollOnce()
+        await waitForCodexUsageReadCount(1, recorder: recorder)
         XCTAssertEqual(recorder.readCount, 1)
         XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
 
@@ -1464,7 +1466,89 @@ final class AppModelTests: XCTestCase {
 
         recorder.advance(by: 181)
         await model.pollOnce()
+        await waitForCodexUsageReadCount(2, recorder: recorder)
         XCTAssertEqual(recorder.readCount, 2)
+    }
+
+    func testCodexUsageRefreshDoesNotBlockHardwarePoll() async {
+        let recorder = CodexUsageReadRecorder(
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            delay: 0.35
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            codexUsageRefreshInterval: 300,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .codexUsage
+        let startedAt = Date()
+        await model.pollOnce()
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertLessThan(elapsed, 0.25)
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertEqual(model.menuBarLabelText, "Codex --")
+
+        await waitForCodexUsageReadCount(1, recorder: recorder)
+
+        XCTAssertEqual(recorder.readCount, 1)
+        XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
+        XCTAssertEqual(model.menuBarStatusItemText, "Codex 75% left")
+        XCTAssertEqual(model.menuBarStatusItemRevision, 1)
+    }
+
+    func testCancelledCodexUsageRefreshDoesNotPublishStaleSnapshot() async {
+        let recorder = CodexUsageReadRecorder(
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            delay: 0.2
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            codexUsageRefreshInterval: 300,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .codexUsage
+        await model.pollOnce()
+        XCTAssertNil(model.codexUsageSnapshot)
+
+        await model.stopAndRestore()
+        await waitForCodexUsageReadCount(1, recorder: recorder)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertEqual(model.menuBarLabelText, "Codex --")
     }
 
     func testMenuBarDisplayModesUseSelectedModePlaceholdersWhenTelemetryIsMissing() {
@@ -3523,6 +3607,33 @@ final class AppModelTests: XCTestCase {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
+
+    private func waitForCodexUsageSnapshot(
+        _ model: AppModel,
+        timeout: TimeInterval = 1,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while model.codexUsageSnapshot == nil && Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(model.codexUsageSnapshot, file: file, line: line)
+    }
+
+    private func waitForCodexUsageReadCount(
+        _ expected: Int,
+        recorder: CodexUsageReadRecorder,
+        timeout: TimeInterval = 1,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while recorder.readCount != expected && Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(recorder.readCount, expected, file: file, line: line)
+    }
 }
 
 private final class AppModelTestClock: @unchecked Sendable {
@@ -3567,9 +3678,11 @@ private final class CodexUsageReadRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var nowValue: Date
     private var reads = 0
+    private let delay: TimeInterval
 
-    init(now: Date) {
+    init(now: Date, delay: TimeInterval = 0) {
         nowValue = now
+        self.delay = delay
     }
 
     var readCount: Int {
@@ -3579,6 +3692,9 @@ private final class CodexUsageReadRecorder: @unchecked Sendable {
     }
 
     func read() -> CodexUsageSnapshot? {
+        if delay > 0 {
+            Thread.sleep(forTimeInterval: delay)
+        }
         lock.lock()
         defer { lock.unlock() }
         reads += 1
