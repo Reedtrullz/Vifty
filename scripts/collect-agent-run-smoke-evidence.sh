@@ -625,7 +625,8 @@ write_summary_json() {
         "autoRestoreAttempted" => nil,
         "autoRestoreSucceeded" => nil,
         "childExitCode" => nil,
-        "resolvedChildExecutable" => nil
+        "resolvedChildExecutable" => nil,
+        "resolvedChildExecutableSHA256" => nil
       }
     else
       exit_status = run_status.to_i
@@ -637,6 +638,7 @@ write_summary_json() {
       auto_restore_succeeded = boolean_or_nil(run_report["autoRestoreSucceeded"])
       child_exit_code = integer_or_nil(run_report["childExitCode"])
       resolved_child_executable = run_report["resolvedChildExecutable"].is_a?(String) ? run_report["resolvedChildExecutable"] : nil
+      resolved_child_executable_sha256 = run_report["resolvedChildExecutableSHA256"].is_a?(String) ? run_report["resolvedChildExecutableSHA256"] : nil
 
       if exit_status == 0
         cooling_lease_prepared = true if cooling_lease_prepared.nil?
@@ -658,7 +660,8 @@ write_summary_json() {
         "autoRestoreAttempted" => auto_restore_attempted,
         "autoRestoreSucceeded" => auto_restore_succeeded,
         "childExitCode" => child_exit_code,
-        "resolvedChildExecutable" => resolved_child_executable
+        "resolvedChildExecutable" => resolved_child_executable,
+        "resolvedChildExecutableSHA256" => resolved_child_executable_sha256
       }
     end
     rate_limit_retry = {

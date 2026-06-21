@@ -350,6 +350,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.childExitCode, 0)
         XCTAssertNil(report.autoRestoreError)
         XCTAssertEqual(report.resolvedChildExecutable, "/usr/bin/true")
+        XCTAssertNil(report.resolvedChildExecutableSHA256)
     }
 
     func testAuditExampleDecodesAgainstCurrentModel() throws {
@@ -609,6 +610,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(runProperties["autoRestoreSucceeded"] as? [String: Any])
         XCTAssertNotNil(runProperties["childExitCode"] as? [String: Any])
         XCTAssertNotNil(runProperties["resolvedChildExecutable"] as? [String: Any])
+        let executableDigest = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256"] as? [String: Any])
+        XCTAssertEqual(executableDigest["pattern"] as? String, "^[a-f0-9]{64}$")
         let runExample = try readJSON(fixtureURL("run-success.json"))
         XCTAssertEqual(runExample["schemaVersion"] as? Int, 1)
         XCTAssertEqual(runExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")

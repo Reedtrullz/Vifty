@@ -47,6 +47,11 @@
       "type": "string",
       "description": "Absolute executable path selected by viftyctl run child-command resolution before the cooling lease was requested. Present in current builds when runLifecycle.resolvedChildExecutableReported is true; absent in legacy run reports."
     },
+    "resolvedChildExecutableSHA256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Lowercase SHA-256 digest of the resolved executable bytes, computed after child-command resolution and before the cooling lease is requested when the executable file is readable. Omitted when unavailable or in legacy run reports."
+    },
     "generatedAt": {
       "type": "number"
     }

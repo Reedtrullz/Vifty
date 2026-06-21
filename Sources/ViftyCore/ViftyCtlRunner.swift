@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct ViftyCtlResult: Equatable, Sendable {
@@ -542,6 +543,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
     public var childExitCode: Int32
     public var autoRestoreError: String?
     public var resolvedChildExecutable: String?
+    public var resolvedChildExecutableSHA256: String?
     public var generatedAt: Date
 
     public init(
@@ -554,6 +556,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         childExitCode: Int32,
         autoRestoreError: String? = nil,
         resolvedChildExecutable: String? = nil,
+        resolvedChildExecutableSHA256: String? = nil,
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
@@ -565,6 +568,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         self.childExitCode = childExitCode
         self.autoRestoreError = autoRestoreError
         self.resolvedChildExecutable = resolvedChildExecutable
+        self.resolvedChildExecutableSHA256 = resolvedChildExecutableSHA256
         self.generatedAt = generatedAt
     }
 
@@ -578,6 +582,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         case childExitCode
         case autoRestoreError
         case resolvedChildExecutable
+        case resolvedChildExecutableSHA256
         case generatedAt
     }
 
@@ -593,6 +598,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         childExitCode = try container.decode(Int32.self, forKey: .childExitCode)
         autoRestoreError = try container.decodeIfPresent(String.self, forKey: .autoRestoreError)
         resolvedChildExecutable = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutable)
+        resolvedChildExecutableSHA256 = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutableSHA256)
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
     }
 
@@ -611,6 +617,7 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
             try container.encodeNil(forKey: .autoRestoreError)
         }
         try container.encodeIfPresent(resolvedChildExecutable, forKey: .resolvedChildExecutable)
+        try container.encodeIfPresent(resolvedChildExecutableSHA256, forKey: .resolvedChildExecutableSHA256)
         try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
@@ -830,6 +837,8 @@ public struct ViftyCtlRunner: Sendable {
                 } catch {
                     throw ViftyCtlChildCommandError(message: error.localizedDescription)
                 }
+                let resolvedChildExecutable = resolvedChildArguments[0]
+                let resolvedChildExecutableSHA256 = Self.sha256Hex(ofFileAtPath: resolvedChildExecutable)
                 let prepareStatus = try await prepareWithOptionalForceRetry(request, force: force)
                 guard prepareSucceeded(prepareStatus, request: request) else {
                     let message = prepareFailureMessage(prepareStatus, request: request)
@@ -849,7 +858,8 @@ public struct ViftyCtlRunner: Sendable {
                     return try await restoreAfterRun(
                         reason: "viftyctl run child exited with \(exitCode)",
                         childExitCode: exitCode,
-                        resolvedChildExecutable: resolvedChildArguments[0],
+                        resolvedChildExecutable: resolvedChildExecutable,
+                        resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
                         json: json
                     )
                 } catch {
@@ -1179,6 +1189,7 @@ public struct ViftyCtlRunner: Sendable {
         reason: String,
         childExitCode: Int32,
         resolvedChildExecutable: String,
+        resolvedChildExecutableSHA256: String?,
         json: Bool
     ) async throws -> ViftyCtlResult {
         do {
@@ -1188,6 +1199,7 @@ public struct ViftyCtlRunner: Sendable {
                     autoRestoreSucceeded: true,
                     childExitCode: childExitCode,
                     resolvedChildExecutable: resolvedChildExecutable,
+                    resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
                     generatedAt: now()
                 )
                 return ViftyCtlResult(stdout: try encodeJSON(report) + "\n", exitCode: childExitCode)
@@ -1200,6 +1212,7 @@ public struct ViftyCtlRunner: Sendable {
                     childExitCode: childExitCode,
                     autoRestoreError: error.localizedDescription,
                     resolvedChildExecutable: resolvedChildExecutable,
+                    resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
                     generatedAt: now()
                 )
                 return ViftyCtlResult(
@@ -1210,6 +1223,17 @@ public struct ViftyCtlRunner: Sendable {
             let stderr = "viftyctl run: Auto restore failed after child exited with \(childExitCode): \(error.localizedDescription). The daemon lease monitor remains the safety fallback until expiry.\n"
             return ViftyCtlResult(stderr: stderr, exitCode: childExitCode == 0 ? 1 : childExitCode)
         }
+    }
+
+    private static func sha256Hex(ofFileAtPath path: String) -> String? {
+        guard let data = try? Data(
+            contentsOf: URL(fileURLWithPath: path, isDirectory: false),
+            options: [.mappedIfSafe]
+        ) else {
+            return nil
+        }
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private func prepareSucceeded(_ status: AgentControlStatus, request: AgentControlRequest) -> Bool {

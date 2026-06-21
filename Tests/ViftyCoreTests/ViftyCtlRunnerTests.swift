@@ -1090,7 +1090,11 @@ final class ViftyCtlRunnerTests: XCTestCase {
     func testRunJSONReportsPreparedLeaseAutoRestoreAndChildExitCode() async throws {
         let request = AgentControlRequest(workload: .test, durationSeconds: 600, maxRPMPercent: 70, reason: "swift test", idempotencyKey: "key")
         let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
-        let processRunner = FakeProcessRunner(exitCode: 0, resolvedArguments: ["/usr/bin/swift", "test"])
+        let executableURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("viftyctl-run-child-\(UUID().uuidString)")
+        try Data("fake child executable".utf8).write(to: executableURL)
+        defer { try? FileManager.default.removeItem(at: executableURL) }
+        let processRunner = FakeProcessRunner(exitCode: 0, resolvedArguments: [executableURL.path, "test"])
         let runner = ViftyCtlRunner(
             client: client,
             processRunner: processRunner,
@@ -1111,13 +1115,15 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(json["childExitCode"] as? Int, 0)
         XCTAssertTrue(json["autoRestoreError"] is NSNull)
-        XCTAssertEqual(json["resolvedChildExecutable"] as? String, "/usr/bin/swift")
+        XCTAssertEqual(json["resolvedChildExecutable"] as? String, executableURL.path)
+        let executableDigest = try XCTUnwrap(json["resolvedChildExecutableSHA256"] as? String)
+        XCTAssertNotNil(executableDigest.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression))
         XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
         let prepareRequests = await client.prepareRequests
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
-        XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
+        XCTAssertEqual(processRunner.runArguments, [[executableURL.path, "test"]])
     }
 
     func testRunJSONReportsAutoRestoreFailureAfterChildExit() async throws {

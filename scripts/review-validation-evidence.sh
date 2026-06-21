@@ -1319,6 +1319,19 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
         if final_run_json && final_run_json["resolvedChildExecutable"] != resolved_child_executable
           failures << "passed agent-run-smoke final run JSON resolvedChildExecutable must match summary run.resolvedChildExecutable"
         end
+        resolved_child_executable_sha256 = run["resolvedChildExecutableSHA256"]
+        if run.key?("resolvedChildExecutableSHA256") && !resolved_child_executable_sha256.nil?
+          unless resolved_child_executable_sha256.is_a?(String) && resolved_child_executable_sha256.match?(/\A[a-f0-9]{64}\z/)
+            failures << "passed agent-run-smoke summary resolvedChildExecutableSHA256 must be a lowercase SHA-256 digest when present"
+          end
+          if final_run_json && final_run_json["resolvedChildExecutableSHA256"] != resolved_child_executable_sha256
+            failures << "passed agent-run-smoke final run JSON resolvedChildExecutableSHA256 must match summary run.resolvedChildExecutableSHA256"
+          end
+        elsif final_run_json && final_run_json.key?("resolvedChildExecutableSHA256") && !final_run_json["resolvedChildExecutableSHA256"].nil?
+          failures << "passed agent-run-smoke summary must preserve final run JSON resolvedChildExecutableSHA256 when present"
+        else
+          warnings << "agent-run-smoke summary did not include resolvedChildExecutableSHA256; executable byte-level provenance is unavailable"
+        end
       elsif !preflight.key?("resolvedChildExecutableReported") || preflight["resolvedChildExecutableReported"].nil?
         warnings << "agent-run-smoke summary did not record resolvedChildExecutableReported; keep executable provenance claims conservative"
       end

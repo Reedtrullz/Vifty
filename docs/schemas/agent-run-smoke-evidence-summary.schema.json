@@ -461,6 +461,14 @@
           ],
           "pattern": "^/.*$",
           "description": "Absolute executable path copied from completed viftyctl run --json output when runLifecycle.resolvedChildExecutableReported is true."
+        },
+        "resolvedChildExecutableSHA256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 digest copied from completed viftyctl run --json output when the resolved executable file was readable."
         }
       }
     },
