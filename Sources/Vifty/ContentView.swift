@@ -1628,24 +1628,22 @@ private struct CurveChartSeriesPointLabel: View {
     let color: Color
 
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
+        HStack(alignment: .top, spacing: 5) {
             Circle()
                 .fill(color)
                 .frame(width: 5, height: 5)
-                .padding(.top, 4)
+                .padding(.top, 5)
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(seriesLabel) \(point.label)")
-                    .font(.caption2.weight(.semibold))
+                Text(point.chartValueText)
+                    .font(.caption2.weight(.semibold).monospacedDigit())
                     .lineLimit(1)
-                HStack(spacing: 5) {
-                    Text(point.temperatureText)
-                    Text(point.rpmText)
-                }
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.72)
+                Text("\(seriesLabel) \(point.label)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .frame(width: 112, alignment: .leading)
+            .frame(width: 122, alignment: .leading)
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 5)
