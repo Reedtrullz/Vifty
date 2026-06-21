@@ -1454,13 +1454,13 @@ private struct FanCurveChartEditor: View {
         let pointPosition = position(for: point, in: size)
         let xOffset: CGFloat
         if pointPosition.x < rect.minX + 58 {
-            xOffset = 52
+            xOffset = 66
         } else if pointPosition.x > rect.maxX - 58 {
-            xOffset = -52
+            xOffset = -66
         } else {
             xOffset = 0
         }
-        let yOffset: CGFloat = pointPosition.y < rect.minY + 30 ? 24 : -24
+        let yOffset: CGFloat = pointPosition.y < rect.minY + 42 ? 34 : -34
         return CGSize(width: xOffset, height: yOffset)
     }
 
@@ -1672,7 +1672,7 @@ private struct ChartHandle: View {
                 .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
                 .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
 
-            ChartHandleValueLabel(text: valueText)
+            ChartHandleValueLabel(label: label, valueText: valueText)
                 .offset(valueLabelOffset)
         }
         .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
@@ -1683,18 +1683,26 @@ private struct ChartHandle: View {
 }
 
 private struct ChartHandleValueLabel: View {
-    let text: String
+    let label: String
+    let valueText: String
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold).monospacedDigit())
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(.regularMaterial, in: Capsule())
-            .allowsHitTesting(false)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(valueText)
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 126, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        .allowsHitTesting(false)
     }
 }
 
