@@ -1279,7 +1279,8 @@ private struct FanCurveChartEditor: View {
                             label: point.label,
                             temperature: value.temperature,
                             rpm: value.rpm,
-                            valueText: value.chartValueText,
+                            temperatureText: value.temperatureText,
+                            rpmText: value.rpmText,
                             accessibilityValueText: value.accessibilityValueText,
                             valueLabelOffset: valueLabelOffset(for: value, in: geometry.size)
                         )
@@ -1603,7 +1604,15 @@ private struct FanCurveChartPoint: Identifiable {
     let rpm: Double
 
     var chartValueText: String {
-        "\(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM"
+        "\(temperatureText) · \(rpmText)"
+    }
+
+    var temperatureText: String {
+        "\(Int(temperature.rounded())) C"
+    }
+
+    var rpmText: String {
+        "\(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM"
     }
 
     var accessibilityValueText: String {
@@ -1635,10 +1644,13 @@ private struct CurveChartSeriesPointLabel: View {
                 Text("\(seriesLabel) \(point.label)")
                     .font(.caption2.weight(.semibold))
                     .lineLimit(1)
-                Text(point.chartValueText)
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                HStack(spacing: 5) {
+                    Text(point.temperatureText)
+                    Text(point.rpmText)
+                }
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
             }
             .frame(width: 112, alignment: .leading)
         }
@@ -1660,7 +1672,8 @@ private struct ChartHandle: View {
     let label: String
     let temperature: Double
     let rpm: Double
-    let valueText: String
+    let temperatureText: String
+    let rpmText: String
     let accessibilityValueText: String
     let valueLabelOffset: CGSize
 
@@ -1671,7 +1684,7 @@ private struct ChartHandle: View {
             .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
             .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
             .overlay(alignment: .top) {
-                ChartHandleValueLabel(label: label, valueText: valueText)
+                ChartHandleValueLabel(label: label, temperatureText: temperatureText, rpmText: rpmText)
                     .offset(valueLabelOffset)
             }
             .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
@@ -1683,7 +1696,8 @@ private struct ChartHandle: View {
 
 private struct ChartHandleValueLabel: View {
     let label: String
-    let valueText: String
+    let temperatureText: String
+    let rpmText: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -1691,11 +1705,14 @@ private struct ChartHandleValueLabel: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Text(valueText)
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            HStack(spacing: 5) {
+                Text(temperatureText)
+                Text(rpmText)
+            }
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
         .frame(width: 126, alignment: .leading)
         .padding(.horizontal, 6)
