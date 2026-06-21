@@ -25,6 +25,91 @@ final class GuardedRunScriptTests: XCTestCase {
         )
     }
 
+    func testGuardedRunPreflightOnlyEmitsDecisionWithoutRunningCoolingOrChild() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            preflightOnly: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stderr.contains("read-only preflight passed"), result.stderr)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(decision["schemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, true)
+        XCTAssertEqual(decision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackRequested"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(decision["decisionReason"] as? String, "preflightReady")
+        XCTAssertEqual(decision["exitCode"] as? Int, 0)
+        XCTAssertEqual(decision["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(decision["recommendedRecoveryAction"] as? String, "none")
+        XCTAssertEqual(decision["diagnoseState"] as? String, "ready")
+        XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(decision["manualControlActive"] as? Bool, false)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunPreflightOnlyFlagDoesNotRunWhenReadinessBlocks() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            recommendedAction: "requestCooling",
+            recommendedRecoveryAction: "restoreAutoBeforeRetry",
+            safeToRequestCooling: true,
+            manualControlActive: true
+        )
+
+        let result = try harness.runGuardedRun([
+            "--preflight-only", "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(decision["decisionReason"] as? String, "manualControlActive")
+        XCTAssertEqual(decision["manualControlActive"] as? Bool, true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunPreflightOnlyRejectsAmbiguousExecutionModes() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let forceResult = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            preflightOnly: "1",
+            forceRetry: "1"
+        )
+        XCTAssertEqual(forceResult.exitCode, 64)
+        XCTAssertTrue(forceResult.stderr.contains("PREFLIGHT_ONLY"), forceResult.stderr)
+        XCTAssertTrue(forceResult.stderr.contains("FORCE_RETRY"), forceResult.stderr)
+
+        let uncooledResult = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            preflightOnly: "1",
+            allowUncooled: "1"
+        )
+        XCTAssertEqual(uncooledResult.exitCode, 64)
+        XCTAssertTrue(uncooledResult.stderr.contains("PREFLIGHT_ONLY"), uncooledResult.stderr)
+        XCTAssertTrue(uncooledResult.stderr.contains("ALLOW_UNCOOLED"), uncooledResult.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsInvalidPreflightOnlyEnvironmentBeforeDiagnose() throws {
+        let harness = try ScriptHarness(state: "ready")
+
+        let result = try harness.runGuardedRun(
+            ["test", "20m", "70", "swift test", "--", "swift", "test"],
+            preflightOnly: "maybe"
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("VIFTY_GUARDED_RUN_PREFLIGHT_ONLY"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsCapabilitiesUnavailableEvenWhenRunLifecycleIsSafe() throws {
         let harness = try ScriptHarness(state: "ready", capabilitiesExitCode: 69)
 
@@ -1312,12 +1397,14 @@ private final class ScriptHarness {
 
     func runGuardedRun(
         _ arguments: [String],
+        preflightOnly: String? = nil,
         forceRetry: String? = nil,
         allowUncooled: String? = nil
     ) throws -> ProcessResult {
         try runScript(
             "examples/viftyctl/guarded-run.sh",
             arguments: arguments,
+            preflightOnly: preflightOnly,
             forceRetry: forceRetry,
             allowUncooled: allowUncooled
         )
@@ -1326,6 +1413,7 @@ private final class ScriptHarness {
     func runScript(
         _ relativePath: String,
         arguments: [String],
+        preflightOnly: String? = nil,
         forceRetry: String? = nil,
         allowUncooled: String? = nil
     ) throws -> ProcessResult {
@@ -1342,6 +1430,9 @@ private final class ScriptHarness {
         environment["VIFTYCTL"] = fakeViftyCtlURL.path
         environment["FAKE_VIFTYCTL_LOG"] = logURL.path
         environment["PATH"] = "\(binURL.path):\(environment["PATH"] ?? "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")"
+        if let preflightOnly {
+            environment["VIFTY_GUARDED_RUN_PREFLIGHT_ONLY"] = preflightOnly
+        }
         if let forceRetry {
             environment["VIFTY_GUARDED_RUN_FORCE_RETRY"] = forceRetry
         }

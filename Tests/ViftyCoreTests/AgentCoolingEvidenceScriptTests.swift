@@ -236,6 +236,68 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(guardedRunDecision["coolingBlockerIDs"] as? [String], ["manualControlClear"])
     }
 
+    func testReviewerAcceptsGuardedRunPreflightReadyDecision() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"""
+            {
+              "state": "ready",
+              "recommendedAgentAction": "requestCooling",
+              "safeToRequestCooling": true,
+              "daemonControlPathReady": true,
+              "manualControlActive": false,
+              "recommendedRecoveryAction": "none",
+              "failedCheckIDs": [],
+              "coolingBlockerIDs": [],
+              "appPreferences": {
+                "startupMode": "Auto",
+                "startupModeSource": "persisted",
+                "readError": null
+              },
+              "checks": []
+            }
+            """#
+        )
+        let guardedRunStderrURL = harness.rootURL.appendingPathComponent("guarded-run-preflight.stderr")
+        try """
+        guarded-run: Guarded-run read-only preflight passed; no cooling command or child command was run.
+        guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":true,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"preflightReady","exitCode":0,"message":"Guarded-run read-only preflight passed; no cooling command or child command was run.","recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","diagnoseState":"ready","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","failedCheckIDs":[],"coolingBlockerIDs":[]}
+        guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
+        """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--guarded-run-stderr-file", guardedRunStderrURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["safeToProceed"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["uncooledFallbackRequested"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "preflightReady")
+        XCTAssertEqual(guardedRunDecision["exitCode"] as? Int, 0)
+        XCTAssertEqual(guardedRunDecision["recommendedAgentAction"] as? String, "requestCooling")
+        XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "none")
+        XCTAssertEqual(guardedRunDecision["diagnoseState"] as? String, "ready")
+        XCTAssertEqual(guardedRunDecision["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["daemonControlPathReady"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(guardedRunDecision["startupMode"] as? String, "Auto")
+        XCTAssertEqual(guardedRunDecision["failedCheckIDs"] as? [String], [])
+        XCTAssertEqual(guardedRunDecision["coolingBlockerIDs"] as? [String], [])
+    }
+
     func testReviewerRejectsUnsupportedGuardedRunDecisionReason() throws {
         let harness = try AgentCoolingEvidenceHarness(
             diagnoseJSON: #"""
@@ -1241,6 +1303,15 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(guardedRunRequired.contains(field), "guardedRunDecision should require \(field)")
         }
+
+        let sourceSchemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("docs/schemas/guarded-run-decision.schema.json")
+        let sourceSchemaData = try Data(contentsOf: sourceSchemaURL)
+        let sourceSchemaObject = try JSONSerialization.jsonObject(with: sourceSchemaData) as? [String: Any]
+        let sourceProperties = try XCTUnwrap(sourceSchemaObject?["properties"] as? [String: Any])
+        let decisionReason = try XCTUnwrap(sourceProperties["decisionReason"] as? [String: Any])
+        let decisionReasonValues = try XCTUnwrap(decisionReason["enum"] as? [String])
+        XCTAssertTrue(decisionReasonValues.contains("preflightReady"))
     }
 }
 

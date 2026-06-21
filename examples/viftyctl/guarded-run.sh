@@ -4,13 +4,18 @@ set -eu
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  guarded-run.sh <workload> <duration> <max-rpm-percent> <reason> -- <command> [args...]
+  guarded-run.sh [--preflight-only] <workload> <duration> <max-rpm-percent> <reason> -- <command> [args...]
 
 Example:
   guarded-run.sh test 20m 70 "swift test" -- swift test
+  guarded-run.sh --preflight-only test 20m 70 "swift test" -- swift test
 
 Environment:
   VIFTYCTL  Path to viftyctl. Defaults to /Applications/Vifty.app/Contents/MacOS/viftyctl.
+  VIFTY_GUARDED_RUN_PREFLIGHT_ONLY
+            Set to 1/true/yes to run all guarded read-only checks and emit
+            decision JSON without requesting cooling or launching the child.
+            Defaults to off.
   VIFTY_GUARDED_RUN_FORCE_RETRY
             Set to 1/true/yes to pass --force to viftyctl run. Defaults to off.
   VIFTY_GUARDED_RUN_ALLOW_UNCOOLED
@@ -334,6 +339,12 @@ trimmed_character_count() {
   '
 }
 
+preflight_only="${VIFTY_GUARDED_RUN_PREFLIGHT_ONLY:-0}"
+if [ "${1:-}" = "--preflight-only" ]; then
+  preflight_only=1
+  shift
+fi
+
 if [ "$#" -lt 6 ]; then
   usage
   exit 64
@@ -385,6 +396,19 @@ if [ ! -x "$viftyctl" ]; then
   exit 69
 fi
 
+case "$preflight_only" in
+  1|true|yes)
+    preflight_only=1
+    ;;
+  0|false|no|"")
+    preflight_only=0
+    ;;
+  *)
+    echo "guarded-run: VIFTY_GUARDED_RUN_PREFLIGHT_ONLY must be 1/true/yes or 0/false/no." >&2
+    exit 64
+    ;;
+esac
+
 case "$force_retry" in
   1|true|yes)
     force_retry=1
@@ -413,6 +437,16 @@ esac
 
 if [ "$force_retry" -eq 1 ] && [ "$allow_uncooled" -eq 1 ]; then
   echo "guarded-run: VIFTY_GUARDED_RUN_FORCE_RETRY and VIFTY_GUARDED_RUN_ALLOW_UNCOOLED are mutually exclusive; choose either a supervised cooling retry or an uncooled fallback." >&2
+  exit 64
+fi
+
+if [ "$preflight_only" -eq 1 ] && [ "$force_retry" -eq 1 ]; then
+  echo "guarded-run: VIFTY_GUARDED_RUN_PREFLIGHT_ONLY and VIFTY_GUARDED_RUN_FORCE_RETRY are mutually exclusive; preflight-only never requests cooling." >&2
+  exit 64
+fi
+
+if [ "$preflight_only" -eq 1 ] && [ "$allow_uncooled" -eq 1 ]; then
+  echo "guarded-run: VIFTY_GUARDED_RUN_PREFLIGHT_ONLY and VIFTY_GUARDED_RUN_ALLOW_UNCOOLED are mutually exclusive; preflight-only never launches the child." >&2
   exit 64
 fi
 
@@ -894,7 +928,11 @@ case "$recommended_action" in
   requestCooling)
     ;;
   requestCoolingWithCaution)
-    echo "guarded-run: Vifty recommends caution; proceeding with bounded cooling." >&2
+    if [ "$preflight_only" -eq 1 ]; then
+      echo "guarded-run: Vifty recommends caution; preflight passed, but a real run should use shorter duration or lower RPM." >&2
+    else
+      echo "guarded-run: Vifty recommends caution; proceeding with bounded cooling." >&2
+    fi
     ;;
   *)
     echo "guarded-run: unknown Vifty agent action '$recommended_action'; refusing to request cooling." >&2
@@ -902,6 +940,13 @@ case "$recommended_action" in
     exit 75
     ;;
 esac
+
+if [ "$preflight_only" -eq 1 ]; then
+  preflight_message="Guarded-run read-only preflight passed; no cooling command or child command was run."
+  echo "guarded-run: $preflight_message" >&2
+  print_guarded_run_decision_json "$preflight_message" true false 0 "preflightReady"
+  exit 0
+fi
 
 if [ "$force_retry" -eq 1 ]; then
   exec "$viftyctl" run \

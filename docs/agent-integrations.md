@@ -38,6 +38,11 @@ Prefer the guarded wrapper:
 /Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+For read-only planning, use the same command with `--preflight-only` or set
+`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`; a passing result emits guarded-run
+decision JSON with `decisionReason: "preflightReady"`, `coolingRequested:
+false`, and `exitCode: 0`, without requesting cooling or launching the child.
+
 For common local workloads, the shortcut scripts in the installed
 `viftyctl-wrappers/` directory or source-tree `examples/viftyctl/` directory are
 equivalent safe wrappers around `guarded-run.sh`:
@@ -82,6 +87,11 @@ Use shorter durations and lower RPM percentages for degraded readiness. Never ca
 
 Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset by default. Only set it to `1` for a supervised human workflow where the user has approved waiting for `retryAfterSeconds` and retrying a rate-limited prepare once. The wrapper still checks `supportsForceRetry` before passing `--force`, and refuses to combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED`.
 
+Leave `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY` unset for real runs. Set it to `1`, or
+use `guarded-run.sh --preflight-only`, only when an agent wants a read-only
+answer about whether a guarded workload would be allowed before asking the user
+or launching the real guarded command.
+
 Leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset by default. Only set it to `1`
 after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
@@ -99,7 +109,8 @@ the stable markers `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
 human recovery text. The wrapper decision payload declares `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json` and tells agents
 whether cooling was requested, whether an uncooled fallback was requested or
-allowed, which stable `decisionReason` category applies, and which readiness fields blocked the safe path.
+allowed, which stable `decisionReason` category applies, whether
+`preflightReady` was reached, and which readiness fields blocked the safe path.
 
 ## Codex
 
@@ -184,6 +195,7 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `recommendedRecoveryAction: "fixArguments"`: fix the wrapper arguments before invoking Vifty again.
 - `recommendedRecoveryAction: "runDiagnose"`: show `viftyctl diagnose --json`, and do not start cooling while readiness is unsafe.
 - Guarded wrapper force retry: leave `VIFTY_GUARDED_RUN_FORCE_RETRY` unset unless a human explicitly approved one retry, and do not combine it with uncooled fallback.
+- Guarded wrapper preflight-only: use `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1` or `--preflight-only` only for read-only planning; do not combine it with force retry or uncooled fallback.
 - Guarded wrapper uncooled fallback: leave `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approved running the child without Vifty cooling after seeing the structured readiness block; avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, or hardware evidence collection; when the daemon control path is unavailable; or when manual control is active. The wrapper still refuses helper-repair, restore-first, manual-control-active, backoff, policy-inspection, hardware-evidence, daemon-control-unavailable states, and force-retry combinations.
 - Child exits nonzero: preserve the child failure. Vifty should still attempt Auto restore.
 - Restore failure after a successful child: treat the wrapper exit as a Vifty safety failure and show stderr plus `viftyctl status --json` and `viftyctl audit --limit 20 --json`.

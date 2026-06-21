@@ -97,6 +97,7 @@ GUARDED_RUN_DECISION_REASONS = %w[
   manualControlActive
   coolingBlockersPresent
   recoveryActionBlocksUncooledFallback
+  preflightReady
   uncooledFallbackAllowed
   unknownNoCoolingDecision
 ].freeze
@@ -868,9 +869,16 @@ if File.file?(guarded_run_stderr_path)
 
     if safe_to_proceed == true
       failures << "guarded-run decision safeToProceed true requires exitCode 0" unless exit_code == 0
-      failures << "guarded-run decision safeToProceed true requires uncooled fallback allowed" unless uncooled_requested == true && uncooled_allowed == true
+      if decision_reason == "preflightReady"
+        failures << "guarded-run decision preflightReady must not request uncooled fallback" unless uncooled_requested == false && uncooled_allowed == false
+      else
+        failures << "guarded-run decision safeToProceed true requires uncooled fallback allowed" unless uncooled_requested == true && uncooled_allowed == true
+      end
     elsif safe_to_proceed == false
       failures << "guarded-run decision safeToProceed false requires nonzero exitCode" if exit_code == 0
+    end
+    if decision_reason == "preflightReady" && safe_to_proceed != true
+      failures << "guarded-run decision preflightReady requires safeToProceed true"
     end
     if uncooled_allowed == true && uncooled_requested != true
       failures << "guarded-run decision cannot allow uncooled fallback unless it was requested"

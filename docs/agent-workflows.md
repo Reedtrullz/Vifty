@@ -281,6 +281,21 @@ Use the generic wrapper in [examples/viftyctl/guarded-run.sh](../examples/viftyc
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+For read-only planning, use the same wrapper with `--preflight-only` or
+`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`:
+
+```sh
+examples/viftyctl/guarded-run.sh --preflight-only test 20m 70 "swift test" -- swift test
+```
+
+Preflight-only validates the child command, capabilities, policy, metadata
+limits, and diagnose readiness, then exits before `viftyctl run` and before the
+child command starts. A passing preflight-only decision emits
+`schemaID: https://vifty.local/schemas/guarded-run-decision.schema.json`,
+`decisionReason: "preflightReady"`, `coolingRequested: false`, and `exitCode:
+0`; it proves the guarded path is currently available, not that cooling has
+already been requested.
+
 The wrapper:
 
 - runs `capabilities --json` and requires schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, current `wrapperResources` discovery metadata, and the safe `runLifecycle` contract,
@@ -297,12 +312,13 @@ The wrapper:
 - prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
+- exits after decision JSON when preflight-only is requested,
 - then delegates to `viftyctl run --json`,
 - and lets `viftyctl run` handle prepare, child launch, signal forwarding, and Auto restore.
 
 For hardware-validation or maintainer triage where you need to know whether the supervised smoke collector may cross the cooling boundary, run `make agent-run-smoke-readiness` first. `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness` emits `schemaID: https://vifty.local/schemas/agent-run-smoke-readiness.schema.json`, `readOnly: true`, and `coolingCommandsRun: false`; it validates daemon-backed capabilities, policy limits, wrapper lifecycle, `safeToRequestCooling`, helper readiness, manual-control state, and optional daemon hash matching without calling `viftyctl run`.
 
-The wrapper does not pass `--force` by default. If a supervised human workflow wants the CLI to wait once for `retryAfterSeconds` and retry a rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`; the wrapper still checks `supportsForceRetry` before passing `--force`. Local agents should leave that off unless the user explicitly asks them to retry after a rate limit. Do not combine it with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper refuses that ambiguous mix.
+The wrapper does not pass `--force` by default. If a supervised human workflow wants the CLI to wait once for `retryAfterSeconds` and retry a rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`; the wrapper still checks `supportsForceRetry` before passing `--force`. Local agents should leave that off unless the user explicitly asks them to retry after a rate limit. Do not combine it with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` or `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`; the wrapper refuses that ambiguous mix.
 
 The wrapper also does not silently rerun workloads without cooling. If the user
 explicitly wants the child command to run without Vifty after a structured
@@ -313,7 +329,8 @@ prints the diagnose JSON plus a guarded-run decision payload between
 and only then execs the child directly; it refuses that fallback for
 `repairHelper`, `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`,
 `collectHardwareEvidence`, `manualControlActive: true`,
-`daemonControlPathReady: false`, and force-retry combinations. The decision
+`daemonControlPathReady: false`, force-retry combinations, and preflight-only
+combinations. The decision
 payload uses `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json` and includes
 `decisionReason` so agents can classify the wrapper-level no-cooling decision

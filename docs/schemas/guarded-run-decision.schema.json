@@ -35,7 +35,7 @@
     },
     "safeToProceed": {
       "type": "boolean",
-      "description": "True only when the wrapper is about to exec the child without Vifty cooling after explicit uncooled fallback approval."
+      "description": "True only when the wrapper has proven the guarded path is safe to proceed: either preflight-only passed without side effects, or the wrapper is about to exec the child without Vifty cooling after explicit uncooled fallback approval."
     },
     "coolingRequested": {
       "const": false,
@@ -56,10 +56,11 @@
         "manualControlActive",
         "coolingBlockersPresent",
         "recoveryActionBlocksUncooledFallback",
+        "preflightReady",
         "uncooledFallbackAllowed",
         "unknownNoCoolingDecision"
       ],
-      "description": "Machine-readable reason for the wrapper-level no-cooling decision so agents do not classify failures by parsing message text."
+      "description": "Machine-readable reason for the wrapper-level no-cooling decision or read-only preflight result so agents do not classify outcomes by parsing message text."
     },
     "exitCode": {
       "type": "integer",

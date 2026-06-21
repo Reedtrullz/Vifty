@@ -30,6 +30,20 @@ Prefer the guarded wrapper. It checks that the child command is a regular execut
 examples/viftyctl/guarded-run.sh test 20m 70 "swift test" -- swift test
 ```
 
+For read-only planning, add `--preflight-only` or set
+`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`. The wrapper still validates the child
+command path, capabilities, policy, metadata limits, and diagnose readiness, but
+it exits before `viftyctl run` and before launching the child:
+
+```sh
+examples/viftyctl/guarded-run.sh --preflight-only test 20m 70 "swift test" -- swift test
+```
+
+Successful preflight-only output includes guarded-run decision JSON with
+`decisionReason: "preflightReady"`, `coolingRequested: false`, and `exitCode:
+0`; agents can use that as permission to ask the user or continue into the real
+guarded wrapper command without pretending cooling already ran. This means no cooling command or child command was run.
+
 Installed app bundles include the same wrapper directory, so installed users can
 prefer:
 
@@ -51,22 +65,23 @@ VIFTYCTL=/Applications/Vifty.app/Contents/MacOS/viftyctl \
   /path/to/guarded-run.sh build 25m 75 "release build" -- swift build -c release
 ```
 
-When the guarded wrapper refuses before `viftyctl run`, it keeps the captured
-machine-readable payload extractable from stderr: capabilities payloads are
+When the guarded wrapper refuses before `viftyctl run` or completes a
+preflight-only check, it keeps the captured machine-readable payload extractable
+from stderr: capabilities payloads are
 bracketed by `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` and
 `guarded-run: END_VIFTY_CAPABILITIES_JSON`, while diagnose payloads are bracketed
 by `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` and
-`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Wrapper no-cooling decisions are
+`guarded-run: END_VIFTY_DIAGNOSE_JSON`. Wrapper no-cooling or preflight-only decisions are
 bracketed by `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` and
 `guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`, with `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json`. Agents and
 support tooling should extract the exact JSON between those markers instead of
 parsing surrounding prose. Current wrapper decision payloads include
 `decisionReason` so agents can classify readiness-blocked, manual-control,
-daemon-control, hard-blocker, and uncooled-fallback decisions without scraping
-the human `message`.
+daemon-control, hard-blocker, preflight-ready, and uncooled-fallback decisions
+without scraping the human `message`.
 
-The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
+The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` or `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
 The guarded wrapper also does not fall back to an uncooled workload by default.
 When the user explicitly wants the child command to run without Vifty after a
@@ -80,7 +95,8 @@ Vifty recommends `repairHelper`,
 `backOffWorkload`, `restoreAutoBeforeRetry`, `inspectPolicy`, or
 `collectHardwareEvidence`; when `daemonControlPathReady` is false; or when
 `manualControlActive` is true. The
-uncooled fallback is mutually exclusive with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`.
+uncooled fallback is mutually exclusive with `VIFTY_GUARDED_RUN_FORCE_RETRY=1`
+and `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`.
 Do not catch guarded-run failures and rerun workloads without cooling.
 
 For common workloads, use the audited shortcuts:

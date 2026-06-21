@@ -9,15 +9,16 @@ common developer workloads on Vifty's safe path:
 4. read-only `viftyctl diagnose --json`, require diagnose readiness schema version `1`, and require recognized command-error schema identity when diagnose exits nonzero with a command-error payload;
 5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `failedCheckIDs`, and `coolingBlockerIDs` so wrappers do not infer safety from prose or fallback telemetry;
 6. fail closed when readiness is blocked, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, and print recovery guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto. When diagnose reports a persisted `Curve` or `Fixed` default, the wrapper also prints that saved default in plain stderr before the JSON;
-7. delegate to `viftyctl run --json` with one bounded lease;
-8. let `viftyctl run` revalidate the child command and restore Auto afterward.
+7. in `--preflight-only` / `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1` mode, exit after the read-only gates with decision JSON and without requesting cooling or launching the child;
+8. delegate to `viftyctl run --json` with one bounded lease;
+9. let `viftyctl run` revalidate the child command and restore Auto afterward.
 
-When the wrapper prints captured JSON on a failure path, it wraps capabilities
-evidence with `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
+When the wrapper prints captured JSON on a failure or preflight-only path, it
+wraps capabilities evidence with `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /
 `guarded-run: END_VIFTY_CAPABILITIES_JSON` and diagnose evidence with
 `guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON` /
 `guarded-run: END_VIFTY_DIAGNOSE_JSON`. It also wraps wrapper-level no-cooling
-decisions with `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` /
+or preflight-only decisions with `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON` /
 `guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON`; those payloads use
 `schemaID: https://vifty.local/schemas/guarded-run-decision.schema.json` and
 summarize `coolingRequested`, `uncooledFallbackRequested`,
@@ -61,13 +62,28 @@ VIFTYCTL=.build/Vifty.app/Contents/MacOS/viftyctl \
   examples/viftyctl/swift-test.sh --filter ViftyCoreTests
 ```
 
+Use `--preflight-only` or `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1` when a local
+agent only needs to know whether a workload can safely request Vifty cooling.
+The wrapper validates the same child command, capabilities, policy, metadata,
+and diagnose gates, then exits before `viftyctl run` and before launching the
+child:
+
+```sh
+examples/viftyctl/guarded-run.sh --preflight-only test 20m 70 "swift test" -- swift test
+```
+
+Successful preflight-only decision JSON uses
+`decisionReason: "preflightReady"`, `coolingRequested: false`, and
+`exitCode: 0`.
+
 The wrappers do not pass `--force` by default. For a supervised human workflow
 that should wait once for Vifty's `retryAfterSeconds` value and retry a
 rate-limited prepare, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1`. The guarded
 wrapper still checks `supportsForceRetry` before passing `--force`. Leave it
 unset for local agents unless the user explicitly approved retrying. Do not
 combine this with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`; the wrapper refuses
-that ambiguous mix.
+that ambiguous mix, and it also refuses force retry with
+`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`.
 
 When the user explicitly approves running the workload without Vifty cooling
 after seeing the structured readiness block, set
@@ -78,6 +94,8 @@ when Vifty recommends `repairHelper`, `backOffWorkload`, or
 `restoreAutoBeforeRetry`, `inspectPolicy`, or `collectHardwareEvidence`, when
 `manualControlActive` is true, when `daemonControlPathReady` is false, or when
 `VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
+It also refuses to combine uncooled fallback with
+`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`.
 Do not catch guarded-run failures and rerun the child command yourself.
 
 ## Scripts
