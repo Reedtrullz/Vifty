@@ -1388,6 +1388,85 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarCodexUsageModeUsesLocalCodexUsageSnapshot() async {
+        let usageSnapshot = CodexUsageSnapshot(
+            usedPercent: 42.4,
+            resetDate: Date(timeIntervalSince1970: 1_800_003_600),
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            planType: "pro",
+            creditsSummary: "Credits: 10.00",
+            sourceFileName: "session.jsonl"
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: { usageSnapshot },
+            now: { Date(timeIntervalSince1970: 1_800_000_000) },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .codexUsage
+        await model.pollOnce()
+
+        XCTAssertEqual(model.menuBarLabelText, "Codex 58% left")
+        XCTAssertEqual(model.menuBarStatusItemText, "Codex 58% left")
+        XCTAssertEqual(model.codexUsageSummary, "Codex: 58% left, 42% used · resets in 1:00:00")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
+    func testCodexUsageReaderOnlyRunsForSelectedMenuModeAndIsThrottled() async {
+        let recorder = CodexUsageReadRecorder(now: Date(timeIntervalSince1970: 1_800_000_000))
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            codexUsageRefreshInterval: 300,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .temperature
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 0)
+
+        model.menuBarDisplayMode = .codexUsage
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 1)
+        XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
+
+        recorder.advance(by: 120)
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 1)
+
+        recorder.advance(by: 181)
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 2)
+    }
+
     func testMenuBarDisplayModesUseSelectedModePlaceholdersWhenTelemetryIsMissing() {
         let model = AppModel()
 
@@ -1396,6 +1475,7 @@ final class AppModelTests: XCTestCase {
             (.fanRPM, "-- RPM"),
             (.averageFanRPM, "-- RPM avg"),
             (.adapterWattage, "-- W"),
+            (.codexUsage, "Codex --"),
             (.temperatureAndRPM, "-- C | -- RPM"),
             (.ownerTemperatureAndRPM, "Mac | -- C | -- RPM")
         ]
@@ -3480,6 +3560,48 @@ private final class AppModelPingSequence: @unchecked Sendable {
         defer { lock.unlock() }
         guard !values.isEmpty else { return false }
         return values.removeFirst()
+    }
+}
+
+private final class CodexUsageReadRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var nowValue: Date
+    private var reads = 0
+
+    init(now: Date) {
+        nowValue = now
+    }
+
+    var readCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return reads
+    }
+
+    func read() -> CodexUsageSnapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        reads += 1
+        return CodexUsageSnapshot(
+            usedPercent: 25,
+            resetDate: nil,
+            updatedAt: nowValue,
+            planType: nil,
+            creditsSummary: nil,
+            sourceFileName: "session.jsonl"
+        )
+    }
+
+    func currentTime() -> Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return nowValue
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.lock()
+        nowValue = nowValue.addingTimeInterval(interval)
+        lock.unlock()
     }
 }
 

@@ -41,6 +41,19 @@ struct MenuBarView: View {
                     .lineLimit(2)
             }
 
+            if model.menuBarDisplayMode == .codexUsage || model.codexUsageSnapshot != nil {
+                Label(model.codexUsageSummary, systemImage: "terminal")
+                    .font(.caption)
+                    .foregroundStyle(model.codexUsageSnapshot == nil ? .secondary : .primary)
+                    .lineLimit(2)
+                if let codexUsageDetailSummary = model.codexUsageDetailSummary {
+                    Text(codexUsageDetailSummary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
                 Label(fanWriteBlockedWhileHotSummary, systemImage: "thermometer.high")
                     .font(.caption.weight(.semibold))

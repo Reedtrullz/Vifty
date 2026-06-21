@@ -118,6 +118,7 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
     case fanRPM
     case averageFanRPM
     case adapterWattage
+    case codexUsage
     case temperatureAndRPM
     case ownerTemperatureAndRPM
     case compactSummary
@@ -136,6 +137,8 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
             return "Average fan RPM"
         case .adapterWattage:
             return "Adapter wattage"
+        case .codexUsage:
+            return "Codex usage"
         case .temperatureAndRPM:
             return "Temperature + RPM"
         case .ownerTemperatureAndRPM:
@@ -181,6 +184,9 @@ final class AppModel: ObservableObject {
     @Published var thermalPressure: ThermalPressure = .nominal
     @Published var menuBarDisplayMode: MenuBarDisplayMode {
         didSet {
+            if menuBarDisplayMode == .codexUsage {
+                lastCodexUsageRefreshAt = nil
+            }
             persistAppPreferences()
         }
     }
@@ -194,6 +200,7 @@ final class AppModel: ObservableObject {
             persistAppPreferences()
         }
     }
+    @Published var codexUsageSnapshot: CodexUsageSnapshot?
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
     @Published private(set) var launchAtLoginError: String?
     @Published var telemetryHistory = TelemetryHistory()
@@ -222,10 +229,13 @@ final class AppModel: ObservableObject {
     static let manualTargetDriftRPMThreshold = 75
     static let manualTargetDriftAttentionSampleCount = 2
     static let manualResponseRPMGapThreshold = 250
+    static let defaultCodexUsageRefreshInterval: TimeInterval = 5 * 60
 
     private let coordinator: FanControlCoordinator
     private let powerReader: @Sendable () -> PowerSnapshot
     private let thermalReader: @Sendable () -> ThermalPressure
+    private let codexUsageReader: @Sendable () -> CodexUsageSnapshot?
+    private let codexUsageRefreshInterval: TimeInterval
     private let now: @Sendable () -> Date
     private let notificationDeliverer: LocalNotificationDelivering
     private let launchAtLoginManager: LaunchAtLoginManaging
@@ -243,6 +253,7 @@ final class AppModel: ObservableObject {
     private var previousAgentCoolingNeedsAttention = false
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var elevatedThermalPressureStartedAt: Date?
+    private var lastCodexUsageRefreshAt: Date?
     private var didPublishFirstMenuBarTelemetryRefresh = false
     private let notificationMinimumInterval: TimeInterval = 10 * 60
     private let sustainedThermalPressureInterval: TimeInterval = 60
@@ -251,6 +262,8 @@ final class AppModel: ObservableObject {
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
         powerReader: @escaping @Sendable () -> PowerSnapshot = { PowerInfoReader.read() },
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
+        codexUsageReader: @escaping @Sendable () -> CodexUsageSnapshot? = { CodexUsageReader.readDefault() },
+        codexUsageRefreshInterval: TimeInterval = AppModel.defaultCodexUsageRefreshInterval,
         now: @escaping @Sendable () -> Date = { Date() },
         notificationDeliverer: LocalNotificationDelivering = UserNotificationDeliverer(),
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
@@ -267,6 +280,8 @@ final class AppModel: ObservableObject {
         self.coordinator = coordinator
         self.powerReader = powerReader
         self.thermalReader = thermalReader
+        self.codexUsageReader = codexUsageReader
+        self.codexUsageRefreshInterval = codexUsageRefreshInterval
         self.now = now
         self.notificationDeliverer = notificationDeliverer
         self.launchAtLoginManager = launchAtLoginManager
@@ -404,6 +419,7 @@ final class AppModel: ObservableObject {
         }
         let currentPower = powerReader()
         let currentThermalPressure = thermalReader()
+        refreshCodexUsageIfNeeded()
         powerSnapshot = currentPower
         thermalPressure = currentThermalPressure
         _ = await restoreAutoIfManualSessionExpired()
@@ -441,6 +457,19 @@ final class AppModel: ObservableObject {
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
+    }
+
+    private func refreshCodexUsageIfNeeded() {
+        guard menuBarDisplayMode == .codexUsage else { return }
+
+        let currentTime = now()
+        if let lastCodexUsageRefreshAt,
+           currentTime.timeIntervalSince(lastCodexUsageRefreshAt) < codexUsageRefreshInterval {
+            return
+        }
+
+        lastCodexUsageRefreshAt = currentTime
+        codexUsageSnapshot = codexUsageReader()
     }
 
     private func refreshMenuBarStatusItemIfNeeded(previousLabel: String) {
@@ -853,6 +882,8 @@ final class AppModel: ObservableObject {
             return menuBarLabelWithAttention(menuBarAverageFanText ?? "-- RPM avg")
         case .adapterWattage:
             return menuBarLabelWithAttention(menuBarPowerText ?? "-- W")
+        case .codexUsage:
+            return CodexUsageFormatter.menuBarText(for: codexUsageSnapshot)
         case .temperatureAndRPM:
             return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
         case .ownerTemperatureAndRPM:
@@ -875,6 +906,14 @@ final class AppModel: ObservableObject {
 
     var menuBarLabelNeedsTelemetryPrime: Bool {
         !hasCompletedHardwarePoll || menuBarLabelText.contains("--")
+    }
+
+    var codexUsageSummary: String {
+        CodexUsageFormatter.summaryText(for: codexUsageSnapshot, now: now)
+    }
+
+    var codexUsageDetailSummary: String? {
+        CodexUsageFormatter.detailText(for: codexUsageSnapshot)
     }
 
     var menuBarFanOwnerText: String {
