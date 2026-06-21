@@ -1287,6 +1287,7 @@ private struct FanCurveChartEditor: View {
                         .fill(Color.secondary.opacity(0.06))
                     chartGrid(in: plotRect(in: geometry.size))
                     chartAxisLabels(in: geometry.size)
+                    curvePointAxisGuides(for: basePoints, color: .accentColor, in: geometry.size)
 
                     ForEach(fanCurveSeries) { series in
                         drawCurve(series.points, in: geometry.size)
@@ -1295,6 +1296,8 @@ private struct FanCurveChartEditor: View {
 
                     drawCurve(basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                    curvePointAxisValueLabels(for: basePoints, color: .accentColor, in: geometry.size)
 
                     ForEach(fanCurveSeries) { series in
                         curvePointValueLabels(for: series, in: geometry.size)
@@ -1508,6 +1511,37 @@ private struct FanCurveChartEditor: View {
         .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [2, 5]))
     }
 
+    private func curvePointAxisGuides(for points: [FanCurveChartPoint], color: Color, in size: CGSize) -> some View {
+        let rect = plotRect(in: size)
+        return ZStack {
+            ForEach(points) { point in
+                let pointPosition = position(for: point, in: size)
+                Path { path in
+                    path.move(to: CGPoint(x: rect.minX, y: pointPosition.y))
+                    path.addLine(to: pointPosition)
+                    path.move(to: pointPosition)
+                    path.addLine(to: CGPoint(x: pointPosition.x, y: rect.maxY))
+                }
+                .stroke(color.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 5]))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func curvePointAxisValueLabels(for points: [FanCurveChartPoint], color: Color, in size: CGSize) -> some View {
+        let rect = plotRect(in: size)
+        return ZStack {
+            ForEach(Array(points.enumerated()), id: \.element.id) { pointIndex, point in
+                let pointPosition = position(for: point, in: size)
+                CurveChartAxisReadout(text: point.rpmText, color: color, width: 70, alignment: .leading)
+                    .position(rpmAxisReadoutPosition(near: pointPosition, pointIndex: pointIndex, in: rect))
+                CurveChartAxisReadout(text: point.temperatureText, color: color, width: 42, alignment: .center)
+                    .position(temperatureAxisReadoutPosition(near: pointPosition, pointIndex: pointIndex, in: rect))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
     private func chartAxisLabels(in size: CGSize) -> some View {
         let rect = plotRect(in: size)
         let rpmX = max(rect.minX - 28, 24)
@@ -1527,6 +1561,21 @@ private struct FanCurveChartEditor: View {
                 .position(x: rect.maxX, y: tempY)
         }
         .allowsHitTesting(false)
+    }
+
+    private func rpmAxisReadoutPosition(near pointPosition: CGPoint, pointIndex: Int, in rect: CGRect) -> CGPoint {
+        let xOffset = CGFloat(pointIndex % 2) * 14
+        let yOffset = CGFloat(pointIndex - 1) * 10
+        let x = rect.minX + 36 + xOffset
+        let y = min(max(pointPosition.y + yOffset, rect.minY + 10), rect.maxY - 10)
+        return CGPoint(x: x, y: y)
+    }
+
+    private func temperatureAxisReadoutPosition(near pointPosition: CGPoint, pointIndex: Int, in rect: CGRect) -> CGPoint {
+        let yOffset = CGFloat(pointIndex % 2) * 13
+        let x = min(max(pointPosition.x, rect.minX + 22), rect.maxX - 22)
+        let y = rect.maxY - 11 - yOffset
+        return CGPoint(x: x, y: y)
     }
 
     private func rpmTickLabel(_ rpm: Int) -> String {
@@ -1599,6 +1648,26 @@ private struct CurveChartAxisValue: View {
             .padding(.horizontal, 3)
             .padding(.vertical, 1)
             .background(.regularMaterial, in: Capsule())
+    }
+}
+
+private struct CurveChartAxisReadout: View {
+    let text: String
+    let color: Color
+    let width: CGFloat
+    let alignment: Alignment
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
+            .frame(width: width, alignment: alignment)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 0.75))
     }
 }
 
