@@ -110,7 +110,11 @@ human recovery text. The wrapper decision payload declares `schemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json` and tells agents
 whether cooling was requested, whether an uncooled fallback was requested or
 allowed, which stable `decisionReason` category applies, whether
-`preflightReady` was reached, and which readiness fields blocked the safe path.
+`preflightReady` was reached, which readiness fields blocked the safe path, and
+the privacy-conscious workload envelope (`requestedWorkload`,
+`requestedDuration`, `requestedMaxRPMPercent`, reason length, command
+basename/kind, and argument count). It intentionally omits full child arguments,
+reason text, and local command paths.
 
 ## Codex
 

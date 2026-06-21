@@ -188,7 +188,14 @@ guarded_run_decision = {
   "manualControlActive" => nil,
   "startupMode" => nil,
   "failedCheckIDs" => [],
-  "coolingBlockerIDs" => []
+  "coolingBlockerIDs" => [],
+  "requestedWorkload" => nil,
+  "requestedDuration" => nil,
+  "requestedMaxRPMPercent" => nil,
+  "reasonCharacterCount" => nil,
+  "childCommandName" => nil,
+  "childCommandKind" => nil,
+  "childArgumentCount" => nil
 }
 accepted_command_errors = []
 
@@ -827,6 +834,13 @@ if File.file?(guarded_run_stderr_path)
     startup_mode = guarded_payload["startupMode"]
     failed_check_ids = guarded_payload["failedCheckIDs"]
     cooling_blocker_ids = guarded_payload["coolingBlockerIDs"]
+    requested_workload = guarded_payload["requestedWorkload"]
+    requested_duration = guarded_payload["requestedDuration"]
+    requested_max_rpm_percent = integer_value(guarded_payload["requestedMaxRPMPercent"])
+    reason_character_count = integer_value(guarded_payload["reasonCharacterCount"])
+    child_command_name = guarded_payload["childCommandName"]
+    child_command_kind = guarded_payload["childCommandKind"]
+    child_argument_count = integer_value(guarded_payload["childArgumentCount"])
 
     guarded_run_decision["schemaVersion"] = schema_version if schema_version.is_a?(Integer)
     guarded_run_decision["schemaID"] = schema_id if schema_id.is_a?(String)
@@ -846,6 +860,13 @@ if File.file?(guarded_run_stderr_path)
     guarded_run_decision["startupMode"] = startup_mode if optional_string?(startup_mode)
     guarded_run_decision["failedCheckIDs"] = failed_check_ids if string_array?(failed_check_ids)
     guarded_run_decision["coolingBlockerIDs"] = cooling_blocker_ids if string_array?(cooling_blocker_ids)
+    guarded_run_decision["requestedWorkload"] = requested_workload if optional_string?(requested_workload)
+    guarded_run_decision["requestedDuration"] = requested_duration if optional_string?(requested_duration)
+    guarded_run_decision["requestedMaxRPMPercent"] = requested_max_rpm_percent
+    guarded_run_decision["reasonCharacterCount"] = reason_character_count
+    guarded_run_decision["childCommandName"] = child_command_name if optional_string?(child_command_name)
+    guarded_run_decision["childCommandKind"] = child_command_kind if optional_string?(child_command_kind)
+    guarded_run_decision["childArgumentCount"] = child_argument_count
 
     failures << "guarded-run decision schemaVersion must be 1" unless schema_version == 1
     failures << "guarded-run decision schemaID must be #{GUARDED_RUN_DECISION_SCHEMA_ID}" unless schema_id == GUARDED_RUN_DECISION_SCHEMA_ID
@@ -866,6 +887,27 @@ if File.file?(guarded_run_stderr_path)
     failures << "guarded-run decision startupMode is unsupported" unless startup_mode.nil? || STARTUP_MODES.include?(startup_mode)
     failures << "guarded-run decision failedCheckIDs must be an array of strings" unless string_array?(failed_check_ids)
     failures << "guarded-run decision coolingBlockerIDs must be an array of strings" unless string_array?(cooling_blocker_ids)
+
+    workload_envelope_values = {
+      "requestedWorkload" => requested_workload,
+      "requestedDuration" => requested_duration,
+      "requestedMaxRPMPercent" => requested_max_rpm_percent,
+      "reasonCharacterCount" => reason_character_count,
+      "childCommandName" => child_command_name,
+      "childCommandKind" => child_command_kind,
+      "childArgumentCount" => child_argument_count
+    }
+    if workload_envelope_values.values.compact.any?
+      failures << "guarded-run decision requestedWorkload must be nonempty" unless requested_workload.is_a?(String) && !requested_workload.strip.empty?
+      failures << "guarded-run decision requestedDuration is unsupported" unless requested_duration.is_a?(String) && requested_duration.match?(/\A[1-9][0-9]*([mh])?\z/)
+      failures << "guarded-run decision requestedMaxRPMPercent must be 1...100" unless requested_max_rpm_percent && requested_max_rpm_percent >= 1 && requested_max_rpm_percent <= 100
+      failures << "guarded-run decision reasonCharacterCount must be positive" unless reason_character_count && reason_character_count.positive?
+      failures << "guarded-run decision childCommandName must be a basename without slashes" unless child_command_name.is_a?(String) && !child_command_name.empty? && !child_command_name.include?("/")
+      failures << "guarded-run decision childCommandKind is unsupported" unless %w[path pathLookup].include?(child_command_kind)
+      failures << "guarded-run decision childArgumentCount must be nonnegative" unless child_argument_count && child_argument_count >= 0
+    else
+      warnings << "guarded-run decision omits workload envelope; accepted as legacy evidence"
+    end
 
     if safe_to_proceed == true
       failures << "guarded-run decision safeToProceed true requires exitCode 0" unless exit_code == 0

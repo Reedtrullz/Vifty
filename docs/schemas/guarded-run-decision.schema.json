@@ -21,7 +21,14 @@
     "manualControlActive",
     "startupMode",
     "failedCheckIDs",
-    "coolingBlockerIDs"
+    "coolingBlockerIDs",
+    "requestedWorkload",
+    "requestedDuration",
+    "requestedMaxRPMPercent",
+    "reasonCharacterCount",
+    "childCommandName",
+    "childCommandKind",
+    "childArgumentCount"
   ],
   "properties": {
     "schemaVersion": {
@@ -121,6 +128,43 @@
       "items": {
         "type": "string"
       }
+    },
+    "requestedWorkload": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The guarded-run workload class that was checked, such as build, test, localModel, or custom."
+    },
+    "requestedDuration": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*([mh])?$",
+      "description": "The requested lease duration string after wrapper argument validation. This is not proof a lease was requested."
+    },
+    "requestedMaxRPMPercent": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "The requested RPM cap percentage after wrapper argument validation."
+    },
+    "reasonCharacterCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Trimmed reason length only; the reason text is intentionally not copied into the decision payload."
+    },
+    "childCommandName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/]+$",
+      "description": "Basename or PATH command token for the preflighted child command. Full paths and child arguments are intentionally omitted."
+    },
+    "childCommandKind": {
+      "type": "string",
+      "enum": ["path", "pathLookup"],
+      "description": "Whether the child command was supplied as a path or resolved through PATH."
+    },
+    "childArgumentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of child arguments after the command name. Argument values are intentionally omitted."
     }
   }
 }

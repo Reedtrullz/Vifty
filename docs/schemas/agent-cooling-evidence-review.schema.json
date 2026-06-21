@@ -268,7 +268,14 @@
         "manualControlActive",
         "startupMode",
         "failedCheckIDs",
-        "coolingBlockerIDs"
+        "coolingBlockerIDs",
+        "requestedWorkload",
+        "requestedDuration",
+        "requestedMaxRPMPercent",
+        "reasonCharacterCount",
+        "childCommandName",
+        "childCommandKind",
+        "childArgumentCount"
       ],
       "properties": {
         "present": {
@@ -340,6 +347,7 @@
             "manualControlActive",
             "coolingBlockersPresent",
             "recoveryActionBlocksUncooledFallback",
+            "preflightReady",
             "uncooledFallbackAllowed",
             "unknownNoCoolingDecision",
             null
@@ -432,6 +440,53 @@
         },
         "coolingBlockerIDs": {
           "$ref": "#/$defs/stringArray"
+        },
+        "requestedWorkload": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requestedDuration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requestedMaxRPMPercent": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reasonCharacterCount": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "childCommandName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "childCommandKind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "path",
+            "pathLookup",
+            null
+          ]
+        },
+        "childArgumentCount": {
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       }
     },

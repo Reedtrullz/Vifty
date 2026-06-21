@@ -50,6 +50,13 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(decision["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(decision["requestedWorkload"] as? String, "test")
+        XCTAssertEqual(decision["requestedDuration"] as? String, "20m")
+        XCTAssertEqual(decision["requestedMaxRPMPercent"] as? Int, 70)
+        XCTAssertEqual(decision["reasonCharacterCount"] as? Int, 10)
+        XCTAssertEqual(decision["childCommandName"] as? String, "swift")
+        XCTAssertEqual(decision["childCommandKind"] as? String, "pathLookup")
+        XCTAssertEqual(decision["childArgumentCount"] as? Int, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 

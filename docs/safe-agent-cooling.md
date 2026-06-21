@@ -79,7 +79,11 @@ support tooling should extract the exact JSON between those markers instead of
 parsing surrounding prose. Current wrapper decision payloads include
 `decisionReason` so agents can classify readiness-blocked, manual-control,
 daemon-control, hard-blocker, preflight-ready, and uncooled-fallback decisions
-without scraping the human `message`.
+without scraping the human `message`. They also include a privacy-conscious
+workload envelope: `requestedWorkload`, `requestedDuration`,
+`requestedMaxRPMPercent`, `reasonCharacterCount`, `childCommandName`,
+`childCommandKind`, and `childArgumentCount`. The reason text, full local
+command path, and child argument values are intentionally omitted.
 
 The guarded wrapper does not force-retry rate-limited prepares by default. For a supervised human workflow, set `VIFTY_GUARDED_RUN_FORCE_RETRY=1` to let `viftyctl run --force` wait once for the daemon's retry window and try again. The wrapper checks `supportsForceRetry` before passing `--force`. Agents should normally leave that unset and show the rate-limit JSON instead. Do not combine force retry with `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` or `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`; the wrapper treats those as mutually exclusive operator choices. `viftyctl run` still revalidates the child command before preparing cooling, so direct CLI use keeps the same safety boundary.
 
@@ -291,8 +295,9 @@ persisted `Curve` or `Fixed` default, switch Vifty's default startup mode to
 `daemonControlPathReady` still has to be inferred from structured
 readiness/recovery fields. If `guarded-run-stderr.txt` is present, the
 `guardedRunDecision` summary records the bracketed wrapper decision, preserves
-`decisionReason` when current wrappers provide it, and fails review if that
-decision drifts from the captured diagnose evidence. The
+`decisionReason` and the privacy-conscious workload envelope when current
+wrappers provide them, and fails review if that decision drifts from the
+captured diagnose evidence. The
 `capabilitiesDecision` summary
 records the captured capabilities schema version plus stable
 `schemaIDs.capabilities`, `schemaIDs.diagnose`, `schemaIDs.commandError`, and

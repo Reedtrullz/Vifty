@@ -189,6 +189,13 @@ guarded_run_decision_json() {
   VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE="${startup_mode:-}" \
   VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS="${failed_check_ids_compact:-[]}" \
   VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS="${cooling_blocker_ids_compact:-[]}" \
+  VIFTY_GUARDED_RUN_DECISION_REQUESTED_WORKLOAD="${workload:-}" \
+  VIFTY_GUARDED_RUN_DECISION_REQUESTED_DURATION="${duration:-}" \
+  VIFTY_GUARDED_RUN_DECISION_REQUESTED_MAX_RPM_PERCENT="${max_rpm_percent:-}" \
+  VIFTY_GUARDED_RUN_DECISION_REASON_CHARACTER_COUNT="${reason_length:-}" \
+  VIFTY_GUARDED_RUN_DECISION_CHILD_COMMAND_NAME="${child_command_name:-}" \
+  VIFTY_GUARDED_RUN_DECISION_CHILD_COMMAND_KIND="${child_command_kind:-}" \
+  VIFTY_GUARDED_RUN_DECISION_CHILD_ARGUMENT_COUNT="${child_argument_count:-}" \
   /usr/bin/ruby -rjson <<'RUBY'
 def bool_value(name)
   value = ENV[name]
@@ -200,6 +207,14 @@ end
 def optional_string(name)
   value = ENV[name].to_s
   value.empty? ? nil : value
+end
+
+def optional_integer(name)
+  value = ENV[name].to_s
+  return nil if value.empty?
+  Integer(value)
+rescue ArgumentError
+  nil
 end
 
 def string_array(name)
@@ -229,7 +244,14 @@ payload = {
   "manualControlActive" => bool_value("VIFTY_GUARDED_RUN_DECISION_MANUAL_ACTIVE"),
   "startupMode" => optional_string("VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE"),
   "failedCheckIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS"),
-  "coolingBlockerIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS")
+  "coolingBlockerIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS"),
+  "requestedWorkload" => optional_string("VIFTY_GUARDED_RUN_DECISION_REQUESTED_WORKLOAD"),
+  "requestedDuration" => optional_string("VIFTY_GUARDED_RUN_DECISION_REQUESTED_DURATION"),
+  "requestedMaxRPMPercent" => optional_integer("VIFTY_GUARDED_RUN_DECISION_REQUESTED_MAX_RPM_PERCENT"),
+  "reasonCharacterCount" => optional_integer("VIFTY_GUARDED_RUN_DECISION_REASON_CHARACTER_COUNT"),
+  "childCommandName" => optional_string("VIFTY_GUARDED_RUN_DECISION_CHILD_COMMAND_NAME"),
+  "childCommandKind" => optional_string("VIFTY_GUARDED_RUN_DECISION_CHILD_COMMAND_KIND"),
+  "childArgumentCount" => optional_integer("VIFTY_GUARDED_RUN_DECISION_CHILD_ARGUMENT_COUNT")
 }
 
 puts JSON.generate(payload)
@@ -382,6 +404,13 @@ if [ "$#" -eq 0 ]; then
 fi
 
 preflight_child_command "$1"
+child_command_input="$1"
+case "$child_command_input" in
+  */*) child_command_kind="path" ;;
+  *) child_command_kind="pathLookup" ;;
+esac
+child_command_name="${child_command_input##*/}"
+child_argument_count=$(($# - 1))
 
 viftyctl="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 force_retry="${VIFTY_GUARDED_RUN_FORCE_RETRY:-0}"
