@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var selectedProfileID: UUID?
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
+    @State private var agentRuleCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -154,6 +155,7 @@ struct ContentView: View {
             startupModeSettings
             launchAtLoginSettings
             menuBarDisplaySettings
+            agentWorkflowSettings
 
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
                 HStack(spacing: 8) {
@@ -360,6 +362,11 @@ struct ContentView: View {
         helperDiagnosticsCopied = true
     }
 
+    private func copyAgentWorkflowRule() {
+        AgentWorkflowSupport.copyAgentRule()
+        agentRuleCopied = true
+    }
+
     private var modePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Mode", selection: $model.selectedMode) {
@@ -494,6 +501,29 @@ struct ContentView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
             Spacer()
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var agentWorkflowSettings: some View {
+        HStack(spacing: 8) {
+            Label("Agent workflows", systemImage: "terminal")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                copyAgentWorkflowRule()
+            } label: {
+                Label("Copy Agent Rule", systemImage: "doc.on.doc")
+            }
+            .controlSize(.small)
+            .help(AgentWorkflowSupport.copyHelp)
+            if agentRuleCopied {
+                Text(AgentWorkflowSupport.copiedMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))

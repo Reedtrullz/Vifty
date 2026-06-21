@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
+    @State private var agentRuleCopied = false
     @State private var selectedMenuCurveProfileID: UUID?
 
     var body: some View {
@@ -213,6 +214,20 @@ struct MenuBarView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
 
+            Button {
+                copyAgentWorkflowRule()
+            } label: {
+                Label("Copy Agent Rule", systemImage: "terminal")
+            }
+            .controlSize(.small)
+            .help(AgentWorkflowSupport.copyHelp)
+
+            if agentRuleCopied {
+                Text(AgentWorkflowSupport.copiedMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             DisclosureGroup {
                 Toggle("Helper failure", isOn: $model.notificationSettings.helperFailure)
                 Toggle("High thermal pressure", isOn: $model.notificationSettings.elevatedThermalPressure)
@@ -279,6 +294,11 @@ struct MenuBarView: View {
     private func copyHelperDiagnosticsCommand() {
         HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
+    }
+
+    private func copyAgentWorkflowRule() {
+        AgentWorkflowSupport.copyAgentRule()
+        agentRuleCopied = true
     }
 
     private var launchAtLoginBinding: Binding<Bool> {

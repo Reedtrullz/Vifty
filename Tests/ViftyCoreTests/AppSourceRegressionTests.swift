@@ -58,6 +58,25 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".fixedSize(horizontal: false, vertical: true)"))
     }
 
+    func testAgentWorkflowRuleCanBeCopiedFromMainWindowAndMenuBar() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
+
+        XCTAssertTrue(contentView.contains("@State private var agentRuleCopied = false"))
+        XCTAssertTrue(contentView.contains("agentWorkflowSettings"))
+        XCTAssertTrue(contentView.contains("Label(\"Agent workflows\", systemImage: \"terminal\")"))
+        XCTAssertTrue(contentView.contains("Label(\"Copy Agent Rule\", systemImage: \"doc.on.doc\")"))
+        XCTAssertTrue(contentView.contains("AgentWorkflowSupport.copyAgentRule()"))
+        XCTAssertTrue(contentView.contains(".help(AgentWorkflowSupport.copyHelp)"))
+        XCTAssertTrue(contentView.contains("Text(AgentWorkflowSupport.copiedMessage)"))
+
+        XCTAssertTrue(menuBarView.contains("@State private var agentRuleCopied = false"))
+        XCTAssertTrue(menuBarView.contains("Label(\"Copy Agent Rule\", systemImage: \"terminal\")"))
+        XCTAssertTrue(menuBarView.contains("AgentWorkflowSupport.copyAgentRule()"))
+        XCTAssertTrue(menuBarView.contains(".help(AgentWorkflowSupport.copyHelp)"))
+        XCTAssertTrue(menuBarView.contains("Text(AgentWorkflowSupport.copiedMessage)"))
+    }
+
     func testMainWindowHeaderAndEmptyFanFallbackGateRepairActions() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
