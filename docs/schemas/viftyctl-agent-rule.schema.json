@@ -88,7 +88,64 @@
         "type": "string",
         "minLength": 1
       },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "const": "schemaVersion == 1"
+          }
+        },
+        {
+          "contains": {
+            "const": "schemaIDs.capabilities"
+          }
+        },
+        {
+          "contains": {
+            "const": "schemaIDs.diagnose"
+          }
+        },
+        {
+          "contains": {
+            "const": "schemaIDs.commandError"
+          }
+        },
+        {
+          "contains": {
+            "const": "schemaIDs.run"
+          }
+        },
+        {
+          "contains": {
+            "const": "schemaIDs.agentRule"
+          }
+        },
+        {
+          "contains": {
+            "const": "guardedRunDecisionSchemaID"
+          }
+        },
+        {
+          "contains": {
+            "const": "guardedRunJSONMarkers"
+          }
+        },
+        {
+          "contains": {
+            "const": "wrapperResources"
+          }
+        },
+        {
+          "contains": {
+            "const": "workloadTemplates"
+          }
+        },
+        {
+          "contains": {
+            "const": "runLifecycle.resolvedChildExecutableReported == true"
+          }
+        }
+      ]
     },
     "safetyRequirements": {
       "type": "array",
@@ -96,7 +153,39 @@
         "type": "string",
         "minLength": 1
       },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "const": "policyStatusAvailable == true"
+          }
+        },
+        {
+          "contains": {
+            "const": "policy.enabled == true"
+          }
+        },
+        {
+          "contains": {
+            "const": "safeToRequestCooling == true"
+          }
+        },
+        {
+          "contains": {
+            "const": "daemonControlPathReady == true"
+          }
+        },
+        {
+          "contains": {
+            "const": "manualControlActive == false"
+          }
+        },
+        {
+          "contains": {
+            "const": "coolingBlockerIDs is empty"
+          }
+        }
+      ]
     },
     "forbiddenActions": {
       "type": "array",
@@ -104,7 +193,39 @@
         "type": "string",
         "minLength": 1
       },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "const": "ViftyHelper setFixed"
+          }
+        },
+        {
+          "contains": {
+            "const": "ViftyHelper auto"
+          }
+        },
+        {
+          "contains": {
+            "const": "sudo"
+          }
+        },
+        {
+          "contains": {
+            "const": "raw SMC tools"
+          }
+        },
+        {
+          "contains": {
+            "const": "direct fan RPM writes"
+          }
+        },
+        {
+          "contains": {
+            "const": "unguarded viftyctl prepare"
+          }
+        }
+      ]
     },
     "workloadTemplateIDs": {
       "type": "array",

@@ -700,8 +700,27 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual((agentRuleProperties["guardedRunDecisionSchemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
         let markerProperties = try XCTUnwrap(agentRuleProperties["guardedRunJSONMarkers"] as? [String: Any])
         XCTAssertEqual(markerProperties["additionalProperties"] as? Bool, false)
-        XCTAssertNotNil(agentRuleProperties["safetyRequirements"] as? [String: Any])
-        XCTAssertNotNil(agentRuleProperties["forbiddenActions"] as? [String: Any])
+        let schemaRequirementsSchema = try XCTUnwrap(agentRuleProperties["schemaRequirements"] as? [String: Any])
+        let schemaRequirementConstraints = try XCTUnwrap(schemaRequirementsSchema["allOf"] as? [[String: Any]])
+        XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("schemaIDs.agentRule"))
+        XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("guardedRunDecisionSchemaID"))
+        XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("guardedRunJSONMarkers"))
+        let safetyRequirementsSchema = try XCTUnwrap(agentRuleProperties["safetyRequirements"] as? [String: Any])
+        let safetyRequirementConstraints = try XCTUnwrap(safetyRequirementsSchema["allOf"] as? [[String: Any]])
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("policyStatusAvailable == true"))
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("policy.enabled == true"))
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("safeToRequestCooling == true"))
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("daemonControlPathReady == true"))
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("manualControlActive == false"))
+        XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("coolingBlockerIDs is empty"))
+        let forbiddenActionsSchema = try XCTUnwrap(agentRuleProperties["forbiddenActions"] as? [String: Any])
+        let forbiddenActionConstraints = try XCTUnwrap(forbiddenActionsSchema["allOf"] as? [[String: Any]])
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("ViftyHelper setFixed"))
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("ViftyHelper auto"))
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("sudo"))
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("raw SMC tools"))
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("direct fan RPM writes"))
+        XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("unguarded viftyctl prepare"))
         let agentRuleExample = try readJSON(fixtureURL("agent-rule.json"))
         XCTAssertEqual(agentRuleExample["schemaVersion"] as? Int, 1)
         XCTAssertEqual(agentRuleExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
@@ -931,5 +950,19 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas")
             .appendingPathComponent(filename)
+    }
+}
+
+private extension Array where Element == [String: Any] {
+    func containsRequiredString(_ value: String) -> Bool {
+        contains { constraint in
+            guard
+                let contains = constraint["contains"] as? [String: Any],
+                let const = contains["const"] as? String
+            else {
+                return false
+            }
+            return const == value
+        }
     }
 }
