@@ -51,6 +51,95 @@ struct CodexUsageSnapshot: Equatable, Sendable {
     }
 }
 
+enum CodexUsageMetricMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case percentLeft
+    case percentUsed
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .percentLeft:
+            return "% left"
+        case .percentUsed:
+            return "% used"
+        }
+    }
+}
+
+enum CodexUsageResetMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case countdown
+    case resetTime
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .countdown:
+            return "Countdown"
+        case .resetTime:
+            return "Reset time"
+        }
+    }
+}
+
+enum CodexUsageRefreshCadence: Int, Codable, CaseIterable, Identifiable, Sendable {
+    case thirtySeconds = 30
+    case oneMinute = 60
+    case threeMinutes = 180
+    case fiveMinutes = 300
+
+    var id: Int { rawValue }
+    var seconds: TimeInterval { TimeInterval(rawValue) }
+
+    var label: String {
+        switch self {
+        case .thirtySeconds:
+            return "30 sec"
+        case .oneMinute:
+            return "1 min"
+        case .threeMinutes:
+            return "3 min"
+        case .fiveMinutes:
+            return "5 min"
+        }
+    }
+
+    init?(seconds: TimeInterval) {
+        let rounded = Int(seconds.rounded())
+        self.init(rawValue: rounded)
+    }
+}
+
+struct CodexUsageDisplayPreferences: Codable, Equatable, Sendable {
+    var metricMode: CodexUsageMetricMode
+    var resetMode: CodexUsageResetMode
+    var refreshCadence: CodexUsageRefreshCadence
+
+    static let defaults = CodexUsageDisplayPreferences(
+        metricMode: .percentLeft,
+        resetMode: .countdown,
+        refreshCadence: .fiveMinutes
+    )
+
+    init(
+        metricMode: CodexUsageMetricMode = .percentLeft,
+        resetMode: CodexUsageResetMode = .countdown,
+        refreshCadence: CodexUsageRefreshCadence = .fiveMinutes
+    ) {
+        self.metricMode = metricMode
+        self.resetMode = resetMode
+        self.refreshCadence = refreshCadence
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        metricMode = try container.decodeIfPresent(CodexUsageMetricMode.self, forKey: .metricMode) ?? Self.defaults.metricMode
+        resetMode = try container.decodeIfPresent(CodexUsageResetMode.self, forKey: .resetMode) ?? Self.defaults.resetMode
+        refreshCadence = try container.decodeIfPresent(CodexUsageRefreshCadence.self, forKey: .refreshCadence) ?? Self.defaults.refreshCadence
+    }
+}
+
 struct CodexUsageReader {
     static let maxRecentFiles = 150
     static let tailBytes: UInt64 = 4 * 1024 * 1024
@@ -648,35 +737,41 @@ struct CodexUsageAppServerClient {
 enum CodexUsageFormatter {
     static func menuBarText(
         for snapshot: CodexUsageSnapshot?,
+        options: CodexUsageDisplayPreferences = .defaults,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> String {
         guard let snapshot else { return "Codex --" }
-        var text = "Codex \(roundedPercent(snapshot.leftPercent))% left"
+        var text = "Codex \(metricText(for: snapshot, mode: options.metricMode))"
         if let resetDate = snapshot.resetDate {
-            text += " · \(compactCountdownText(until: resetDate, now: now()))"
+            text += " · \(menuResetText(until: resetDate, mode: options.resetMode, now: now()))"
         }
         return text
     }
 
     static func summaryText(
         for snapshot: CodexUsageSnapshot?,
+        options: CodexUsageDisplayPreferences = .defaults,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> String {
         guard let snapshot else { return "Codex usage unavailable" }
         let scope = snapshot.windowLabel.map { " \($0)" } ?? ""
-        var text = "Codex\(scope): \(roundedPercent(snapshot.leftPercent))% left, \(roundedPercent(snapshot.usedPercent))% used"
+        var text = "Codex\(scope): \(metricText(for: snapshot, mode: options.metricMode)), \(alternateMetricText(for: snapshot, mode: options.metricMode))"
         if let resetDate = snapshot.resetDate {
-            text += " · resets in \(countdownText(until: resetDate, now: now()))"
+            text += " · \(summaryResetText(until: resetDate, mode: options.resetMode, now: now()))"
         }
         return text
     }
 
-    static func detailText(for snapshot: CodexUsageSnapshot?) -> String? {
-        detailLines(for: snapshot).joined(separator: " · ").nilIfEmpty
+    static func detailText(
+        for snapshot: CodexUsageSnapshot?,
+        options: CodexUsageDisplayPreferences = .defaults
+    ) -> String? {
+        detailLines(for: snapshot, options: options).joined(separator: " · ").nilIfEmpty
     }
 
     static func detailLines(
         for snapshot: CodexUsageSnapshot?,
+        options: CodexUsageDisplayPreferences = .defaults,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> [String] {
         guard let snapshot else { return [] }
@@ -693,7 +788,7 @@ enum CodexUsageFormatter {
         if let monthlySummary = snapshot.monthlySummary {
             lines.append(monthlySummary)
         }
-        lines.append(contentsOf: limitSummaryLines(for: snapshot, now: now))
+        lines.append(contentsOf: limitSummaryLines(for: snapshot, options: options, now: now))
         if let sourceSummary = snapshot.sourceSummary {
             lines.append("Source: \(sourceSummary)")
         } else if let sourceFileName = snapshot.sourceFileName {
@@ -704,6 +799,24 @@ enum CodexUsageFormatter {
 
     private static func roundedPercent(_ value: Double) -> Int {
         Int(max(0, min(100, value)).rounded())
+    }
+
+    private static func metricText(for snapshot: CodexUsageSnapshot, mode: CodexUsageMetricMode) -> String {
+        switch mode {
+        case .percentLeft:
+            return "\(roundedPercent(snapshot.leftPercent))% left"
+        case .percentUsed:
+            return "\(roundedPercent(snapshot.usedPercent))% used"
+        }
+    }
+
+    private static func alternateMetricText(for snapshot: CodexUsageSnapshot, mode: CodexUsageMetricMode) -> String {
+        switch mode {
+        case .percentLeft:
+            return "\(roundedPercent(snapshot.usedPercent))% used"
+        case .percentUsed:
+            return "\(roundedPercent(snapshot.leftPercent))% left"
+        }
     }
 
     private static func countdownText(until date: Date, now: Date) -> String {
@@ -725,13 +838,44 @@ enum CodexUsageFormatter {
         return "\(minutes)m"
     }
 
+    private static func resetClockText(for date: Date) -> String {
+        DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .short)
+    }
+
+    private static func menuResetText(
+        until date: Date,
+        mode: CodexUsageResetMode,
+        now: Date
+    ) -> String {
+        switch mode {
+        case .countdown:
+            return compactCountdownText(until: date, now: now)
+        case .resetTime:
+            return resetClockText(for: date)
+        }
+    }
+
+    private static func summaryResetText(
+        until date: Date,
+        mode: CodexUsageResetMode,
+        now: Date
+    ) -> String {
+        switch mode {
+        case .countdown:
+            return "resets in \(countdownText(until: date, now: now))"
+        case .resetTime:
+            return "resets at \(resetClockText(for: date))"
+        }
+    }
+
     private static func limitSummaryLines(
         for snapshot: CodexUsageSnapshot,
+        options: CodexUsageDisplayPreferences,
         now: @escaping @Sendable () -> Date
     ) -> [String] {
         snapshot.limitWindows.map { window in
             let usedText = window.usedPercent.map { "\(roundedPercent($0))% used" } ?? "--% used"
-            let resetText = window.resetDate.map { "resets in \(countdownText(until: $0, now: now()))" } ?? "reset unknown"
+            let resetText = window.resetDate.map { summaryResetText(until: $0, mode: options.resetMode, now: now()) } ?? "reset unknown"
             return "\(window.name): \(usedText), \(resetText)"
         }
     }

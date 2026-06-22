@@ -499,22 +499,56 @@ struct ContentView: View {
     }
 
     private var menuBarDisplaySettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label("Menu bar", systemImage: "menubar.rectangle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Picker("Menu bar", selection: $model.menuBarDisplayMode) {
+                    ForEach(MenuBarDisplayMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                Spacer()
+            }
+            if model.menuBarDisplayMode == .codexUsage {
+                codexUsageDisplayControls
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var codexUsageDisplayControls: some View {
         HStack(spacing: 8) {
-            Label("Menu bar", systemImage: "menubar.rectangle")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Picker("Menu bar", selection: $model.menuBarDisplayMode) {
-                ForEach(MenuBarDisplayMode.allCases) { mode in
+            Picker("Codex metric", selection: $model.codexUsageMetricMode) {
+                ForEach(CodexUsageMetricMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
-            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+
+            Picker("Reset", selection: $model.codexUsageResetMode) {
+                ForEach(CodexUsageResetMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.small)
+
+            Picker("Refresh", selection: $model.codexUsageRefreshCadence) {
+                ForEach(CodexUsageRefreshCadence.allCases) { cadence in
+                    Text(cadence.label).tag(cadence)
+                }
+            }
             .pickerStyle(.menu)
             .controlSize(.small)
             Spacer()
         }
-        .padding(10)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var agentWorkflowSettings: some View {

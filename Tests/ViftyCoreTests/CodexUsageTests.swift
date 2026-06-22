@@ -122,6 +122,42 @@ final class CodexUsageTests: XCTestCase {
         )
     }
 
+    func testFormatterCanShowUsedPercentAndResetClockTime() throws {
+        let resetDate = Date(timeIntervalSince1970: 1_800_003_600)
+        let snapshot = CodexUsageSnapshot(
+            usedPercent: 42.4,
+            resetDate: resetDate,
+            windowLabel: "5h",
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            planType: "pro",
+            creditsSummary: "Credits: 10.00",
+            sourceFileName: "session.jsonl"
+        )
+        let options = CodexUsageDisplayPreferences(
+            metricMode: .percentUsed,
+            resetMode: .resetTime,
+            refreshCadence: .thirtySeconds
+        )
+        let resetTime = DateFormatter.localizedString(from: resetDate, dateStyle: .none, timeStyle: .short)
+
+        XCTAssertEqual(
+            CodexUsageFormatter.menuBarText(
+                for: snapshot,
+                options: options,
+                now: { Date(timeIntervalSince1970: 1_800_000_000) }
+            ),
+            "Codex 42% used · \(resetTime)"
+        )
+        XCTAssertEqual(
+            CodexUsageFormatter.summaryText(
+                for: snapshot,
+                options: options,
+                now: { Date(timeIntervalSince1970: 1_800_000_000) }
+            ),
+            "Codex 5h: 42% used, 58% left · resets at \(resetTime)"
+        )
+    }
+
     func testAppServerClientReadsRateLimitsOverDirectStdio() throws {
         let root = try temporaryDirectory()
         let executable = root.appendingPathComponent("fake-codex")

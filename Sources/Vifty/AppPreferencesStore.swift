@@ -6,13 +6,15 @@ struct AppPreferences: Codable, Equatable {
     var notificationSettings: LocalNotificationSettings
     var usePerFanFixedRPM: Bool
     var fixedFanTargets: [FixedFanTarget]
+    var codexUsageDisplayPreferences: CodexUsageDisplayPreferences
 
     static let defaults = AppPreferences(
         menuBarDisplayMode: .fanIcon,
         startupMode: .auto,
         notificationSettings: .disabled,
         usePerFanFixedRPM: false,
-        fixedFanTargets: []
+        fixedFanTargets: [],
+        codexUsageDisplayPreferences: .defaults
     )
 
     init(
@@ -20,13 +22,15 @@ struct AppPreferences: Codable, Equatable {
         startupMode: ModeSelection = .auto,
         notificationSettings: LocalNotificationSettings,
         usePerFanFixedRPM: Bool = false,
-        fixedFanTargets: [FixedFanTarget] = []
+        fixedFanTargets: [FixedFanTarget] = [],
+        codexUsageDisplayPreferences: CodexUsageDisplayPreferences = .defaults
     ) {
         self.menuBarDisplayMode = menuBarDisplayMode
         self.startupMode = startupMode
         self.notificationSettings = notificationSettings
         self.usePerFanFixedRPM = usePerFanFixedRPM
         self.fixedFanTargets = fixedFanTargets
+        self.codexUsageDisplayPreferences = codexUsageDisplayPreferences
     }
 
     init(from decoder: Decoder) throws {
@@ -36,6 +40,10 @@ struct AppPreferences: Codable, Equatable {
         notificationSettings = try container.decodeIfPresent(LocalNotificationSettings.self, forKey: .notificationSettings) ?? .disabled
         usePerFanFixedRPM = try container.decodeIfPresent(Bool.self, forKey: .usePerFanFixedRPM) ?? false
         fixedFanTargets = try container.decodeIfPresent([FixedFanTarget].self, forKey: .fixedFanTargets) ?? []
+        codexUsageDisplayPreferences = try container.decodeIfPresent(
+            CodexUsageDisplayPreferences.self,
+            forKey: .codexUsageDisplayPreferences
+        ) ?? .defaults
     }
 }
 

@@ -232,6 +232,32 @@ struct MenuBarView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
 
+            if model.menuBarDisplayMode == .codexUsage {
+                Picker("Codex metric", selection: $model.codexUsageMetricMode) {
+                    ForEach(CodexUsageMetricMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+
+                Picker("Reset", selection: $model.codexUsageResetMode) {
+                    ForEach(CodexUsageResetMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+
+                Picker("Refresh", selection: $model.codexUsageRefreshCadence) {
+                    ForEach(CodexUsageRefreshCadence.allCases) { cadence in
+                        Text(cadence.label).tag(cadence)
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+            }
+
             Menu {
                 ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
                     Section(mode.menuTitle) {

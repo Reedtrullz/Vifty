@@ -1427,6 +1427,48 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testCodexUsageDisplayPreferencesAffectMenuBarAndPersist() async throws {
+        let resetDate = Date(timeIntervalSince1970: 1_800_003_600)
+        let usageSnapshot = CodexUsageSnapshot(
+            usedPercent: 42.4,
+            resetDate: resetDate,
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            planType: "pro",
+            creditsSummary: "Credits: 10.00",
+            sourceFileName: "session.jsonl"
+        )
+        let store = AppPreferencesStore(url: temporaryPreferencesPath(), legacyDefaults: nil)
+        let model = AppModel(
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: { usageSnapshot },
+            now: { Date(timeIntervalSince1970: 1_800_000_000) },
+            daemonPing: { true },
+            agentStatusReader: { nil },
+            preferencesStore: store
+        )
+
+        model.menuBarDisplayMode = .codexUsage
+        model.codexUsageMetricMode = .percentUsed
+        model.codexUsageResetMode = .resetTime
+        model.codexUsageRefreshCadence = .thirtySeconds
+        await model.pollOnce()
+        await waitForCodexUsageSnapshot(model)
+
+        let resetTime = DateFormatter.localizedString(from: resetDate, dateStyle: .none, timeStyle: .short)
+        XCTAssertEqual(model.menuBarLabelText, "Codex 42% used · \(resetTime)")
+        XCTAssertEqual(model.codexUsageSummary, "Codex: 42% used, 58% left · resets at \(resetTime)")
+
+        let relaunched = AppModel(
+            codexUsageReader: { usageSnapshot },
+            preferencesStore: store
+        )
+        XCTAssertEqual(relaunched.menuBarDisplayMode, .codexUsage)
+        XCTAssertEqual(relaunched.codexUsageMetricMode, .percentUsed)
+        XCTAssertEqual(relaunched.codexUsageResetMode, .resetTime)
+        XCTAssertEqual(relaunched.codexUsageRefreshCadence, .thirtySeconds)
+    }
+
     func testCodexUsageReaderOnlyRunsForSelectedMenuModeAndIsThrottled() async {
         let recorder = CodexUsageReadRecorder(now: Date(timeIntervalSince1970: 1_800_000_000))
         let hardwareSnapshot = HardwareSnapshot(
@@ -1468,6 +1510,31 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageReadCount(2, recorder: recorder)
         XCTAssertEqual(recorder.readCount, 2)
+    }
+
+    func testCodexUsageRefreshCadenceCanBeReducedForLiveTopBarTracking() async {
+        let recorder = CodexUsageReadRecorder(now: Date(timeIntervalSince1970: 1_800_000_000))
+        let model = AppModel(
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .codexUsage
+        model.codexUsageRefreshCadence = .thirtySeconds
+
+        await model.pollOnce()
+        await waitForCodexUsageReadCount(1, recorder: recorder)
+
+        recorder.advance(by: 29)
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 1)
+
+        recorder.advance(by: 2)
+        await model.pollOnce()
+        await waitForCodexUsageReadCount(2, recorder: recorder)
     }
 
     func testCodexUsageRefreshDoesNotBlockHardwarePoll() async {

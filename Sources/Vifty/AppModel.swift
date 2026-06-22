@@ -201,6 +201,22 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var codexUsageSnapshot: CodexUsageSnapshot?
+    @Published var codexUsageMetricMode: CodexUsageMetricMode {
+        didSet {
+            codexUsageDisplayPreferenceDidChange()
+        }
+    }
+    @Published var codexUsageResetMode: CodexUsageResetMode {
+        didSet {
+            codexUsageDisplayPreferenceDidChange()
+        }
+    }
+    @Published var codexUsageRefreshCadence: CodexUsageRefreshCadence {
+        didSet {
+            lastCodexUsageRefreshAt = nil
+            codexUsageDisplayPreferenceDidChange()
+        }
+    }
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
     @Published private(set) var launchAtLoginError: String?
     @Published var telemetryHistory = TelemetryHistory()
@@ -235,7 +251,6 @@ final class AppModel: ObservableObject {
     private let powerReader: @Sendable () -> PowerSnapshot
     private let thermalReader: @Sendable () -> ThermalPressure
     private let codexUsageReader: @Sendable () -> CodexUsageSnapshot?
-    private let codexUsageRefreshInterval: TimeInterval
     private let now: @Sendable () -> Date
     private let notificationDeliverer: LocalNotificationDelivering
     private let launchAtLoginManager: LaunchAtLoginManaging
@@ -283,7 +298,6 @@ final class AppModel: ObservableObject {
         self.powerReader = powerReader
         self.thermalReader = thermalReader
         self.codexUsageReader = codexUsageReader
-        self.codexUsageRefreshInterval = codexUsageRefreshInterval
         self.now = now
         self.notificationDeliverer = notificationDeliverer
         self.launchAtLoginManager = launchAtLoginManager
@@ -298,6 +312,14 @@ final class AppModel: ObservableObject {
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
         fixedFanTargets = appPreferences.fixedFanTargets
+        codexUsageMetricMode = appPreferences.codexUsageDisplayPreferences.metricMode
+        codexUsageResetMode = appPreferences.codexUsageDisplayPreferences.resetMode
+        codexUsageRefreshCadence = if appPreferences.codexUsageDisplayPreferences == .defaults,
+                                      let injectedCadence = CodexUsageRefreshCadence(seconds: codexUsageRefreshInterval) {
+            injectedCadence
+        } else {
+            appPreferences.codexUsageDisplayPreferences.refreshCadence
+        }
         launchAtLoginStatus = launchAtLoginManager.status
         savedProfiles = profileStore.load()
     }
@@ -470,7 +492,7 @@ final class AppModel: ObservableObject {
 
         let currentTime = now()
         if let lastCodexUsageRefreshAt,
-           currentTime.timeIntervalSince(lastCodexUsageRefreshAt) < codexUsageRefreshInterval {
+           currentTime.timeIntervalSince(lastCodexUsageRefreshAt) < codexUsageRefreshCadence.seconds {
             return
         }
 
@@ -906,7 +928,11 @@ final class AppModel: ObservableObject {
         case .adapterWattage:
             return menuBarLabelWithAttention(menuBarPowerText ?? "-- W")
         case .codexUsage:
-            return CodexUsageFormatter.menuBarText(for: codexUsageSnapshot, now: now)
+            return CodexUsageFormatter.menuBarText(
+                for: codexUsageSnapshot,
+                options: codexUsageDisplayPreferences,
+                now: now
+            )
         case .temperatureAndRPM:
             return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
         case .ownerTemperatureAndRPM:
@@ -932,15 +958,26 @@ final class AppModel: ObservableObject {
     }
 
     var codexUsageSummary: String {
-        CodexUsageFormatter.summaryText(for: codexUsageSnapshot, now: now)
+        CodexUsageFormatter.summaryText(
+            for: codexUsageSnapshot,
+            options: codexUsageDisplayPreferences,
+            now: now
+        )
     }
 
     var codexUsageDetailSummary: String? {
-        CodexUsageFormatter.detailText(for: codexUsageSnapshot)
+        CodexUsageFormatter.detailText(
+            for: codexUsageSnapshot,
+            options: codexUsageDisplayPreferences
+        )
     }
 
     var codexUsageDetailLines: [String] {
-        CodexUsageFormatter.detailLines(for: codexUsageSnapshot, now: now)
+        CodexUsageFormatter.detailLines(
+            for: codexUsageSnapshot,
+            options: codexUsageDisplayPreferences,
+            now: now
+        )
     }
 
     var menuBarFanOwnerText: String {
@@ -1024,8 +1061,24 @@ final class AppModel: ObservableObject {
             startupMode: startupMode,
             notificationSettings: notificationSettings,
             usePerFanFixedRPM: usePerFanFixedRPM,
-            fixedFanTargets: fixedFanTargets
+            fixedFanTargets: fixedFanTargets,
+            codexUsageDisplayPreferences: codexUsageDisplayPreferences
         ))
+    }
+
+    private var codexUsageDisplayPreferences: CodexUsageDisplayPreferences {
+        CodexUsageDisplayPreferences(
+            metricMode: codexUsageMetricMode,
+            resetMode: codexUsageResetMode,
+            refreshCadence: codexUsageRefreshCadence
+        )
+    }
+
+    private func codexUsageDisplayPreferenceDidChange() {
+        persistAppPreferences()
+        if menuBarDisplayMode == .codexUsage {
+            menuBarStatusItemRevision &+= 1
+        }
     }
 
     private var helperWritePathBlockedSummary: String? {

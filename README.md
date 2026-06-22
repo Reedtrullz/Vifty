@@ -31,7 +31,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry. The main window and menu-bar popover can copy a short AGENTS.md/Codex rule that checks capabilities, readiness, and the guarded wrapper path.
-- **Codex usage tracking** — optional menu-bar mode reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage, reset countdown, credits, monthly limits, and source without storing API keys.
+- **Codex usage tracking** — optional menu-bar mode reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage, reset countdown or reset time, credits, monthly limits, and source without storing API keys.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
@@ -218,7 +218,7 @@ For the detailed privileged-helper and agent-control boundaries, see [docs/trust
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
 - Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export.
-- Codex usage mode is optional. When selected, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty does not store Codex credentials or API keys.
+- Codex usage mode is optional. When selected, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty can show percent left or used, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
 - Local notifications use macOS UserNotifications only. They are opt-in, rate-limited, and do not add analytics, network calls, or persistent telemetry export.
 
 ### Optional: Harden XPC with your TeamID
