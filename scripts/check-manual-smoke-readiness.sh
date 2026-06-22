@@ -230,6 +230,13 @@ unless %w[requestCooling requestCoolingWithCaution].include?(recommended_action)
   blockers << "diagnose recommended action is not requestCooling or requestCoolingWithCaution"
 end
 
+recovery_steps = []
+def add_recovery_step(steps, id, text)
+  return if steps.any? { |step| step["id"] == id }
+
+  steps << { "id" => id, "text" => text }
+end
+
 ready = blockers.empty?
 status = ready ? "ready" : "blocked"
 next_action = if ready
@@ -242,6 +249,37 @@ elsif recommended_recovery == "repairHelper"
   "Repair or reinstall the helper, approve Login Items if prompted, then rerun diagnose and this preflight."
 else
   "Do not run manual fan-write smoke. Collect read-only validation evidence and clear the listed blockers first."
+end
+
+if !ready
+  if manual_control_active == true || recommended_recovery == "restoreAutoBeforeRetry"
+    add_recovery_step(
+      recovery_steps,
+      "restoreAutoBeforeRetry",
+      "Restore Auto in Vifty, wait until manualControlActive=false, then rerun this preflight before any smoke test."
+    )
+  end
+  if recommended_recovery == "repairHelper"
+    add_recovery_step(
+      recovery_steps,
+      "repairHelper",
+      "Repair or reinstall the helper, approve Login Items if prompted, then rerun diagnose and this preflight."
+    )
+  end
+  if daemon_match_required && daemon_matches_expected_text != "true"
+    add_recovery_step(
+      recovery_steps,
+      "installMatchingDaemon",
+      "Install or repair the freshly built app/helper so the installed LaunchDaemon helper hash matches the built daemon, then rerun this preflight."
+    )
+  end
+  if recovery_steps.empty?
+    add_recovery_step(
+      recovery_steps,
+      "clearReadinessBlockers",
+      "Do not run manual fan-write smoke. Collect read-only validation evidence and clear the listed blockers first."
+    )
+  end
 end
 
 daemon_matches_expected = case daemon_matches_expected_text
@@ -289,6 +327,7 @@ summary = {
     "matchRequired" => daemon_match_required
   },
   "blockers" => blockers,
+  "recoverySteps" => recovery_steps,
   "nextAction" => next_action,
   "parseError" => parse_error
 }
@@ -329,6 +368,10 @@ else
   if daemon_match_required || !expected_daemon_path.empty?
     match = daemon_matches_expected.nil? ? "unknown" : daemon_matches_expected.to_s
     puts "Daemon match: #{match} (required=#{daemon_match_required})"
+  end
+  unless recovery_steps.empty?
+    puts "Recovery steps:"
+    recovery_steps.each { |step| puts "- #{step["text"]}" }
   end
   puts "Next action: #{next_action}"
 end

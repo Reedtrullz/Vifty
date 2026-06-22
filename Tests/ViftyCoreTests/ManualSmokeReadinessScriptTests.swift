@@ -70,6 +70,10 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         let appPreferences = try XCTUnwrap(summary["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferences["startupMode"] as? String, "Curve")
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
+
+        let recoverySteps = try XCTUnwrap(summary["recoverySteps"] as? [[String: Any]])
+        XCTAssertEqual(recoverySteps.map { $0["id"] as? String }, ["restoreAutoBeforeRetry"])
+        XCTAssertTrue((recoverySteps.first?["text"] as? String)?.contains("Restore Auto in Vifty") == true)
     }
 
     func testJSONOutputCanBeSavedAsValidationSummaryEvidence() throws {
@@ -93,6 +97,7 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(savedSummary["manualSmokeReady"] as? Bool, true)
         XCTAssertEqual(savedSummary["readOnly"] as? Bool, true)
         XCTAssertEqual(savedSummary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(savedSummary["recoverySteps"] as? [[String: AnyHashable]], [])
         XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
     }
 
@@ -116,6 +121,9 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(summary["readOnly"] as? Bool, true)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, false)
         XCTAssertEqual(summary["blockers"] as? [String], ["installed daemon does not match expected build daemon"])
+        let recoverySteps = try XCTUnwrap(summary["recoverySteps"] as? [[String: Any]])
+        XCTAssertEqual(recoverySteps.map { $0["id"] as? String }, ["installMatchingDaemon"])
+        XCTAssertTrue((recoverySteps.first?["text"] as? String)?.contains("Install or repair the freshly built app/helper") == true)
 
         let daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
         XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.path)
@@ -126,6 +134,36 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
         XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
         XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
+    }
+
+    func testJSONOutputListsEveryRecoveryStepWhenMultipleBlockersExist() throws {
+        let harness = try ManualSmokeReadinessHarness(
+            diagnoseJSON: #"{"state":"degraded","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"restoreAutoBeforeRequestingCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"appPreferences":{"startupMode":"Curve","startupModeSource":"persisted","readError":null}}"#,
+            expectedDaemonContents: "different daemon"
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match",
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(ManualSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(
+            summary["blockers"] as? [String],
+            [
+                "installed daemon does not match expected build daemon",
+                "diagnose reported safeToRequestCooling is not true",
+                "manual control active before manual smoke",
+                "diagnose recommended action is not requestCooling or requestCoolingWithCaution"
+            ]
+        )
+        let recoverySteps = try XCTUnwrap(summary["recoverySteps"] as? [[String: Any]])
+        XCTAssertEqual(recoverySteps.map { $0["id"] as? String }, ["restoreAutoBeforeRetry", "installMatchingDaemon"])
+        XCTAssertTrue((recoverySteps[0]["text"] as? String)?.contains("Restore Auto in Vifty") == true)
+        XCTAssertTrue((recoverySteps[1]["text"] as? String)?.contains("installed LaunchDaemon helper hash matches") == true)
     }
 
     func testReadinessSchemaIsDocumentedForEvidenceConsumers() throws {
@@ -140,6 +178,7 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual((properties["schemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/manual-smoke-readiness.schema.json")
         XCTAssertEqual((properties["readOnly"] as? [String: Any])?["const"] as? Bool, true)
         XCTAssertEqual((properties["coolingCommandsRun"] as? [String: Any])?["const"] as? Bool, false)
+        XCTAssertNotNil(properties["recoverySteps"] as? [String: Any])
         XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
         XCTAssertNotNil(properties["coolingBlockerIDs"] as? [String: Any])
         XCTAssertNotNil(properties["appPreferences"] as? [String: Any])

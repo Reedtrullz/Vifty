@@ -279,6 +279,33 @@
         "type": "string"
       }
     },
+    "recoverySteps": {
+      "description": "Ordered recovery actions for every blocker that needs user attention. Empty when manualSmokeReady is true.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "restoreAutoBeforeRetry",
+              "repairHelper",
+              "installMatchingDaemon",
+              "clearReadinessBlockers"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "nextAction": {
       "type": "string",
       "minLength": 1
