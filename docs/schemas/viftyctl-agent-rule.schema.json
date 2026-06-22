@@ -233,7 +233,119 @@
         "type": "string",
         "minLength": 1
       },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "const": "swift-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "swift-release-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "xcode-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "xcode-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "make-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "make-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "make-verify"
+          }
+        },
+        {
+          "contains": {
+            "const": "npm-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "npm-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "pnpm-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "pnpm-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "bun-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "bun-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "go-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "go-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "cargo-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "cargo-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "uv-build"
+          }
+        },
+        {
+          "contains": {
+            "const": "uv-test"
+          }
+        },
+        {
+          "contains": {
+            "const": "pytest"
+          }
+        },
+        {
+          "contains": {
+            "const": "local-model-template"
+          }
+        },
+        {
+          "contains": {
+            "const": "custom-workload-template"
+          }
+        }
+      ]
     }
   },
   "$defs": {

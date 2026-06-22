@@ -427,7 +427,119 @@
               "xcode-test.sh"
             ]
           },
-          "uniqueItems": true
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {
+                "const": "bun-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "bun-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "cargo-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "cargo-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "custom-workload.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "go-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "go-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "local-model.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "make-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "make-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "make-verify.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "npm-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "npm-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "pnpm-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "pnpm-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "pytest.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "swift-release-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "swift-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "uv-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "uv-test.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "xcode-build.sh"
+              }
+            },
+            {
+              "contains": {
+                "const": "xcode-test.sh"
+              }
+            }
+          ]
         }
       }
     },

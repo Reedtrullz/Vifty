@@ -596,6 +596,13 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(enumValues(named: "policySource", in: capabilitiesProperties), ["daemonStatus", "fallbackUnavailable"])
         let capabilitiesDefinitions = try XCTUnwrap(capabilitiesSchema["$defs"] as? [String: Any])
         XCTAssertEqual(definitionEnumValues(named: "workload", in: capabilitiesDefinitions), ["build", "test", "render", "localModel", "custom"])
+        let wrapperResourcesDefinition = try XCTUnwrap(capabilitiesDefinitions["wrapperResources"] as? [String: Any])
+        let wrapperResourceProperties = try XCTUnwrap(wrapperResourcesDefinition["properties"] as? [String: Any])
+        let workloadScriptsSchema = try XCTUnwrap(wrapperResourceProperties["workloadScripts"] as? [String: Any])
+        let workloadScriptConstraints = try XCTUnwrap(workloadScriptsSchema["allOf"] as? [[String: Any]])
+        for script in ViftyCtlWrapperResources.workloadScriptNames {
+            XCTAssertTrue(workloadScriptConstraints.containsRequiredString(script), "Missing required capabilities wrapper script \(script)")
+        }
         try assertRequiredFields(
             definition: "policy",
             in: capabilitiesDefinitions,
@@ -721,6 +728,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("raw SMC tools"))
         XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("direct fan RPM writes"))
         XCTAssertTrue(forbiddenActionConstraints.containsRequiredString("unguarded viftyctl prepare"))
+        let workloadTemplateIDsSchema = try XCTUnwrap(agentRuleProperties["workloadTemplateIDs"] as? [String: Any])
+        let workloadTemplateIDConstraints = try XCTUnwrap(workloadTemplateIDsSchema["allOf"] as? [[String: Any]])
+        let auditedWorkloadTemplateIDs = ViftyCtlWorkloadTemplate.auditedTemplates.map(\.id)
+        for templateID in auditedWorkloadTemplateIDs {
+            XCTAssertTrue(workloadTemplateIDConstraints.containsRequiredString(templateID), "Missing required agent-rule workload template ID \(templateID)")
+        }
         let agentRuleExample = try readJSON(fixtureURL("agent-rule.json"))
         XCTAssertEqual(agentRuleExample["schemaVersion"] as? Int, 1)
         XCTAssertEqual(agentRuleExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
@@ -742,6 +755,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)
         XCTAssertTrue((agentRuleExample["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
         XCTAssertTrue((agentRuleExample["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
+        XCTAssertEqual(agentRuleExample["workloadTemplateIDs"] as? [String], auditedWorkloadTemplateIDs)
 
         let statusSchema = try readJSON(schemaURL("viftyctl-status.schema.json"))
         let statusDefinitions = try XCTUnwrap(statusSchema["$defs"] as? [String: Any])
