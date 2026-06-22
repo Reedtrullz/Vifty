@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import ViftyCore
 
 final class AgentCoolingEvidenceScriptTests: XCTestCase {
     func testCollectorCapturesOnlyReadOnlyAgentEvidence() throws {
@@ -1692,7 +1693,8 @@ private final class AgentCoolingEvidenceHarness {
     }
 
     private func writeFakeJSONFixtures() throws {
-        try capabilitiesJSON.write(to: capabilitiesJSONURL, atomically: true, encoding: .utf8)
+        try Self.capabilitiesJSONWithAuditedTemplates(capabilitiesJSON)
+            .write(to: capabilitiesJSONURL, atomically: true, encoding: .utf8)
         try diagnoseJSON.write(to: diagnoseJSONURL, atomically: true, encoding: .utf8)
         try statusJSON.write(to: statusJSONURL, atomically: true, encoding: .utf8)
         try auditJSON.write(to: auditJSONURL, atomically: true, encoding: .utf8)
@@ -1788,5 +1790,19 @@ private final class AgentCoolingEvidenceHarness {
         """
         {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-command-error.schema.json","command":"\(command)","errorCode":"HELPER_UNREACHABLE","message":"daemon unavailable","safeToProceed":false,"recommendedRecoveryAction":"repairHelper","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"generatedAt":700000000}
         """
+    }
+
+    private static func capabilitiesJSONWithAuditedTemplates(_ json: String) -> String {
+        guard let data = json.data(using: .utf8),
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let templates = object["workloadTemplates"] as? [[String: Any]],
+              templates.allSatisfy({ Set($0.keys) == ["shortcutScript"] }) else {
+            return json
+        }
+
+        let auditedData = try! JSONEncoder().encode(ViftyCtlWorkloadTemplate.auditedTemplates)
+        object["workloadTemplates"] = try! JSONSerialization.jsonObject(with: auditedData)
+        let normalizedData = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        return String(decoding: normalizedData, as: UTF8.self)
     }
 }

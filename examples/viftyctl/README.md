@@ -38,9 +38,10 @@ and script names. Agents can combine those values with a known installed app or
 checkout location without copying user-specific absolute paths into support
 evidence.
 
-`workloadTemplates` must also advertise every shortcut wrapper by
-`shortcutScript`, so guarded runs cannot proceed against older or drifted
-capabilities payloads that list scripts without their audited workload defaults.
+`workloadTemplates` must also advertise every shortcut wrapper with the
+expected audited title/workload/duration/RPM cap/reason/child-command defaults,
+so guarded runs cannot proceed against older or drifted capabilities payloads
+that list scripts without matching their safe workload defaults.
 
 Agents should also read `metadataLimits` from capabilities before generating
 custom direct-prepare reasons or idempotency keys; legacy payloads without those

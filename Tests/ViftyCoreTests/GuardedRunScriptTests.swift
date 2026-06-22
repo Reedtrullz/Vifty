@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import ViftyCore
 
 final class GuardedRunScriptTests: XCTestCase {
     func testGuardedRunDelegatesToJSONViftyCtlRunWhenReady() throws {
@@ -640,6 +641,27 @@ final class GuardedRunScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("does not advertise audited workload templates"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsDriftedAuditedWorkloadTemplateDefaults() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            workloadTemplatesOverride: ScriptHarness.workloadTemplatesJSON { templates in
+                let index = templates.firstIndex { $0.shortcutScript == "swift-test.sh" }!
+                templates[index].duration = "30m"
+                templates[index].maxRPMPercent = 80
+                templates[index].reason = "swift test but louder"
+            }
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("audited workload template defaults drifted"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("swift-test.sh"), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
@@ -1605,8 +1627,7 @@ private final class ScriptHarness {
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let wrapperResources = wrapperResourcesOverride
             ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["bun-build.sh","bun-test.sh","cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pnpm-build.sh","pnpm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","uv-build.sh","uv-test.sh","xcode-build.sh","xcode-test.sh"]}"#
-        let workloadTemplates = workloadTemplatesOverride
-            ?? #""workloadTemplates":[{"shortcutScript":"bun-build.sh"},{"shortcutScript":"bun-test.sh"},{"shortcutScript":"cargo-build.sh"},{"shortcutScript":"cargo-test.sh"},{"shortcutScript":"custom-workload.sh"},{"shortcutScript":"go-build.sh"},{"shortcutScript":"go-test.sh"},{"shortcutScript":"local-model.sh"},{"shortcutScript":"make-build.sh"},{"shortcutScript":"make-test.sh"},{"shortcutScript":"make-verify.sh"},{"shortcutScript":"npm-build.sh"},{"shortcutScript":"npm-test.sh"},{"shortcutScript":"pnpm-build.sh"},{"shortcutScript":"pnpm-test.sh"},{"shortcutScript":"pytest.sh"},{"shortcutScript":"swift-release-build.sh"},{"shortcutScript":"swift-test.sh"},{"shortcutScript":"uv-build.sh"},{"shortcutScript":"uv-test.sh"},{"shortcutScript":"xcode-build.sh"},{"shortcutScript":"xcode-test.sh"}]"#
+        let workloadTemplates = workloadTemplatesOverride ?? Self.workloadTemplatesJSON()
         var schemaIDs = #""capabilities":"\#(capabilitiesSchemaID)""#
         if let capabilitiesDiagnoseSchemaID {
             schemaIDs += #","diagnose":"\#(capabilitiesDiagnoseSchemaID)""#
@@ -1688,5 +1709,14 @@ private final class ScriptHarness {
     private static func jsonStringArray(_ values: [String]) -> String {
         let data = try! JSONSerialization.data(withJSONObject: values)
         return String(decoding: data, as: UTF8.self)
+    }
+
+    static func workloadTemplatesJSON(
+        mutate: ((inout [ViftyCtlWorkloadTemplate]) -> Void)? = nil
+    ) -> String {
+        var templates = ViftyCtlWorkloadTemplate.auditedTemplates
+        mutate?(&templates)
+        let data = try! JSONEncoder().encode(templates)
+        return #""workloadTemplates":\#(String(decoding: data, as: UTF8.self))"#
     }
 }

@@ -163,6 +163,302 @@ print_capabilities_json_evidence() {
   print_json_evidence "VIFTY_CAPABILITIES_JSON" "${capabilities_json:-}"
 }
 
+validate_audited_workload_templates() {
+  VIFTY_GUARDED_RUN_WORKLOAD_TEMPLATES_JSON="$workload_templates" /usr/bin/ruby -rjson <<'RUBY'
+expected = [
+  {
+    "id" => "swift-test",
+    "title" => "Swift test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "swift test",
+    "childArguments" => ["swift", "test"],
+    "shortcutScript" => "swift-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "swift-release-build",
+    "title" => "Swift release build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "swift release build",
+    "childArguments" => ["swift", "build", "-c", "release"],
+    "shortcutScript" => "swift-release-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "xcode-build",
+    "title" => "Xcode build",
+    "workload" => "build",
+    "duration" => "30m",
+    "maxRPMPercent" => 75,
+    "reason" => "xcodebuild build",
+    "childArguments" => ["xcodebuild", "build"],
+    "shortcutScript" => "xcode-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "xcode-test",
+    "title" => "Xcode test",
+    "workload" => "test",
+    "duration" => "30m",
+    "maxRPMPercent" => 75,
+    "reason" => "xcodebuild test",
+    "childArguments" => ["xcodebuild", "test"],
+    "shortcutScript" => "xcode-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "make-build",
+    "title" => "Make build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "make build",
+    "childArguments" => ["make", "build"],
+    "shortcutScript" => "make-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "make-test",
+    "title" => "Make test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "make test",
+    "childArguments" => ["make", "test"],
+    "shortcutScript" => "make-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "make-verify",
+    "title" => "Make verify",
+    "workload" => "test",
+    "duration" => "30m",
+    "maxRPMPercent" => 75,
+    "reason" => "make verify",
+    "childArguments" => ["make", "verify"],
+    "shortcutScript" => "make-verify.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "npm-build",
+    "title" => "npm build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "npm run build",
+    "childArguments" => ["npm", "run", "build"],
+    "shortcutScript" => "npm-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "npm-test",
+    "title" => "npm test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "npm test",
+    "childArguments" => ["npm", "test"],
+    "shortcutScript" => "npm-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "pnpm-build",
+    "title" => "pnpm build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "pnpm build",
+    "childArguments" => ["pnpm", "build"],
+    "shortcutScript" => "pnpm-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "pnpm-test",
+    "title" => "pnpm test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "pnpm test",
+    "childArguments" => ["pnpm", "test"],
+    "shortcutScript" => "pnpm-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "bun-build",
+    "title" => "Bun build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "bun run build",
+    "childArguments" => ["bun", "run", "build"],
+    "shortcutScript" => "bun-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "bun-test",
+    "title" => "Bun test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "bun test",
+    "childArguments" => ["bun", "test"],
+    "shortcutScript" => "bun-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "go-build",
+    "title" => "Go build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "go build",
+    "childArguments" => ["go", "build"],
+    "shortcutScript" => "go-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "go-test",
+    "title" => "Go test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "go test",
+    "childArguments" => ["go", "test"],
+    "shortcutScript" => "go-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "cargo-build",
+    "title" => "Cargo build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "cargo build",
+    "childArguments" => ["cargo", "build"],
+    "shortcutScript" => "cargo-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "cargo-test",
+    "title" => "Cargo test",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "cargo test",
+    "childArguments" => ["cargo", "test"],
+    "shortcutScript" => "cargo-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "uv-build",
+    "title" => "uv build",
+    "workload" => "build",
+    "duration" => "25m",
+    "maxRPMPercent" => 75,
+    "reason" => "uv build",
+    "childArguments" => ["uv", "build"],
+    "shortcutScript" => "uv-build.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "uv-test",
+    "title" => "uv pytest",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "uv pytest",
+    "childArguments" => ["uv", "run", "pytest"],
+    "shortcutScript" => "uv-test.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "pytest",
+    "title" => "pytest",
+    "workload" => "test",
+    "duration" => "20m",
+    "maxRPMPercent" => 70,
+    "reason" => "pytest",
+    "childArguments" => ["python3", "-m", "pytest"],
+    "shortcutScript" => "pytest.sh",
+    "shortcutArguments" => []
+  },
+  {
+    "id" => "local-model-template",
+    "title" => "Local model template",
+    "workload" => "localModel",
+    "duration" => "30m",
+    "maxRPMPercent" => 75,
+    "reason" => "local model run",
+    "childArguments" => ["./run-local-model.sh"],
+    "shortcutScript" => "local-model.sh",
+    "shortcutArguments" => ["--", "./run-local-model.sh"]
+  },
+  {
+    "id" => "custom-workload-template",
+    "title" => "Custom workload template",
+    "workload" => "custom",
+    "duration" => "15m",
+    "maxRPMPercent" => 65,
+    "reason" => "custom workload",
+    "childArguments" => ["./scripts/smoke-test.sh"],
+    "shortcutScript" => "custom-workload.sh",
+    "shortcutArguments" => ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
+  }
+]
+
+actual = JSON.parse(ENV.fetch("VIFTY_GUARDED_RUN_WORKLOAD_TEMPLATES_JSON", ""))
+unless actual.is_a?(Array)
+  puts "missing:workloadTemplates"
+  exit 10
+end
+
+by_script = {}
+duplicates = []
+actual.each do |template|
+  next unless template.is_a?(Hash)
+  script = template["shortcutScript"]
+  next unless script.is_a?(String)
+  duplicates << script if by_script.key?(script)
+  by_script[script] = template
+end
+
+missing = []
+drift = []
+expected.each do |expected_template|
+  script = expected_template.fetch("shortcutScript")
+  actual_template = by_script[script]
+  if actual_template.nil?
+    missing << script
+    next
+  end
+
+  expected_template.each do |key, expected_value|
+    actual_value = actual_template[key]
+    drift << "#{script}.#{key}" unless actual_value == expected_value
+  end
+end
+
+unless missing.empty?
+  puts "missing:#{missing.join(",")}"
+  exit 10
+end
+
+unless duplicates.empty?
+  puts "drift:duplicate shortcutScript #{duplicates.uniq.join(",")}"
+  exit 11
+end
+
+unless drift.empty?
+  puts "drift:#{drift.first(8).join(",")}"
+  exit 11
+end
+RUBY
+}
+
 print_diagnose_json_evidence() {
   print_json_evidence "VIFTY_DIAGNOSE_JSON" "${diagnose_json:-}"
 }
@@ -629,7 +925,6 @@ if ! printf '%s\n' "$capability_workloads" | /usr/bin/grep -F "\"$workload\"" >/
 fi
 
 missing_wrapper_script=0
-missing_workload_template=0
 for expected_wrapper_script in \
   bun-build.sh \
   bun-test.sh \
@@ -658,10 +953,6 @@ do
     *"\"$expected_wrapper_script\""*) ;;
     *) missing_wrapper_script=1 ;;
   esac
-  case "$workload_templates" in
-    *"\"shortcutScript\":\"$expected_wrapper_script\""*) ;;
-    *) missing_workload_template=1 ;;
-  esac
 done
 
 if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
@@ -678,8 +969,30 @@ if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
   exit 75
 fi
 
-if [ "$missing_workload_template" -ne 0 ]; then
+set +e
+workload_template_validation="$(validate_audited_workload_templates 2>/dev/null)"
+workload_template_validation_status=$?
+set -e
+
+if [ "$workload_template_validation_status" -eq 10 ]; then
   echo "guarded-run: viftyctl capabilities does not advertise audited workload templates; refusing to request cooling." >&2
+  if [ -n "$workload_template_validation" ]; then
+    echo "guarded-run: $workload_template_validation" >&2
+  fi
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    print_capabilities_json_evidence
+  fi
+  exit 75
+fi
+
+if [ "$workload_template_validation_status" -ne 0 ]; then
+  echo "guarded-run: viftyctl capabilities audited workload template defaults drifted; refusing to request cooling." >&2
+  if [ -n "$workload_template_validation" ]; then
+    echo "guarded-run: $workload_template_validation" >&2
+  fi
   if [ "$capabilities_status" -ne 0 ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi
