@@ -26,7 +26,9 @@ For a machine-readable starter rule, agents can run `viftyctl agent-rule
 examples, safety requirements, forbidden actions, or workload template IDs. It
 also exposes `guardedRunDecisionSchemaID:
 "https://vifty.local/schemas/guarded-run-decision.schema.json"` so agents can
-validate guarded-run no-cooling/preflight decision JSON without scraping prose.
+validate guarded-run no-cooling/preflight decision JSON without scraping prose,
+plus `guardedRunJSONMarkers` so agents can extract wrapper JSON blocks without
+hardcoding marker strings.
 Agents should still run `capabilities --json` and `diagnose --json` after reading
 it because the agent-rule payload is guidance, not authorization to request
 cooling. Its command examples are location-aware: installed app runs use

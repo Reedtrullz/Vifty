@@ -63,11 +63,15 @@ For a pasteable starter rule, `viftyctl agent-rule --json` emits
 `guardedRunDecisionSchemaID:
 "https://vifty.local/schemas/guarded-run-decision.schema.json"`, the safe-rule
 text, default guarded commands, safety requirements, forbidden actions, and
-audited workload template IDs. Treat it as read-only guidance, not cooling
+audited workload template IDs. It also includes `guardedRunJSONMarkers` for the
+capabilities, diagnose, and decision marker pairs printed by guarded wrappers.
+Treat it as read-only guidance, not cooling
 authorization: compare the schema ID with `capabilities.schemaIDs.agentRule`,
 then still require safe `capabilities --json` and `diagnose --json` output before
 requesting cooling. Use `guardedRunDecisionSchemaID` when validating
-preflight-only or no-cooling decision payloads from the guarded wrapper.
+preflight-only or no-cooling decision payloads from the guarded wrapper, and use
+`guardedRunJSONMarkers` instead of hardcoding marker strings when extracting
+wrapper JSON.
 
 Use the installed CLI explicitly when running outside the Vifty repository:
 

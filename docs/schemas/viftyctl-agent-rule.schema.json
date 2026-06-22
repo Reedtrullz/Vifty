@@ -14,6 +14,7 @@
     "capabilitiesCommand",
     "diagnoseCommand",
     "guardedRunDecisionSchemaID",
+    "guardedRunJSONMarkers",
     "guardedRunCommand",
     "guardedRunPreflightCommand",
     "schemaRequirements",
@@ -52,6 +53,26 @@
     },
     "guardedRunDecisionSchemaID": {
       "const": "https://vifty.local/schemas/guarded-run-decision.schema.json"
+    },
+    "guardedRunJSONMarkers": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "diagnose",
+        "decision"
+      ],
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/markerPair"
+        },
+        "diagnose": {
+          "$ref": "#/$defs/markerPair"
+        },
+        "decision": {
+          "$ref": "#/$defs/markerPair"
+        }
+      },
+      "additionalProperties": false
     },
     "guardedRunCommand": {
       "type": "string",
@@ -92,6 +113,26 @@
         "minLength": 1
       },
       "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "markerPair": {
+      "type": "object",
+      "required": [
+        "begin",
+        "end"
+      ],
+      "properties": {
+        "begin": {
+          "type": "string",
+          "pattern": "^guarded-run: BEGIN_VIFTY_[A-Z_]+_JSON$"
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^guarded-run: END_VIFTY_[A-Z_]+_JSON$"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

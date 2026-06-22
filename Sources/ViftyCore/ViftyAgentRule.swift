@@ -29,6 +29,32 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
     }
 }
 
+public struct ViftyAgentRuleJSONMarkerPair: Codable, Equatable, Sendable {
+    public var begin: String
+    public var end: String
+
+    public init(begin: String, end: String) {
+        self.begin = begin
+        self.end = end
+    }
+}
+
+public struct ViftyAgentRuleJSONMarkers: Codable, Equatable, Sendable {
+    public var capabilities: ViftyAgentRuleJSONMarkerPair
+    public var diagnose: ViftyAgentRuleJSONMarkerPair
+    public var decision: ViftyAgentRuleJSONMarkerPair
+
+    public init(
+        capabilities: ViftyAgentRuleJSONMarkerPair,
+        diagnose: ViftyAgentRuleJSONMarkerPair,
+        decision: ViftyAgentRuleJSONMarkerPair
+    ) {
+        self.capabilities = capabilities
+        self.diagnose = diagnose
+        self.decision = decision
+    }
+}
+
 public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var schemaID: String
@@ -39,6 +65,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
     public var capabilitiesCommand: String
     public var diagnoseCommand: String
     public var guardedRunDecisionSchemaID: String
+    public var guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers
     public var guardedRunCommand: String
     public var guardedRunPreflightCommand: String
     public var schemaRequirements: [String]
@@ -54,6 +81,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         rule: String,
         commands: ViftyAgentRuleCommands,
         guardedRunDecisionSchemaID: String = ViftyAgentRule.guardedRunDecisionSchemaID,
+        guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers = ViftyAgentRule.guardedRunJSONMarkers,
         schemaRequirements: [String] = ViftyAgentRule.schemaRequirements,
         safetyRequirements: [String] = ViftyAgentRule.safetyRequirements,
         forbiddenActions: [String] = ViftyAgentRule.forbiddenActions,
@@ -68,6 +96,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         self.capabilitiesCommand = commands.capabilitiesCommand
         self.diagnoseCommand = commands.diagnoseCommand
         self.guardedRunDecisionSchemaID = guardedRunDecisionSchemaID
+        self.guardedRunJSONMarkers = guardedRunJSONMarkers
         self.guardedRunCommand = commands.guardedRunCommand
         self.guardedRunPreflightCommand = commands.guardedRunPreflightCommand
         self.schemaRequirements = schemaRequirements
@@ -82,6 +111,20 @@ public enum ViftyAgentRule {
     public static let canonicalViftyCtlPath = "/Applications/Vifty.app/Contents/MacOS/viftyctl"
     public static let guardedRunResourcePath = "Contents/Resources/viftyctl-wrappers/guarded-run.sh"
     public static let guardedRunDecisionSchemaID = "https://vifty.local/schemas/guarded-run-decision.schema.json"
+    public static let guardedRunJSONMarkers = ViftyAgentRuleJSONMarkers(
+        capabilities: ViftyAgentRuleJSONMarkerPair(
+            begin: "guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON",
+            end: "guarded-run: END_VIFTY_CAPABILITIES_JSON"
+        ),
+        diagnose: ViftyAgentRuleJSONMarkerPair(
+            begin: "guarded-run: BEGIN_VIFTY_DIAGNOSE_JSON",
+            end: "guarded-run: END_VIFTY_DIAGNOSE_JSON"
+        ),
+        decision: ViftyAgentRuleJSONMarkerPair(
+            begin: "guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON",
+            end: "guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON"
+        )
+    )
 
     public static let schemaRequirements = [
         "schemaVersion == 1",

@@ -34,9 +34,11 @@ Agents can also fetch the same short rule from the CLI with `viftyctl agent-rule
 "https://vifty.local/schemas/viftyctl-agent-rule.schema.json"` and is read-only
 guidance, not cooling authorization. Compare the value with
 `capabilities.schemaIDs.agentRule`, use its `guardedRunDecisionSchemaID` to
-validate guarded-run no-cooling/preflight decision payloads, then still run
-`capabilities --json` and `diagnose --json` before any guarded workload requests
-cooling. Since the rule contains runnable command examples, live output is
+validate guarded-run no-cooling/preflight decision payloads, and use
+`guardedRunJSONMarkers` to extract wrapper capabilities/diagnose/decision JSON
+without hardcoding marker strings. Still run `capabilities --json` and
+`diagnose --json` before any guarded workload requests cooling. Since the rule
+contains runnable command examples, live output is
 location-aware: installed app runs use `/Applications/Vifty.app`, SwiftPM/source
 checkout runs use `.build/.../ViftyCtl` plus `examples/viftyctl/...`, and
 non-canonical/custom app bundles add `VIFTYCTL=...` so copied wrappers call the
