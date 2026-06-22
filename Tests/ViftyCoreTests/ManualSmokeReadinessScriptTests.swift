@@ -72,6 +72,30 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(appPreferences["startupModeSource"] as? String, "persisted")
     }
 
+    func testJSONOutputCanBeSavedAsValidationSummaryEvidence() throws {
+        let harness = try ManualSmokeReadinessHarness()
+        let summaryURL = harness.rootURL.appendingPathComponent("manual-smoke-readiness.json")
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--json",
+            "--summary", summaryURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summaryURL.path))
+
+        let printedSummary = try XCTUnwrap(ManualSmokeReadinessHarness.parseJSON(result.stdout))
+        let savedSummary = try XCTUnwrap(ManualSmokeReadinessHarness.readJSON(summaryURL))
+        XCTAssertEqual(savedSummary as NSDictionary, printedSummary as NSDictionary)
+        XCTAssertEqual(savedSummary["kind"] as? String, "vifty-manual-smoke-readiness")
+        XCTAssertEqual(savedSummary["status"] as? String, "ready")
+        XCTAssertEqual(savedSummary["manualSmokeReady"] as? Bool, true)
+        XCTAssertEqual(savedSummary["readOnly"] as? Bool, true)
+        XCTAssertEqual(savedSummary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(try harness.loggedArguments(), ["diagnose --json"])
+    }
+
     func testJSONOutputBlocksWhenExpectedDaemonDoesNotMatchInstalledDaemon() throws {
         let harness = try ManualSmokeReadinessHarness(expectedDaemonContents: "different daemon")
 

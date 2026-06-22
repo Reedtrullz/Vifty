@@ -31,6 +31,7 @@ VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT ?= not-recorded
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE ?=
 VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY ?=
 MANUAL_SMOKE_READINESS_JSON ?= 0
+MANUAL_SMOKE_READINESS_SUMMARY ?=
 MANUAL_SMOKE_EXPECTED_DAEMON ?=
 MANUAL_SMOKE_REQUIRE_DAEMON_MATCH ?= 0
 AGENT_RUN_SMOKE_READINESS_JSON ?= 0
@@ -108,7 +109,7 @@ validation-evidence-review: ## Review a captured validation evidence bundle
 	./scripts/review-validation-evidence.sh --bundle "$(VALIDATION_EVIDENCE_BUNDLE)" --mode "$(VALIDATION_EVIDENCE_REVIEW_MODE)" $(if $(VALIDATION_EVIDENCE_REVIEW_SUMMARY),--summary "$(VALIDATION_EVIDENCE_REVIEW_SUMMARY)",) --manual-smoke-result "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE),--manual-smoke-source "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_SOURCE)",) $(if $(VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY),--manual-smoke-readiness-summary "$(VALIDATION_EVIDENCE_MANUAL_SMOKE_READINESS_SUMMARY)",) --agent-run-smoke-result "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_RESULT)" $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE),--agent-run-smoke-source "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SOURCE)",) $(if $(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY),--agent-run-smoke-summary "$(VALIDATION_EVIDENCE_AGENT_RUN_SMOKE_SUMMARY)",)
 
 manual-smoke-readiness: ## Read-only preflight before human Fixed/Curve smoke
-	./scripts/check-manual-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" $(if $(MANUAL_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(MANUAL_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(MANUAL_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(filter 1 true yes,$(MANUAL_SMOKE_READINESS_JSON)),--json,)
+	./scripts/check-manual-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" $(if $(MANUAL_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(MANUAL_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(MANUAL_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(filter 1 true yes,$(MANUAL_SMOKE_READINESS_JSON)),--json,) $(if $(MANUAL_SMOKE_READINESS_SUMMARY),--summary "$(MANUAL_SMOKE_READINESS_SUMMARY)",)
 
 manual-smoke-readiness-current-build: ## Build current app and run read-only manual smoke preflight
 	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "manual-smoke-readiness-current-build requires a clean git worktree so the preflight uses the built app from the current source ref; commit or stash changes first, or use make manual-smoke-readiness with an explicit VIFTYCTL for exploratory local preflight." >&2; exit 65; fi

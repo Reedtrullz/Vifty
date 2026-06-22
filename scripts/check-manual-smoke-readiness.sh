@@ -17,6 +17,8 @@ Options:
                      Block unless the installed helper daemon hash matches
                      --expected-daemon.
   --json             Print the readiness summary as JSON instead of prose.
+  --summary <path>   Write the readiness summary JSON to this path, creating
+                     parent directories when needed.
   -h, --help         Show this help.
 
 This script only runs:
@@ -36,6 +38,7 @@ EXPECTED_DAEMON_PATH="${VIFTY_MANUAL_SMOKE_EXPECTED_DAEMON:-}"
 REQUIRE_DAEMON_MATCH="${VIFTY_MANUAL_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
 INSTALLED_DAEMON_PATH="${VIFTY_MANUAL_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
 JSON_OUTPUT=0
+SUMMARY_PATH="${VIFTY_MANUAL_SMOKE_READINESS_SUMMARY:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +65,14 @@ while [[ $# -gt 0 ]]; do
     --json)
       JSON_OUTPUT=1
       shift
+      ;;
+    --summary)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --summary requires a path" >&2
+        exit 64
+      fi
+      SUMMARY_PATH="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -135,10 +146,11 @@ fi
 DIAGNOSE_STATUS=$?
 set -e
 
-ruby -rjson - \
+ruby -rjson -rfileutils - \
   "${DIAGNOSE_JSON}" \
   "${DIAGNOSE_STATUS}" \
   "${JSON_OUTPUT}" \
+  "${SUMMARY_PATH}" \
   "${INSTALLED_DAEMON_PATH}" \
   "${INSTALLED_DAEMON_PRESENT}" \
   "${INSTALLED_DAEMON_SHA256}" \
@@ -149,13 +161,14 @@ ruby -rjson - \
 path = ARGV.fetch(0)
 diagnose_status = Integer(ARGV.fetch(1))
 json_output = ARGV.fetch(2) == "1"
-installed_daemon_path = ARGV.fetch(3)
-installed_daemon_present = ARGV.fetch(4) == "true"
-installed_daemon_sha256 = ARGV.fetch(5)
-expected_daemon_path = ARGV.fetch(6)
-expected_daemon_sha256 = ARGV.fetch(7)
-daemon_matches_expected_text = ARGV.fetch(8)
-daemon_match_required = ARGV.fetch(9) == "1"
+summary_path = ARGV.fetch(3)
+installed_daemon_path = ARGV.fetch(4)
+installed_daemon_present = ARGV.fetch(5) == "true"
+installed_daemon_sha256 = ARGV.fetch(6)
+expected_daemon_path = ARGV.fetch(7)
+expected_daemon_sha256 = ARGV.fetch(8)
+daemon_matches_expected_text = ARGV.fetch(9)
+daemon_match_required = ARGV.fetch(10) == "1"
 
 raw = File.read(path)
 parse_error = nil
@@ -280,8 +293,21 @@ summary = {
   "parseError" => parse_error
 }
 
+json_text = JSON.pretty_generate(summary)
+
+unless summary_path.empty?
+  begin
+    directory = File.dirname(summary_path)
+    FileUtils.mkdir_p(directory) unless directory == "." || Dir.exist?(directory)
+    File.write(summary_path, json_text + "\n")
+  rescue StandardError => error
+    warn "could not write manual smoke readiness summary #{summary_path}: #{error.message}"
+    exit(73)
+  end
+end
+
 if json_output
-  puts JSON.pretty_generate(summary)
+  puts json_text
 else
   puts "Manual smoke readiness: #{status}"
   if ready
