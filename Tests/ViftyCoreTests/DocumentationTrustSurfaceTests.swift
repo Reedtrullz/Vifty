@@ -1359,6 +1359,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(exampleReadme.contains("advertised `run` command support"))
         XCTAssertTrue(exampleReadme.contains("require the requested workload name"))
         XCTAssertTrue(exampleReadme.contains("require `wrapperResources` for machine-readable source/app-bundle wrapper discovery"))
+        XCTAssertTrue(exampleReadme.contains("require audited `workloadTemplates` for every advertised shortcut wrapper"))
+        XCTAssertTrue(exampleReadme.contains("guarded runs cannot proceed against older or drifted"))
         XCTAssertTrue(exampleReadme.contains("app-bundle/source-checkout relative paths"))
         XCTAssertTrue(exampleReadme.contains("nonzero exit to match the advertised unavailable exit code"))
         XCTAssertTrue(exampleReadme.contains("safe `runLifecycle` contract"))

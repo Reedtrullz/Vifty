@@ -500,6 +500,7 @@ wrapper_source_directory="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil
 wrapper_bundle_directory="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.bundleDirectory raw -o - - 2>/dev/null || printf '')"
 wrapper_guarded_run_script="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.guardedRunScript raw -o - - 2>/dev/null || printf '')"
 wrapper_workload_scripts="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract wrapperResources.workloadScripts json -o - - 2>/dev/null || printf '')"
+workload_templates="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract workloadTemplates json -o - - 2>/dev/null || printf '')"
 run_child_preflight="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.childCommandPreflightBeforeCooling raw -o - - 2>/dev/null || printf '')"
 auto_restore_after_child="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.autoRestoreAfterChildExit raw -o - - 2>/dev/null || printf '')"
 structured_pre_child_failures="$(printf '%s\n' "$capabilities_json" | /usr/bin/plutil -extract runLifecycle.structuredPreChildFailures raw -o - - 2>/dev/null || printf '')"
@@ -533,6 +534,7 @@ maximum_idempotency_key_length="$(printf '%s\n' "$capabilities_json" | /usr/bin/
 [ "$wrapper_bundle_directory" = "null" ] && wrapper_bundle_directory=""
 [ "$wrapper_guarded_run_script" = "null" ] && wrapper_guarded_run_script=""
 [ "$wrapper_workload_scripts" = "null" ] && wrapper_workload_scripts=""
+[ "$workload_templates" = "null" ] && workload_templates=""
 [ "$minimum_agent_rpm_percent" = "null" ] && minimum_agent_rpm_percent=""
 [ "$maximum_allowed_rpm_percent" = "null" ] && maximum_allowed_rpm_percent=""
 [ "$max_duration_seconds" = "null" ] && max_duration_seconds=""
@@ -627,6 +629,7 @@ if ! printf '%s\n' "$capability_workloads" | /usr/bin/grep -F "\"$workload\"" >/
 fi
 
 missing_wrapper_script=0
+missing_workload_template=0
 for expected_wrapper_script in \
   bun-build.sh \
   bun-test.sh \
@@ -655,6 +658,10 @@ do
     *"\"$expected_wrapper_script\""*) ;;
     *) missing_wrapper_script=1 ;;
   esac
+  case "$workload_templates" in
+    *"\"shortcutScript\":\"$expected_wrapper_script\""*) ;;
+    *) missing_workload_template=1 ;;
+  esac
 done
 
 if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
@@ -662,6 +669,17 @@ if [ "$wrapper_source_directory" != "examples/viftyctl" ] ||
    [ "$wrapper_guarded_run_script" != "guarded-run.sh" ] ||
    [ "$missing_wrapper_script" -ne 0 ]; then
   echo "guarded-run: viftyctl capabilities does not advertise wrapper resource discovery; refusing to request cooling." >&2
+  if [ "$capabilities_status" -ne 0 ]; then
+    echo "guarded-run: capabilities exited $capabilities_status." >&2
+  fi
+  if [ -n "$capabilities_json" ]; then
+    print_capabilities_json_evidence
+  fi
+  exit 75
+fi
+
+if [ "$missing_workload_template" -ne 0 ]; then
+  echo "guarded-run: viftyctl capabilities does not advertise audited workload templates; refusing to request cooling." >&2
   if [ "$capabilities_status" -ne 0 ]; then
     echo "guarded-run: capabilities exited $capabilities_status." >&2
   fi

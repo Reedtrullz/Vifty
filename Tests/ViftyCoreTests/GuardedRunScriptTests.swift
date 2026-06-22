@@ -628,6 +628,21 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunRequiresAuditedWorkloadTemplates() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            workloadTemplatesOverride: #""workloadTemplates":[]"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("does not advertise audited workload templates"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunRejectsOversizedReasonFromAdvertisedMetadataLimit() throws {
         let harness = try ScriptHarness(
             state: "ready",
@@ -1384,6 +1399,7 @@ private final class ScriptHarness {
         policyOverride: String? = nil,
         metadataLimitsOverride: String? = nil,
         wrapperResourcesOverride: String? = nil,
+        workloadTemplatesOverride: String? = nil,
         capabilitiesSchemaVersion: Int = 1,
         capabilitiesSchemaID: String = "https://vifty.local/schemas/viftyctl-capabilities.schema.json",
         capabilitiesDiagnoseSchemaID: String? = "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
@@ -1432,6 +1448,7 @@ private final class ScriptHarness {
                 policyOverride: policyOverride,
                 metadataLimitsOverride: metadataLimitsOverride,
                 wrapperResourcesOverride: wrapperResourcesOverride,
+                workloadTemplatesOverride: workloadTemplatesOverride,
                 capabilitiesSchemaVersion: capabilitiesSchemaVersion,
                 capabilitiesSchemaID: capabilitiesSchemaID,
                 capabilitiesDiagnoseSchemaID: capabilitiesDiagnoseSchemaID,
@@ -1557,6 +1574,7 @@ private final class ScriptHarness {
         policyOverride: String?,
         metadataLimitsOverride: String?,
         wrapperResourcesOverride: String?,
+        workloadTemplatesOverride: String?,
         capabilitiesSchemaVersion: Int,
         capabilitiesSchemaID: String,
         capabilitiesDiagnoseSchemaID: String?,
@@ -1587,6 +1605,8 @@ private final class ScriptHarness {
             ?? #""metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256}"#
         let wrapperResources = wrapperResourcesOverride
             ?? #""wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["bun-build.sh","bun-test.sh","cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pnpm-build.sh","pnpm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","uv-build.sh","uv-test.sh","xcode-build.sh","xcode-test.sh"]}"#
+        let workloadTemplates = workloadTemplatesOverride
+            ?? #""workloadTemplates":[{"shortcutScript":"bun-build.sh"},{"shortcutScript":"bun-test.sh"},{"shortcutScript":"cargo-build.sh"},{"shortcutScript":"cargo-test.sh"},{"shortcutScript":"custom-workload.sh"},{"shortcutScript":"go-build.sh"},{"shortcutScript":"go-test.sh"},{"shortcutScript":"local-model.sh"},{"shortcutScript":"make-build.sh"},{"shortcutScript":"make-test.sh"},{"shortcutScript":"make-verify.sh"},{"shortcutScript":"npm-build.sh"},{"shortcutScript":"npm-test.sh"},{"shortcutScript":"pnpm-build.sh"},{"shortcutScript":"pnpm-test.sh"},{"shortcutScript":"pytest.sh"},{"shortcutScript":"swift-release-build.sh"},{"shortcutScript":"swift-test.sh"},{"shortcutScript":"uv-build.sh"},{"shortcutScript":"uv-test.sh"},{"shortcutScript":"xcode-build.sh"},{"shortcutScript":"xcode-test.sh"}]"#
         var schemaIDs = #""capabilities":"\#(capabilitiesSchemaID)""#
         if let capabilitiesDiagnoseSchemaID {
             schemaIDs += #","diagnose":"\#(capabilitiesDiagnoseSchemaID)""#
@@ -1599,8 +1619,8 @@ private final class ScriptHarness {
         }
         let schemaIdentity = #""schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{\#(schemaIDs)}"#
         let capabilitiesOutput = capabilitiesOutputOverride ?? (runLifecycle.isEmpty
-            ? #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(wrapperResources),\#(exitCodes)}"#
-            : #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(wrapperResources),\#(exitCodes)}"#)
+            ? #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(policy),\#(metadataLimits),\#(wrapperResources),\#(workloadTemplates),\#(exitCodes)}"#
+            : #"{\#(schemaIdentity),"commands":\#(commandsJSON),"workloads":\#(workloadsJSON),"daemonStatusAvailable":true,"policySource":"daemonStatus",\#(policyStatus)"supportsForceRetry":\#(supportsForceRetryValue),\#(runLifecycle),\#(policy),\#(metadataLimits),\#(wrapperResources),\#(workloadTemplates),\#(exitCodes)}"#)
         let script = """
         #!/bin/sh
         set -eu
