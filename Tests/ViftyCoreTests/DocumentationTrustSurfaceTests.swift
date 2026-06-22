@@ -33,6 +33,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`"))
         XCTAssertTrue(readme.contains("`decisionReason: \"preflightReady\"`"))
         XCTAssertTrue(readme.contains("workload wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom runs"))
+        XCTAssertTrue(readme.contains("guarded command/preflight templates for the same audited Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workload families"))
         XCTAssertTrue(readme.contains("`VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1`"))
         XCTAssertTrue(readme.contains("Use `VIFTY_GUARDED_RUN_FORCE_RETRY=1` only for supervised runs where the user approved waiting for `retryAfterSeconds` and retrying one rate-limited prepare."))
         XCTAssertTrue(readme.contains("`guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON`"))
@@ -1080,6 +1081,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let integrations = try read("docs/agent-integrations.md")
 
         XCTAssertTrue(guide.contains("read-only readiness first, one bounded workload lease, validated child command, then Auto restore"))
+        XCTAssertTrue(agentWorkflows.contains("audited wrapper command for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv,\npytest, local-model, or custom workload templates"))
+        XCTAssertTrue(integrations.contains("Copy Command"))
+        XCTAssertTrue(integrations.contains("Copy Safe Command"))
+        XCTAssertTrue(integrations.contains("audited Swift, Xcode,\nMake, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workload"))
         XCTAssertTrue(guide.contains("call `sudo`, `ViftyHelper setFixed`, `ViftyHelper auto`, raw SMC tools, or arbitrary fan RPM writes"))
         XCTAssertTrue(guide.contains("request cooling when `diagnose --json` reports `state: \"blocked\"`"))
         XCTAssertTrue(guide.contains("prepare cooling before the child command has been resolved and validated"))

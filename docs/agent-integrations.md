@@ -13,10 +13,11 @@ checkouts can use the same scripts from `examples/viftyctl/`.
 The Vifty main window and menu-bar popover include **Copy Agent Rule** for a
 short AGENTS.md/Codex starter rule that points at the installed
 `capabilities --json`, `diagnose --json`, and guarded-wrapper path. They also
-include **Copy Command** / **Copy Safe Command** menus for common Swift, Make,
-npm, cargo, and local-model workloads, with both normal guarded-run commands and
-read-only `--preflight-only` variants. Use the longer shared rule below when a
-project needs the full failure-handling policy in version control.
+include **Copy Command** / **Copy Safe Command** menus for audited Swift, Xcode,
+Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workload
+templates, with both normal guarded-run commands and read-only
+`--preflight-only` variants. Use the longer shared rule below when a project
+needs the full failure-handling policy in version control.
 
 Agents that want machine-readable discovery should read
 `viftyctl capabilities --json` first and use `wrapperResources.bundleDirectory`,

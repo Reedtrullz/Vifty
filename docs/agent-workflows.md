@@ -24,10 +24,10 @@ Installed app bundles include the same wrappers under `Contents/Resources/viftyc
 
 The Vifty main window and menu-bar popover can copy both a short agent rule and
 common guarded command templates. Use **Copy Safe Command** when you want an
-audited wrapper command for Swift tests, release builds, `make verify`, npm,
-cargo, or a local-model template; use the read-only preflight entries when an
-agent only needs to check readiness without requesting cooling or launching the
-child command.
+audited wrapper command for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv,
+pytest, local-model, or custom workload templates; use the read-only preflight
+entries when an agent only needs to check readiness without requesting cooling
+or launching the child command.
 
 ## Contract
 

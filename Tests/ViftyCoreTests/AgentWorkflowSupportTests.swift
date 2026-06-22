@@ -1,5 +1,6 @@
 import XCTest
 @testable import Vifty
+import ViftyCore
 
 final class AgentWorkflowSupportTests: XCTestCase {
     func testAgentRuleExplainsGuardedLocalCoolingContract() {
@@ -10,10 +11,24 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(AgentWorkflowSupport.copyCommandHelp.contains("audited guarded-run"))
         XCTAssertTrue(AgentWorkflowSupport.copiedMessage.contains("Copied"))
         XCTAssertTrue(AgentWorkflowSupport.copiedCommandMessage.contains("Copied"))
+        XCTAssertEqual(
+            Set(AgentWorkflowSupport.safeWorkloadCommandTemplates.map(\.shortcutScript)),
+            Set(ViftyCtlWrapperResources.workloadScriptNames)
+        )
         XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "swift-test" })
         XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "swift-release-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "xcode-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "make-build" })
         XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "make-verify" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "npm-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "pnpm-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "bun-test" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "go-test" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "cargo-build" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "uv-test" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "pytest" })
         XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "local-model-template" })
+        XCTAssertTrue(AgentWorkflowSupport.safeWorkloadCommandTemplates.contains { $0.id == "custom-workload-template" })
 
         let rule = AgentWorkflowSupport.agentRule()
 
@@ -128,19 +143,24 @@ final class AgentWorkflowSupportTests: XCTestCase {
         try FileManager.default.createDirectory(at: macOSURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
 
-        for relativePath in [
+        let relativeExecutablePaths = [
             "Contents/MacOS/viftyctl",
-            "Contents/Resources/viftyctl-wrappers/guarded-run.sh",
-            "Contents/Resources/viftyctl-wrappers/swift-test.sh",
-            "Contents/Resources/viftyctl-wrappers/local-model.sh"
-        ] {
+            "Contents/Resources/viftyctl-wrappers/guarded-run.sh"
+        ] + AgentWorkflowSupport.safeWorkloadCommandTemplates.map { template in
+            "Contents/Resources/viftyctl-wrappers/\(template.shortcutScript)"
+        }
+        for relativePath in relativeExecutablePaths {
             let url = appURL.appendingPathComponent(relativePath, isDirectory: false)
             try Data("#!/bin/sh\n".utf8).write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: url.path)
         }
 
         let swiftTest = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "swift-test" })
+        let xcodeBuild = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "xcode-build" })
+        let goTest = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "go-test" })
+        let uvTest = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "uv-test" })
         let localModel = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "local-model-template" })
+        let customWorkload = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "custom-workload-template" })
 
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(swiftTest, mode: .run, bundleURL: appURL),
@@ -151,12 +171,44 @@ final class AgentWorkflowSupportTests: XCTestCase {
             "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
         )
         XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(xcodeBuild, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("xcode-build.sh").path)'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(xcodeBuild, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'build' '30m' '75' 'xcodebuild build' '--' 'xcodebuild' 'build'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(goTest, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("go-test.sh").path)'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(goTest, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'go test' '--' 'go' 'test'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(uvTest, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("uv-test.sh").path)'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(uvTest, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'uv pytest' '--' 'uv' 'run' 'pytest'"
+        )
+        XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(localModel, mode: .run, bundleURL: appURL),
             "'\(wrappersURL.appendingPathComponent("local-model.sh").path)' '--' './run-local-model.sh'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(localModel, mode: .preflight, bundleURL: appURL),
             "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'localModel' '30m' '75' 'local model run' '--' './run-local-model.sh'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(customWorkload, mode: .run, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("custom-workload.sh").path)' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
+        )
+        XCTAssertEqual(
+            AgentWorkflowSupport.workloadCommand(customWorkload, mode: .preflight, bundleURL: appURL),
+            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'custom' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
         )
     }
 

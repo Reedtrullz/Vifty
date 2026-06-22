@@ -62,6 +62,50 @@ enum AgentWorkflowSupport {
             shortcutArguments: []
         ),
         WorkloadCommandTemplate(
+            id: "xcode-build",
+            title: "Xcode build",
+            workload: "build",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "xcodebuild build",
+            childArguments: ["xcodebuild", "build"],
+            shortcutScript: "xcode-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "xcode-test",
+            title: "Xcode test",
+            workload: "test",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "xcodebuild test",
+            childArguments: ["xcodebuild", "test"],
+            shortcutScript: "xcode-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "make-build",
+            title: "Make build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "make build",
+            childArguments: ["make", "build"],
+            shortcutScript: "make-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "make-test",
+            title: "Make test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "make test",
+            childArguments: ["make", "test"],
+            shortcutScript: "make-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
             id: "make-verify",
             title: "Make verify",
             workload: "test",
@@ -70,6 +114,17 @@ enum AgentWorkflowSupport {
             reason: "make verify",
             childArguments: ["make", "verify"],
             shortcutScript: "make-verify.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "npm-build",
+            title: "npm build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "npm run build",
+            childArguments: ["npm", "run", "build"],
+            shortcutScript: "npm-build.sh",
             shortcutArguments: []
         ),
         WorkloadCommandTemplate(
@@ -84,6 +139,83 @@ enum AgentWorkflowSupport {
             shortcutArguments: []
         ),
         WorkloadCommandTemplate(
+            id: "pnpm-build",
+            title: "pnpm build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "pnpm build",
+            childArguments: ["pnpm", "build"],
+            shortcutScript: "pnpm-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "pnpm-test",
+            title: "pnpm test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "pnpm test",
+            childArguments: ["pnpm", "test"],
+            shortcutScript: "pnpm-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "bun-build",
+            title: "Bun build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "bun run build",
+            childArguments: ["bun", "run", "build"],
+            shortcutScript: "bun-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "bun-test",
+            title: "Bun test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "bun test",
+            childArguments: ["bun", "test"],
+            shortcutScript: "bun-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "go-build",
+            title: "Go build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "go build",
+            childArguments: ["go", "build"],
+            shortcutScript: "go-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "go-test",
+            title: "Go test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "go test",
+            childArguments: ["go", "test"],
+            shortcutScript: "go-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "cargo-build",
+            title: "Cargo build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "cargo build",
+            childArguments: ["cargo", "build"],
+            shortcutScript: "cargo-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
             id: "cargo-test",
             title: "Cargo test",
             workload: "test",
@@ -92,6 +224,39 @@ enum AgentWorkflowSupport {
             reason: "cargo test",
             childArguments: ["cargo", "test"],
             shortcutScript: "cargo-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "uv-build",
+            title: "uv build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "uv build",
+            childArguments: ["uv", "build"],
+            shortcutScript: "uv-build.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "uv-test",
+            title: "uv pytest",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "uv pytest",
+            childArguments: ["uv", "run", "pytest"],
+            shortcutScript: "uv-test.sh",
+            shortcutArguments: []
+        ),
+        WorkloadCommandTemplate(
+            id: "pytest",
+            title: "pytest",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "pytest",
+            childArguments: ["python3", "-m", "pytest"],
+            shortcutScript: "pytest.sh",
             shortcutArguments: []
         ),
         WorkloadCommandTemplate(
@@ -104,6 +269,17 @@ enum AgentWorkflowSupport {
             childArguments: ["./run-local-model.sh"],
             shortcutScript: "local-model.sh",
             shortcutArguments: ["--", "./run-local-model.sh"]
+        ),
+        WorkloadCommandTemplate(
+            id: "custom-workload-template",
+            title: "Custom workload template",
+            workload: "custom",
+            duration: "15m",
+            maxRPMPercent: 65,
+            reason: "custom workload",
+            childArguments: ["./scripts/smoke-test.sh"],
+            shortcutScript: "custom-workload.sh",
+            shortcutArguments: ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
         )
     ]
 
