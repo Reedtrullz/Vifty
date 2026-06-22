@@ -94,6 +94,14 @@
     "wrapperResources": {
       "$ref": "#/$defs/wrapperResources"
     },
+    "workloadTemplates": {
+      "type": "array",
+      "description": "Audited convenience workload templates for local agents and app copy menus. This field is additive; legacy payloads can omit it, but current agents should prefer it over scraping docs for safe command defaults.",
+      "items": {
+        "$ref": "#/$defs/workloadTemplate"
+      },
+      "uniqueItems": true
+    },
     "exitCodes": {
       "$ref": "#/$defs/exitCodes"
     }
@@ -407,6 +415,90 @@
             ]
           },
           "uniqueItems": true
+        }
+      }
+    },
+    "workloadTemplate": {
+      "type": "object",
+      "description": "One audited workload command template advertised by viftyctl capabilities. Agents can combine this with wrapperResources to build either a shortcut-wrapper command or a read-only guarded-run preflight without guessing policy-shaped defaults.",
+      "required": [
+        "id",
+        "title",
+        "workload",
+        "duration",
+        "maxRPMPercent",
+        "reason",
+        "childArguments",
+        "shortcutScript",
+        "shortcutArguments"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workload": {
+          "$ref": "#/$defs/workload"
+        },
+        "duration": {
+          "type": "string",
+          "pattern": "^[0-9]+[smh]?$"
+        },
+        "maxRPMPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "childArguments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "shortcutScript": {
+          "type": "string",
+          "description": "Audited convenience script name from wrapperResources.workloadScripts.",
+          "enum": [
+            "bun-build.sh",
+            "bun-test.sh",
+            "cargo-build.sh",
+            "cargo-test.sh",
+            "custom-workload.sh",
+            "go-build.sh",
+            "go-test.sh",
+            "local-model.sh",
+            "make-build.sh",
+            "make-test.sh",
+            "make-verify.sh",
+            "npm-build.sh",
+            "npm-test.sh",
+            "pnpm-build.sh",
+            "pnpm-test.sh",
+            "pytest.sh",
+            "swift-release-build.sh",
+            "swift-test.sh",
+            "uv-build.sh",
+            "uv-test.sh",
+            "xcode-build.sh",
+            "xcode-test.sh"
+          ]
+        },
+        "shortcutArguments": {
+          "type": "array",
+          "description": "Arguments to pass after shortcutScript for parameterized templates. Empty for fixed shortcut wrappers.",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

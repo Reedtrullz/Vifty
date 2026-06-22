@@ -141,6 +141,285 @@ public struct ViftyCtlMetadataLimits: Codable, Equatable, Sendable {
     )
 }
 
+public struct ViftyCtlWorkloadTemplate: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var title: String
+    public var workload: String
+    public var duration: String
+    public var maxRPMPercent: Int
+    public var reason: String
+    public var childArguments: [String]
+    public var shortcutScript: String
+    public var shortcutArguments: [String]
+
+    public init(
+        id: String,
+        title: String,
+        workload: String,
+        duration: String,
+        maxRPMPercent: Int,
+        reason: String,
+        childArguments: [String],
+        shortcutScript: String,
+        shortcutArguments: [String]
+    ) {
+        self.id = id
+        self.title = title
+        self.workload = workload
+        self.duration = duration
+        self.maxRPMPercent = maxRPMPercent
+        self.reason = reason
+        self.childArguments = childArguments
+        self.shortcutScript = shortcutScript
+        self.shortcutArguments = shortcutArguments
+    }
+
+    public static let auditedTemplates: [ViftyCtlWorkloadTemplate] = [
+        ViftyCtlWorkloadTemplate(
+            id: "swift-test",
+            title: "Swift test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "swift test",
+            childArguments: ["swift", "test"],
+            shortcutScript: "swift-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "swift-release-build",
+            title: "Swift release build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "swift release build",
+            childArguments: ["swift", "build", "-c", "release"],
+            shortcutScript: "swift-release-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "xcode-build",
+            title: "Xcode build",
+            workload: "build",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "xcodebuild build",
+            childArguments: ["xcodebuild", "build"],
+            shortcutScript: "xcode-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "xcode-test",
+            title: "Xcode test",
+            workload: "test",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "xcodebuild test",
+            childArguments: ["xcodebuild", "test"],
+            shortcutScript: "xcode-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "make-build",
+            title: "Make build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "make build",
+            childArguments: ["make", "build"],
+            shortcutScript: "make-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "make-test",
+            title: "Make test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "make test",
+            childArguments: ["make", "test"],
+            shortcutScript: "make-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "make-verify",
+            title: "Make verify",
+            workload: "test",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "make verify",
+            childArguments: ["make", "verify"],
+            shortcutScript: "make-verify.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "npm-build",
+            title: "npm build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "npm run build",
+            childArguments: ["npm", "run", "build"],
+            shortcutScript: "npm-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "npm-test",
+            title: "npm test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "npm test",
+            childArguments: ["npm", "test"],
+            shortcutScript: "npm-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "pnpm-build",
+            title: "pnpm build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "pnpm build",
+            childArguments: ["pnpm", "build"],
+            shortcutScript: "pnpm-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "pnpm-test",
+            title: "pnpm test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "pnpm test",
+            childArguments: ["pnpm", "test"],
+            shortcutScript: "pnpm-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "bun-build",
+            title: "Bun build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "bun run build",
+            childArguments: ["bun", "run", "build"],
+            shortcutScript: "bun-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "bun-test",
+            title: "Bun test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "bun test",
+            childArguments: ["bun", "test"],
+            shortcutScript: "bun-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "go-build",
+            title: "Go build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "go build",
+            childArguments: ["go", "build"],
+            shortcutScript: "go-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "go-test",
+            title: "Go test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "go test",
+            childArguments: ["go", "test"],
+            shortcutScript: "go-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "cargo-build",
+            title: "Cargo build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "cargo build",
+            childArguments: ["cargo", "build"],
+            shortcutScript: "cargo-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "cargo-test",
+            title: "Cargo test",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "cargo test",
+            childArguments: ["cargo", "test"],
+            shortcutScript: "cargo-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "uv-build",
+            title: "uv build",
+            workload: "build",
+            duration: "25m",
+            maxRPMPercent: 75,
+            reason: "uv build",
+            childArguments: ["uv", "build"],
+            shortcutScript: "uv-build.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "uv-test",
+            title: "uv pytest",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "uv pytest",
+            childArguments: ["uv", "run", "pytest"],
+            shortcutScript: "uv-test.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "pytest",
+            title: "pytest",
+            workload: "test",
+            duration: "20m",
+            maxRPMPercent: 70,
+            reason: "pytest",
+            childArguments: ["python3", "-m", "pytest"],
+            shortcutScript: "pytest.sh",
+            shortcutArguments: []
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "local-model-template",
+            title: "Local model template",
+            workload: "localModel",
+            duration: "30m",
+            maxRPMPercent: 75,
+            reason: "local model run",
+            childArguments: ["./run-local-model.sh"],
+            shortcutScript: "local-model.sh",
+            shortcutArguments: ["--", "./run-local-model.sh"]
+        ),
+        ViftyCtlWorkloadTemplate(
+            id: "custom-workload-template",
+            title: "Custom workload template",
+            workload: "custom",
+            duration: "15m",
+            maxRPMPercent: 65,
+            reason: "custom workload",
+            childArguments: ["./scripts/smoke-test.sh"],
+            shortcutScript: "custom-workload.sh",
+            shortcutArguments: ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
+        )
+    ]
+}
+
 public struct ViftyCtlWrapperResources: Codable, Equatable, Sendable {
     public static let workloadScriptNames = [
         "bun-build.sh",
@@ -209,6 +488,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
     public var directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities
     public var metadataLimits: ViftyCtlMetadataLimits
     public var wrapperResources: ViftyCtlWrapperResources
+    public var workloadTemplates: [ViftyCtlWorkloadTemplate]
     public var exitCodes: ViftyCtlExitCodes
 
     public init(
@@ -228,6 +508,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         directControlLifecycle: ViftyCtlDirectControlLifecycleCapabilities = ViftyCtlDirectControlLifecycleCapabilities(),
         metadataLimits: ViftyCtlMetadataLimits = ViftyCtlMetadataLimits(),
         wrapperResources: ViftyCtlWrapperResources = ViftyCtlWrapperResources(),
+        workloadTemplates: [ViftyCtlWorkloadTemplate] = ViftyCtlWorkloadTemplate.auditedTemplates,
         exitCodes: ViftyCtlExitCodes = ViftyCtlExitCodes()
     ) {
         self.schemaVersion = schemaVersion
@@ -246,6 +527,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         self.directControlLifecycle = directControlLifecycle
         self.metadataLimits = metadataLimits
         self.wrapperResources = wrapperResources
+        self.workloadTemplates = workloadTemplates
         self.exitCodes = exitCodes
     }
 
@@ -266,6 +548,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         case directControlLifecycle
         case metadataLimits
         case wrapperResources
+        case workloadTemplates
         case exitCodes
     }
 
@@ -299,6 +582,10 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
             ViftyCtlWrapperResources.self,
             forKey: .wrapperResources
         ) ?? .unsupported
+        workloadTemplates = try container.decodeIfPresent(
+            [ViftyCtlWorkloadTemplate].self,
+            forKey: .workloadTemplates
+        ) ?? []
         exitCodes = try container.decode(ViftyCtlExitCodes.self, forKey: .exitCodes)
     }
 
@@ -324,6 +611,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
         try container.encode(directControlLifecycle, forKey: .directControlLifecycle)
         try container.encode(metadataLimits, forKey: .metadataLimits)
         try container.encode(wrapperResources, forKey: .wrapperResources)
+        try container.encode(workloadTemplates, forKey: .workloadTemplates)
         try container.encode(exitCodes, forKey: .exitCodes)
     }
 }

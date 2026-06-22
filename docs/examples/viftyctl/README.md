@@ -4,7 +4,7 @@ These examples are canonical sample payloads for local agents and shell automati
 
 The XCTest suite decodes these files against the current Swift models so the examples stay aligned with the implementation.
 
-`capabilities.json` includes source-tree `schemas`, installed app-bundle `schemaResources`, and stable `schemaIDs` so agents can validate payloads from either a checkout or an installed `Vifty.app`.
+`capabilities.json` includes source-tree `schemas`, installed app-bundle `schemaResources`, stable `schemaIDs`, wrapper resource discovery, and audited `workloadTemplates` so agents can validate payloads from either a checkout or an installed `Vifty.app` without scraping docs for safe build/test/model command defaults.
 
 Command-error examples include the stable command-error schema ID,
 `https://vifty.local/schemas/viftyctl-command-error.schema.json`, matching

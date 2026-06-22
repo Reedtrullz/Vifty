@@ -21,8 +21,9 @@ needs the full failure-handling policy in version control.
 
 Agents that want machine-readable discovery should read
 `viftyctl capabilities --json` first and use `wrapperResources.bundleDirectory`,
-`wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, and
-`wrapperResources.workloadScripts` instead of hardcoding wrapper script names.
+`wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`,
+`wrapperResources.workloadScripts`, and `workloadTemplates` instead of hardcoding
+wrapper script names or workload command defaults.
 Those paths are intentionally relative to the app bundle or source checkout so
 support evidence does not expose user-specific absolute paths.
 
@@ -41,14 +42,14 @@ Before trusting readiness or policy limits, run:
 ```
 
 From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`,
-`schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`,
+`schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `workloadTemplates`,
 `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable:
 true`, `policy.enabled: true`, and support for the requested workload before
-trusting the diagnose result for a cooling request. Use
+trusting the diagnose result or copied command template for a cooling request. Use
 `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`,
-`wrapperResources.guardedRunScript`, and `wrapperResources.workloadScripts` to
-choose the installed or source wrapper instead of inventing unaudited
-fan-control commands.
+`wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and
+`workloadTemplates` to choose the installed or source wrapper and audited workload
+defaults instead of inventing unaudited fan-control commands.
 
 If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop. If the user explicitly approves running the child command without Vifty cooling after seeing that JSON, use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` with the guarded wrapper so Vifty can still enforce recovery-action, daemon-control, manual-ownership, blocker-ID, and force-retry blocks; do not catch a guarded-run failure and rerun the child yourself.
 
@@ -133,7 +134,7 @@ after the user explicitly approved running the child command without Vifty
 cooling after seeing the structured readiness block. The wrapper will still run
 read-only checks, print the diagnose JSON, refuse to request cooling, avoid the uncooled fallback when Vifty recommends helper repair, backing off, restoring Auto first, policy inspection, hardware evidence collection, or when the daemon control path is unavailable, and reject attempts to combine uncooled fallback with force retry.
 
-The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, command-error, and run schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `wrapperResources` discovery metadata is missing or stale, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, launch-failure cleanup reporting, and `resolvedChildExecutableReported=true`. Completed `viftyctl run --json` payloads identify the absolute child executable that was resolved before cooling, include `childTerminationReason` plus inferred signal fields when the exit code looks like `128 + signal`, and include `resolvedChildExecutableSHA256Status` plus `resolvedChildExecutableSHA256` when the executable bytes are readable.
+The guarded wrapper rejects malformed duration/RPM/reason arguments before contacting Vifty, checks `viftyctl capabilities --json` before readiness, and refuses cooling if the CLI exits nonzero for anything other than the advertised unavailable exit code, if the capabilities payload does not declare schema version `1` and the stable capabilities, diagnose, command-error, and run schema IDs, if the CLI no longer advertises `run`, if the requested workload is not advertised, if `wrapperResources` discovery metadata is missing or stale, if `workloadTemplates` is absent when an agent wants a copied command default, if `policyStatusAvailable` is missing or not true, if `policy.enabled` is absent or false, if advertised policy duration/RPM limits or `metadataLimits` are missing, if the requested duration/RPM/reason exceeds those advertised limits, if `diagnose --json` readiness does not declare schema version `1`, if a nonzero diagnose command-error payload does not match the advertised command-error schema identity, or if the advertised `runLifecycle` contract no longer guarantees child-command preflight, handled signal forwarding, Auto restore, structured pre-child failures, launch-failure cleanup reporting, and `resolvedChildExecutableReported=true`. Completed `viftyctl run --json` payloads identify the absolute child executable that was resolved before cooling, include `childTerminationReason` plus inferred signal fields when the exit code looks like `128 + signal`, and include `resolvedChildExecutableSHA256Status` plus `resolvedChildExecutableSHA256` when the executable bytes are readable.
 
 On guarded-run failure paths, extract captured JSON from stderr only between
 the stable markers `guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON` /

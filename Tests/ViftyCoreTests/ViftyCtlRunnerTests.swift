@@ -151,6 +151,28 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("go-build.sh") == true)
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("go-test.sh") == true)
         XCTAssertTrue((wrapperResources["workloadScripts"] as? [String])?.contains("custom-workload.sh") == true)
+        let workloadTemplates = try XCTUnwrap(json["workloadTemplates"] as? [[String: Any]])
+        XCTAssertEqual(workloadTemplates.count, ViftyCtlWorkloadTemplate.auditedTemplates.count)
+        let swiftTestTemplate = try XCTUnwrap(workloadTemplates.first { ($0["id"] as? String) == "swift-test" })
+        XCTAssertEqual(swiftTestTemplate["title"] as? String, "Swift test")
+        XCTAssertEqual(swiftTestTemplate["workload"] as? String, "test")
+        XCTAssertEqual(swiftTestTemplate["duration"] as? String, "20m")
+        XCTAssertEqual(swiftTestTemplate["maxRPMPercent"] as? Int, 70)
+        XCTAssertEqual(swiftTestTemplate["reason"] as? String, "swift test")
+        XCTAssertEqual(swiftTestTemplate["childArguments"] as? [String], ["swift", "test"])
+        XCTAssertEqual(swiftTestTemplate["shortcutScript"] as? String, "swift-test.sh")
+        XCTAssertEqual(swiftTestTemplate["shortcutArguments"] as? [String], [])
+        let customTemplate = try XCTUnwrap(workloadTemplates.first { ($0["id"] as? String) == "custom-workload-template" })
+        XCTAssertEqual(customTemplate["workload"] as? String, "custom")
+        XCTAssertEqual(customTemplate["shortcutScript"] as? String, "custom-workload.sh")
+        XCTAssertEqual(
+            customTemplate["shortcutArguments"] as? [String],
+            ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
+        )
+        XCTAssertEqual(
+            Set(workloadTemplates.compactMap { $0["shortcutScript"] as? String }),
+            Set(ViftyCtlWrapperResources.workloadScriptNames)
+        )
         let schemaIDs = try XCTUnwrap(json["schemaIDs"] as? [String: Any])
         XCTAssertEqual(schemaIDs["capabilities"] as? String, "https://vifty.local/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(schemaIDs["audit"] as? String, "https://vifty.local/schemas/viftyctl-audit.schema.json")

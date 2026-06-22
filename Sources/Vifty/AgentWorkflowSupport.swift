@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ViftyCore
 
 enum AgentWorkflowSupport {
     static let copyHelp = "Copy a pasteable AGENTS.md/Codex rule that checks viftyctl capabilities, viftyctl diagnose readiness, and guarded-run wrappers before any agent/build/test cooling."
@@ -10,17 +11,7 @@ enum AgentWorkflowSupport {
     private static let canonicalAppPath = "/Applications/Vifty.app"
     private static let guardedRunResourcePath = "Contents/Resources/viftyctl-wrappers/guarded-run.sh"
 
-    struct WorkloadCommandTemplate: Identifiable, Equatable {
-        let id: String
-        let title: String
-        let workload: String
-        let duration: String
-        let maxRPMPercent: Int
-        let reason: String
-        let childArguments: [String]
-        let shortcutScript: String
-        let shortcutArguments: [String]
-    }
+    typealias WorkloadCommandTemplate = ViftyCtlWorkloadTemplate
 
     enum WorkloadCommandMode: String, CaseIterable, Identifiable {
         case run
@@ -38,250 +29,7 @@ enum AgentWorkflowSupport {
         }
     }
 
-    static let safeWorkloadCommandTemplates: [WorkloadCommandTemplate] = [
-        WorkloadCommandTemplate(
-            id: "swift-test",
-            title: "Swift test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "swift test",
-            childArguments: ["swift", "test"],
-            shortcutScript: "swift-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "swift-release-build",
-            title: "Swift release build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "swift release build",
-            childArguments: ["swift", "build", "-c", "release"],
-            shortcutScript: "swift-release-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "xcode-build",
-            title: "Xcode build",
-            workload: "build",
-            duration: "30m",
-            maxRPMPercent: 75,
-            reason: "xcodebuild build",
-            childArguments: ["xcodebuild", "build"],
-            shortcutScript: "xcode-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "xcode-test",
-            title: "Xcode test",
-            workload: "test",
-            duration: "30m",
-            maxRPMPercent: 75,
-            reason: "xcodebuild test",
-            childArguments: ["xcodebuild", "test"],
-            shortcutScript: "xcode-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "make-build",
-            title: "Make build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "make build",
-            childArguments: ["make", "build"],
-            shortcutScript: "make-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "make-test",
-            title: "Make test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "make test",
-            childArguments: ["make", "test"],
-            shortcutScript: "make-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "make-verify",
-            title: "Make verify",
-            workload: "test",
-            duration: "30m",
-            maxRPMPercent: 75,
-            reason: "make verify",
-            childArguments: ["make", "verify"],
-            shortcutScript: "make-verify.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "npm-build",
-            title: "npm build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "npm run build",
-            childArguments: ["npm", "run", "build"],
-            shortcutScript: "npm-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "npm-test",
-            title: "npm test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "npm test",
-            childArguments: ["npm", "test"],
-            shortcutScript: "npm-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "pnpm-build",
-            title: "pnpm build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "pnpm build",
-            childArguments: ["pnpm", "build"],
-            shortcutScript: "pnpm-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "pnpm-test",
-            title: "pnpm test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "pnpm test",
-            childArguments: ["pnpm", "test"],
-            shortcutScript: "pnpm-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "bun-build",
-            title: "Bun build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "bun run build",
-            childArguments: ["bun", "run", "build"],
-            shortcutScript: "bun-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "bun-test",
-            title: "Bun test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "bun test",
-            childArguments: ["bun", "test"],
-            shortcutScript: "bun-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "go-build",
-            title: "Go build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "go build",
-            childArguments: ["go", "build"],
-            shortcutScript: "go-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "go-test",
-            title: "Go test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "go test",
-            childArguments: ["go", "test"],
-            shortcutScript: "go-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "cargo-build",
-            title: "Cargo build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "cargo build",
-            childArguments: ["cargo", "build"],
-            shortcutScript: "cargo-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "cargo-test",
-            title: "Cargo test",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "cargo test",
-            childArguments: ["cargo", "test"],
-            shortcutScript: "cargo-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "uv-build",
-            title: "uv build",
-            workload: "build",
-            duration: "25m",
-            maxRPMPercent: 75,
-            reason: "uv build",
-            childArguments: ["uv", "build"],
-            shortcutScript: "uv-build.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "uv-test",
-            title: "uv pytest",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "uv pytest",
-            childArguments: ["uv", "run", "pytest"],
-            shortcutScript: "uv-test.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "pytest",
-            title: "pytest",
-            workload: "test",
-            duration: "20m",
-            maxRPMPercent: 70,
-            reason: "pytest",
-            childArguments: ["python3", "-m", "pytest"],
-            shortcutScript: "pytest.sh",
-            shortcutArguments: []
-        ),
-        WorkloadCommandTemplate(
-            id: "local-model-template",
-            title: "Local model template",
-            workload: "localModel",
-            duration: "30m",
-            maxRPMPercent: 75,
-            reason: "local model run",
-            childArguments: ["./run-local-model.sh"],
-            shortcutScript: "local-model.sh",
-            shortcutArguments: ["--", "./run-local-model.sh"]
-        ),
-        WorkloadCommandTemplate(
-            id: "custom-workload-template",
-            title: "Custom workload template",
-            workload: "custom",
-            duration: "15m",
-            maxRPMPercent: 65,
-            reason: "custom workload",
-            childArguments: ["./scripts/smoke-test.sh"],
-            shortcutScript: "custom-workload.sh",
-            shortcutArguments: ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
-        )
-    ]
+    static let safeWorkloadCommandTemplates: [WorkloadCommandTemplate] = ViftyCtlWorkloadTemplate.auditedTemplates
 
     static func agentRule(
         bundleURL: URL = Bundle.main.bundleURL,
@@ -304,9 +52,9 @@ enum AgentWorkflowSupport {
         \(diagnoseCommand)
         ```
 
-        From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits or wrapper output.
+        From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `workloadTemplates`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits, copied command templates, or wrapper output.
 
-        Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, and `wrapperResources.workloadScripts` to choose the installed or source wrapper instead of inventing unaudited fan-control commands.
+        Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and `workloadTemplates` to choose the installed or source wrapper and audited workload defaults instead of inventing unaudited fan-control commands.
 
         If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
 

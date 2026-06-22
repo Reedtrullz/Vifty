@@ -56,6 +56,20 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("uv-build.sh"))
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("uv-test.sh"))
         XCTAssertTrue(capabilities.wrapperResources.workloadScripts.contains("custom-workload.sh"))
+        XCTAssertEqual(capabilities.workloadTemplates, ViftyCtlWorkloadTemplate.auditedTemplates)
+        XCTAssertEqual(
+            Set(capabilities.workloadTemplates.map(\.shortcutScript)),
+            Set(capabilities.wrapperResources.workloadScripts)
+        )
+        XCTAssertTrue(capabilities.workloadTemplates.contains { template in
+            template.id == "make-verify"
+                && template.workload == "test"
+                && template.childArguments == ["make", "verify"]
+        })
+        XCTAssertTrue(capabilities.workloadTemplates.contains { template in
+            template.id == "custom-workload-template"
+                && template.shortcutArguments == ["15m", "65", "custom workload", "--", "./scripts/smoke-test.sh"]
+        })
         XCTAssertEqual(capabilities.schemaIDs.capabilities, "https://vifty.local/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.audit, "https://vifty.local/schemas/viftyctl-audit.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.diagnose, "https://vifty.local/schemas/viftyctl-diagnose.schema.json")
@@ -68,9 +82,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let sourceScripts = try sourceWorkloadWrapperScripts()
         let capabilities = try decode(ViftyCtlCapabilities.self, from: "capabilities.json")
         let schemaScripts = try capabilitiesSchemaWorkloadScripts()
+        let templateScripts = ViftyCtlWorkloadTemplate.auditedTemplates.map(\.shortcutScript).sorted()
 
         XCTAssertEqual(ViftyCtlWrapperResources.workloadScriptNames.sorted(), sourceScripts)
+        XCTAssertEqual(templateScripts, sourceScripts)
         XCTAssertEqual(capabilities.wrapperResources.workloadScripts.sorted(), sourceScripts)
+        XCTAssertEqual(capabilities.workloadTemplates.map(\.shortcutScript).sorted(), sourceScripts)
         XCTAssertEqual(schemaScripts.sorted(), sourceScripts)
     }
 
@@ -82,6 +99,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         payload.removeValue(forKey: "metadataLimits")
         payload.removeValue(forKey: "policyStatusAvailable")
         payload.removeValue(forKey: "wrapperResources")
+        payload.removeValue(forKey: "workloadTemplates")
         let data = try JSONSerialization.data(withJSONObject: payload)
 
         let capabilities = try JSONDecoder().decode(ViftyCtlCapabilities.self, from: data)
@@ -92,6 +110,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.metadataLimits, .unsupported)
         XCTAssertFalse(capabilities.policyStatusAvailable)
         XCTAssertEqual(capabilities.wrapperResources, .unsupported)
+        XCTAssertEqual(capabilities.workloadTemplates, [])
     }
 
     func testLegacyRunLifecycleDecodesWithoutResolvedExecutableReporting() throws {
@@ -601,6 +620,19 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             arePresentIn: capabilitiesExample["wrapperResources"] as? [String: Any],
             context: "capabilities wrapperResources"
         )
+        let workloadTemplates = try XCTUnwrap(capabilitiesExample["workloadTemplates"] as? [[String: Any]])
+        for template in workloadTemplates {
+            try assertRequiredFields(
+                definition: "workloadTemplate",
+                in: capabilitiesDefinitions,
+                arePresentIn: template,
+                context: "capabilities workloadTemplate"
+            )
+        }
+        let workloadTemplateDefinition = try XCTUnwrap(capabilitiesDefinitions["workloadTemplate"] as? [String: Any])
+        let workloadTemplateProperties = try XCTUnwrap(workloadTemplateDefinition["properties"] as? [String: Any])
+        let shortcutScript = try XCTUnwrap(workloadTemplateProperties["shortcutScript"] as? [String: Any])
+        XCTAssertEqual((shortcutScript["enum"] as? [String])?.sorted(), try sourceWorkloadWrapperScripts())
         try assertRequiredFields(
             definition: "schemaPathReferences",
             in: capabilitiesDefinitions,
