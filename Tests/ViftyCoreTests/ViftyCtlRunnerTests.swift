@@ -173,6 +173,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue((json["guardedRunCommand"] as? String)?.contains("swift-test.sh") == true)
         XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("--preflight-only") == true)
         XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
+        XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)
         XCTAssertTrue((json["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
         XCTAssertTrue((json["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
         XCTAssertTrue((json["workloadTemplateIDs"] as? [String])?.contains("swift-test") == true)

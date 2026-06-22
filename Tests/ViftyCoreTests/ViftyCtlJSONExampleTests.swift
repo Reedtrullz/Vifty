@@ -720,6 +720,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("safeToRequestCooling") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunDecisionSchemaID") == true)
+        XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)
         XCTAssertTrue((agentRuleExample["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
         XCTAssertTrue((agentRuleExample["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
 

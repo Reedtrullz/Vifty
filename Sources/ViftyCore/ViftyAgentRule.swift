@@ -134,6 +134,7 @@ public enum ViftyAgentRule {
         "schemaIDs.run",
         "schemaIDs.agentRule",
         "guardedRunDecisionSchemaID",
+        "guardedRunJSONMarkers",
         "wrapperResources",
         "workloadTemplates",
         "runLifecycle.resolvedChildExecutableReported == true"
