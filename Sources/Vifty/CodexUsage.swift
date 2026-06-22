@@ -457,6 +457,7 @@ private struct RateLimitKeyStyle {
 }
 
 struct CodexUsageAppServerClient {
+    private static let initializeRequestID = "vifty-codex-usage-init"
     private static let requestID = "vifty-codex-usage"
     private let executableURL: URL?
     private let timeout: TimeInterval
@@ -468,15 +469,76 @@ struct CodexUsageAppServerClient {
 
     func read() -> CodexUsageSnapshot? {
         guard let executableURL else { return nil }
+        if let snapshot = readUsingStdioAppServer(executableURL) {
+            return snapshot
+        }
+        return readUsingProxy(executableURL)
+    }
+
+    private func readUsingStdioAppServer(_ executableURL: URL) -> CodexUsageSnapshot? {
+        let initialize: [String: Any] = [
+            "id": Self.initializeRequestID,
+            "method": "initialize",
+            "params": [
+                "clientInfo": [
+                    "name": "vifty",
+                    "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "local"
+                ],
+                "capabilities": [
+                    "experimentalApi": true
+                ]
+            ]
+        ]
+        let initialized: [String: Any] = [
+            "method": "notifications/initialized",
+            "params": [:]
+        ]
+        return readRateLimits(
+            executableURL,
+            arguments: ["app-server", "--stdio"],
+            prefixRequests: [initialize, initialized]
+        )
+    }
+
+    private func readUsingProxy(_ executableURL: URL) -> CodexUsageSnapshot? {
+        readRateLimits(
+            executableURL,
+            arguments: ["app-server", "proxy"],
+            prefixRequests: []
+        )
+    }
+
+    private func readRateLimits(
+        _ executableURL: URL,
+        arguments: [String],
+        prefixRequests: [[String: Any]]
+    ) -> CodexUsageSnapshot? {
         let process = Process()
         process.executableURL = executableURL
-        process.arguments = ["app-server", "proxy"]
+        process.arguments = arguments
 
         let stdin = Pipe()
         let stdout = Pipe()
+        let stderr = Pipe()
         process.standardInput = stdin
         process.standardOutput = stdout
-        process.standardError = Pipe()
+        process.standardError = stderr
+
+        let responseReady = DispatchSemaphore(value: 0)
+        let output = LockedOutput()
+        stdout.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            if output.appendAndContainsResult(data, requestID: Self.requestID) {
+                responseReady.signal()
+            }
+        }
+        stderr.fileHandleForReading.readabilityHandler = { handle in
+            _ = handle.availableData
+        }
+        process.terminationHandler = { _ in
+            responseReady.signal()
+        }
 
         do {
             try process.run()
@@ -485,24 +547,32 @@ struct CodexUsageAppServerClient {
                 "method": "account/rateLimits/read",
                 "params": NSNull()
             ]
-            let requestData = try JSONSerialization.data(withJSONObject: request)
-            stdin.fileHandleForWriting.write(requestData)
-            stdin.fileHandleForWriting.write(Data("\n".utf8))
-            try? stdin.fileHandleForWriting.close()
+            for payload in prefixRequests + [request] {
+                let requestData = try JSONSerialization.data(withJSONObject: payload)
+                stdin.fileHandleForWriting.write(requestData)
+                stdin.fileHandleForWriting.write(Data("\n".utf8))
+            }
         } catch {
+            stdout.fileHandleForReading.readabilityHandler = nil
+            stderr.fileHandleForReading.readabilityHandler = nil
+            try? stdin.fileHandleForWriting.close()
             return nil
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.03)
-        }
+        _ = responseReady.wait(timeout: .now() + timeout)
+        stdout.fileHandleForReading.readabilityHandler = nil
+        stderr.fileHandleForReading.readabilityHandler = nil
+        try? stdin.fileHandleForWriting.close()
         if process.isRunning {
             process.terminate()
-            return nil
+            process.waitUntilExit()
+        }
+        let remainingData = stdout.fileHandleForReading.readDataToEndOfFile()
+        if !remainingData.isEmpty {
+            output.append(remainingData)
         }
 
-        let responseData = stdout.fileHandleForReading.readDataToEndOfFile()
+        let responseData = output.snapshot()
         guard let result = Self.resultPayload(from: responseData, requestID: Self.requestID) else {
             return nil
         }
@@ -546,6 +616,32 @@ struct CodexUsageAppServerClient {
         return candidates
             .map(URL.init(fileURLWithPath:))
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+
+    private final class LockedOutput: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+
+        func append(_ chunk: Data) {
+            lock.lock()
+            data.append(chunk)
+            lock.unlock()
+        }
+
+        func appendAndContainsResult(_ chunk: Data, requestID: String) -> Bool {
+            lock.lock()
+            data.append(chunk)
+            let hasResult = CodexUsageAppServerClient.resultPayload(from: data, requestID: requestID) != nil
+            lock.unlock()
+            return hasResult
+        }
+
+        func snapshot() -> Data {
+            lock.lock()
+            let snapshot = data
+            lock.unlock()
+            return snapshot
+        }
     }
 }
 

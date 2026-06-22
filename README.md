@@ -218,6 +218,7 @@ For the detailed privileged-helper and agent-control boundaries, see [docs/trust
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
 - Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export.
+- Codex usage mode is optional. When selected, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty does not store Codex credentials or API keys.
 - Local notifications use macOS UserNotifications only. They are opt-in, rate-limited, and do not add analytics, network calls, or persistent telemetry export.
 
 ### Optional: Harden XPC with your TeamID

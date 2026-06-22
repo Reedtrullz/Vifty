@@ -97,7 +97,7 @@ Agents should run `viftyctl diagnose --json` before long build/test workloads, u
 
 ## Local Data and Privacy
 
-Vifty has no analytics, accounts, cloud sync, or background network dependency.
+Vifty has no analytics, Vifty-owned accounts, cloud sync, or background network dependency. The optional **Codex usage** menu-bar mode is separate: when selected, it asks the local Codex CLI/app-server for account rate-limit data if available, then falls back to local Codex session logs. Vifty does not store Codex credentials or API keys.
 
 Local files:
 

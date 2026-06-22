@@ -122,6 +122,61 @@ final class CodexUsageTests: XCTestCase {
         )
     }
 
+    func testAppServerClientReadsRateLimitsOverDirectStdio() throws {
+        let root = try temporaryDirectory()
+        let executable = root.appendingPathComponent("fake-codex")
+        let argsLog = root.appendingPathComponent("args.log")
+        let stdinLog = root.appendingPathComponent("stdin.log")
+        let script = """
+        #!/bin/sh
+        printf '%s\\n' "$*" > \(shellSingleQuote(argsLog.path))
+        initialized=0
+        while IFS= read -r line
+        do
+          printf '%s\\n' "$line" >> \(shellSingleQuote(stdinLog.path))
+          case "$line" in
+            *vifty-codex-usage-init*)
+              printf '%s\\n' '{"id":"vifty-codex-usage-init","result":{"ok":true}}'
+              ;;
+            *initialized*)
+              initialized=1
+              ;;
+            *account*rateLimits*read*)
+              if [ "$initialized" != "1" ]; then
+                exit 3
+              fi
+              printf '%s\\n' '{"method":"remoteControl/status/changed","params":{"status":"disabled"}}'
+              printf '%s\\n' '{"id":"vifty-codex-usage","result":{"rateLimitsByLimitId":{"codex":{"limitId":"codex","planType":"pro","primary":{"usedPercent":12.5,"windowDurationMins":300,"resetsAt":1800003600},"secondary":{"usedPercent":2,"windowDurationMins":10080,"resetsAt":1800086400},"credits":{"hasCredits":false,"balance":"0"}}},"rateLimitResetCredits":{"availableCount":0}}}'
+              exit 0
+              ;;
+          esac
+        done
+        """
+        try script.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: executable.path)
+
+        let snapshot = try XCTUnwrap(CodexUsageAppServerClient(executableURL: executable, timeout: 1).read())
+
+        XCTAssertEqual(snapshot.usedPercent, 12.5, accuracy: 0.001)
+        XCTAssertEqual(snapshot.leftPercent, 87.5, accuracy: 0.001)
+        XCTAssertEqual(snapshot.resetDate, Date(timeIntervalSince1970: 1_800_003_600))
+        XCTAssertEqual(snapshot.windowLabel, "5h")
+        XCTAssertEqual(snapshot.planType, "pro")
+        XCTAssertEqual(snapshot.creditsSummary, "Credits: 0")
+        XCTAssertEqual(snapshot.resetCreditsSummary, "Usage resets: 0 available")
+        XCTAssertEqual(snapshot.sourceSummary, "Codex app-server")
+        XCTAssertEqual(
+            Set(snapshot.limitWindows.map(\.name)),
+            Set(["codex 5h", "codex 7d"])
+        )
+        XCTAssertEqual(try String(contentsOf: argsLog, encoding: .utf8), "app-server --stdio\n")
+        let stdin = try String(contentsOf: stdinLog, encoding: .utf8)
+        XCTAssertTrue(stdin.contains("initialize"))
+        XCTAssertTrue(stdin.contains("account"))
+        XCTAssertTrue(stdin.contains("rateLimits"))
+        XCTAssertTrue(stdin.contains("read"))
+    }
+
     func testReaderReturnsNilWithoutLocalTokenCountEvents() throws {
         let root = try temporaryDirectory()
         try FileManager.default.createDirectory(at: root.appendingPathComponent("sessions", isDirectory: true), withIntermediateDirectories: true)
@@ -141,5 +196,9 @@ final class CodexUsageTests: XCTestCase {
             try? FileManager.default.removeItem(at: url)
         }
         return url
+    }
+
+    private func shellSingleQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }
