@@ -1505,7 +1505,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.codexUsageSnapshot)
         XCTAssertEqual(model.menuBarLabelText, "Codex --")
 
-        await waitForCodexUsageReadCount(1, recorder: recorder)
+        await waitForCodexUsageSnapshot(model)
 
         XCTAssertEqual(recorder.readCount, 1)
         XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
