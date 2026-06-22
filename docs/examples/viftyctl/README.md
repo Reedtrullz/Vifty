@@ -6,6 +6,15 @@ The XCTest suite decodes these files against the current Swift models so the exa
 
 `capabilities.json` includes source-tree `schemas`, installed app-bundle `schemaResources`, stable `schemaIDs`, wrapper resource discovery, and audited `workloadTemplates` so agents can validate payloads from either a checkout or an installed `Vifty.app` without scraping docs for safe build/test/model command defaults.
 
+Agent-rule examples include the stable agent-rule schema ID,
+`https://vifty.local/schemas/viftyctl-agent-rule.schema.json`, matching
+`capabilities.schemaIDs.agentRule` before agents trust the pasteable safe-cooling
+instructions, default guarded-run commands, safety requirements, or forbidden
+actions. They also expose `guardedRunDecisionSchemaID:
+https://vifty.local/schemas/guarded-run-decision.schema.json` so agents can
+validate guarded-run no-cooling/preflight decision JSON without scraping rule
+text.
+
 Command-error examples include the stable command-error schema ID,
 `https://vifty.local/schemas/viftyctl-command-error.schema.json`, matching
 `capabilities.schemaIDs.commandError` before agents trust recovery, retry, or
@@ -26,6 +35,7 @@ unavailable, and legacy digest provenance.
 Files:
 
 - [capabilities.json](capabilities.json) - `viftyctl capabilities --json`
+- [agent-rule.json](agent-rule.json) - `viftyctl agent-rule --json`
 - [audit.json](audit.json) - `viftyctl audit --json`
 - [diagnose-ready.json](diagnose-ready.json) - `viftyctl diagnose --json` on ready hardware with `recommendedRecoveryAction`
 - [diagnose-blocked-helper-unreachable.json](diagnose-blocked-helper-unreachable.json) - `viftyctl diagnose --json` when helper telemetry exists but the daemon agent-control path is unreachable
@@ -42,6 +52,7 @@ Files:
 Schema:
 
 - [../../schemas/viftyctl-capabilities.schema.json](../../schemas/viftyctl-capabilities.schema.json) - agent-facing schema for the capabilities report
+- [../../schemas/viftyctl-agent-rule.schema.json](../../schemas/viftyctl-agent-rule.schema.json) - agent-facing schema for the safe local agent-cooling rule
 - [../../schemas/viftyctl-audit.schema.json](../../schemas/viftyctl-audit.schema.json) - agent-facing schema for the read-only audit report
 - [../../schemas/viftyctl-command-error.schema.json](../../schemas/viftyctl-command-error.schema.json) - agent-facing schema for structured command failures
 - [../../schemas/viftyctl-diagnose.schema.json](../../schemas/viftyctl-diagnose.schema.json) - agent-facing schema for the readiness report

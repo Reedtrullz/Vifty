@@ -5,10 +5,12 @@ import SwiftUI
 enum ViftyStatusItemPresentation {
     static func resolvedText(
         statusItemText: String?,
-        labelNeedsTelemetryPrime: Bool
+        labelNeedsTelemetryPrime: Bool,
+        allowsPlaceholderText: Bool
     ) -> String? {
         guard !labelNeedsTelemetryPrime else { return nil }
-        guard let statusItemText, !statusItemText.contains("--") else { return nil }
+        guard let statusItemText else { return nil }
+        guard allowsPlaceholderText || !statusItemText.contains("--") else { return nil }
         return statusItemText
     }
 }
@@ -104,7 +106,8 @@ final class ViftyStatusItemController: NSObject {
     private var resolvedStatusItemText: String? {
         ViftyStatusItemPresentation.resolvedText(
             statusItemText: model.menuBarStatusItemText,
-            labelNeedsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime
+            labelNeedsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime,
+            allowsPlaceholderText: model.menuBarDisplayMode == .codexUsage
         )
     }
 

@@ -201,6 +201,11 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var codexUsageSnapshot: CodexUsageSnapshot?
+    @Published var codexUsageDisplayStyle: CodexUsageDisplayStyle {
+        didSet {
+            codexUsageDisplayPreferenceDidChange()
+        }
+    }
     @Published var codexUsageMetricMode: CodexUsageMetricMode {
         didSet {
             codexUsageDisplayPreferenceDidChange()
@@ -312,6 +317,7 @@ final class AppModel: ObservableObject {
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
         fixedFanTargets = appPreferences.fixedFanTargets
+        codexUsageDisplayStyle = appPreferences.codexUsageDisplayPreferences.displayStyle
         codexUsageMetricMode = appPreferences.codexUsageDisplayPreferences.metricMode
         codexUsageResetMode = appPreferences.codexUsageDisplayPreferences.resetMode
         codexUsageRefreshCadence = if appPreferences.codexUsageDisplayPreferences == .defaults,
@@ -949,12 +955,21 @@ final class AppModel: ObservableObject {
     var menuBarStatusItemText: String? {
         guard !menuBarLabelUsesFanIcon else { return nil }
         let label = menuBarLabelText
+        if menuBarDisplayMode == .codexUsage, hasCompletedHardwarePoll {
+            return label
+        }
         guard !label.contains("--") else { return nil }
         return label
     }
 
     var menuBarLabelNeedsTelemetryPrime: Bool {
-        !hasCompletedHardwarePoll || menuBarLabelText.contains("--")
+        if !hasCompletedHardwarePoll {
+            return true
+        }
+        if menuBarDisplayMode == .codexUsage {
+            return false
+        }
+        return menuBarLabelText.contains("--")
     }
 
     var codexUsageSummary: String {
@@ -1068,6 +1083,7 @@ final class AppModel: ObservableObject {
 
     private var codexUsageDisplayPreferences: CodexUsageDisplayPreferences {
         CodexUsageDisplayPreferences(
+            displayStyle: codexUsageDisplayStyle,
             metricMode: codexUsageMetricMode,
             resetMode: codexUsageResetMode,
             refreshCadence: codexUsageRefreshCadence

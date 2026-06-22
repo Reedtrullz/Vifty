@@ -233,6 +233,14 @@ struct MenuBarView: View {
             .controlSize(.small)
 
             if model.menuBarDisplayMode == .codexUsage {
+                Picker("Codex display", selection: $model.codexUsageDisplayStyle) {
+                    ForEach(CodexUsageDisplayStyle.allCases) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+
                 Picker("Codex metric", selection: $model.codexUsageMetricMode) {
                     ForEach(CodexUsageMetricMode.allCases) { mode in
                         Text(mode.label).tag(mode)

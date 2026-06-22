@@ -99,6 +99,115 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("status"))
         XCTAssertTrue(result.stdout.contains("diagnose"))
         XCTAssertTrue(result.stdout.contains("prepare"))
+        XCTAssertTrue(result.stdout.contains("agent-rule"))
+    }
+
+    func testAgentRuleReturnsPasteableRuleWithoutDaemonMutation() async throws {
+        let client = FakeAgentControlClient(
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.agentRule(json: false))
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        XCTAssertTrue(result.stdout.contains("For long local build/test/model workloads on this Mac"))
+        XCTAssertTrue(result.stdout.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' capabilities --json"))
+        XCTAssertTrue(result.stdout.contains("'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json"))
+        XCTAssertTrue(result.stdout.contains("workloadTemplates"))
+        XCTAssertTrue(result.stdout.contains("guarded-run.sh"))
+        XCTAssertTrue(result.stdout.contains("Never call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, direct fan RPM writes, or unguarded `viftyctl prepare` from an agent."))
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
+    func testAgentRuleJSONIsSchemaBackedAndMachineReadable() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil
+            )),
+            processRunner: FakeProcessRunner(),
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.agentRule(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
+        XCTAssertEqual(json["command"] as? String, "agent-rule")
+        XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
+        XCTAssertTrue((json["rule"] as? String)?.contains("safeToRequestCooling") == true)
+        XCTAssertEqual(json["viftyctlCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl'")
+        XCTAssertEqual(json["capabilitiesCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl' capabilities --json")
+        XCTAssertEqual(json["diagnoseCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json")
+        XCTAssertEqual(json["guardedRunDecisionSchemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertTrue((json["guardedRunCommand"] as? String)?.contains("swift-test.sh") == true)
+        XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("--preflight-only") == true)
+        XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
+        XCTAssertTrue((json["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
+        XCTAssertTrue((json["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
+        XCTAssertTrue((json["workloadTemplateIDs"] as? [String])?.contains("swift-test") == true)
+    }
+
+    func testAgentRuleJSONCanUseSourceCheckoutBundleURL() async throws {
+        let root = try temporaryDirectory()
+        try Data("swift-tools-version: 6.0\n".utf8).write(to: root.appendingPathComponent("Package.swift"))
+
+        let buildURL = root.appendingPathComponent(".build/debug", isDirectory: true)
+        let wrappersURL = root.appendingPathComponent("examples/viftyctl", isDirectory: true)
+        try FileManager.default.createDirectory(at: buildURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
+
+        let viftyCtlURL = buildURL.appendingPathComponent("ViftyCtl", isDirectory: false)
+        let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
+        let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
+        for executableURL in [viftyCtlURL, guardedRunURL, swiftTestURL] {
+            try Data("#!/bin/sh\n".utf8).write(to: executableURL)
+            try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: executableURL.path)
+        }
+
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil
+            )),
+            processRunner: FakeProcessRunner(),
+            agentRuleBundleURL: buildURL,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.agentRule(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["viftyctlCommand"] as? String, "'\(viftyCtlURL.path)'")
+        XCTAssertEqual(json["capabilitiesCommand"] as? String, "'\(viftyCtlURL.path)' capabilities --json")
+        XCTAssertEqual(json["diagnoseCommand"] as? String, "'\(viftyCtlURL.path)' diagnose --json")
+        XCTAssertTrue((json["guardedRunCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(swiftTestURL.path)'") == true)
+        XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(guardedRunURL.path)' '--preflight-only'") == true)
+        XCTAssertFalse((json["guardedRunCommand"] as? String)?.contains("/Applications/Vifty.app") == true)
+        XCTAssertFalse((json["guardedRunPreflightCommand"] as? String)?.contains("/Applications/Vifty.app") == true)
     }
 
     func testCapabilitiesJSONIncludesPolicyAndWorkloads() async throws {
@@ -131,6 +240,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(schemas["status"] as? String, "docs/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemas["commandError"] as? String, "docs/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(schemas["run"] as? String, "docs/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(schemas["agentRule"] as? String, "docs/schemas/viftyctl-agent-rule.schema.json")
         let schemaResources = try XCTUnwrap(json["schemaResources"] as? [String: Any])
         XCTAssertEqual(schemaResources["capabilities"] as? String, "Contents/Resources/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(schemaResources["audit"] as? String, "Contents/Resources/schemas/viftyctl-audit.schema.json")
@@ -138,6 +248,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(schemaResources["status"] as? String, "Contents/Resources/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemaResources["commandError"] as? String, "Contents/Resources/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(schemaResources["run"] as? String, "Contents/Resources/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(schemaResources["agentRule"] as? String, "Contents/Resources/schemas/viftyctl-agent-rule.schema.json")
         let wrapperResources = try XCTUnwrap(json["wrapperResources"] as? [String: Any])
         XCTAssertEqual(wrapperResources["sourceDirectory"] as? String, "examples/viftyctl")
         XCTAssertEqual(wrapperResources["bundleDirectory"] as? String, "Contents/Resources/viftyctl-wrappers")
@@ -180,6 +291,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(schemaIDs["status"] as? String, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(schemaIDs["commandError"] as? String, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(schemaIDs["run"] as? String, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(schemaIDs["agentRule"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
         let exitCodes = try XCTUnwrap(json["exitCodes"] as? [String: Any])
         XCTAssertEqual(exitCodes["success"] as? Int, 0)
         XCTAssertEqual(exitCodes["commandFailure"] as? Int, 1)
@@ -1836,6 +1948,16 @@ final class ViftyCtlRunnerTests: XCTestCase {
             isMacBookPro: true,
             capturedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ViftyTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: url)
+        }
+        return url
     }
 }
 

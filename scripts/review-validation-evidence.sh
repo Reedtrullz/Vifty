@@ -225,6 +225,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "validation-report-index.schema.json" => "Contents/Resources/schemas/validation-report-index.schema.json",
     "validation-review-result.schema.json" => "Contents/Resources/schemas/validation-review-result.schema.json",
     "viftyctl-audit.schema.json" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
+    "viftyctl-agent-rule.schema.json" => "Contents/Resources/schemas/viftyctl-agent-rule.schema.json",
     "viftyctl-capabilities.schema.json" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
     "viftyctl-command-error.schema.json" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
     "viftyctl-diagnose.schema.json" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
@@ -234,6 +235,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
   EXPECTED_CAPABILITIES_SCHEMA_RESOURCES = {
     "audit" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
+    "agentRule" => "Contents/Resources/schemas/viftyctl-agent-rule.schema.json",
     "capabilities" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
     "commandError" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",
     "diagnose" => "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
@@ -1104,6 +1106,24 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def validate_agent_run_smoke_viftyctl_path(summary, failures)
+    viftyctl = summary["viftyctl"]
+    unless viftyctl.is_a?(String) &&
+        !viftyctl.empty? &&
+        !viftyctl.include?("/") &&
+        !viftyctl.start_with?(".")
+      failures << "agent-run-smoke summary viftyctl must be a basename-only command name"
+    end
+
+    unless %w[appBundle sourceCheckout customExecutable].include?(summary["viftyctlPathKind"].to_s)
+      failures << "agent-run-smoke summary viftyctlPathKind must be appBundle, sourceCheckout, or customExecutable"
+    end
+
+    unless summary["viftyctlPathPrivacy"] == "basenameOnly"
+      failures << "agent-run-smoke summary viftyctlPathPrivacy must be basenameOnly"
+    end
+  end
+
   def validate_agent_run_smoke_daemon_runtime(summary, failures)
     daemon_runtime = summary["daemonRuntime"]
     unless daemon_runtime.is_a?(Hash)
@@ -1199,6 +1219,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     validate_agent_run_smoke_bundle(path, summary, failures)
     validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
     validate_agent_run_smoke_provenance(summary, failures)
+    validate_agent_run_smoke_viftyctl_path(summary, failures)
     validate_agent_run_smoke_daemon_runtime(summary, failures)
 
     unless summary["schemaVersion"] == 1

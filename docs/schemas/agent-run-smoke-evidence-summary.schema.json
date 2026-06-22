@@ -13,6 +13,8 @@
     "readOnly",
     "coolingCommandsRun",
     "viftyctl",
+    "viftyctlPathKind",
+    "viftyctlPathPrivacy",
     "installSource",
     "sourceRef",
     "sourceSHA",
@@ -58,6 +60,16 @@
     },
     "viftyctl": {
       "type": "string"
+    },
+    "viftyctlPathKind": {
+      "enum": [
+        "appBundle",
+        "sourceCheckout",
+        "customExecutable"
+      ]
+    },
+    "viftyctlPathPrivacy": {
+      "const": "basenameOnly"
     },
     "installSource": {
       "$ref": "#/$defs/installSource"

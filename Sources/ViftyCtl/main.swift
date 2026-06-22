@@ -9,7 +9,11 @@ struct ViftyCtlMain {
         let rawArguments = Array(CommandLine.arguments.dropFirst())
         do {
             let command = try ViftyCtlArguments.parse(rawArguments)
-            let runner = ViftyCtlRunner(client: ViftyCtlDaemonClient(), processRunner: ViftyCtlProcessRunner())
+            let runner = ViftyCtlRunner(
+                client: ViftyCtlDaemonClient(),
+                processRunner: ViftyCtlProcessRunner(),
+                agentRuleBundleURL: Bundle.main.bundleURL
+            )
             let result = try await runner.run(command)
             if !result.stdout.isEmpty { FileHandle.standardOutput.write(Data(result.stdout.utf8)) }
             if !result.stderr.isEmpty { FileHandle.standardError.write(Data(result.stderr.utf8)) }

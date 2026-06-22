@@ -8,7 +8,7 @@ This guide is for supported Apple Silicon MacBook Pro hardware only. Unsupported
 
 Agents and scripts may:
 
-- run `viftyctl diagnose --json`, `status --json`, `capabilities --json`, and `audit --json`;
+- run `viftyctl agent-rule --json`, `diagnose --json`, `status --json`, `capabilities --json`, and `audit --json`;
 - run workloads through `/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh`, `examples/viftyctl/guarded-run.sh`, or their convenience wrappers;
 - use direct `prepare` / `restore-auto` only when a human is supervising a lifecycle that cannot be represented by `viftyctl run`.
 
@@ -57,6 +57,17 @@ For machine-readable discovery, `viftyctl capabilities --json` advertises
 Those paths are app-bundle/source-checkout relative rather than absolute, so
 agents can combine them with a known installed app or checkout location without
 recording user-specific paths in support evidence.
+
+For a pasteable starter rule, `viftyctl agent-rule --json` emits
+`schemaID: "https://vifty.local/schemas/viftyctl-agent-rule.schema.json"`,
+`guardedRunDecisionSchemaID:
+"https://vifty.local/schemas/guarded-run-decision.schema.json"`, the safe-rule
+text, default guarded commands, safety requirements, forbidden actions, and
+audited workload template IDs. Treat it as read-only guidance, not cooling
+authorization: compare the schema ID with `capabilities.schemaIDs.agentRule`,
+then still require safe `capabilities --json` and `diagnose --json` output before
+requesting cooling. Use `guardedRunDecisionSchemaID` when validating
+preflight-only or no-cooling decision payloads from the guarded wrapper.
 
 Use the installed CLI explicitly when running outside the Vifty repository:
 

@@ -3,6 +3,7 @@ import Foundation
 public enum ViftyCtlCommand: Equatable, Sendable {
     case status(json: Bool)
     case capabilities(json: Bool)
+    case agentRule(json: Bool)
     case diagnose(json: Bool)
     case audit(limit: Int, json: Bool)
     case prepare(AgentControlRequest, json: Bool, force: Bool)
@@ -27,6 +28,9 @@ public enum ViftyCtlArguments {
         case "capabilities":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
             return .capabilities(json: rest.contains("--json"))
+        case "agent-rule":
+            try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
+            return .agentRule(json: rest.contains("--json"))
         case "diagnose":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
             return .diagnose(json: rest.contains("--json"))

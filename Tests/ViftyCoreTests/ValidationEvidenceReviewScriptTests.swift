@@ -793,6 +793,27 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("agent-run-smoke summary schemaID must be https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"))
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryThatLeaksViftyCtlPath() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            viftyctl: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary viftyctl must be a basename-only command name"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeLocalAdHocProvenanceWithoutSourceSHA() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1600,6 +1621,9 @@ private final class ValidationEvidenceReviewHarness {
         sourceArtifactName: String = "",
         sourceArtifactSHA256: String = "",
         sourceArtifactBytes: String = "",
+        viftyctl: String = "viftyctl",
+        viftyctlPathKind: String = "appBundle",
+        viftyctlPathPrivacy: String = "basenameOnly",
         daemonRuntimeMatchesExpected: Bool? = true,
         daemonRuntimeMatchRequired: Bool = true
     ) throws -> URL {
@@ -1637,6 +1661,9 @@ private final class ValidationEvidenceReviewHarness {
             sourceArtifactName: sourceArtifactName,
             sourceArtifactSHA256: sourceArtifactSHA256,
             sourceArtifactBytes: sourceArtifactBytes,
+            viftyctl: viftyctl,
+            viftyctlPathKind: viftyctlPathKind,
+            viftyctlPathPrivacy: viftyctlPathPrivacy,
             daemonRuntimeMatchesExpected: daemonRuntimeMatchesExpected,
             daemonRuntimeMatchRequired: daemonRuntimeMatchRequired
         )
@@ -1689,6 +1716,9 @@ private final class ValidationEvidenceReviewHarness {
         sourceArtifactName: String = "",
         sourceArtifactSHA256: String = "",
         sourceArtifactBytes: String = "",
+        viftyctl: String = "viftyctl",
+        viftyctlPathKind: String = "appBundle",
+        viftyctlPathPrivacy: String = "basenameOnly",
         daemonRuntimeMatchesExpected: Bool? = true,
         daemonRuntimeMatchRequired: Bool = true
     ) throws -> URL {
@@ -1878,7 +1908,9 @@ private final class ValidationEvidenceReviewHarness {
             "status": status,
             "readOnly": status == "blocked",
             "coolingCommandsRun": status != "blocked",
-            "viftyctl": "/Applications/Vifty.app/Contents/MacOS/viftyctl",
+            "viftyctl": viftyctl,
+            "viftyctlPathKind": viftyctlPathKind,
+            "viftyctlPathPrivacy": viftyctlPathPrivacy,
             "installSource": installSource,
             "sourceRef": sourceRef,
             "sourceSHA": sourceSHA,
@@ -2400,6 +2432,7 @@ private final class ValidationEvidenceReviewHarness {
     validation-report-index.schema.json\t\(String(repeating: "9", count: 64))\t3100\tContents/Resources/schemas/validation-report-index.schema.json
     validation-review-result.schema.json\t\(String(repeating: "8", count: 64))\t3700\tContents/Resources/schemas/validation-review-result.schema.json
     viftyctl-audit.schema.json\t\(String(repeating: "e", count: 64))\t1390\tContents/Resources/schemas/viftyctl-audit.schema.json
+    viftyctl-agent-rule.schema.json\t\(String(repeating: "4", count: 64))\t2400\tContents/Resources/schemas/viftyctl-agent-rule.schema.json
     viftyctl-capabilities.schema.json\t\(String(repeating: "a", count: 64))\t5170\tContents/Resources/schemas/viftyctl-capabilities.schema.json
     viftyctl-command-error.schema.json\t\(String(repeating: "b", count: 64))\t1461\tContents/Resources/schemas/viftyctl-command-error.schema.json
     viftyctl-diagnose.schema.json\t\(String(repeating: "c", count: 64))\t5697\tContents/Resources/schemas/viftyctl-diagnose.schema.json
@@ -2409,6 +2442,7 @@ private final class ValidationEvidenceReviewHarness {
 
     static let defaultCapabilitiesSchemaResourcesTSV = """
     key\tadvertisedResource\texpectedResource
+    agentRule\tContents/Resources/schemas/viftyctl-agent-rule.schema.json\tContents/Resources/schemas/viftyctl-agent-rule.schema.json
     audit\tContents/Resources/schemas/viftyctl-audit.schema.json\tContents/Resources/schemas/viftyctl-audit.schema.json
     capabilities\tContents/Resources/schemas/viftyctl-capabilities.schema.json\tContents/Resources/schemas/viftyctl-capabilities.schema.json
     commandError\tContents/Resources/schemas/viftyctl-command-error.schema.json\tContents/Resources/schemas/viftyctl-command-error.schema.json

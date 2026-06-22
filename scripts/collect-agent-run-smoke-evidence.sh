@@ -291,6 +291,30 @@ if [[ ! -x "${VIFTYCTL}" ]]; then
   exit 69
 fi
 
+classify_viftyctl_path_kind() {
+  local viftyctl_dir=""
+  local viftyctl_real=""
+
+  viftyctl_dir="$(cd "$(dirname "${VIFTYCTL}")" && pwd -P)"
+  viftyctl_real="${viftyctl_dir}/$(basename "${VIFTYCTL}")"
+
+  case "${viftyctl_real}" in
+    */Contents/MacOS/viftyctl)
+      printf 'appBundle'
+      ;;
+    "${ROOT_DIR}"/*)
+      printf 'sourceCheckout'
+      ;;
+    *)
+      printf 'customExecutable'
+      ;;
+  esac
+}
+
+VIFTYCTL_COMMAND_NAME="$(basename "${VIFTYCTL}")"
+VIFTYCTL_PATH_PRIVACY="basenameOnly"
+VIFTYCTL_PATH_KIND="$(classify_viftyctl_path_kind)"
+
 if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
   INSTALLED_DAEMON_PRESENT="true"
   INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
@@ -519,7 +543,9 @@ write_metadata() {
 generatedAtUTC=${GENERATED_AT_UTC}
 readOnly=${read_only}
 coolingCommandsRun=${cooling_commands_run}
-viftyctl=${VIFTYCTL}
+viftyctl=${VIFTYCTL_COMMAND_NAME}
+viftyctlPathKind=${VIFTYCTL_PATH_KIND}
+viftyctlPathPrivacy=${VIFTYCTL_PATH_PRIVACY}
 installSource=${INSTALL_SOURCE}
 sourceRef=${SOURCE_REF}
 sourceSHA=${SOURCE_SHA}
@@ -569,15 +595,16 @@ write_summary_json() {
   local rate_limit_initial_status="${11}"
 
   ruby -rjson -e '
-    manifest_path, generated_at, viftyctl, install_source, source_ref,
-      source_sha, source_artifact_name, source_artifact_sha256,
-      source_artifact_bytes, installed_daemon_path, installed_daemon_present,
+    manifest_path, generated_at, viftyctl, viftyctl_path_kind,
+      viftyctl_path_privacy, install_source, source_ref, source_sha,
+      source_artifact_name, source_artifact_sha256, source_artifact_bytes,
+      installed_daemon_path, installed_daemon_present,
       installed_daemon_sha256, expected_daemon_path, expected_daemon_sha256,
       daemon_matches_expected, daemon_match_required, workload, duration, max_rpm_percent,
       reason, status, read_only, cooling_commands_run, run_status,
       skipped_reason, skip_reasons_text, audit_limit, pre_capabilities_path, pre_diagnose_path,
       run_json_path, run_stdout_name, run_stderr_name, rate_limit_retry_attempted,
-      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(35)
+      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(37)
 
     def boolean_or_nil(value)
       [true, false].include?(value) ? value : nil
@@ -701,6 +728,8 @@ write_summary_json() {
       "readOnly" => read_only == "true",
       "coolingCommandsRun" => cooling_commands_run == "true",
       "viftyctl" => viftyctl,
+      "viftyctlPathKind" => viftyctl_path_kind,
+      "viftyctlPathPrivacy" => viftyctl_path_privacy,
       "installSource" => install_source,
       "sourceRef" => source_ref,
       "sourceSHA" => source_sha,
@@ -747,7 +776,8 @@ write_summary_json() {
       "run" => run,
       "commands" => commands
     })
-  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL}" \
+  ' "${MANIFEST_PATH}" "${GENERATED_AT_UTC}" "${VIFTYCTL_COMMAND_NAME}" \
+    "${VIFTYCTL_PATH_KIND}" "${VIFTYCTL_PATH_PRIVACY}" \
     "${INSTALL_SOURCE}" "${SOURCE_REF}" "${SOURCE_SHA}" \
     "${SOURCE_ARTIFACT_NAME}" "${SOURCE_ARTIFACT_SHA256}" "${SOURCE_ARTIFACT_BYTES}" \
     "${INSTALLED_DAEMON_PATH}" "${INSTALLED_DAEMON_PRESENT}" "${INSTALLED_DAEMON_SHA256}" \

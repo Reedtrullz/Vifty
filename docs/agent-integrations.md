@@ -19,6 +19,21 @@ templates, with both normal guarded-run commands and read-only
 `--preflight-only` variants. Use the longer shared rule below when a project
 needs the full failure-handling policy in version control.
 
+For a machine-readable starter rule, agents can run `viftyctl agent-rule
+--json`. The payload uses
+`https://vifty.local/schemas/viftyctl-agent-rule.schema.json`; compare that with
+`capabilities.schemaIDs.agentRule` before trusting the rule text, command
+examples, safety requirements, forbidden actions, or workload template IDs. It
+also exposes `guardedRunDecisionSchemaID:
+"https://vifty.local/schemas/guarded-run-decision.schema.json"` so agents can
+validate guarded-run no-cooling/preflight decision JSON without scraping prose.
+Agents should still run `capabilities --json` and `diagnose --json` after reading
+it because the agent-rule payload is guidance, not authorization to request
+cooling. Its command examples are location-aware: installed app runs use
+`/Applications/Vifty.app`, SwiftPM/source checkout runs use `.build/.../ViftyCtl`
+plus `examples/viftyctl/...`, and non-canonical/custom app bundles add
+`VIFTYCTL=...` so copied wrappers call the same `viftyctl` binary.
+
 Agents that want machine-readable discovery should read
 `viftyctl capabilities --json` first and use `wrapperResources.bundleDirectory`,
 `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`,
@@ -37,12 +52,14 @@ For long local build/test/model workloads on this Mac, use Vifty only through th
 Before trusting readiness or policy limits, run:
 
 ```sh
+/Applications/Vifty.app/Contents/MacOS/viftyctl agent-rule --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl capabilities --json
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
 From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`,
 `schemaIDs.commandError`, `schemaIDs.run`, `wrapperResources`, `workloadTemplates`,
+`schemaIDs.agentRule`,
 `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable:
 true`, `policy.enabled: true`, and support for the requested workload before
 trusting the diagnose result or copied command template for a cooling request. Use
@@ -50,6 +67,7 @@ trusting the diagnose result or copied command template for a cooling request. U
 `wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and
 `workloadTemplates` to choose the installed or source wrapper and audited workload
 defaults instead of inventing unaudited fan-control commands.
+Treat the agent-rule payload as another read-only input, never as authorization.
 
 If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop. If the user explicitly approves running the child command without Vifty cooling after seeing that JSON, use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` with the guarded wrapper so Vifty can still enforce recovery-action, daemon-control, manual-ownership, blocker-ID, and force-retry blocks; do not catch a guarded-run failure and rerun the child yourself.
 

@@ -66,7 +66,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(rule.contains("guarded-run: END_VIFTY_DIAGNOSE_JSON"))
         XCTAssertTrue(rule.contains("guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON"))
         XCTAssertTrue(rule.contains("guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON"))
-        XCTAssertTrue(rule.contains("https://vifty.local/schemas/guarded-run-decision.schema.json"))
+        XCTAssertTrue(rule.contains("guardedRunDecisionSchemaID"))
         XCTAssertTrue(rule.contains("decisionReason"))
         XCTAssertTrue(rule.contains("coolingRequested: false"))
         XCTAssertTrue(rule.contains("Do not parse surrounding recovery prose"))
@@ -96,8 +96,8 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' diagnose --json"))
-        XCTAssertTrue(rule.contains("'\(swiftTestURL.path)'"))
-        XCTAssertTrue(rule.contains("'\(guardedRunURL.path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(swiftTestURL.path)'"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(guardedRunURL.path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
     }
 
     func testAgentRuleShellQuotesBundledPaths() throws {
@@ -121,8 +121,36 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' capabilities --json"))
         XCTAssertTrue(rule.contains("'\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' diagnose --json"))
-        XCTAssertTrue(rule.contains("'\(swiftTestURL.path.replacingOccurrences(of: "'", with: "'\\''"))'"))
-        XCTAssertTrue(rule.contains("'\(guardedRunURL.path.replacingOccurrences(of: "'", with: "'\\''"))' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' '\(swiftTestURL.path.replacingOccurrences(of: "'", with: "'\\''"))'"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path.replacingOccurrences(of: "'", with: "'\\''"))' '\(guardedRunURL.path.replacingOccurrences(of: "'", with: "'\\''"))' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
+    }
+
+    func testAgentRuleUsesSourceCheckoutWrappersWhenRunFromSwiftPMBuildDirectory() throws {
+        let root = try temporaryDirectory()
+        try Data("swift-tools-version: 6.0\n".utf8).write(to: root.appendingPathComponent("Package.swift"))
+
+        let buildURL = root.appendingPathComponent(".build/debug", isDirectory: true)
+        let wrappersURL = root.appendingPathComponent("examples/viftyctl", isDirectory: true)
+        try FileManager.default.createDirectory(at: buildURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
+
+        let viftyCtlURL = buildURL.appendingPathComponent("ViftyCtl", isDirectory: false)
+        let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
+        let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
+        try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
+        try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
+        try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
+
+        let rule = ViftyAgentRule.rule(bundleURL: buildURL)
+
+        XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' capabilities --json"))
+        XCTAssertTrue(rule.contains("'\(viftyCtlURL.path)' diagnose --json"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(swiftTestURL.path)'"))
+        XCTAssertTrue(rule.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(guardedRunURL.path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"))
+        XCTAssertFalse(rule.contains("'/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/swift-test.sh'"))
     }
 
     func testAgentRuleFallsBackToCanonicalInstalledAppPaths() throws {
@@ -164,54 +192,55 @@ final class AgentWorkflowSupportTests: XCTestCase {
         let uvTest = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "uv-test" })
         let localModel = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "local-model-template" })
         let customWorkload = try XCTUnwrap(AgentWorkflowSupport.safeWorkloadCommandTemplates.first { $0.id == "custom-workload-template" })
+        let explicitViftyCtlPrefix = "VIFTYCTL='\(appURL.appendingPathComponent("Contents/MacOS/viftyctl").path)' "
 
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(swiftTest, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("swift-test.sh").path)'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("swift-test.sh").path)'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(swiftTest, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(xcodeBuild, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("xcode-build.sh").path)'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("xcode-build.sh").path)'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(xcodeBuild, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'build' '30m' '75' 'xcodebuild build' '--' 'xcodebuild' 'build'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'build' '30m' '75' 'xcodebuild build' '--' 'xcodebuild' 'build'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(goTest, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("go-test.sh").path)'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("go-test.sh").path)'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(goTest, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'go test' '--' 'go' 'test'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'go test' '--' 'go' 'test'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(uvTest, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("uv-test.sh").path)'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("uv-test.sh").path)'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(uvTest, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'uv pytest' '--' 'uv' 'run' 'pytest'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'test' '20m' '70' 'uv pytest' '--' 'uv' 'run' 'pytest'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(localModel, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("local-model.sh").path)' '--' './run-local-model.sh'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("local-model.sh").path)' '--' './run-local-model.sh'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(localModel, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'localModel' '30m' '75' 'local model run' '--' './run-local-model.sh'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'localModel' '30m' '75' 'local model run' '--' './run-local-model.sh'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(customWorkload, mode: .run, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("custom-workload.sh").path)' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("custom-workload.sh").path)' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
         )
         XCTAssertEqual(
             AgentWorkflowSupport.workloadCommand(customWorkload, mode: .preflight, bundleURL: appURL),
-            "'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'custom' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
+            "\(explicitViftyCtlPrefix)'\(wrappersURL.appendingPathComponent("guarded-run.sh").path)' '--preflight-only' 'custom' '15m' '65' 'custom workload' '--' './scripts/smoke-test.sh'"
         )
     }
 

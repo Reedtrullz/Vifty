@@ -405,6 +405,7 @@ for schema_reference in \
   "validation-report-index.schema.json|https://vifty.local/schemas/validation-report-index.schema.json" \
   "validation-review-result.schema.json|https://vifty.local/schemas/validation-review-result.schema.json" \
   "viftyctl-audit.schema.json|https://vifty.local/schemas/viftyctl-audit.schema.json" \
+  "viftyctl-agent-rule.schema.json|https://vifty.local/schemas/viftyctl-agent-rule.schema.json" \
   "viftyctl-capabilities.schema.json|https://vifty.local/schemas/viftyctl-capabilities.schema.json" \
   "viftyctl-command-error.schema.json|https://vifty.local/schemas/viftyctl-command-error.schema.json" \
   "viftyctl-diagnose.schema.json|https://vifty.local/schemas/viftyctl-diagnose.schema.json" \

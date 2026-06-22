@@ -33,6 +33,7 @@
         "enum": [
           "status",
           "capabilities",
+          "agent-rule",
           "diagnose",
           "audit",
           "prepare",
@@ -124,7 +125,8 @@
         "diagnose",
         "status",
         "commandError",
-        "run"
+        "run",
+        "agentRule"
       ],
       "properties": {
         "capabilities": {
@@ -144,6 +146,9 @@
         },
         "run": {
           "const": "docs/schemas/viftyctl-run.schema.json"
+        },
+        "agentRule": {
+          "const": "docs/schemas/viftyctl-agent-rule.schema.json"
         }
       }
     },
@@ -155,7 +160,8 @@
         "diagnose",
         "status",
         "commandError",
-        "run"
+        "run",
+        "agentRule"
       ],
       "properties": {
         "capabilities": {
@@ -175,6 +181,9 @@
         },
         "run": {
           "const": "Contents/Resources/schemas/viftyctl-run.schema.json"
+        },
+        "agentRule": {
+          "const": "Contents/Resources/schemas/viftyctl-agent-rule.schema.json"
         }
       }
     },
@@ -186,7 +195,8 @@
         "diagnose",
         "status",
         "commandError",
-        "run"
+        "run",
+        "agentRule"
       ],
       "properties": {
         "capabilities": {
@@ -206,6 +216,9 @@
         },
         "run": {
           "const": "https://vifty.local/schemas/viftyctl-run.schema.json"
+        },
+        "agentRule": {
+          "const": "https://vifty.local/schemas/viftyctl-agent-rule.schema.json"
         }
       }
     },

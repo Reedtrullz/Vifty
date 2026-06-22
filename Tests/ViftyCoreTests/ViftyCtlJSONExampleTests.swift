@@ -10,6 +10,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(capabilities.commands.contains("diagnose"))
         XCTAssertTrue(capabilities.commands.contains("audit"))
         XCTAssertTrue(capabilities.commands.contains("run"))
+        XCTAssertTrue(capabilities.commands.contains("agent-rule"))
         XCTAssertTrue(capabilities.workloads.contains("localModel"))
         XCTAssertEqual(capabilities.policySource, .daemonStatus)
         XCTAssertTrue(capabilities.daemonStatusAvailable)
@@ -36,12 +37,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemas.status, "docs/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemas.commandError, "docs/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(capabilities.schemas.run, "docs/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(capabilities.schemas.agentRule, "docs/schemas/viftyctl-agent-rule.schema.json")
         XCTAssertEqual(capabilities.schemaResources.capabilities, "Contents/Resources/schemas/viftyctl-capabilities.schema.json")
         XCTAssertEqual(capabilities.schemaResources.audit, "Contents/Resources/schemas/viftyctl-audit.schema.json")
         XCTAssertEqual(capabilities.schemaResources.diagnose, "Contents/Resources/schemas/viftyctl-diagnose.schema.json")
         XCTAssertEqual(capabilities.schemaResources.status, "Contents/Resources/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaResources.commandError, "Contents/Resources/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(capabilities.schemaResources.run, "Contents/Resources/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(capabilities.schemaResources.agentRule, "Contents/Resources/schemas/viftyctl-agent-rule.schema.json")
         XCTAssertEqual(capabilities.wrapperResources.sourceDirectory, "examples/viftyctl")
         XCTAssertEqual(capabilities.wrapperResources.bundleDirectory, "Contents/Resources/viftyctl-wrappers")
         XCTAssertEqual(capabilities.wrapperResources.guardedRunScript, "guarded-run.sh")
@@ -76,6 +79,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.schemaIDs.status, "https://vifty.local/schemas/viftyctl-status.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.commandError, "https://vifty.local/schemas/viftyctl-command-error.schema.json")
         XCTAssertEqual(capabilities.schemaIDs.run, "https://vifty.local/schemas/viftyctl-run.schema.json")
+        XCTAssertEqual(capabilities.schemaIDs.agentRule, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
+    }
+
+    func testAgentRuleExampleMatchesGeneratedReport() throws {
+        let fixture = try decode(ViftyCtlAgentRuleReport.self, from: "agent-rule.json")
+        let expected = ViftyAgentRule.report(generatedAt: Date(timeIntervalSince1970: 1_700_000_000))
+
+        XCTAssertEqual(fixture, expected)
     }
 
     func testWorkloadWrapperContractMatchesSourceScriptsAndSchema() throws {
@@ -542,6 +553,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let examplesReadme = try String(contentsOf: fixtureURL("README.md"), encoding: .utf8)
         let schemaExamples = [
             ("viftyctl-audit.schema.json", "audit.json"),
+            ("viftyctl-agent-rule.schema.json", "agent-rule.json"),
             ("viftyctl-capabilities.schema.json", "capabilities.json"),
             ("viftyctl-command-error.schema.json", "command-error.json"),
             ("viftyctl-command-error.schema.json", "command-error-run-child-command-failed.json"),
@@ -580,7 +592,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let policyStatusAvailable = try XCTUnwrap(capabilitiesProperties["policyStatusAvailable"] as? [String: Any])
         XCTAssertEqual(policyStatusAvailable["type"] as? String, "boolean")
         let commandItems = try XCTUnwrap((capabilitiesProperties["commands"] as? [String: Any])?["items"] as? [String: Any])
-        XCTAssertEqual(commandItems["enum"] as? [String], ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"])
+        XCTAssertEqual(commandItems["enum"] as? [String], ["status", "capabilities", "agent-rule", "diagnose", "audit", "prepare", "restore-auto", "run"])
         XCTAssertEqual(enumValues(named: "policySource", in: capabilitiesProperties), ["daemonStatus", "fallbackUnavailable"])
         let capabilitiesDefinitions = try XCTUnwrap(capabilitiesSchema["$defs"] as? [String: Any])
         XCTAssertEqual(definitionEnumValues(named: "workload", in: capabilitiesDefinitions), ["build", "test", "render", "localModel", "custom"])
@@ -681,6 +693,24 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(runExample["resolvedChildExecutableSHA256Status"] as? String, "unavailable")
         XCTAssertEqual(runExample["resolvedChildExecutable"] as? String, "/usr/bin/true")
 
+        let agentRuleSchema = try readJSON(schemaURL("viftyctl-agent-rule.schema.json"))
+        let agentRuleProperties = try XCTUnwrap(agentRuleSchema["properties"] as? [String: Any])
+        XCTAssertEqual((agentRuleProperties["schemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
+        XCTAssertEqual((agentRuleProperties["command"] as? [String: Any])?["const"] as? String, "agent-rule")
+        XCTAssertEqual((agentRuleProperties["guardedRunDecisionSchemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertNotNil(agentRuleProperties["safetyRequirements"] as? [String: Any])
+        XCTAssertNotNil(agentRuleProperties["forbiddenActions"] as? [String: Any])
+        let agentRuleExample = try readJSON(fixtureURL("agent-rule.json"))
+        XCTAssertEqual(agentRuleExample["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(agentRuleExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
+        XCTAssertEqual(agentRuleExample["command"] as? String, "agent-rule")
+        XCTAssertEqual(agentRuleExample["guardedRunDecisionSchemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("safeToRequestCooling") == true)
+        XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
+        XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunDecisionSchemaID") == true)
+        XCTAssertTrue((agentRuleExample["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
+        XCTAssertTrue((agentRuleExample["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
+
         let statusSchema = try readJSON(schemaURL("viftyctl-status.schema.json"))
         let statusDefinitions = try XCTUnwrap(statusSchema["$defs"] as? [String: Any])
         XCTAssertEqual(definitionEnumValues(named: "workload", in: statusDefinitions), ["build", "test", "render", "localModel", "custom"])
@@ -747,7 +777,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             (capabilities.schemas.diagnose, capabilities.schemaIDs.diagnose),
             (capabilities.schemas.status, capabilities.schemaIDs.status),
             (capabilities.schemas.commandError, capabilities.schemaIDs.commandError),
-            (capabilities.schemas.run, capabilities.schemaIDs.run)
+            (capabilities.schemas.run, capabilities.schemaIDs.run),
+            (capabilities.schemas.agentRule, capabilities.schemaIDs.agentRule)
         ]
         for (schemaPath, schemaID) in references {
             let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

@@ -176,6 +176,7 @@ EXPECTED_SCHEMA_FILES=(
   "validation-report-index.schema.json"
   "validation-review-result.schema.json"
   "viftyctl-audit.schema.json"
+  "viftyctl-agent-rule.schema.json"
   "viftyctl-capabilities.schema.json"
   "viftyctl-command-error.schema.json"
   "viftyctl-diagnose.schema.json"
@@ -559,6 +560,7 @@ capture_capabilities_schema_resources() {
   ruby -rjson -e '
     path = ARGV.fetch(0)
     expected = {
+      "agentRule" => "Contents/Resources/schemas/viftyctl-agent-rule.schema.json",
       "audit" => "Contents/Resources/schemas/viftyctl-audit.schema.json",
       "capabilities" => "Contents/Resources/schemas/viftyctl-capabilities.schema.json",
       "commandError" => "Contents/Resources/schemas/viftyctl-command-error.schema.json",

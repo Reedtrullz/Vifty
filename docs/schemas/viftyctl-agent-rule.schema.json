@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/viftyctl-agent-rule.schema.json",
+  "title": "viftyctl agent-rule --json report",
+  "description": "Machine-readable safe local agent/build/test cooling rule emitted by viftyctl agent-rule --json. This payload is read-only guidance for agents and must not be treated as cooling authorization; agents still need capabilities and diagnose readiness before running guarded workloads.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "command",
+    "generatedAt",
+    "rule",
+    "viftyctlCommand",
+    "capabilitiesCommand",
+    "diagnoseCommand",
+    "guardedRunDecisionSchemaID",
+    "guardedRunCommand",
+    "guardedRunPreflightCommand",
+    "schemaRequirements",
+    "safetyRequirements",
+    "forbiddenActions",
+    "workloadTemplateIDs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/viftyctl-agent-rule.schema.json"
+    },
+    "command": {
+      "const": "agent-rule"
+    },
+    "generatedAt": {
+      "type": "number"
+    },
+    "rule": {
+      "type": "string",
+      "minLength": 1
+    },
+    "viftyctlCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilitiesCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "diagnoseCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guardedRunDecisionSchemaID": {
+      "const": "https://vifty.local/schemas/guarded-run-decision.schema.json"
+    },
+    "guardedRunCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guardedRunPreflightCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaRequirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "safetyRequirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "forbiddenActions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "workloadTemplateIDs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}

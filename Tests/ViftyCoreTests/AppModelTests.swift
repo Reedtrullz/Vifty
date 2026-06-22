@@ -1449,6 +1449,7 @@ final class AppModelTests: XCTestCase {
         )
 
         model.menuBarDisplayMode = .codexUsage
+        model.codexUsageDisplayStyle = .battery
         model.codexUsageMetricMode = .percentUsed
         model.codexUsageResetMode = .resetTime
         model.codexUsageRefreshCadence = .thirtySeconds
@@ -1456,7 +1457,7 @@ final class AppModelTests: XCTestCase {
         await waitForCodexUsageSnapshot(model)
 
         let resetTime = DateFormatter.localizedString(from: resetDate, dateStyle: .none, timeStyle: .short)
-        XCTAssertEqual(model.menuBarLabelText, "Codex 42% used · \(resetTime)")
+        XCTAssertEqual(model.menuBarLabelText, "Codex [##---] 42% used · \(resetTime)")
         XCTAssertEqual(model.codexUsageSummary, "Codex: 42% used, 58% left · resets at \(resetTime)")
 
         let relaunched = AppModel(
@@ -1464,6 +1465,7 @@ final class AppModelTests: XCTestCase {
             preferencesStore: store
         )
         XCTAssertEqual(relaunched.menuBarDisplayMode, .codexUsage)
+        XCTAssertEqual(relaunched.codexUsageDisplayStyle, .battery)
         XCTAssertEqual(relaunched.codexUsageMetricMode, .percentUsed)
         XCTAssertEqual(relaunched.codexUsageResetMode, .resetTime)
         XCTAssertEqual(relaunched.codexUsageRefreshCadence, .thirtySeconds)
@@ -1580,6 +1582,40 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuBarStatusItemRevision, 1)
     }
 
+    func testCodexUsageModeShowsStatusItemPlaceholderAfterPrimeWhileRefreshIsPending() async {
+        let recorder = CodexUsageReadRecorder(
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            delay: 0.35
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .codexUsage
+        await model.primeMenuBarStatusItemTelemetry(maxAttempts: 1)
+
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertEqual(model.menuBarLabelText, "Codex --")
+        XCTAssertEqual(model.menuBarStatusItemText, "Codex --")
+        XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
+    }
+
     func testCancelledCodexUsageRefreshDoesNotPublishStaleSnapshot() async {
         let recorder = CodexUsageReadRecorder(
             now: Date(timeIntervalSince1970: 1_800_000_000),
@@ -1642,18 +1678,29 @@ final class AppModelTests: XCTestCase {
     func testStatusItemPresentationSuppressesStartupPlaceholders() {
         XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
             statusItemText: "Mac | -- C | -- RPM",
-            labelNeedsTelemetryPrime: false
+            labelNeedsTelemetryPrime: false,
+            allowsPlaceholderText: false
         ))
         XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
             statusItemText: "Mac | 67 C | 3352 RPM",
-            labelNeedsTelemetryPrime: true
+            labelNeedsTelemetryPrime: true,
+            allowsPlaceholderText: false
         ))
         XCTAssertEqual(
             ViftyStatusItemPresentation.resolvedText(
                 statusItemText: "Mac | 67 C | 3352 RPM",
-                labelNeedsTelemetryPrime: false
+                labelNeedsTelemetryPrime: false,
+                allowsPlaceholderText: false
             ),
             "Mac | 67 C | 3352 RPM"
+        )
+        XCTAssertEqual(
+            ViftyStatusItemPresentation.resolvedText(
+                statusItemText: "Codex --",
+                labelNeedsTelemetryPrime: false,
+                allowsPlaceholderText: true
+            ),
+            "Codex --"
         )
     }
 
@@ -2120,6 +2167,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(loaded.notificationSettings.autoRestoreFailure)
         XCTAssertFalse(loaded.usePerFanFixedRPM)
         XCTAssertTrue(loaded.fixedFanTargets.isEmpty)
+        XCTAssertEqual(loaded.codexUsageDisplayPreferences.displayStyle, .text)
     }
 
     func testStartupFixedModeAppliesOnceThroughManualPreflight() async throws {

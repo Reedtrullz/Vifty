@@ -35,15 +35,20 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("`recommendedAgentAction` is either `requestCooling` or `requestCoolingWithCaution`"))
         XCTAssertTrue(try harness.read("README.txt").contains("`manualControlActive=false`"))
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("readOnly=false"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("coolingCommandsRun=true"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("installSource=not-recorded"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceRef="))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceSHA="))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("sourceArtifactName="))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("installedDaemonPath=\(harness.installedDaemonURL.path)"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("installedDaemonPresent=true"))
-        XCTAssertTrue(try harness.read("metadata.txt").contains("daemonMatchesExpected=unknown"))
+        let metadata = try harness.read("metadata.txt")
+        XCTAssertTrue(metadata.contains("readOnly=false"))
+        XCTAssertTrue(metadata.contains("coolingCommandsRun=true"))
+        XCTAssertTrue(metadata.contains("viftyctl=viftyctl"))
+        XCTAssertTrue(metadata.contains("viftyctlPathKind=customExecutable"))
+        XCTAssertTrue(metadata.contains("viftyctlPathPrivacy=basenameOnly"))
+        XCTAssertFalse(metadata.contains(harness.viftyctlURL.deletingLastPathComponent().path))
+        XCTAssertTrue(metadata.contains("installSource=not-recorded"))
+        XCTAssertTrue(metadata.contains("sourceRef="))
+        XCTAssertTrue(metadata.contains("sourceSHA="))
+        XCTAssertTrue(metadata.contains("sourceArtifactName="))
+        XCTAssertTrue(metadata.contains("installedDaemonPath=\(harness.installedDaemonURL.path)"))
+        XCTAssertTrue(metadata.contains("installedDaemonPresent=true"))
+        XCTAssertTrue(metadata.contains("daemonMatchesExpected=unknown"))
 
         let daemonRuntime = try harness.read("daemon-runtime.tsv")
         XCTAssertTrue(daemonRuntime.contains("installedDaemonPresent\ttrue"))
@@ -70,6 +75,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["readOnly"] as? Bool, false)
         XCTAssertEqual(summary["coolingCommandsRun"] as? Bool, true)
+        XCTAssertEqual(summary["viftyctl"] as? String, "viftyctl")
+        XCTAssertEqual(summary["viftyctlPathKind"] as? String, "customExecutable")
+        XCTAssertEqual(summary["viftyctlPathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(summary["installSource"] as? String, "not-recorded")
         XCTAssertEqual(summary["sourceRef"] as? String, "")
         XCTAssertEqual(summary["sourceSHA"] as? String, "")
@@ -748,6 +756,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "status",
             "readOnly",
             "coolingCommandsRun",
+            "viftyctl",
+            "viftyctlPathKind",
+            "viftyctlPathPrivacy",
             "installSource",
             "sourceRef",
             "sourceSHA",
@@ -763,6 +774,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         }
 
         let defs = try XCTUnwrap(schema["$defs"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let pathKind = try XCTUnwrap(properties["viftyctlPathKind"] as? [String: Any])
+        XCTAssertEqual(pathKind["enum"] as? [String], ["appBundle", "sourceCheckout", "customExecutable"])
+        let pathPrivacy = try XCTUnwrap(properties["viftyctlPathPrivacy"] as? [String: Any])
+        XCTAssertEqual(pathPrivacy["const"] as? String, "basenameOnly")
         let daemonRuntime = try XCTUnwrap(defs["daemonRuntime"] as? [String: Any])
         let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
         for field in [

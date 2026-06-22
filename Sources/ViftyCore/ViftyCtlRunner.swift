@@ -493,7 +493,7 @@ public struct ViftyCtlCapabilities: Codable, Equatable, Sendable {
 
     public init(
         schemaVersion: Int = 1,
-        commands: [String] = ["status", "capabilities", "diagnose", "audit", "prepare", "restore-auto", "run"],
+        commands: [String] = ["status", "capabilities", "agent-rule", "diagnose", "audit", "prepare", "restore-auto", "run"],
         workloads: [String] = AgentControlWorkload.allCases.map(\.rawValue),
         schemas: ViftyCtlSchemaReferences = ViftyCtlSchemaReferences(),
         schemaResources: ViftyCtlSchemaReferences = .bundleResources,
@@ -623,7 +623,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         diagnose: "Contents/Resources/schemas/viftyctl-diagnose.schema.json",
         status: "Contents/Resources/schemas/viftyctl-status.schema.json",
         commandError: "Contents/Resources/schemas/viftyctl-command-error.schema.json",
-        run: "Contents/Resources/schemas/viftyctl-run.schema.json"
+        run: "Contents/Resources/schemas/viftyctl-run.schema.json",
+        agentRule: "Contents/Resources/schemas/viftyctl-agent-rule.schema.json"
     )
 
     public static let schemaIDs = ViftyCtlSchemaReferences(
@@ -632,7 +633,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         diagnose: "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
         status: "https://vifty.local/schemas/viftyctl-status.schema.json",
         commandError: "https://vifty.local/schemas/viftyctl-command-error.schema.json",
-        run: "https://vifty.local/schemas/viftyctl-run.schema.json"
+        run: "https://vifty.local/schemas/viftyctl-run.schema.json",
+        agentRule: "https://vifty.local/schemas/viftyctl-agent-rule.schema.json"
     )
 
     public var capabilities: String
@@ -641,6 +643,7 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
     public var status: String
     public var commandError: String
     public var run: String
+    public var agentRule: String
 
     public init(
         capabilities: String = "docs/schemas/viftyctl-capabilities.schema.json",
@@ -648,7 +651,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         diagnose: String = "docs/schemas/viftyctl-diagnose.schema.json",
         status: String = "docs/schemas/viftyctl-status.schema.json",
         commandError: String = "docs/schemas/viftyctl-command-error.schema.json",
-        run: String = "docs/schemas/viftyctl-run.schema.json"
+        run: String = "docs/schemas/viftyctl-run.schema.json",
+        agentRule: String = "docs/schemas/viftyctl-agent-rule.schema.json"
     ) {
         self.capabilities = capabilities
         self.audit = audit
@@ -656,6 +660,7 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         self.status = status
         self.commandError = commandError
         self.run = run
+        self.agentRule = agentRule
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -665,6 +670,7 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         case status
         case commandError
         case run
+        case agentRule
     }
 
     public init(from decoder: any Decoder) throws {
@@ -676,6 +682,8 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         commandError = try container.decode(String.self, forKey: .commandError)
         run = try container.decodeIfPresent(String.self, forKey: .run)
             ?? "docs/schemas/viftyctl-run.schema.json"
+        agentRule = try container.decodeIfPresent(String.self, forKey: .agentRule)
+            ?? "docs/schemas/viftyctl-agent-rule.schema.json"
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -686,6 +694,7 @@ public struct ViftyCtlSchemaReferences: Codable, Equatable, Sendable {
         try container.encode(status, forKey: .status)
         try container.encode(commandError, forKey: .commandError)
         try container.encode(run, forKey: .run)
+        try container.encode(agentRule, forKey: .agentRule)
     }
 }
 
@@ -1091,6 +1100,7 @@ public struct ViftyCtlRunner: Sendable {
     private let manualControlActiveReader: @Sendable () -> Bool
     private let appPreferencesReader: @Sendable () -> ViftyAppPreferencesDiagnostic
     private let manualControlClearer: @Sendable () -> Void
+    private let agentRuleBundleURL: URL?
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
 
@@ -1103,6 +1113,7 @@ public struct ViftyCtlRunner: Sendable {
             ViftyAppPreferencesDiagnosticReader().read()
         },
         manualControlClearer: @escaping @Sendable () -> Void = { ManualControlMarker().clear() },
+        agentRuleBundleURL: URL? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
     ) {
@@ -1112,6 +1123,7 @@ public struct ViftyCtlRunner: Sendable {
         self.manualControlActiveReader = manualControlActiveReader
         self.appPreferencesReader = appPreferencesReader
         self.manualControlClearer = manualControlClearer
+        self.agentRuleBundleURL = agentRuleBundleURL
         self.now = now
         self.sleep = sleep
     }
@@ -1139,6 +1151,16 @@ public struct ViftyCtlRunner: Sendable {
                     stderr: stderr,
                     exitCode: capabilities.daemonStatusAvailable ? 0 : capabilities.exitCodes.unavailable
                 )
+            case .agentRule(let json):
+                if json {
+                    return ViftyCtlResult(
+                        stdout: try encodeJSON(ViftyAgentRule.report(
+                            generatedAt: now(),
+                            bundleURL: agentRuleBundleURL
+                        )) + "\n"
+                    )
+                }
+                return ViftyCtlResult(stdout: ViftyAgentRule.rule(bundleURL: agentRuleBundleURL) + "\n")
             case .diagnose(let json):
                 let report = await diagnoseReport()
                 if json {
@@ -1288,6 +1310,7 @@ public struct ViftyCtlRunner: Sendable {
         switch command {
         case .status(let json),
              .capabilities(let json),
+             .agentRule(let json),
              .diagnose(let json),
              .audit(_, let json):
             return json
@@ -1305,6 +1328,8 @@ public struct ViftyCtlRunner: Sendable {
             return "status"
         case .capabilities:
             return "capabilities"
+        case .agentRule:
+            return "agent-rule"
         case .diagnose:
             return "diagnose"
         case .audit:

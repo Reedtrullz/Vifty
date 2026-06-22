@@ -16,6 +16,13 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(command, .status(json: true))
     }
 
+    func testParsesAgentRuleJSON() throws {
+        let command = try ViftyCtlArguments.parse(["agent-rule", "--json"])
+
+        XCTAssertEqual(command, .agentRule(json: true))
+        XCTAssertTrue(ViftyCtlArguments.requestsJSON(["agent-rule", "--json"]))
+    }
+
     func testParsesDiagnoseJSON() throws {
         let command = try ViftyCtlArguments.parse(["diagnose", "--json"])
 

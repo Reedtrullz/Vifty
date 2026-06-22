@@ -67,6 +67,22 @@ enum CodexUsageMetricMode: String, Codable, CaseIterable, Identifiable, Sendable
     }
 }
 
+enum CodexUsageDisplayStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case text
+    case battery
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .text:
+            return "Text"
+        case .battery:
+            return "Battery"
+        }
+    }
+}
+
 enum CodexUsageResetMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case countdown
     case resetTime
@@ -112,21 +128,25 @@ enum CodexUsageRefreshCadence: Int, Codable, CaseIterable, Identifiable, Sendabl
 }
 
 struct CodexUsageDisplayPreferences: Codable, Equatable, Sendable {
+    var displayStyle: CodexUsageDisplayStyle
     var metricMode: CodexUsageMetricMode
     var resetMode: CodexUsageResetMode
     var refreshCadence: CodexUsageRefreshCadence
 
     static let defaults = CodexUsageDisplayPreferences(
+        displayStyle: .text,
         metricMode: .percentLeft,
         resetMode: .countdown,
         refreshCadence: .fiveMinutes
     )
 
     init(
+        displayStyle: CodexUsageDisplayStyle = .text,
         metricMode: CodexUsageMetricMode = .percentLeft,
         resetMode: CodexUsageResetMode = .countdown,
         refreshCadence: CodexUsageRefreshCadence = .fiveMinutes
     ) {
+        self.displayStyle = displayStyle
         self.metricMode = metricMode
         self.resetMode = resetMode
         self.refreshCadence = refreshCadence
@@ -134,6 +154,7 @@ struct CodexUsageDisplayPreferences: Codable, Equatable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        displayStyle = try container.decodeIfPresent(CodexUsageDisplayStyle.self, forKey: .displayStyle) ?? Self.defaults.displayStyle
         metricMode = try container.decodeIfPresent(CodexUsageMetricMode.self, forKey: .metricMode) ?? Self.defaults.metricMode
         resetMode = try container.decodeIfPresent(CodexUsageResetMode.self, forKey: .resetMode) ?? Self.defaults.resetMode
         refreshCadence = try container.decodeIfPresent(CodexUsageRefreshCadence.self, forKey: .refreshCadence) ?? Self.defaults.refreshCadence
@@ -741,7 +762,12 @@ enum CodexUsageFormatter {
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> String {
         guard let snapshot else { return "Codex --" }
-        var text = "Codex \(metricText(for: snapshot, mode: options.metricMode))"
+        var text = switch options.displayStyle {
+        case .text:
+            "Codex \(metricText(for: snapshot, mode: options.metricMode))"
+        case .battery:
+            "Codex \(batteryMetricText(for: snapshot, mode: options.metricMode))"
+        }
         if let resetDate = snapshot.resetDate {
             text += " · \(menuResetText(until: resetDate, mode: options.resetMode, now: now()))"
         }
@@ -808,6 +834,25 @@ enum CodexUsageFormatter {
         case .percentUsed:
             return "\(roundedPercent(snapshot.usedPercent))% used"
         }
+    }
+
+    private static func batteryMetricText(for snapshot: CodexUsageSnapshot, mode: CodexUsageMetricMode) -> String {
+        let percent = switch mode {
+        case .percentLeft:
+            snapshot.leftPercent
+        case .percentUsed:
+            snapshot.usedPercent
+        }
+        return "\(batteryGauge(for: percent)) \(metricText(for: snapshot, mode: mode))"
+    }
+
+    private static func batteryGauge(for percent: Double) -> String {
+        let clamped = max(0, min(100, percent))
+        let filledSegments = Int((clamped / 20.0).rounded())
+        return "["
+            + String(repeating: "#", count: filledSegments)
+            + String(repeating: "-", count: max(0, 5 - filledSegments))
+            + "]"
     }
 
     private static func alternateMetricText(for snapshot: CodexUsageSnapshot, mode: CodexUsageMetricMode) -> String {

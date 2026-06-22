@@ -158,6 +158,45 @@ final class CodexUsageTests: XCTestCase {
         )
     }
 
+    func testFormatterCanShowBatteryStyleMenuBarText() throws {
+        let resetDate = Date(timeIntervalSince1970: 1_800_003_600)
+        let snapshot = CodexUsageSnapshot(
+            usedPercent: 42.4,
+            resetDate: resetDate,
+            windowLabel: "5h",
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let leftOptions = CodexUsageDisplayPreferences(
+            displayStyle: .battery,
+            metricMode: .percentLeft,
+            resetMode: .countdown,
+            refreshCadence: .fiveMinutes
+        )
+        let usedOptions = CodexUsageDisplayPreferences(
+            displayStyle: .battery,
+            metricMode: .percentUsed,
+            resetMode: .countdown,
+            refreshCadence: .fiveMinutes
+        )
+
+        XCTAssertEqual(
+            CodexUsageFormatter.menuBarText(
+                for: snapshot,
+                options: leftOptions,
+                now: { Date(timeIntervalSince1970: 1_800_000_000) }
+            ),
+            "Codex [###--] 58% left · 1h"
+        )
+        XCTAssertEqual(
+            CodexUsageFormatter.menuBarText(
+                for: snapshot,
+                options: usedOptions,
+                now: { Date(timeIntervalSince1970: 1_800_000_000) }
+            ),
+            "Codex [##---] 42% used · 1h"
+        )
+    }
+
     func testAppServerClientReadsRateLimitsOverDirectStdio() throws {
         let root = try temporaryDirectory()
         let executable = root.appendingPathComponent("fake-codex")
