@@ -3321,6 +3321,84 @@ final class AppModelTests: XCTestCase {
         ])
     }
 
+    func testPollOnceKeepsUntilChangedManualModeAfterTransientNoControllableFailure() async {
+        let initialSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3600,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .forced,
+                    targetRPM: 3600
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1000)
+        )
+        let nonControllableSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3400,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: false,
+                    hardwareMode: .forced,
+                    targetRPM: 3400
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1010)
+        )
+        let hardware = AppModelFakeHardware(snapshot: initialSnapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = initialSnapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 4200
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        await hardware.failNextSnapshot(ViftyError.noControllableFans)
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .fixed)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("No controllable fans are available.") == true)
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredFanIDs, [])
+        switch model.controlState.mode {
+        case .fixedRPM(4200):
+            break
+        default:
+            XCTFail("Until-changed fixed intent should survive a transient no-controllable snapshot failure.")
+        }
+
+        await hardware.setSnapshot(nonControllableSnapshot)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .fixed)
+        XCTAssertEqual(model.controlState.mode, .fixedRPM(4200))
+    }
+
     func testPollOnceKeepsLatestTelemetryVisibleAfterManualReassertFailure() async {
         let initialSnapshot = HardwareSnapshot(
             fans: [

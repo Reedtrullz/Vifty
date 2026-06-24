@@ -483,6 +483,10 @@ final class AppModel: ObservableObject {
                 fanAccessMessage = fanAccessMessage(for: snapshot)
             }
             if preservesManualIntent {
+                if selectedMode != .auto {
+                    let intendedMode: FanMode = stateBeforeTick.mode == .auto ? selectedFanMode() : stateBeforeTick.mode
+                    await coordinator.setMode(intendedMode)
+                }
                 controlState = await coordinator.state
             } else {
                 await coordinator.forceAuto()
@@ -1772,14 +1776,16 @@ final class AppModel: ObservableObject {
 
     private func shouldPreserveManualIntent(afterTickFailure error: Error, attemptedMode: FanMode) -> Bool {
         guard attemptedMode != .auto else { return false }
-        guard let viftyError = error as? ViftyError else { return false }
+        guard let viftyError = error as? ViftyError else { return true }
 
         switch viftyError {
         case .helperRejected, .smcUnavailable, .smcOpenFailed, .smcCallFailed, .smcKeyUnavailable, .smcWriteRejected:
             return true
-        case .unsupportedHardware, .noControllableFans:
+        case .unsupportedHardware:
             return false
         case .noTemperatureSensors:
+            return true
+        case .noControllableFans:
             return true
         }
     }
