@@ -35,6 +35,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(rule.contains("capabilities --json"))
         XCTAssertTrue(rule.contains("diagnose --json"))
         XCTAssertTrue(rule.contains("schemaVersion: 1"))
+        XCTAssertTrue(rule.contains("schemaIDs.capabilities"))
         XCTAssertTrue(rule.contains("schemaIDs.diagnose"))
         XCTAssertTrue(rule.contains("schemaIDs.commandError"))
         XCTAssertTrue(rule.contains("schemaIDs.run"))

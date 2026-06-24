@@ -174,7 +174,7 @@ public enum ViftyAgentRule {
         \(commands.diagnoseCommand)
         ```
 
-        From capabilities, require `schemaVersion: 1`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `schemaIDs.agentRule`, `wrapperResources`, `workloadTemplates`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits, copied command templates, or wrapper output.
+        From capabilities, require `schemaVersion: 1`, `schemaIDs.capabilities`, `schemaIDs.diagnose`, `schemaIDs.commandError`, `schemaIDs.run`, `schemaIDs.agentRule`, `wrapperResources`, `workloadTemplates`, `runLifecycle.resolvedChildExecutableReported: true`, `policyStatusAvailable: true`, `policy.enabled: true`, and support for the requested workload before trusting policy limits, copied command templates, or wrapper output.
 
         Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and `workloadTemplates` to choose the installed or source wrapper and audited workload defaults instead of inventing unaudited fan-control commands.
 
