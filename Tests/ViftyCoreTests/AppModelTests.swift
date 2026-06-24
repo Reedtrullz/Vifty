@@ -3214,6 +3214,113 @@ final class AppModelTests: XCTestCase {
         ])
     }
 
+    func testPollOncePreservesUntilChangedManualModeAfterTransientNoTemperatureFailure() async {
+        let initialSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3600,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .forced,
+                    targetRPM: 3600
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1000)
+        )
+        let noTemperatureSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3200,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .forced,
+                    targetRPM: 3200
+                )
+            ],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1010)
+        )
+        let restoredSnapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 3800,
+                    minimumRPM: 1400,
+                    maximumRPM: 6000,
+                    controllable: true,
+                    hardwareMode: .automatic,
+                    targetRPM: nil
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 91.2, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            capturedAt: Date(timeIntervalSince1970: 1015)
+        )
+        let hardware = AppModelFakeHardware(snapshot: initialSnapshot)
+        let pingSequence = AppModelPingSequence(values: [true, false, true])
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { pingSequence.next() },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = initialSnapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .curve
+        model.curveStartTemp = 50
+        model.curveStartRPM = 3000
+        model.curveMidTemp = 70
+        model.curveMidRPM = 5000
+        model.curveMaxTemp = 85
+        model.curveMaxRPM = 6000
+        model.manualRunLimit = .indefinitely
+
+        await model.applyCurrentModeSelection()
+        await hardware.setSnapshot(noTemperatureSnapshot)
+        await hardware.failNextSnapshot(ViftyError.noTemperatureSensors)
+
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .curve)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertTrue(model.lastError?.contains("No temperature sensors are available.") == true)
+        XCTAssertEqual(model.daemonReachable, true)
+        switch model.controlState.mode {
+        case .temperatureCurve:
+            break
+        default:
+            XCTFail("Until-changed curve intent should survive a transient no-temperature snapshot failure.")
+        }
+
+        await hardware.setSnapshot(restoredSnapshot)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .curve)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [
+            FanCommand(fanID: 0, mode: .fixedRPM(4400)),
+            FanCommand(fanID: 0, mode: .fixedRPM(6000))
+        ])
+    }
+
     func testPollOnceKeepsLatestTelemetryVisibleAfterManualReassertFailure() async {
         let initialSnapshot = HardwareSnapshot(
             fans: [

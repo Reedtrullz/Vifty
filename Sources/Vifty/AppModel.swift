@@ -1777,8 +1777,10 @@ final class AppModel: ObservableObject {
         switch viftyError {
         case .helperRejected, .smcUnavailable, .smcOpenFailed, .smcCallFailed, .smcKeyUnavailable, .smcWriteRejected:
             return true
-        case .unsupportedHardware, .noTemperatureSensors, .noControllableFans:
+        case .unsupportedHardware, .noControllableFans:
             return false
+        case .noTemperatureSensors:
+            return true
         }
     }
 
