@@ -1507,6 +1507,8 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let decisionReason = try XCTUnwrap(sourceProperties["decisionReason"] as? [String: Any])
         let decisionReasonValues = try XCTUnwrap(decisionReason["enum"] as? [String])
         XCTAssertTrue(decisionReasonValues.contains("preflightReady"))
+        XCTAssertTrue(decisionReasonValues.contains("daemonRuntimeMismatch"))
+        XCTAssertNotNil(sourceProperties["daemonRuntime"] as? [String: Any])
     }
 }
 

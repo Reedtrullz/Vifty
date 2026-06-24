@@ -1061,6 +1061,54 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunBlocksWhenDaemonRuntimeRequiresMatchButDoesNotMatchEvenIfDerivedFieldsClaimSafe() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            decisionFieldsOverride: #","recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"daemonRuntime":{"installedDaemonPath":"/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon","installedDaemonPresent":true,"installedDaemonSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expectedDaemonPath":"/Applications/Vifty.app/Contents/MacOS/ViftyDaemon","expectedDaemonPresent":true,"expectedDaemonSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matchesExpectedDaemon":false,"matchRequired":true}"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon runtime does not match"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""matchRequired":true"#), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""matchesExpectedDaemon":false"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunDoesNotRunUncooledWhenDaemonRuntimeRequiresMatchButDoesNotMatch() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            decisionFieldsOverride: #","recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"daemonRuntime":{"installedDaemonPath":"/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon","installedDaemonPresent":true,"installedDaemonSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expectedDaemonPath":"/Applications/Vifty.app/Contents/MacOS/ViftyDaemon","expectedDaemonPresent":true,"expectedDaemonSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matchesExpectedDaemon":false,"matchRequired":true}"#
+        )
+        let markerURL = harness.rootURL.appendingPathComponent("should-not-run-daemon-runtime-mismatch.txt")
+
+        let result = try harness.runGuardedRun(
+            [
+                "test", "20m", "70", "swift test",
+                "--", "/bin/sh", "-c", "printf child-ran > '\(markerURL.path)'"
+            ],
+            allowUncooled: "1"
+        )
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("daemon runtime does not match"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("not running workload without cooling"), result.stderr)
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        XCTAssertEqual(decision["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(decision["uncooledFallbackRequested"] as? Bool, true)
+        XCTAssertEqual(decision["uncooledFallbackAllowed"] as? Bool, false)
+        XCTAssertEqual(decision["decisionReason"] as? String, "daemonRuntimeMismatch")
+        let daemonRuntime = try XCTUnwrap(decision["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
+        XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunDoesNotRunUncooledWhenCoolingBlockerIDsAreNonEmpty() throws {
         let harness = try ScriptHarness(
             state: "degraded",

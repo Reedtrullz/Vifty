@@ -483,6 +483,7 @@ guarded_run_decision_json() {
   VIFTY_GUARDED_RUN_DECISION_DAEMON_READY="${daemon_control_path_ready:-}" \
   VIFTY_GUARDED_RUN_DECISION_MANUAL_ACTIVE="${manual_control_active:-}" \
   VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE="${startup_mode:-}" \
+  VIFTY_GUARDED_RUN_DECISION_DAEMON_RUNTIME="${daemon_runtime_compact:-}" \
   VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS="${failed_check_ids_compact:-[]}" \
   VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS="${cooling_blocker_ids_compact:-[]}" \
   VIFTY_GUARDED_RUN_DECISION_REQUESTED_WORKLOAD="${workload:-}" \
@@ -521,6 +522,17 @@ rescue JSON::ParserError
   []
 end
 
+def optional_object(name)
+  value = ENV[name].to_s
+  return nil if value.empty?
+  parsed = JSON.parse(value)
+  parsed.is_a?(Hash) ? parsed : nil
+rescue JSON::ParserError
+  nil
+end
+
+daemon_runtime = optional_object("VIFTY_GUARDED_RUN_DECISION_DAEMON_RUNTIME")
+
 payload = {
   "schemaVersion" => 1,
   "schemaID" => "https://vifty.local/schemas/guarded-run-decision.schema.json",
@@ -539,6 +551,7 @@ payload = {
   "daemonControlPathReady" => bool_value("VIFTY_GUARDED_RUN_DECISION_DAEMON_READY"),
   "manualControlActive" => bool_value("VIFTY_GUARDED_RUN_DECISION_MANUAL_ACTIVE"),
   "startupMode" => optional_string("VIFTY_GUARDED_RUN_DECISION_STARTUP_MODE"),
+  "daemonRuntime" => daemon_runtime,
   "failedCheckIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_FAILED_CHECK_IDS"),
   "coolingBlockerIDs" => string_array("VIFTY_GUARDED_RUN_DECISION_COOLING_BLOCKER_IDS"),
   "requestedWorkload" => optional_string("VIFTY_GUARDED_RUN_DECISION_REQUESTED_WORKLOAD"),
@@ -570,6 +583,14 @@ finish_without_cooling_request() {
   print_diagnose_json_evidence
 
   if [ "$allow_uncooled" -eq 1 ]; then
+    if [ "$decision_reason" = "daemonRuntimeMismatch" ]; then
+      uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but daemon runtime does not match this app build; not running workload without cooling."
+      echo "guarded-run: $uncooled_message" >&2
+      print_no_direct_uncooled_rerun_guidance
+      print_guarded_run_decision_json "$uncooled_message" false false 75 "daemonRuntimeMismatch"
+      exit 75
+    fi
+
     case "$recommended_recovery_action" in
       repairHelper|backOffWorkload|restoreAutoBeforeRetry|inspectPolicy|collectHardwareEvidence)
         uncooled_message="VIFTY_GUARDED_RUN_ALLOW_UNCOOLED is set, but recovery action is $recommended_recovery_action; not running workload without cooling."
@@ -1117,6 +1138,9 @@ manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extra
 failed_check_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract failedCheckIDs json -o - - 2>/dev/null || printf '')"
 cooling_blocker_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract coolingBlockerIDs json -o - - 2>/dev/null || printf '')"
 startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPreferences.startupMode raw -o - - 2>/dev/null || printf '')"
+daemon_runtime="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime json -o - - 2>/dev/null || printf '')"
+daemon_runtime_match_required="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime.matchRequired raw -o - - 2>/dev/null || printf '')"
+daemon_runtime_matches_expected="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime.matchesExpectedDaemon raw -o - - 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$diagnose_schema_version" = "null" ] && diagnose_schema_version=""
@@ -1129,8 +1153,12 @@ startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPre
 [ "$failed_check_ids" = "null" ] && failed_check_ids=""
 [ "$cooling_blocker_ids" = "null" ] && cooling_blocker_ids=""
 [ "$startup_mode" = "null" ] && startup_mode=""
+[ "$daemon_runtime" = "null" ] && daemon_runtime=""
+[ "$daemon_runtime_match_required" = "null" ] && daemon_runtime_match_required=""
+[ "$daemon_runtime_matches_expected" = "null" ] && daemon_runtime_matches_expected=""
 failed_check_ids_compact="$(printf '%s' "$failed_check_ids" | /usr/bin/tr -d '[:space:]')"
 cooling_blocker_ids_compact="$(printf '%s' "$cooling_blocker_ids" | /usr/bin/tr -d '[:space:]')"
+daemon_runtime_compact="$(printf '%s' "$daemon_runtime" | /usr/bin/tr -d '[:space:]')"
 cooling_blockers_present=0
 
 if [ "$diagnose_status" -ne 0 ] && [ "$state" != "blocked" ]; then
@@ -1260,6 +1288,30 @@ case "$recommended_recovery_action" in
     exit 75
     ;;
 esac
+
+case "$daemon_runtime_match_required" in
+  ""|true|false)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose daemonRuntime.matchRequired is invalid; refusing to request cooling." >&2
+    print_diagnose_json_evidence
+    exit 75
+    ;;
+esac
+
+case "$daemon_runtime_matches_expected" in
+  ""|true|false)
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose daemonRuntime.matchesExpectedDaemon is invalid; refusing to request cooling." >&2
+    print_diagnose_json_evidence
+    exit 75
+    ;;
+esac
+
+if [ "$daemon_runtime_match_required" = "true" ] && [ "$daemon_runtime_matches_expected" != "true" ]; then
+  finish_without_cooling_request "daemonRuntimeMismatch" "Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling." "$@"
+fi
 
 if [ "$cooling_blockers_present" -ne 0 ]; then
   finish_without_cooling_request "coolingBlockersPresent" "Vifty diagnose coolingBlockerIDs is non-empty: $cooling_blocker_ids_compact; refusing to request cooling." "$@"

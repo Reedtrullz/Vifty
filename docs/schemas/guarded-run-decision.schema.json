@@ -61,6 +61,7 @@
         "safeToRequestCoolingFalse",
         "daemonControlPathNotReady",
         "manualControlActive",
+        "daemonRuntimeMismatch",
         "coolingBlockersPresent",
         "recoveryActionBlocksUncooledFallback",
         "preflightReady",
@@ -116,6 +117,11 @@
     "startupMode": {
       "type": ["string", "null"],
       "enum": ["Auto", "Curve", "Fixed", null]
+    },
+    "daemonRuntime": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "description": "Raw daemonRuntime object from viftyctl diagnose when available. Agents should treat matchRequired=true with matchesExpectedDaemon not true as a hard stop before cooling or uncooled fallback."
     },
     "failedCheckIDs": {
       "type": "array",
