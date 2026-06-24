@@ -105,7 +105,7 @@ After installation, start Vifty from Spotlight, Launchpad, Finder, or Terminal:
 open /Applications/Vifty.app
 ```
 
-`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
+`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. The root LaunchDaemon helper is repaired from inside Vifty after user approval, not silently replaced by the app installer; after copying the app, `make install` performs a read-only helper-daemon hash check and warns when the installed helper differs from the bundled `ViftyDaemon`. Use **Reinstall Helper** or **Repair Helper**, then rerun `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build` before treating current-build manual or agent smoke evidence as valid. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
 
 In Vifty, enable **Start Vifty at startup** from the main window or menu-bar popover to register the app with macOS Login Items. If macOS shows a pending approval state, approve Vifty in System Settings > General > Login Items.
 

@@ -345,6 +345,25 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(readme.contains("the installer quits and relaunches it from the newly installed bundle"))
     }
 
+    func testLocalInstallerReportsPrivilegedHelperDaemonDrift() throws {
+        let installScript = try read("scripts/install-vifty.sh")
+        let readme = try read("README.md")
+
+        XCTAssertTrue(installScript.contains("CHECK_HELPER_DAEMON=\"${CHECK_HELPER_DAEMON:-1}\""))
+        XCTAssertTrue(installScript.contains("HELPER_TARGET=\"${VIFTY_HELPER_TARGET:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}\""))
+        XCTAssertTrue(installScript.contains("report_helper_daemon_status"))
+        XCTAssertTrue(installScript.contains("sha256_file \"${bundled_daemon}\""))
+        XCTAssertTrue(installScript.contains("sha256_file \"${HELPER_TARGET}\""))
+        XCTAssertTrue(installScript.contains("Fan helper matches the installed app daemon."))
+        XCTAssertTrue(installScript.contains("Fan helper daemon differs from the installed app bundle."))
+        XCTAssertTrue(installScript.contains("Open Vifty and choose Reinstall Helper or Repair Helper before current-build manual/agent smoke evidence."))
+        XCTAssertTrue(installScript.contains("AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build"))
+
+        XCTAssertTrue(readme.contains("The root LaunchDaemon helper is repaired from inside Vifty after user approval, not silently replaced by the app installer"))
+        XCTAssertTrue(readme.contains("performs a read-only helper-daemon hash check"))
+        XCTAssertTrue(readme.contains("before treating current-build manual or agent smoke evidence as valid"))
+    }
+
     func testMenuBarCurveProfileSelectorUsesSavedProfiles() throws {
         let menuBarView = try read("Sources/Vifty/MenuBarView.swift")
         let appModel = try read("Sources/Vifty/AppModel.swift")
