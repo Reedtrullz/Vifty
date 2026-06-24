@@ -1678,17 +1678,20 @@ final class AppModelTests: XCTestCase {
     func testStatusItemPresentationSuppressesStartupPlaceholders() {
         XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
             statusItemText: "Mac | -- C | -- RPM",
+            fallbackStatusItemText: nil,
             labelNeedsTelemetryPrime: false,
             allowsPlaceholderText: false
         ))
         XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
             statusItemText: "Mac | 67 C | 3352 RPM",
+            fallbackStatusItemText: nil,
             labelNeedsTelemetryPrime: true,
             allowsPlaceholderText: false
         ))
         XCTAssertEqual(
             ViftyStatusItemPresentation.resolvedText(
                 statusItemText: "Mac | 67 C | 3352 RPM",
+                fallbackStatusItemText: nil,
                 labelNeedsTelemetryPrime: false,
                 allowsPlaceholderText: false
             ),
@@ -1697,10 +1700,41 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             ViftyStatusItemPresentation.resolvedText(
                 statusItemText: "Codex --",
+                fallbackStatusItemText: nil,
                 labelNeedsTelemetryPrime: false,
                 allowsPlaceholderText: true
             ),
             "Codex --"
+        )
+    }
+
+    func testStatusItemPresentationUsesFallbackWhenPlaceholderIsHidden() {
+        XCTAssertEqual(
+            ViftyStatusItemPresentation.resolvedText(
+                statusItemText: "Mac | -- C | -- RPM",
+                fallbackStatusItemText: "Mac | -- C | -- RPM",
+                labelNeedsTelemetryPrime: false,
+                allowsPlaceholderText: false
+            ),
+            "Mac | -- C | -- RPM"
+        )
+        XCTAssertEqual(
+            ViftyStatusItemPresentation.resolvedText(
+                statusItemText: "Mac | 67 C | 3352 RPM",
+                fallbackStatusItemText: "Mac | -- C | -- RPM",
+                labelNeedsTelemetryPrime: false,
+                allowsPlaceholderText: false
+            ),
+            "Mac | 67 C | 3352 RPM"
+        )
+        XCTAssertEqual(
+            ViftyStatusItemPresentation.resolvedText(
+                statusItemText: "Mac | 67 C | 3352 RPM",
+                fallbackStatusItemText: "Mac | -- C | -- RPM",
+                labelNeedsTelemetryPrime: true,
+                allowsPlaceholderText: false
+            ),
+            "Mac | -- C | -- RPM"
         )
     }
 
