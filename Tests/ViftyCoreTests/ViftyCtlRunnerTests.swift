@@ -496,6 +496,69 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasonCount, 0)
     }
 
+    func testDiagnoseJSONBlocksCoolingWhenInstalledDaemonDiffersFromExpectedBuild() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runtime = ViftyCtlDaemonRuntimeDiagnostic(
+            installedDaemonPath: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+            installedDaemonPresent: true,
+            installedDaemonSHA256: String(repeating: "a", count: 64),
+            expectedDaemonPath: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+            expectedDaemonPresent: true,
+            expectedDaemonSHA256: String(repeating: "b", count: 64),
+            matchesExpectedDaemon: false,
+            matchRequired: true
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { false },
+            daemonRuntimeReader: { runtime },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 75)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "blocked")
+        XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
+        let daemonRuntime = try XCTUnwrap(json["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, runtime.installedDaemonPath)
+        XCTAssertEqual(daemonRuntime["installedDaemonPresent"] as? Bool, true)
+        XCTAssertEqual(daemonRuntime["installedDaemonSHA256"] as? String, runtime.installedDaemonSHA256)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPath"] as? String, runtime.expectedDaemonPath)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPresent"] as? Bool, true)
+        XCTAssertEqual(daemonRuntime["expectedDaemonSHA256"] as? String, runtime.expectedDaemonSHA256)
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
+        XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "daemonRuntimeMatchesExpected"
+                && (check["passed"] as? Bool) == false
+                && (check["severity"] as? String) == "error"
+                && ((check["message"] as? String)?.contains("Repair/Reinstall Helper") == true)
+        })
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
     func testDiagnoseJSONReturnsBlockedReportWhenDaemonSnapshotFails() async throws {
         let client = FakeAgentControlClient(
             status: AgentControlStatus(
@@ -940,6 +1003,42 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.failedCheckIDs, ["manualControlClear"])
         XCTAssertEqual(report.coolingBlockerIDs, ["manualControlClear"])
         XCTAssertTrue(report.checks.contains { $0.id == "manualControlClear" && !$0.passed && $0.severity == .warning })
+    }
+
+    func testReadinessReportBlocksHelperRuntimeMismatchBeforeCooling() {
+        let report = ViftyCtlReadinessReport.make(
+            snapshot: Self.readySnapshot(),
+            agentControl: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            ),
+            thermalPressure: .nominal,
+            generatedAt: Date(timeIntervalSince1970: 1_000),
+            daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic(
+                installedDaemonPath: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                installedDaemonPresent: true,
+                installedDaemonSHA256: String(repeating: "a", count: 64),
+                expectedDaemonPath: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+                expectedDaemonPresent: true,
+                expectedDaemonSHA256: String(repeating: "b", count: 64),
+                matchesExpectedDaemon: false,
+                matchRequired: true
+            )
+        )
+
+        XCTAssertEqual(report.state, .blocked)
+        XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertEqual(report.failedCheckIDs, ["daemonRuntimeMatchesExpected"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["daemonRuntimeMatchesExpected"])
+        XCTAssertEqual(report.daemonRuntime.matchesExpectedDaemon, false)
+        XCTAssertTrue(report.checks.contains {
+            $0.id == "daemonRuntimeMatchesExpected" && !$0.passed && $0.severity == .error
+        })
     }
 
     func testReadinessReportRecommendsPolicyInspectionWhenAgentCoolingIsDisabled() {

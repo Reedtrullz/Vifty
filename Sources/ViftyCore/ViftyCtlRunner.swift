@@ -18,6 +18,65 @@ public enum ViftyCtlExecutableDigestStatus: String, Codable, Equatable, Sendable
     case unavailable
 }
 
+public extension ViftyCtlDaemonRuntimeDiagnostic {
+    static func current(
+        executablePath: String? = CommandLine.arguments.first,
+        installedDaemonPath: String = ViftyCtlDaemonRuntimeDiagnostic.standardInstalledDaemonPath
+    ) -> ViftyCtlDaemonRuntimeDiagnostic {
+        let fileManager = FileManager.default
+        let installedURL = URL(fileURLWithPath: installedDaemonPath, isDirectory: false)
+        let installedPresent = fileExists(installedURL, fileManager: fileManager)
+        let installedSHA256 = installedPresent ? sha256Hex(of: installedURL) : nil
+        let expectedURL = expectedDaemonURL(forExecutablePath: executablePath)
+        let expectedPresent = expectedURL.map { fileExists($0, fileManager: fileManager) } ?? false
+        let expectedSHA256 = expectedPresent ? expectedURL.flatMap(sha256Hex(of:)) : nil
+        let matchesExpectedDaemon: Bool?
+        if let installedSHA256, let expectedSHA256 {
+            matchesExpectedDaemon = installedSHA256 == expectedSHA256
+        } else {
+            matchesExpectedDaemon = nil
+        }
+
+        return ViftyCtlDaemonRuntimeDiagnostic(
+            installedDaemonPath: installedDaemonPath,
+            installedDaemonPresent: installedPresent,
+            installedDaemonSHA256: installedSHA256,
+            expectedDaemonPath: expectedURL?.path,
+            expectedDaemonPresent: expectedPresent,
+            expectedDaemonSHA256: expectedSHA256,
+            matchesExpectedDaemon: matchesExpectedDaemon,
+            matchRequired: expectedSHA256 != nil
+        )
+    }
+
+    private static func expectedDaemonURL(forExecutablePath executablePath: String?) -> URL? {
+        guard let executablePath, !executablePath.isEmpty else {
+            return nil
+        }
+        let executableURL = URL(fileURLWithPath: executablePath, isDirectory: false)
+        let executableName = executableURL.lastPathComponent
+        guard executableName == "viftyctl" || executableName == "ViftyCtl" else {
+            return nil
+        }
+        return executableURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("ViftyDaemon", isDirectory: false)
+    }
+
+    private static func fileExists(_ url: URL, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue
+    }
+
+    private static func sha256Hex(of url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else {
+            return nil
+        }
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 public enum ViftyCtlChildTerminationReason: String, Codable, Equatable, Sendable {
     case exited
     case signalInferred
@@ -1099,6 +1158,7 @@ public struct ViftyCtlRunner: Sendable {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let manualControlActiveReader: @Sendable () -> Bool
     private let appPreferencesReader: @Sendable () -> ViftyAppPreferencesDiagnostic
+    private let daemonRuntimeReader: @Sendable () -> ViftyCtlDaemonRuntimeDiagnostic
     private let manualControlClearer: @Sendable () -> Void
     private let agentRuleBundleURL: URL?
     private let now: @Sendable () -> Date
@@ -1112,6 +1172,9 @@ public struct ViftyCtlRunner: Sendable {
         appPreferencesReader: @escaping @Sendable () -> ViftyAppPreferencesDiagnostic = {
             ViftyAppPreferencesDiagnosticReader().read()
         },
+        daemonRuntimeReader: @escaping @Sendable () -> ViftyCtlDaemonRuntimeDiagnostic = {
+            ViftyCtlDaemonRuntimeDiagnostic.current()
+        },
         manualControlClearer: @escaping @Sendable () -> Void = { ManualControlMarker().clear() },
         agentRuleBundleURL: URL? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
@@ -1122,6 +1185,7 @@ public struct ViftyCtlRunner: Sendable {
         self.thermalReader = thermalReader
         self.manualControlActiveReader = manualControlActiveReader
         self.appPreferencesReader = appPreferencesReader
+        self.daemonRuntimeReader = daemonRuntimeReader
         self.manualControlClearer = manualControlClearer
         self.agentRuleBundleURL = agentRuleBundleURL
         self.now = now
@@ -1423,6 +1487,7 @@ public struct ViftyCtlRunner: Sendable {
             generatedAt: generatedAt,
             manualControlActive: manualControlActiveReader(),
             appPreferences: appPreferencesReader(),
+            daemonRuntime: daemonRuntimeReader(),
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )
@@ -1490,6 +1555,7 @@ public struct ViftyCtlRunner: Sendable {
             "recoveryAction=\(report.recommendedRecoveryAction.rawValue)",
             "model=\(report.modelIdentifier) appleSilicon=\(report.isAppleSilicon) macBookPro=\(report.isMacBookPro)",
             "fans=\(report.fanCount) controllable=\(report.controllableFanCount) temperatures=\(report.temperatureSensorCount) thermal=\(report.thermalPressure.displayName)",
+            "daemonRuntimeMatch=\(report.daemonRuntime.matchesExpectedDaemon.map(String.init) ?? "unknown") matchRequired=\(report.daemonRuntime.matchRequired)",
             "agentControl=\(report.agentControl.enabled ? "enabled" : "disabled")"
         ]
 

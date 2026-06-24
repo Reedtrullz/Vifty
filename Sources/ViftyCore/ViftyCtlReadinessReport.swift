@@ -82,6 +82,52 @@ public struct ViftyCtlTemperatureSensorReport: Codable, Equatable, Sendable {
     }
 }
 
+public struct ViftyCtlDaemonRuntimeDiagnostic: Codable, Equatable, Sendable {
+    public static let standardInstalledDaemonPath = "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon"
+
+    public static var unavailable: ViftyCtlDaemonRuntimeDiagnostic {
+        ViftyCtlDaemonRuntimeDiagnostic(
+            installedDaemonPath: standardInstalledDaemonPath,
+            installedDaemonPresent: false,
+            installedDaemonSHA256: nil,
+            expectedDaemonPath: nil,
+            expectedDaemonPresent: false,
+            expectedDaemonSHA256: nil,
+            matchesExpectedDaemon: nil,
+            matchRequired: false
+        )
+    }
+
+    public var installedDaemonPath: String
+    public var installedDaemonPresent: Bool
+    public var installedDaemonSHA256: String?
+    public var expectedDaemonPath: String?
+    public var expectedDaemonPresent: Bool
+    public var expectedDaemonSHA256: String?
+    public var matchesExpectedDaemon: Bool?
+    public var matchRequired: Bool
+
+    public init(
+        installedDaemonPath: String,
+        installedDaemonPresent: Bool,
+        installedDaemonSHA256: String?,
+        expectedDaemonPath: String?,
+        expectedDaemonPresent: Bool,
+        expectedDaemonSHA256: String?,
+        matchesExpectedDaemon: Bool?,
+        matchRequired: Bool
+    ) {
+        self.installedDaemonPath = installedDaemonPath
+        self.installedDaemonPresent = installedDaemonPresent
+        self.installedDaemonSHA256 = installedDaemonSHA256
+        self.expectedDaemonPath = expectedDaemonPath
+        self.expectedDaemonPresent = expectedDaemonPresent
+        self.expectedDaemonSHA256 = expectedDaemonSHA256
+        self.matchesExpectedDaemon = matchesExpectedDaemon
+        self.matchRequired = matchRequired
+    }
+}
+
 public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var generatedAt: Date
@@ -94,6 +140,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var failedCheckIDs: [String]
     public var coolingBlockerIDs: [String]
     public var appPreferences: ViftyAppPreferencesDiagnostic
+    public var daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic
     public var modelIdentifier: String
     public var isAppleSilicon: Bool
     public var isMacBookPro: Bool
@@ -121,6 +168,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case failedCheckIDs
         case coolingBlockerIDs
         case appPreferences
+        case daemonRuntime
         case modelIdentifier
         case isAppleSilicon
         case isMacBookPro
@@ -147,6 +195,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         daemonControlPathReady: Bool? = nil,
         manualControlActive: Bool = false,
         appPreferences: ViftyAppPreferencesDiagnostic = .unavailable,
+        daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic = .unavailable,
         modelIdentifier: String,
         isAppleSilicon: Bool,
         isMacBookPro: Bool,
@@ -175,6 +224,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.failedCheckIDs = Self.failedCheckIDs(from: checks)
         self.coolingBlockerIDs = Self.coolingBlockerIDs(from: checks)
         self.appPreferences = appPreferences
+        self.daemonRuntime = daemonRuntime
         self.modelIdentifier = modelIdentifier
         self.isAppleSilicon = isAppleSilicon
         self.isMacBookPro = isMacBookPro
@@ -214,6 +264,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 ViftyAppPreferencesDiagnostic.self,
                 forKey: .appPreferences
             ) ?? .unavailable,
+            daemonRuntime: try container.decodeIfPresent(
+                ViftyCtlDaemonRuntimeDiagnostic.self,
+                forKey: .daemonRuntime
+            ) ?? .unavailable,
             modelIdentifier: try container.decode(String.self, forKey: .modelIdentifier),
             isAppleSilicon: try container.decode(Bool.self, forKey: .isAppleSilicon),
             isMacBookPro: try container.decode(Bool.self, forKey: .isMacBookPro),
@@ -250,6 +304,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encode(failedCheckIDs, forKey: .failedCheckIDs)
         try container.encode(coolingBlockerIDs, forKey: .coolingBlockerIDs)
         try container.encode(appPreferences, forKey: .appPreferences)
+        try container.encode(daemonRuntime, forKey: .daemonRuntime)
         try container.encode(modelIdentifier, forKey: .modelIdentifier)
         try container.encode(isAppleSilicon, forKey: .isAppleSilicon)
         try container.encode(isMacBookPro, forKey: .isMacBookPro)
@@ -273,6 +328,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         generatedAt: Date = Date(),
         manualControlActive: Bool = false,
         appPreferences: ViftyAppPreferencesDiagnostic = .unavailable,
+        daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic = .unavailable,
         daemonSnapshotError: String? = nil,
         agentControlStatusError: String? = nil
     ) -> ViftyCtlReadinessReport {
@@ -286,6 +342,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             controllableFans: controllableFans,
             manualControlActive: manualControlActive,
             appPreferences: appPreferences,
+            daemonRuntime: daemonRuntime,
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError
         )
@@ -300,6 +357,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             daemonControlPathReady: daemonControlPathReady(from: checks),
             manualControlActive: manualControlActive,
             appPreferences: appPreferences,
+            daemonRuntime: daemonRuntime,
             modelIdentifier: snapshot.modelIdentifier,
             isAppleSilicon: snapshot.isAppleSilicon,
             isMacBookPro: snapshot.isMacBookPro,
@@ -324,6 +382,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         controllableFans: [Fan],
         manualControlActive: Bool,
         appPreferences: ViftyAppPreferencesDiagnostic,
+        daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic,
         daemonSnapshotError: String?,
         agentControlStatusError: String?
     ) -> [ViftyCtlReadinessCheck] {
@@ -334,6 +393,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 daemonSnapshotError: daemonSnapshotError,
                 agentControlStatusError: agentControlStatusError
             ),
+            daemonRuntimeMatchesExpectedCheck(daemonRuntime),
             supportedHardwareCheck(snapshot),
             agentControlEnabledCheck(agentControl),
             temperatureSensorsPresentCheck(snapshot),
@@ -396,6 +456,53 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             message: passed
                 ? "Daemon-backed control path is ready for bounded agent cooling requests."
                 : "Daemon-backed control path is unavailable; repair the helper before requesting cooling."
+        )
+    }
+
+    private static func daemonRuntimeMatchesExpectedCheck(
+        _ daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic
+    ) -> ViftyCtlReadinessCheck {
+        guard daemonRuntime.matchRequired else {
+            return ViftyCtlReadinessCheck(
+                id: "daemonRuntimeMatchesExpected",
+                severity: .info,
+                passed: true,
+                message: "Current-build daemon runtime parity is not required for this diagnose context."
+            )
+        }
+
+        guard daemonRuntime.expectedDaemonPresent, daemonRuntime.expectedDaemonSHA256 != nil else {
+            return ViftyCtlReadinessCheck(
+                id: "daemonRuntimeMatchesExpected",
+                severity: .error,
+                passed: false,
+                message: "Expected ViftyDaemon for this viftyctl build is missing; rebuild or reinstall Vifty before requesting cooling."
+            )
+        }
+
+        guard daemonRuntime.installedDaemonPresent, daemonRuntime.installedDaemonSHA256 != nil else {
+            return ViftyCtlReadinessCheck(
+                id: "daemonRuntimeMatchesExpected",
+                severity: .error,
+                passed: false,
+                message: "Installed privileged fan helper is missing; use Repair/Reinstall Helper before requesting cooling."
+            )
+        }
+
+        guard daemonRuntime.matchesExpectedDaemon == true else {
+            return ViftyCtlReadinessCheck(
+                id: "daemonRuntimeMatchesExpected",
+                severity: .error,
+                passed: false,
+                message: "Installed privileged fan helper does not match this Vifty build; use Repair/Reinstall Helper before requesting cooling."
+            )
+        }
+
+        return ViftyCtlReadinessCheck(
+            id: "daemonRuntimeMatchesExpected",
+            severity: .info,
+            passed: true,
+            message: "Installed privileged fan helper matches this Vifty build."
         )
     }
 
@@ -631,7 +738,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     ) -> ViftyCtlReadinessRecoveryAction {
         if failedCheck("daemonSnapshotAvailable", in: checks)
             || failedCheck("agentControlStatusAvailable", in: checks)
-            || failedCheck("daemonControlPathReady", in: checks) {
+            || failedCheck("daemonControlPathReady", in: checks)
+            || failedCheck("daemonRuntimeMatchesExpected", in: checks) {
             return .repairHelper
         }
 

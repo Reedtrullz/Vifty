@@ -427,6 +427,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "safeToRequestCooling",
             "daemonControlPathReady",
             "manualControlActive",
+            "daemonRuntime",
             "isAppleSilicon",
             "isMacBookPro",
             "thermalPressure",
@@ -444,6 +445,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
         let appPreferencesProperty = try XCTUnwrap(properties["appPreferences"] as? [String: Any])
         XCTAssertEqual(appPreferencesProperty["$ref"] as? String, "#/$defs/appPreferencesDiagnostic")
+        let daemonRuntimeProperty = try XCTUnwrap(properties["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntimeProperty["$ref"] as? String, "#/$defs/daemonRuntimeDiagnostic")
         XCTAssertNotNil(properties["failedCheckIDs"])
         XCTAssertNotNil(properties["coolingBlockerIDs"])
         XCTAssertEqual(enumValues(named: "state", in: properties), ["ready", "degraded", "blocked"])
@@ -485,6 +488,21 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "unreadable",
             "unavailable"
         ])
+        let daemonRuntime = try XCTUnwrap(definitions["daemonRuntimeDiagnostic"] as? [String: Any])
+        let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
+        XCTAssertEqual(daemonRuntimeRequired, [
+            "installedDaemonPath",
+            "installedDaemonPresent",
+            "installedDaemonSHA256",
+            "expectedDaemonPath",
+            "expectedDaemonPresent",
+            "expectedDaemonSHA256",
+            "matchesExpectedDaemon",
+            "matchRequired"
+        ])
+        let daemonRuntimeProperties = try XCTUnwrap(daemonRuntime["properties"] as? [String: Any])
+        XCTAssertEqual((daemonRuntimeProperties["installedDaemonSHA256"] as? [String: Any])?["pattern"] as? String, "^[a-f0-9]{64}$")
+        XCTAssertEqual((daemonRuntimeProperties["expectedDaemonSHA256"] as? [String: Any])?["pattern"] as? String, "^[a-f0-9]{64}$")
         let readinessCheck = try XCTUnwrap(definitions["readinessCheck"] as? [String: Any])
         let checkProperties = try XCTUnwrap(readinessCheck["properties"] as? [String: Any])
         XCTAssertEqual(enumValues(named: "severity", in: checkProperties), ["info", "warning", "error"])
@@ -495,6 +513,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "daemonSnapshotAvailable",
             "agentControlStatusAvailable",
             "daemonControlPathReady",
+            "daemonRuntimeMatchesExpected",
             "supportedHardware",
             "agentControlEnabled",
             "temperatureSensorsPresent",

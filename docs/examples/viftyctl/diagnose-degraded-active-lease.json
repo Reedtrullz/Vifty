@@ -46,6 +46,16 @@
     "startupMode": "Auto",
     "startupModeSource": "persisted"
   },
+  "daemonRuntime": {
+    "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+    "installedDaemonPresent": false,
+    "installedDaemonSHA256": null,
+    "expectedDaemonPath": null,
+    "expectedDaemonPresent": false,
+    "expectedDaemonSHA256": null,
+    "matchesExpectedDaemon": null,
+    "matchRequired": false
+  },
   "checks": [
     {
       "id": "daemonSnapshotAvailable",
@@ -64,6 +74,12 @@
       "message": "Daemon-backed control path is ready for bounded agent cooling requests.",
       "passed": true,
       "severity": "error"
+    },
+    {
+      "id": "daemonRuntimeMatchesExpected",
+      "message": "Current-build daemon runtime parity is not required for this diagnose context.",
+      "passed": true,
+      "severity": "info"
     },
     {
       "id": "supportedHardware",

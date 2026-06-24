@@ -7,11 +7,8 @@
       "errorCode": "HELPER_UNREACHABLE",
       "message": "Daemon agent-control status is unavailable: Could not create daemon proxy.",
       "retryAfterSeconds": null,
-      "targetRPMByFanID": {
-      },
-      "warnings": [
-
-      ]
+      "targetRPMByFanID": {},
+      "warnings": []
     },
     "lastErrorCode": "HELPER_UNREACHABLE",
     "policy": null
@@ -21,6 +18,16 @@
     "readError": null,
     "startupMode": "Auto",
     "startupModeSource": "persisted"
+  },
+  "daemonRuntime": {
+    "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+    "installedDaemonPresent": false,
+    "installedDaemonSHA256": null,
+    "expectedDaemonPath": null,
+    "expectedDaemonPresent": false,
+    "expectedDaemonSHA256": null,
+    "matchesExpectedDaemon": null,
+    "matchRequired": false
   },
   "checks": [
     {
@@ -40,6 +47,12 @@
       "message": "Daemon-backed control path is unavailable; repair the helper before requesting cooling.",
       "passed": false,
       "severity": "error"
+    },
+    {
+      "id": "daemonRuntimeMatchesExpected",
+      "message": "Current-build daemon runtime parity is not required for this diagnose context.",
+      "passed": true,
+      "severity": "info"
     },
     {
       "id": "supportedHardware",
