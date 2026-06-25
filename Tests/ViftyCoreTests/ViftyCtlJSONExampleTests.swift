@@ -724,6 +724,11 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual((agentRuleProperties["schemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
         XCTAssertEqual((agentRuleProperties["command"] as? [String: Any])?["const"] as? String, "agent-rule")
         XCTAssertEqual((agentRuleProperties["guardedRunDecisionSchemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        let repairHelperRecoveryActionsSchema = try XCTUnwrap(agentRuleProperties["repairHelperRecoveryActions"] as? [String: Any])
+        let repairHelperRecoveryConstraints = try XCTUnwrap(repairHelperRecoveryActionsSchema["allOf"] as? [[String: Any]])
+        for action in ViftyAgentRule.repairHelperRecoveryActions {
+            XCTAssertTrue(repairHelperRecoveryConstraints.containsRequiredString(action))
+        }
         let markerProperties = try XCTUnwrap(agentRuleProperties["guardedRunJSONMarkers"] as? [String: Any])
         XCTAssertEqual(markerProperties["additionalProperties"] as? Bool, false)
         let schemaRequirementsSchema = try XCTUnwrap(agentRuleProperties["schemaRequirements"] as? [String: Any])
@@ -758,6 +763,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(agentRuleExample["schemaID"] as? String, "https://vifty.local/schemas/viftyctl-agent-rule.schema.json")
         XCTAssertEqual(agentRuleExample["command"] as? String, "agent-rule")
         XCTAssertEqual(agentRuleExample["guardedRunDecisionSchemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
+        XCTAssertEqual(agentRuleExample["repairHelperRecoveryActions"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         let markerExample = try XCTUnwrap(agentRuleExample["guardedRunJSONMarkers"] as? [String: Any])
         let capabilitiesMarker = try XCTUnwrap(markerExample["capabilities"] as? [String: Any])
         XCTAssertEqual(capabilitiesMarker["begin"] as? String, "guarded-run: BEGIN_VIFTY_CAPABILITIES_JSON")

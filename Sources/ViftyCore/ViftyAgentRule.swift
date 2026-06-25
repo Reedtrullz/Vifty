@@ -64,6 +64,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
     public var viftyctlCommand: String
     public var capabilitiesCommand: String
     public var diagnoseCommand: String
+    public var repairHelperRecoveryActions: [String]?
     public var guardedRunDecisionSchemaID: String
     public var guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers
     public var guardedRunCommand: String
@@ -80,6 +81,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         generatedAt: Date,
         rule: String,
         commands: ViftyAgentRuleCommands,
+        repairHelperRecoveryActions: [String]? = ViftyAgentRule.repairHelperRecoveryActions,
         guardedRunDecisionSchemaID: String = ViftyAgentRule.guardedRunDecisionSchemaID,
         guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers = ViftyAgentRule.guardedRunJSONMarkers,
         schemaRequirements: [String] = ViftyAgentRule.schemaRequirements,
@@ -95,6 +97,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         self.viftyctlCommand = commands.viftyctlCommand
         self.capabilitiesCommand = commands.capabilitiesCommand
         self.diagnoseCommand = commands.diagnoseCommand
+        self.repairHelperRecoveryActions = repairHelperRecoveryActions
         self.guardedRunDecisionSchemaID = guardedRunDecisionSchemaID
         self.guardedRunJSONMarkers = guardedRunJSONMarkers
         self.guardedRunCommand = commands.guardedRunCommand
@@ -149,6 +152,12 @@ public enum ViftyAgentRule {
         "coolingBlockerIDs is empty"
     ]
 
+    public static let repairHelperRecoveryActions = [
+        "Open Vifty and use Repair/Reinstall Helper, then approve Login Items if macOS asks.",
+        "In a source checkout, run make repair-helper for the same explicit administrator-approved LaunchDaemon repair.",
+        "After repair, rerun diagnose --json and require safe readiness before requesting cooling."
+    ]
+
     public static let forbiddenActions = [
         "ViftyHelper setFixed",
         "ViftyHelper auto",
@@ -179,6 +188,8 @@ public enum ViftyAgentRule {
         Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and `workloadTemplates` to choose the installed or source wrapper and audited workload defaults instead of inventing unaudited fan-control commands.
 
         If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
+
+        If `recommendedRecoveryAction` is `repairHelper`, show `repairHelperRecoveryActions` from this report when present: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper` as an explicit administrator-approved repair, then rerun `diagnose --json`. Do not request cooling, use uncooled fallback, or call direct SMC/helper commands while repair is pending.
 
         Prefer the guarded wrapper for one child workload:
 

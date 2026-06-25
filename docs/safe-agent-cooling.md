@@ -165,13 +165,13 @@ Decision table:
 | `coolingBlockerIDs` is non-empty | Stop before cooling and show the blocker IDs plus `recommendedRecoveryAction`. |
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto once or wait; do not loop restore attempts. |
 | `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that and the guarded wrapper allows it; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
-| `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying. |
-| Diagnose `recommendedRecoveryAction: "repairHelper"` | Ask the user to open Vifty and use Repair/Reinstall Helper. Do not attempt direct SMC writes or uncooled guarded fallback. |
+| `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying; source checkouts can use `make repair-helper` for the same explicit administrator-approved LaunchDaemon repair. |
+| Diagnose `recommendedRecoveryAction: "repairHelper"` | Show `repairHelperRecoveryActions` from `viftyctl agent-rule --json` when available: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper`, then rerun `diagnose --json`. Do not attempt direct SMC writes or uncooled guarded fallback. |
 | Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto once, re-run diagnose, clear manual/user ownership, or wait for the active lease to clear before retrying. |
 | Diagnose `recommendedRecoveryAction: "backOffWorkload"` | Pause or reduce the workload; do not fight critical system thermals. |
 | Diagnose `recommendedRecoveryAction: "inspectPolicy"` | Inspect policy/status before retrying; do not assume cooling is available and do not use the guarded uncooled fallback. |
 | Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"` | Collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback. |
-| Command-error `recommendedRecoveryAction: "repairHelper"` | Recover daemon/transport failures through the Vifty helper repair path. Do not attempt direct SMC writes. |
+| Command-error `recommendedRecoveryAction: "repairHelper"` | Recover daemon/transport failures through the Vifty helper repair path or explicit `make repair-helper` source-checkout path. Do not attempt direct SMC writes. |
 | `recommendedRecoveryAction: "waitBeforeRetry"` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
 | `recommendedRecoveryAction: "fixChildCommand"` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |
 

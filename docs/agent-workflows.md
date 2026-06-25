@@ -336,7 +336,7 @@ The wrapper:
 - treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease or manual-control case,
 - treats `daemonControlPathReady: false` as a hard stop before cooling,
 - treats `manualControlActive: true` as a restore-Auto stop before cooling,
-- prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness,
+- prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness; for `repairHelper`, agents should prefer the optional `repairHelperRecoveryActions` array from `viftyctl agent-rule --json`, including the source-checkout `make repair-helper` path,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
 - exits after decision JSON when preflight-only is requested,

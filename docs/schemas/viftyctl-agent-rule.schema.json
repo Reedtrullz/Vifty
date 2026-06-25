@@ -51,6 +51,32 @@
       "type": "string",
       "minLength": 1
     },
+    "repairHelperRecoveryActions": {
+      "description": "Optional human-safe recovery actions agents can show when diagnose or command-error JSON reports recommendedRecoveryAction: repairHelper. These actions are recovery guidance only, not permission to request cooling.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "const": "Open Vifty and use Repair/Reinstall Helper, then approve Login Items if macOS asks."
+          }
+        },
+        {
+          "contains": {
+            "const": "In a source checkout, run make repair-helper for the same explicit administrator-approved LaunchDaemon repair."
+          }
+        },
+        {
+          "contains": {
+            "const": "After repair, rerun diagnose --json and require safe readiness before requesting cooling."
+          }
+        }
+      ]
+    },
     "guardedRunDecisionSchemaID": {
       "const": "https://vifty.local/schemas/guarded-run-decision.schema.json"
     },
