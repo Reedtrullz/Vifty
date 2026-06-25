@@ -926,6 +926,21 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(childArgumentCount["minimum"] as? Int, 0)
         let childArgumentsPrivacy = try XCTUnwrap(properties["childArgumentsPrivacy"] as? [String: Any])
         XCTAssertEqual(childArgumentsPrivacy["const"] as? String, "omitted")
+        let commands = try XCTUnwrap(properties["commands"] as? [String: Any])
+        XCTAssertEqual(commands["minContains"] as? Int, 1)
+        XCTAssertEqual((commands["contains"] as? [String: Any])?["$ref"] as? String, "#/$defs/privacyReviewCommand")
+        let privacyReviewCommand = try XCTUnwrap(defs["privacyReviewCommand"] as? [String: Any])
+        XCTAssertTrue(
+            (privacyReviewCommand["description"] as? String)?.contains("require status 0 and no redaction-needed rows") == true
+        )
+        let privacyReviewConstraints = try XCTUnwrap(privacyReviewCommand["allOf"] as? [[String: Any]])
+        XCTAssertEqual(privacyReviewConstraints.count, 2)
+        XCTAssertEqual(privacyReviewConstraints[0]["$ref"] as? String, "#/$defs/command")
+        let privacyReviewProperties = try XCTUnwrap(privacyReviewConstraints[1]["properties"] as? [String: Any])
+        XCTAssertEqual((privacyReviewProperties["name"] as? [String: Any])?["const"] as? String, "privacy-review")
+        XCTAssertEqual((privacyReviewProperties["stdout"] as? [String: Any])?["const"] as? String, "privacy-review.tsv")
+        XCTAssertEqual((privacyReviewProperties["stderr"] as? [String: Any])?["const"] as? String, "privacy-review.stderr")
+        XCTAssertEqual((privacyReviewProperties["statusFile"] as? [String: Any])?["const"] as? String, "privacy-review.status")
         let daemonRuntime = try XCTUnwrap(defs["daemonRuntime"] as? [String: Any])
         let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
         for field in [

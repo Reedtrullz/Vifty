@@ -171,6 +171,11 @@
     "commands": {
       "type": "array",
       "minItems": 1,
+      "description": "Captured command manifest mirrored from manifest.tsv. Every bundle must include the privacy-review command so reviewers can reject public-share evidence with local identifiers before trusting smoke results.",
+      "contains": {
+        "$ref": "#/$defs/privacyReviewCommand"
+      },
+      "minContains": 1,
       "items": {
         "$ref": "#/$defs/command"
       }
@@ -665,6 +670,38 @@
           "type": "string"
         }
       }
+    },
+    "privacyReviewCommand": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/command"
+        },
+        {
+          "type": "object",
+          "required": [
+            "name",
+            "status",
+            "stdout",
+            "stderr",
+            "statusFile"
+          ],
+          "properties": {
+            "name": {
+              "const": "privacy-review"
+            },
+            "stdout": {
+              "const": "privacy-review.tsv"
+            },
+            "stderr": {
+              "const": "privacy-review.stderr"
+            },
+            "statusFile": {
+              "const": "privacy-review.status"
+            }
+          }
+        }
+      ],
+      "description": "Canonical privacy review manifest command. The summary schema requires its presence and canonical file names; review scripts require status 0 and no redaction-needed rows before public sharing."
     }
   }
 }
