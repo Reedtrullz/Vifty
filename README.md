@@ -160,6 +160,16 @@ make install
 make pkg
 ```
 
+If SwiftPM's local `.build/build.db` becomes unhealthy, keep the trust gate reproducible by moving SwiftPM products to a fresh path:
+
+```sh
+SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify
+SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make app CONFIGURATION=release
+SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install
+```
+
+The app bundle is still written to `.build/Vifty.app`; only SwiftPM's package build products move to `SWIFT_BUILD_PATH`.
+
 GitHub Actions runs the same verification on every push to `main`, every pull request targeting `main`, and manual `workflow_dispatch`: Swift tests, release app bundle build, plist validation, ad-hoc code-signature verification, temporary install-script verification, and a zipped `Vifty.app` artifact upload.
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.

@@ -3,6 +3,9 @@
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
 VIFTY_XPC_ALLOWED_TEAM_ID ?=
+SWIFT_BUILD_PATH ?=
+SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",)
+SWIFT_PRODUCTS_DIR = $(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION))
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
 SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)
@@ -63,16 +66,16 @@ install: CONFIGURATION = release
 pkg: CONFIGURATION = release
 
 app: ## Build the release app bundle
-	swift build -c $(CONFIGURATION)
+	swift build $(SWIFT_BUILD_ARGS) -c $(CONFIGURATION)
 	rm -rf "$(APP_DIR)"
 	mkdir -p "$(MACOS)"
 	mkdir -p "$(SCHEMAS)"
 	mkdir -p "$(WRAPPERS)"
 	mkdir -p "$(CONTENTS)/Library/LaunchDaemons"
-	cp ".build/$(CONFIGURATION)/Vifty" "$(MACOS)/Vifty"
-	cp ".build/$(CONFIGURATION)/ViftyHelper" "$(MACOS)/ViftyHelper"
-	cp ".build/$(CONFIGURATION)/ViftyCtl" "$(MACOS)/viftyctl"
-	cp ".build/$(CONFIGURATION)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
+	cp "$(SWIFT_PRODUCTS_DIR)/Vifty" "$(MACOS)/Vifty"
+	cp "$(SWIFT_PRODUCTS_DIR)/ViftyHelper" "$(MACOS)/ViftyHelper"
+	cp "$(SWIFT_PRODUCTS_DIR)/ViftyCtl" "$(MACOS)/viftyctl"
+	cp "$(SWIFT_PRODUCTS_DIR)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
 	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
 	install -m 755 scripts/collect-agent-cooling-evidence.sh "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
 	install -m 755 scripts/check-manual-smoke-readiness.sh "$(CONTENTS)/Resources/check-manual-smoke-readiness.sh"
@@ -149,14 +152,14 @@ source-first-readiness: ## Check published source-first release readiness
 	./scripts/check-release-readiness.sh --mode source-first --version "$(RELEASE_VERSION)" --repo "$(RELEASE_REPO)" --json
 
 test: ## Run the XCTest suite
-	swift test
+	swift test $(SWIFT_BUILD_ARGS)
 
 verify: ## Run local trust gates without installing
 	/bin/bash -n scripts/*.sh examples/viftyctl/*.sh
 	scripts/check-community-standards.sh
 	scripts/validate-release-metadata.sh --mode "$(RELEASE_METADATA_MODE)"
-	swift test
-	swift build -Xswiftc -warnings-as-errors
+	swift test $(SWIFT_BUILD_ARGS)
+	swift build $(SWIFT_BUILD_ARGS) -Xswiftc -warnings-as-errors
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
 	plutil -lint "$(CONTENTS)/Info.plist"
 	plutil -lint "$(DAEMON_PLIST)"

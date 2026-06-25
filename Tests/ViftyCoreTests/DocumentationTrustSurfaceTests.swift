@@ -85,6 +85,16 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("MacBookPro18 still needs manual smoke before Vifty claims validated hardware support"))
     }
 
+    func testReadmeDocumentsSwiftBuildPathEscapeHatchForAgentWorkflows() throws {
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("If SwiftPM's local `.build/build.db` becomes unhealthy, keep the trust gate reproducible by moving SwiftPM products to a fresh path:"))
+        XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify"))
+        XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make app CONFIGURATION=release"))
+        XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install"))
+        XCTAssertTrue(readme.contains("The app bundle is still written to `.build/Vifty.app`; only SwiftPM's package build products move to `SWIFT_BUILD_PATH`."))
+    }
+
     func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
         let readme = try read("README.md")
 
