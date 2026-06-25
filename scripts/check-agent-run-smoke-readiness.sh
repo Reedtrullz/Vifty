@@ -260,6 +260,10 @@ def strings(value)
   value.is_a?(Array) ? value.map(&:to_s) : []
 end
 
+def string_array(value)
+  value.is_a?(Array) && value.all? { |item| item.is_a?(String) } ? value : []
+end
+
 capabilities, capabilities_parse_error = parsed_json(capabilities_path)
 diagnose, diagnose_parse_error = parsed_json(diagnose_path)
 
@@ -342,6 +346,7 @@ reason_within_metadata_limit = metadata_limits_available && reason.length <= max
 
 recommended_action = diagnose["recommendedAgentAction"].to_s
 recommended_recovery = diagnose["recommendedRecoveryAction"].to_s
+recovery_steps = string_array(diagnose["recoverySteps"])
 thermal_pressure = diagnose["thermalPressure"].to_s
 fan_count = integer_value(diagnose["fanCount"])
 controllable_fan_count = integer_value(diagnose["controllableFanCount"])
@@ -428,6 +433,7 @@ summary = {
   "state" => diagnose["state"],
   "recommendedAgentAction" => recommended_action.empty? ? nil : recommended_action,
   "recommendedRecoveryAction" => recommended_recovery.empty? ? nil : recommended_recovery,
+  "recoverySteps" => recovery_steps,
   "safeToRequestCooling" => safe_to_request_cooling,
   "daemonControlPathReady" => daemon_control_path_ready,
   "manualControlActive" => manual_control_active,
@@ -496,6 +502,10 @@ else
     puts "Do not run supervised viftyctl run smoke."
     puts "Blockers:"
     blockers.each { |blocker| puts "- #{blocker}" }
+    unless recovery_steps.empty?
+      puts "Recovery steps:"
+      recovery_steps.each { |step| puts "- #{step}" }
+    end
   end
 
   puts "State: #{summary["state"] || "unknown"}"

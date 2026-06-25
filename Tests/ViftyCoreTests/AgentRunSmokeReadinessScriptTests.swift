@@ -101,6 +101,67 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
+    func testJSONOutputCarriesDiagnoseRecoveryStepsBeforeSmokeEvidence() throws {
+        let recoverySteps = [
+            "Repair or reinstall the helper from the installed Vifty app.",
+            "Approve Login Items if macOS prompts.",
+            "Rerun viftyctl diagnose --json before smoke evidence."
+        ]
+        let harness = try AgentRunSmokeReadinessHarness(
+            diagnoseJSON: AgentRunSmokeReadinessHarness.diagnoseJSON(
+                state: "blocked",
+                recommendedAgentAction: "doNotRequestCooling",
+                recommendedRecoveryAction: "repairHelper",
+                recoverySteps: recoverySteps,
+                safeToRequestCooling: false,
+                daemonControlPathReady: false
+            ),
+            diagnoseExitCode: 75
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["recommendedRecoveryAction"] as? String, "repairHelper")
+        XCTAssertEqual(summary["recoverySteps"] as? [String], recoverySteps)
+        XCTAssertEqual(summary["agentRunSmokeReady"] as? Bool, false)
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
+    func testHumanOutputPrintsRecoveryStepsWhenReadinessBlocksSmokeEvidence() throws {
+        let recoverySteps = [
+            "Restore Auto once from viftyctl or the Vifty UI.",
+            "Wait until manualControlActive is false.",
+            "Rerun this preflight before agent-run smoke."
+        ]
+        let harness = try AgentRunSmokeReadinessHarness(
+            diagnoseJSON: AgentRunSmokeReadinessHarness.diagnoseJSON(
+                state: "blocked",
+                recommendedAgentAction: "restoreAutoBeforeRequestingCooling",
+                recommendedRecoveryAction: "restoreAutoBeforeRetry",
+                recoverySteps: recoverySteps,
+                safeToRequestCooling: false,
+                manualControlActive: true
+            ),
+            diagnoseExitCode: 75
+        )
+
+        let result = try harness.runReadiness(["--viftyctl", harness.viftyctlURL.path])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Agent run smoke readiness: blocked"), result.stdout)
+        XCTAssertTrue(result.stdout.contains("Recovery steps:"), result.stdout)
+        for step in recoverySteps {
+            XCTAssertTrue(result.stdout.contains("- \(step)"), result.stdout)
+        }
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
     func testReadinessSchemaIsDocumentedForEvidenceConsumers() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/agent-run-smoke-readiness.schema.json")
@@ -115,9 +176,13 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual((properties["coolingCommandsRun"] as? [String: Any])?["const"] as? Bool, false)
         XCTAssertNotNil(properties["capabilities"] as? [String: Any])
         XCTAssertNotNil(properties["daemonRuntime"] as? [String: Any])
+        XCTAssertNotNil(properties["recoverySteps"] as? [String: Any])
         XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
         XCTAssertNotNil(properties["coolingBlockerIDs"] as? [String: Any])
         XCTAssertNotNil(properties["appPreferences"] as? [String: Any])
+
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        XCTAssertTrue(required.contains("recoverySteps"))
     }
 }
 
@@ -234,12 +299,17 @@ private final class AgentRunSmokeReadinessHarness {
         state: String = "ready",
         recommendedAgentAction: String = "requestCooling",
         recommendedRecoveryAction: String = "none",
+        recoverySteps: [String] = [],
         safeToRequestCooling: Bool = true,
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false
     ) -> String {
-        """
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"\(state)","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"\(recommendedAgentAction)","recommendedRecoveryAction":"\(recommendedRecoveryAction)","safeToRequestCooling":\(safeToRequestCooling),"daemonControlPathReady":\(daemonControlPathReady),"manualControlActive":\(manualControlActive),"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}
+        let recoveryStepsJSON = String(
+            data: try! JSONSerialization.data(withJSONObject: recoverySteps),
+            encoding: .utf8
+        )!
+        return """
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"\(state)","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"\(recommendedAgentAction)","recommendedRecoveryAction":"\(recommendedRecoveryAction)","recoverySteps":\(recoveryStepsJSON),"safeToRequestCooling":\(safeToRequestCooling),"daemonControlPathReady":\(daemonControlPathReady),"manualControlActive":\(manualControlActive),"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}
         """
     }
 
