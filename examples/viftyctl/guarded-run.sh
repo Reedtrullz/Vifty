@@ -463,6 +463,56 @@ print_diagnose_json_evidence() {
   print_json_evidence "VIFTY_DIAGNOSE_JSON" "${diagnose_json:-}"
 }
 
+json_optional_object() {
+  json_payload="$1"
+  json_path="$2"
+
+  VIFTY_JSON_PAYLOAD="$json_payload" \
+  VIFTY_JSON_PATH="$json_path" \
+  /usr/bin/ruby -rjson <<'RUBY'
+begin
+  payload = JSON.parse(ENV.fetch("VIFTY_JSON_PAYLOAD", ""))
+  current = payload
+  ENV.fetch("VIFTY_JSON_PATH", "").split(".").each do |component|
+    exit 0 unless current.is_a?(Hash) && current.key?(component)
+    current = current[component]
+  end
+  exit 0 if current.nil?
+  puts(current.is_a?(Hash) ? JSON.generate(current) : "__invalid__")
+rescue JSON::ParserError
+  exit 1
+end
+RUBY
+}
+
+json_optional_bool() {
+  json_payload="$1"
+  json_path="$2"
+
+  VIFTY_JSON_PAYLOAD="$json_payload" \
+  VIFTY_JSON_PATH="$json_path" \
+  /usr/bin/ruby -rjson <<'RUBY'
+begin
+  payload = JSON.parse(ENV.fetch("VIFTY_JSON_PAYLOAD", ""))
+  current = payload
+  ENV.fetch("VIFTY_JSON_PATH", "").split(".").each do |component|
+    exit 0 unless current.is_a?(Hash) && current.key?(component)
+    current = current[component]
+  end
+  exit 0 if current.nil?
+  if current == true
+    puts "true"
+  elsif current == false
+    puts "false"
+  else
+    puts "__invalid__"
+  end
+rescue JSON::ParserError
+  exit 1
+end
+RUBY
+}
+
 guarded_run_decision_json() {
   decision_message="$1"
   decision_safe_to_proceed="$2"
@@ -1138,9 +1188,9 @@ manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extra
 failed_check_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract failedCheckIDs json -o - - 2>/dev/null || printf '')"
 cooling_blocker_ids="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract coolingBlockerIDs json -o - - 2>/dev/null || printf '')"
 startup_mode="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract appPreferences.startupMode raw -o - - 2>/dev/null || printf '')"
-daemon_runtime="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime json -o - - 2>/dev/null || printf '')"
-daemon_runtime_match_required="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime.matchRequired raw -o - - 2>/dev/null || printf '')"
-daemon_runtime_matches_expected="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonRuntime.matchesExpectedDaemon raw -o - - 2>/dev/null || printf '')"
+daemon_runtime="$(json_optional_object "$diagnose_json" daemonRuntime 2>/dev/null || printf '')"
+daemon_runtime_match_required="$(json_optional_bool "$diagnose_json" daemonRuntime.matchRequired 2>/dev/null || printf '')"
+daemon_runtime_matches_expected="$(json_optional_bool "$diagnose_json" daemonRuntime.matchesExpectedDaemon 2>/dev/null || printf '')"
 
 [ "$state" = "null" ] && state=""
 [ "$diagnose_schema_version" = "null" ] && diagnose_schema_version=""
