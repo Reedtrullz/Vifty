@@ -39,6 +39,7 @@ MANUAL_SMOKE_READINESS_SUMMARY ?=
 MANUAL_SMOKE_EXPECTED_DAEMON ?=
 MANUAL_SMOKE_REQUIRE_DAEMON_MATCH ?= 0
 AGENT_RUN_SMOKE_READINESS_JSON ?= 0
+AGENT_RUN_SMOKE_READINESS_SUMMARY ?=
 AGENT_EVIDENCE_OUTPUT ?=
 AGENT_EVIDENCE_GUARDED_RUN_STDERR ?=
 AGENT_EVIDENCE_BUNDLE ?=
@@ -131,7 +132,7 @@ agent-cooling-evidence-review: ## Review a read-only agent/helper support eviden
 	./scripts/review-agent-cooling-evidence.sh --bundle "$(AGENT_EVIDENCE_BUNDLE)" $(if $(AGENT_EVIDENCE_REVIEW_SUMMARY),--summary "$(AGENT_EVIDENCE_REVIEW_SUMMARY)",)
 
 agent-run-smoke-readiness: ## Read-only preflight before supervised viftyctl run smoke
-	./scripts/check-agent-run-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" $(if $(AGENT_RUN_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(AGENT_RUN_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_READINESS_JSON)),--json,)
+	./scripts/check-agent-run-smoke-readiness.sh --viftyctl "$(VIFTYCTL)" --duration "$(AGENT_RUN_SMOKE_DURATION)" --max-rpm-percent "$(AGENT_RUN_SMOKE_MAX_RPM_PERCENT)" --reason "$(AGENT_RUN_SMOKE_REASON)" $(if $(AGENT_RUN_SMOKE_EXPECTED_DAEMON),--expected-daemon "$(AGENT_RUN_SMOKE_EXPECTED_DAEMON)",) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH)),--require-daemon-match,) $(if $(filter 1 true yes,$(AGENT_RUN_SMOKE_READINESS_JSON)),--json,) $(if $(AGENT_RUN_SMOKE_READINESS_SUMMARY),--summary "$(AGENT_RUN_SMOKE_READINESS_SUMMARY)",)
 
 agent-run-smoke-readiness-current-build: ## Build current app and run read-only agent smoke preflight
 	@status="$$(git status --porcelain --untracked-files=all 2>/dev/null)"; if [ -n "$$status" ]; then echo "agent-run-smoke-readiness-current-build requires a clean git worktree so the preflight uses the built app from the current source ref; commit or stash changes first, or use make agent-run-smoke-readiness with an explicit VIFTYCTL for exploratory local preflight." >&2; exit 65; fi

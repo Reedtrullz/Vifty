@@ -19,6 +19,8 @@ Options:
   --require-daemon-match     Block unless the installed helper daemon hash
                              matches --expected-daemon.
   --json                     Print the readiness summary as JSON instead of prose.
+  --summary <path>           Write the readiness summary JSON to this path,
+                             creating parent directories when needed.
   -h, --help                 Show this help.
 
 This script only runs:
@@ -42,6 +44,7 @@ EXPECTED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_EXPECTED_DAEMON:-}"
 REQUIRE_DAEMON_MATCH="${VIFTY_AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
 INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
 JSON_OUTPUT=0
+SUMMARY_PATH="${VIFTY_AGENT_RUN_SMOKE_READINESS_SUMMARY:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -92,6 +95,14 @@ while [[ $# -gt 0 ]]; do
     --json)
       JSON_OUTPUT=1
       shift
+      ;;
+    --summary)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --summary requires a path" >&2
+        exit 64
+      fi
+      SUMMARY_PATH="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -194,7 +205,7 @@ fi
 DIAGNOSE_STATUS=$?
 set -e
 
-ruby -rjson - \
+ruby -rjson -rfileutils - \
   "${CAPABILITIES_JSON}" \
   "${CAPABILITIES_STATUS}" \
   "${DIAGNOSE_JSON}" \
@@ -209,7 +220,8 @@ ruby -rjson - \
   "${EXPECTED_DAEMON_PATH}" \
   "${EXPECTED_DAEMON_SHA256}" \
   "${DAEMON_MATCHES_EXPECTED}" \
-  "${REQUIRE_DAEMON_MATCH}" <<'RUBY'
+  "${REQUIRE_DAEMON_MATCH}" \
+  "${SUMMARY_PATH}" <<'RUBY'
 capabilities_path = ARGV.fetch(0)
 capabilities_status = Integer(ARGV.fetch(1))
 diagnose_path = ARGV.fetch(2)
@@ -225,6 +237,7 @@ expected_daemon_path = ARGV.fetch(11)
 expected_daemon_sha256 = ARGV.fetch(12)
 daemon_matches_expected_text = ARGV.fetch(13)
 daemon_match_required = ARGV.fetch(14) == "1"
+summary_path = ARGV.fetch(15)
 
 def parsed_json(path)
   raw = File.read(path)
@@ -492,8 +505,15 @@ summary = {
   }
 }
 
+summary_json = JSON.pretty_generate(summary)
+unless summary_path.empty?
+  parent = File.dirname(summary_path)
+  FileUtils.mkdir_p(parent) unless parent == "."
+  File.write(summary_path, "#{summary_json}\n")
+end
+
 if json_output
-  puts JSON.pretty_generate(summary)
+  puts summary_json
 else
   puts "Agent run smoke readiness: #{status}"
   if ready

@@ -133,6 +133,31 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
+    func testJSONOutputCanBeSavedAsAgentRunSmokeReadinessEvidence() throws {
+        let harness = try AgentRunSmokeReadinessHarness()
+        let summaryURL = harness.rootURL.appendingPathComponent("agent-run-smoke-readiness.json")
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--json",
+            "--summary", summaryURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summaryURL.path))
+
+        let printedSummary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        let savedSummary = try XCTUnwrap(AgentRunSmokeReadinessHarness.readJSON(summaryURL))
+        XCTAssertEqual(savedSummary as NSDictionary, printedSummary as NSDictionary)
+        XCTAssertEqual(savedSummary["kind"] as? String, "vifty-agent-run-smoke-readiness")
+        XCTAssertEqual(savedSummary["status"] as? String, "ready")
+        XCTAssertEqual(savedSummary["agentRunSmokeReady"] as? Bool, true)
+        XCTAssertEqual(savedSummary["readOnly"] as? Bool, true)
+        XCTAssertEqual(savedSummary["coolingCommandsRun"] as? Bool, false)
+        XCTAssertEqual(savedSummary["recoverySteps"] as? [String], [])
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
     func testHumanOutputPrintsRecoveryStepsWhenReadinessBlocksSmokeEvidence() throws {
         let recoverySteps = [
             "Restore Auto once from viftyctl or the Vifty UI.",

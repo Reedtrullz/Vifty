@@ -225,8 +225,10 @@ should be preceded by `make agent-run-smoke-readiness`, which emits
 `schemaID: https://vifty.local/schemas/agent-run-smoke-readiness.schema.json`
 with `readOnly: true` and `coolingCommandsRun: false` after checking only
 `capabilities --json`, `diagnose --json`, and optional daemon hash evidence. The
-readiness summary copies diagnose `recoverySteps` so blocked supervised-smoke
-preflights carry the next safe actions without asking agents to parse prose. The
+readiness summary can be saved with
+`AGENT_RUN_SMOKE_READINESS_SUMMARY=.build/agent-run-smoke-readiness.json`, and it
+copies diagnose `recoverySteps` so blocked supervised-smoke preflights carry the
+next safe actions without asking agents to parse prose. The
 collector itself first performs read-only capabilities/diagnose checks, but when readiness is
 safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
 with exactly one structured cooldown retry if the daemon returns
