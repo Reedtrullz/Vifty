@@ -867,6 +867,31 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryWithPrivacyFindings() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
+            status: "passed",
+            privacyReviewStatus: 1,
+            privacyReviewText: """
+            finding\tfile\tline\tkind
+            redaction-needed\tviftyctl-run.json\t1\tuser-home-path
+            """
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke privacy-review found redaction-needed entry in viftyctl-run.json:1"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeSummarySchemaDrift() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1883,7 +1908,9 @@ private final class ValidationEvidenceReviewHarness {
         viftyctlPathKind: String = "appBundle",
         viftyctlPathPrivacy: String = "basenameOnly",
         daemonRuntimeMatchesExpected: Bool? = true,
-        daemonRuntimeMatchRequired: Bool = true
+        daemonRuntimeMatchRequired: Bool = true,
+        privacyReviewStatus: Int = 0,
+        privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n"
     ) throws -> URL {
         try writeAgentRunSmokeBundleSummary(
             status: status,
@@ -1924,7 +1951,9 @@ private final class ValidationEvidenceReviewHarness {
             viftyctlPathKind: viftyctlPathKind,
             viftyctlPathPrivacy: viftyctlPathPrivacy,
             daemonRuntimeMatchesExpected: daemonRuntimeMatchesExpected,
-            daemonRuntimeMatchRequired: daemonRuntimeMatchRequired
+            daemonRuntimeMatchRequired: daemonRuntimeMatchRequired,
+            privacyReviewStatus: privacyReviewStatus,
+            privacyReviewText: privacyReviewText
         )
     }
 
@@ -1981,7 +2010,9 @@ private final class ValidationEvidenceReviewHarness {
         viftyctlPathKind: String = "appBundle",
         viftyctlPathPrivacy: String = "basenameOnly",
         daemonRuntimeMatchesExpected: Bool? = true,
-        daemonRuntimeMatchRequired: Bool = true
+        daemonRuntimeMatchRequired: Bool = true,
+        privacyReviewStatus: Int = 0,
+        privacyReviewText: String = "finding\tfile\tline\tkind\nnone\t-\t-\tpassed\n"
     ) throws -> URL {
         let smokeBundleURL = rootURL.appendingPathComponent("agent-run-smoke-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: smokeBundleURL, withIntermediateDirectories: true)
@@ -2163,6 +2194,21 @@ private final class ValidationEvidenceReviewHarness {
                 "readError": startupModeReadError as Any? ?? NSNull()
             ]
         }
+        commands.append([
+            "name": "privacy-review",
+            "status": privacyReviewStatus,
+            "stdout": "privacy-review.tsv",
+            "stderr": "privacy-review.stderr",
+            "statusFile": "privacy-review.status"
+        ])
+        try writeAgentRunSmokeCommandFiles(
+            in: smokeBundleURL,
+            name: "privacy-review",
+            status: privacyReviewStatus,
+            stdout: "privacy-review.tsv",
+            stderr: "privacy-review.stderr",
+            stdoutContents: privacyReviewText
+        )
 
         var json: [String: Any] = [
             "schemaVersion": 1,

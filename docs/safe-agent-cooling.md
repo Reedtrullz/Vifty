@@ -238,7 +238,8 @@ reason text, records `reasonCharacterCount`, labels daemon path display
 values, and records only the child command basename, command kind, argument
 count, resolved executable basename, `childArgumentsPrivacy=omitted`, and
 `resolvedChildExecutablePathPrivacy=basenameOnly` while preserving daemon identity
-through SHA-256 fields. The collector supports
+through SHA-256 fields. The smoke bundle also writes `privacy-review.tsv`; review
+and redact any `redaction-needed` rows before public sharing. The collector supports
 exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless
 `capabilities --json` reports schema version `1`, the stable capabilities,

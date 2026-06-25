@@ -35,6 +35,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("`recommendedAgentAction` is either `requestCooling` or `requestCoolingWithCaution`"))
         XCTAssertTrue(try harness.read("README.txt").contains("`manualControlActive=false`"))
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
+        XCTAssertTrue(try harness.read("README.txt").contains("privacy-review.tsv"))
         let metadata = try harness.read("metadata.txt")
         XCTAssertTrue(metadata.contains("readOnly=false"))
         XCTAssertTrue(metadata.contains("coolingCommandsRun=true"))
@@ -75,7 +76,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(manifest.contains("post-status\t0\tpost-status.json\tpost-status.stderr"))
         XCTAssertTrue(manifest.contains("post-audit\t0\tpost-audit.json\tpost-audit.stderr"))
         XCTAssertTrue(manifest.contains("post-diagnose\t0\tpost-diagnose.json\tpost-diagnose.stderr"))
+        XCTAssertTrue(manifest.contains("privacy-review\t0\tprivacy-review.tsv\tprivacy-review.stderr"))
         XCTAssertEqual(try harness.read("viftyctl-run.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertEqual(try harness.read("privacy-review.status").trimmingCharacters(in: .whitespacesAndNewlines), "0")
+        XCTAssertTrue(try harness.read("privacy-review.tsv").contains("none\t-\t-\tpassed"))
 
         let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
         XCTAssertEqual(summary["schemaVersion"] as? Int, 1)
@@ -171,7 +175,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(rateLimitRetry["stdout"] is NSNull)
         XCTAssertTrue(rateLimitRetry["stderr"] is NSNull)
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
-        XCTAssertEqual(commands.count, 7)
+        XCTAssertEqual(commands.count, 8)
 
         let checksums = try harness.read("checksums.tsv")
         XCTAssertTrue(checksums.contains("sha256\tbytes\tfile"))
@@ -179,6 +183,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(checksums.contains("\tmetadata.txt"))
         XCTAssertTrue(checksums.contains("\tdaemon-runtime.tsv"))
         XCTAssertTrue(checksums.contains("\tmanifest.tsv"))
+        XCTAssertTrue(checksums.contains("\tprivacy-review.tsv"))
+        XCTAssertTrue(checksums.contains("\tprivacy-review.status"))
         XCTAssertTrue(checksums.contains("\tagent-run-smoke-evidence-summary.json"))
         XCTAssertTrue(checksums.contains("\tviftyctl-run.json"))
         XCTAssertTrue(checksums.contains("\tpost-audit.json"))
@@ -326,6 +332,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(run["resolvedChildExecutableSHA256Status"] as? String, "computed")
         XCTAssertEqual(run["resolvedChildExecutableSHA256"] as? String, String(repeating: "a", count: 64))
+
+        let privacyReview = try harness.read("privacy-review.tsv")
+        XCTAssertTrue(privacyReview.contains("redaction-needed\tviftyctl-run.json"))
+        XCTAssertTrue(privacyReview.contains("user-home-path"), privacyReview)
+        XCTAssertEqual(try harness.read("privacy-review.status").trimmingCharacters(in: .whitespacesAndNewlines), "1")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenRequiredDaemonDoesNotMatchExpectedBuild() throws {
@@ -830,7 +841,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(run["skipReasons"] as? [String], [])
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
-        XCTAssertEqual(commands.count, 8)
+        XCTAssertEqual(commands.count, 9)
 
         let checksums = try harness.read("checksums.tsv")
         XCTAssertTrue(checksums.contains("\tviftyctl-run.json"))

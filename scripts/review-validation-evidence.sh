@@ -1104,6 +1104,24 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       failures << "agent-run-smoke summary commands is missing manifest command #{name}" unless commands_by_name.key?(name)
     end
 
+    privacy_command = commands_by_name["privacy-review"]
+    if privacy_command.nil?
+      failures << "agent-run-smoke summary commands is missing privacy-review"
+    else
+      unless privacy_command["status"] == 0
+        failures << "agent-run-smoke privacy-review status #{privacy_command["status"].inspect} must be 0 before sharing the bundle"
+      end
+      relative_path = agent_run_smoke_local_filename(privacy_command["stdout"], "privacy-review stdout", failures)
+      unless relative_path.nil?
+        privacy_rows = parse_external_tsv(File.join(smoke_bundle, relative_path), failures, "agent-run-smoke privacy-review.tsv")
+        privacy_rows.each do |row|
+          if row["finding"].to_s == "redaction-needed"
+            failures << "agent-run-smoke privacy-review found redaction-needed entry in #{row["file"]}:#{row["line"]}"
+          end
+        end
+      end
+    end
+
     run = summary["run"].is_a?(Hash) ? summary["run"] : {}
     %w[stdout stderr].each do |field|
       next if run[field].nil?

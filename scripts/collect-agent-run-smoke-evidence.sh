@@ -571,11 +571,14 @@ Attach or paste:
 - manifest.tsv
 - daemon-runtime.tsv
 - agent-run-smoke-evidence-summary.json
+- privacy-review.tsv
 - checksums.tsv
 
 The default child command is /bin/sleep 5. Custom child commands are allowed
 after --, but hardware-validation reports should keep this smoke short and
-boring.
+boring. Check privacy-review.tsv before public sharing; a nonzero privacy
+review means the named files may contain private local paths, hostnames,
+serial-number labels, hardware-identifier labels, or other identifiers.
 EOF
 }
 
@@ -910,6 +913,83 @@ write_checksums() {
   done < <(/usr/bin/find "${OUTPUT_DIR}" -type f -print0 | /usr/bin/sort -z)
 }
 
+capture_privacy_review() {
+  local name="privacy-review"
+  local stdout_name="privacy-review.tsv"
+  local stdout_path="${OUTPUT_DIR}/${stdout_name}"
+  local stderr_name="${name}.stderr"
+  local stderr_path="${OUTPUT_DIR}/${stderr_name}"
+  local status_path="${OUTPUT_DIR}/${name}.status"
+  local host_name=""
+  local short_host_name=""
+  local status
+
+  host_name="$(/bin/hostname 2>/dev/null || true)"
+  short_host_name="$(/bin/hostname -s 2>/dev/null || true)"
+
+  set +e
+  ruby -e '
+    bundle, home_path, host_name, short_host_name = ARGV
+    ignored = {
+      "privacy-review.tsv" => true,
+      "privacy-review.stderr" => true,
+      "privacy-review.status" => true,
+      "checksums.tsv" => true
+    }
+    common_host_tokens = %w[localhost mac macbook macbookpro]
+    host_tokens = [host_name, short_host_name]
+      .map(&:to_s)
+      .map(&:strip)
+      .uniq
+      .select { |value| value.length >= 5 }
+      .reject { |value| common_host_tokens.include?(value.downcase.gsub(/[^a-z0-9]/, "")) }
+    patterns = [
+      ["serial-number-label", /serial\s+number|IOPlatformSerialNumber/i],
+      ["hardware-uuid-label", /hardware\s+uuid|platform\s+uuid|IOPlatformUUID/i],
+      ["user-home-path", %r{/Users/[^/\s]+}]
+    ]
+    if home_path.to_s.start_with?("/Users/")
+      patterns << ["current-home-path", Regexp.new(Regexp.escape(home_path))]
+    end
+    host_tokens.each do |token|
+      patterns << ["local-hostname", Regexp.new(Regexp.escape(token), Regexp::IGNORECASE)]
+    end
+
+    findings = []
+    Dir.children(bundle).sort.each do |entry|
+      next if ignored[entry]
+      path = File.join(bundle, entry)
+      next unless File.file?(path)
+      begin
+        File.foreach(path).with_index(1) do |line, line_number|
+          patterns.each do |kind, pattern|
+            findings << [entry, line_number, kind] if line.match?(pattern)
+          end
+        end
+      rescue ArgumentError
+        next
+      end
+    end
+
+    puts "finding\tfile\tline\tkind"
+    if findings.empty?
+      puts "none\t-\t-\tpassed"
+      exit 0
+    end
+
+    findings.each do |file, line, kind|
+      puts "redaction-needed\t#{file}\t#{line}\t#{kind}"
+    end
+    warn "privacy review found local identifiers; review or redact the named files before sharing the bundle"
+    exit 1
+  ' "${OUTPUT_DIR}" "${HOME:-}" "${host_name}" "${short_host_name}" > "${stdout_path}" 2> "${stderr_path}"
+  status=$?
+  set -e
+
+  printf '%s\n' "${status}" > "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${status}" "${stdout_name}" "${stderr_name}" >> "${MANIFEST_PATH}"
+}
+
 run_capture "pre-capabilities" "pre-capabilities.json" \
   "${VIFTYCTL}" capabilities --json
 run_capture "pre-diagnose" "pre-diagnose.json" \
@@ -991,6 +1071,8 @@ if [[ -n "${skip_reason}" ]]; then
   write_metadata "true" "false"
   write_daemon_runtime
   write_summary_json "blocked" "true" "false" "" "${skip_reason}" "${skip_reasons_text}" "" "" "false" "" ""
+  capture_privacy_review
+  write_summary_json "blocked" "true" "false" "" "${skip_reason}" "${skip_reasons_text}" "" "" "false" "" ""
   write_checksums
   echo "Agent run smoke skipped: ${skip_reason}"
   if [[ "${#skip_reasons[@]}" -gt 1 ]]; then
@@ -1057,6 +1139,10 @@ fi
 write_readme
 write_metadata "false" "true"
 write_daemon_runtime
+write_summary_json "${smoke_status}" "false" "true" "${run_status}" "" "" \
+  "${run_stdout_name}" "${run_stderr_name}" "${rate_limit_retry_attempted}" \
+  "${rate_limit_retry_after}" "${rate_limit_initial_status}"
+capture_privacy_review
 write_summary_json "${smoke_status}" "false" "true" "${run_status}" "" "" \
   "${run_stdout_name}" "${run_stderr_name}" "${rate_limit_retry_attempted}" \
   "${rate_limit_retry_after}" "${rate_limit_initial_status}"
