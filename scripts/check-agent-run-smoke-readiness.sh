@@ -277,6 +277,19 @@ def string_array(value)
   value.is_a?(Array) && value.all? { |item| item.is_a?(String) } ? value : []
 end
 
+def share_safe_path(path)
+  value = path.to_s
+  return [nil, "notProvided"] if value.empty?
+
+  if value.start_with?("/Library/PrivilegedHelperTools/") || value.start_with?("/Applications/Vifty.app/")
+    [value, "system"]
+  elsif !value.start_with?("/")
+    [value, "relative"]
+  else
+    [File.basename(value), "basenameOnly"]
+  end
+end
+
 capabilities, capabilities_parse_error = parsed_json(capabilities_path)
 diagnose, diagnose_parse_error = parsed_json(diagnose_path)
 
@@ -427,6 +440,8 @@ when "true" then true
 when "false" then false
 else nil
 end
+safe_installed_daemon_path, installed_daemon_path_privacy = share_safe_path(installed_daemon_path)
+safe_expected_daemon_path, expected_daemon_path_privacy = share_safe_path(expected_daemon_path)
 
 summary = {
   "kind" => "vifty-agent-run-smoke-readiness",
@@ -439,7 +454,9 @@ summary = {
   "duration" => duration,
   "durationSeconds" => requested_duration_seconds,
   "maxRPMPercent" => max_rpm_percent,
-  "reason" => reason,
+  "reason" => "omitted-for-privacy",
+  "reasonCharacterCount" => reason.length,
+  "reasonPrivacy" => "omitted",
   "capabilitiesExitStatus" => capabilities_status,
   "diagnoseExitStatus" => diagnose_status,
   "modelIdentifier" => diagnose["modelIdentifier"],
@@ -489,10 +506,12 @@ summary = {
     "resolvedChildExecutableReported" => boolean_value(lifecycle["resolvedChildExecutableReported"])
   },
   "daemonRuntime" => {
-    "installedDaemonPath" => installed_daemon_path,
+    "installedDaemonPath" => safe_installed_daemon_path,
+    "installedDaemonPathPrivacy" => installed_daemon_path_privacy,
     "installedDaemonPresent" => installed_daemon_present,
     "installedDaemonSHA256" => installed_daemon_sha256.empty? ? nil : installed_daemon_sha256,
-    "expectedDaemonPath" => expected_daemon_path.empty? ? nil : expected_daemon_path,
+    "expectedDaemonPath" => safe_expected_daemon_path,
+    "expectedDaemonPathPrivacy" => expected_daemon_path_privacy,
     "expectedDaemonSHA256" => expected_daemon_sha256.empty? ? nil : expected_daemon_sha256,
     "matchesExpectedDaemon" => daemon_matches_expected,
     "matchRequired" => daemon_match_required

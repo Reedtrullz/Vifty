@@ -727,6 +727,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "#{File.basename(File.dirname(summary_path))}/#{File.basename(summary_path)}"
   end
 
+  def likely_user_home_path?(value)
+    value.to_s.match?(%r{/Users/[^/\s]+})
+  end
+
   def validate_manual_smoke_readiness_daemon_runtime(summary, failures)
     daemon_runtime = summary["daemonRuntime"]
     unless daemon_runtime.is_a?(Hash)
@@ -848,6 +852,17 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     unless [true, false, nil].include?(daemon_runtime["matchesExpectedDaemon"])
       failures << "agent-run-smoke readiness summary daemonRuntime.matchesExpectedDaemon must be boolean or null"
     end
+    %w[installedDaemonPath expectedDaemonPath].each do |field|
+      if likely_user_home_path?(daemon_runtime[field])
+        failures << "agent-run-smoke readiness summary daemonRuntime.#{field} must not contain /Users/... paths"
+      end
+    end
+    %w[installedDaemonPathPrivacy expectedDaemonPathPrivacy].each do |field|
+      next if daemon_runtime[field].nil?
+      unless %w[system relative basenameOnly notProvided].include?(daemon_runtime[field].to_s)
+        failures << "agent-run-smoke readiness summary daemonRuntime.#{field} has unsupported privacy value"
+      end
+    end
     unless daemon_runtime["installedDaemonSHA256"].nil?
       require_sha256(
         daemon_runtime["installedDaemonSHA256"],
@@ -882,6 +897,15 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     unless summary["coolingCommandsRun"] == false
       failures << "agent-run-smoke readiness summary must declare coolingCommandsRun=false"
+    end
+    if likely_user_home_path?(summary["reason"])
+      failures << "agent-run-smoke readiness summary reason must not contain /Users/... paths"
+    end
+    unless summary["reasonCharacterCount"].nil?
+      require_positive_integer(summary["reasonCharacterCount"], "agent-run-smoke readiness summary reasonCharacterCount", failures)
+    end
+    unless summary["reasonPrivacy"].nil?
+      failures << "agent-run-smoke readiness summary reasonPrivacy must be omitted" unless summary["reasonPrivacy"].to_s == "omitted"
     end
     unless string_array?(summary["recoverySteps"])
       failures << "agent-run-smoke readiness summary recoverySteps must be an array of strings"

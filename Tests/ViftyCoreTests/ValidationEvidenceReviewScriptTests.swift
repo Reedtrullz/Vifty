@@ -649,6 +649,26 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewRejectsAgentRunSmokeReadinessSummaryWithPrivateReasonPath() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let readinessSummaryURL = try harness.writeAgentRunSmokeReadinessSummary(
+            reason: "private /Users/reidar/Client Secret test"
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeReadinessSummaryURL: readinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke readiness summary reason must not contain /Users/... paths"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsLocalAdHocAgentRunSmokeWithoutReadinessOrSmokeSummary() throws {
         let harness = try ValidationEvidenceReviewHarness(
             installSource: "local-ad-hoc-build",
@@ -1662,6 +1682,7 @@ private final class ValidationEvidenceReviewHarness {
         status: String = "ready",
         schemaID: String = "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json",
         agentRunSmokeReady: Bool = true,
+        reason: String = "agent run smoke test",
         safeToRequestCooling: Bool = true,
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false,
@@ -1682,7 +1703,7 @@ private final class ValidationEvidenceReviewHarness {
             "duration": "2m",
             "durationSeconds": 120,
             "maxRPMPercent": 55,
-            "reason": "agent run smoke test",
+            "reason": reason,
             "capabilitiesExitStatus": 0,
             "diagnoseExitStatus": status == "ready" ? 0 : 75,
             "modelIdentifier": "MacBookPro18,3",

@@ -64,10 +64,12 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(capabilities["reasonWithinMetadataLimit"] as? Bool, true)
 
         let daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
-        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.path)
+        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntime["installedDaemonPathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(daemonRuntime["installedDaemonPresent"] as? Bool, true)
         XCTAssertNotNil(daemonRuntime["installedDaemonSHA256"] as? String)
-        XCTAssertEqual(daemonRuntime["expectedDaemonPath"] as? String, harness.expectedDaemonURL.path)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPath"] as? String, harness.expectedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPathPrivacy"] as? String, "basenameOnly")
         XCTAssertNotNil(daemonRuntime["expectedDaemonSHA256"] as? String)
         XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
         XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
@@ -75,6 +77,37 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         let parseErrors = try XCTUnwrap(summary["parseErrors"] as? [String: Any])
         XCTAssertTrue(parseErrors["capabilities"] is NSNull)
         XCTAssertTrue(parseErrors["diagnose"] is NSNull)
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
+    func testJSONOutputUsesPrivacySafeRequestAndDaemonPathEnvelope() throws {
+        let harness = try AgentRunSmokeReadinessHarness()
+        let privateReason = "project /Users/reidar/Client Secret swift test"
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match",
+            "--reason", privateReason,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertFalse(result.stdout.contains(privateReason), result.stdout)
+        XCTAssertFalse(result.stdout.contains("/Users/reidar"), result.stdout)
+        XCTAssertFalse(result.stdout.contains(harness.rootURL.path), result.stdout)
+
+        let summary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["reason"] as? String, "omitted-for-privacy")
+        XCTAssertEqual(summary["reasonCharacterCount"] as? Int, privateReason.count)
+        XCTAssertEqual(summary["reasonPrivacy"] as? String, "omitted")
+
+        let daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntime["installedDaemonPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertEqual(daemonRuntime["expectedDaemonPath"] as? String, harness.expectedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntime["expectedDaemonPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, true)
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
@@ -202,12 +235,21 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertNotNil(properties["capabilities"] as? [String: Any])
         XCTAssertNotNil(properties["daemonRuntime"] as? [String: Any])
         XCTAssertNotNil(properties["recoverySteps"] as? [String: Any])
+        XCTAssertNotNil(properties["reasonCharacterCount"] as? [String: Any])
+        XCTAssertNotNil(properties["reasonPrivacy"] as? [String: Any])
         XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
         XCTAssertNotNil(properties["coolingBlockerIDs"] as? [String: Any])
         XCTAssertNotNil(properties["appPreferences"] as? [String: Any])
 
         let required = try XCTUnwrap(schema["required"] as? [String])
         XCTAssertTrue(required.contains("recoverySteps"))
+        XCTAssertTrue(required.contains("reasonCharacterCount"))
+        XCTAssertTrue(required.contains("reasonPrivacy"))
+
+        let daemonRuntime = try XCTUnwrap(properties["daemonRuntime"] as? [String: Any])
+        let daemonRuntimeProperties = try XCTUnwrap(daemonRuntime["properties"] as? [String: Any])
+        XCTAssertNotNil(daemonRuntimeProperties["installedDaemonPathPrivacy"] as? [String: Any])
+        XCTAssertNotNil(daemonRuntimeProperties["expectedDaemonPathPrivacy"] as? [String: Any])
     }
 }
 

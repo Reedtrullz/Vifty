@@ -17,6 +17,8 @@
     "durationSeconds",
     "maxRPMPercent",
     "reason",
+    "reasonCharacterCount",
+    "reasonPrivacy",
     "capabilitiesExitStatus",
     "diagnoseExitStatus",
     "modelIdentifier",
@@ -84,8 +86,15 @@
       "maximum": 100
     },
     "reason": {
-      "type": "string",
-      "minLength": 1
+      "const": "omitted-for-privacy",
+      "description": "The full audit reason is intentionally omitted from shareable readiness summaries. Use reasonCharacterCount for metadata-limit evidence."
+    },
+    "reasonCharacterCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reasonPrivacy": {
+      "const": "omitted"
     },
     "capabilitiesExitStatus": {
       "type": "integer",
@@ -420,16 +429,30 @@
       "additionalProperties": false,
       "required": [
         "installedDaemonPath",
+        "installedDaemonPathPrivacy",
         "installedDaemonPresent",
         "installedDaemonSHA256",
         "expectedDaemonPath",
+        "expectedDaemonPathPrivacy",
         "expectedDaemonSHA256",
         "matchesExpectedDaemon",
         "matchRequired"
       ],
       "properties": {
         "installedDaemonPath": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "A share-safe path display value. Private absolute paths are reduced to basename-only."
+        },
+        "installedDaemonPathPrivacy": {
+          "enum": [
+            "system",
+            "relative",
+            "basenameOnly",
+            "notProvided"
+          ]
         },
         "installedDaemonPresent": {
           "type": "boolean"
@@ -445,6 +468,15 @@
           "type": [
             "string",
             "null"
+          ],
+          "description": "A share-safe path display value. Private absolute paths are reduced to basename-only."
+        },
+        "expectedDaemonPathPrivacy": {
+          "enum": [
+            "system",
+            "relative",
+            "basenameOnly",
+            "notProvided"
           ]
         },
         "expectedDaemonSHA256": {

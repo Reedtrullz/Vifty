@@ -228,7 +228,9 @@ with `readOnly: true` and `coolingCommandsRun: false` after checking only
 readiness summary can be saved with
 `AGENT_RUN_SMOKE_READINESS_SUMMARY=.build/agent-run-smoke-readiness.json`, and it
 copies diagnose `recoverySteps` so blocked supervised-smoke preflights carry the
-next safe actions without asking agents to parse prose. The
+next safe actions without asking agents to parse prose. Saved readiness
+summaries omit the full reason text, record `reasonCharacterCount`, and reduce
+private daemon paths to basename-only display values with path privacy labels. The
 collector itself first performs read-only capabilities/diagnose checks, but when readiness is
 safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
 with exactly one structured cooldown retry if the daemon returns
