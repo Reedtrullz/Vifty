@@ -1315,6 +1315,35 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
   end
 
+  def validate_agent_run_smoke_child_command(summary, failures)
+    child_command_name = summary["childCommandName"]
+    unless child_command_name.is_a?(String) &&
+        !child_command_name.empty? &&
+        !child_command_name.include?("/")
+      failures << "agent-run-smoke summary childCommandName must be a basename without slashes"
+    end
+
+    unless %w[path pathLookup].include?(summary["childCommandKind"].to_s)
+      failures << "agent-run-smoke summary childCommandKind must be path or pathLookup"
+    end
+
+    child_argument_count = summary["childArgumentCount"]
+    unless child_argument_count.is_a?(Integer) && child_argument_count >= 0
+      failures << "agent-run-smoke summary childArgumentCount must be a nonnegative integer"
+    end
+
+    unless summary["childArgumentsPrivacy"].to_s == "omitted"
+      failures << "agent-run-smoke summary childArgumentsPrivacy must be omitted"
+    end
+
+    child_command = summary["childCommand"]
+    unless child_command.is_a?(Array) &&
+        child_command.length == 1 &&
+        child_command.first == child_command_name
+      failures << "agent-run-smoke summary childCommand must contain only the basename command display value"
+    end
+  end
+
   def validate_agent_run_smoke_daemon_runtime(summary, failures)
     daemon_runtime = summary["daemonRuntime"]
     unless daemon_runtime.is_a?(Hash)
@@ -1422,6 +1451,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
     validate_agent_run_smoke_provenance(summary, failures)
     validate_agent_run_smoke_viftyctl_path(summary, failures)
+    validate_agent_run_smoke_child_command(summary, failures)
     validate_agent_run_smoke_daemon_runtime(summary, failures)
 
     unless summary["schemaVersion"] == 1

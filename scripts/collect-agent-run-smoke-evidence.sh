@@ -337,6 +337,15 @@ share_safe_path_privacy() {
   fi
 }
 
+child_command_kind() {
+  local command="$1"
+  if [[ "${command}" == */* ]]; then
+    printf 'path'
+  else
+    printf 'pathLookup'
+  fi
+}
+
 VIFTYCTL_COMMAND_NAME="$(basename "${VIFTYCTL}")"
 VIFTYCTL_PATH_PRIVACY="basenameOnly"
 VIFTYCTL_PATH_KIND="$(classify_viftyctl_path_kind)"
@@ -344,6 +353,10 @@ SAFE_INSTALLED_DAEMON_PATH="$(share_safe_path_value "${INSTALLED_DAEMON_PATH}")"
 INSTALLED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${INSTALLED_DAEMON_PATH}")"
 SAFE_EXPECTED_DAEMON_PATH="$(share_safe_path_value "${EXPECTED_DAEMON_PATH}")"
 EXPECTED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${EXPECTED_DAEMON_PATH}")"
+CHILD_COMMAND_NAME="$(/usr/bin/basename "${CHILD_COMMAND[0]}")"
+CHILD_COMMAND_KIND="$(child_command_kind "${CHILD_COMMAND[0]}")"
+CHILD_ARGUMENT_COUNT=$((${#CHILD_COMMAND[@]} - 1))
+CHILD_ARGUMENTS_PRIVACY="omitted"
 
 if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
   INSTALLED_DAEMON_PRESENT="true"
@@ -598,7 +611,11 @@ reason=omitted-for-privacy
 reasonCharacterCount=${#REASON}
 reasonPrivacy=omitted
 auditLimit=${AUDIT_LIMIT}
-childCommand=${CHILD_COMMAND[*]}
+childCommand=${CHILD_COMMAND_NAME}
+childCommandName=${CHILD_COMMAND_NAME}
+childCommandKind=${CHILD_COMMAND_KIND}
+childArgumentCount=${CHILD_ARGUMENT_COUNT}
+childArgumentsPrivacy=${CHILD_ARGUMENTS_PRIVACY}
 EOF
 }
 
@@ -638,10 +655,11 @@ write_summary_json() {
       installed_daemon_path_privacy, installed_daemon_sha256,
       expected_daemon_path, expected_daemon_path_privacy, expected_daemon_sha256,
       daemon_matches_expected, daemon_match_required, workload, duration, max_rpm_percent,
-      reason_character_count, status, read_only, cooling_commands_run, run_status,
+      reason_character_count, child_command_name, child_command_kind,
+      child_argument_count, child_arguments_privacy, status, read_only, cooling_commands_run, run_status,
       skipped_reason, skip_reasons_text, audit_limit, pre_capabilities_path, pre_diagnose_path,
       run_json_path, run_stdout_name, run_stderr_name, rate_limit_retry_attempted,
-      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(39)
+      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(43)
 
     def boolean_or_nil(value)
       [true, false].include?(value) ? value : nil
@@ -791,7 +809,11 @@ write_summary_json() {
       "reasonCharacterCount" => reason_character_count.to_i,
       "reasonPrivacy" => "omitted",
       "auditLimit" => audit_limit.to_i,
-      "childCommand" => ARGV,
+      "childCommand" => [child_command_name],
+      "childCommandName" => child_command_name,
+      "childCommandKind" => child_command_kind,
+      "childArgumentCount" => child_argument_count.to_i,
+      "childArgumentsPrivacy" => child_arguments_privacy,
       "preflight" => {
         "capabilitiesExitStatus" => commands.find { |command| command["name"] == "pre-capabilities" }&.fetch("status"),
         "capabilitiesSchemaVersion" => capabilities["schemaVersion"],
@@ -827,13 +849,16 @@ write_summary_json() {
     "${EXPECTED_DAEMON_SHA256}" "${DAEMON_MATCHES_EXPECTED}" \
     "${REQUIRE_DAEMON_MATCH}" \
     "test" "${DURATION}" \
-    "${MAX_RPM_PERCENT}" "${#REASON}" "${status}" "${read_only}" \
+    "${MAX_RPM_PERCENT}" "${#REASON}" \
+    "${CHILD_COMMAND_NAME}" "${CHILD_COMMAND_KIND}" \
+    "${CHILD_ARGUMENT_COUNT}" "${CHILD_ARGUMENTS_PRIVACY}" \
+    "${status}" "${read_only}" \
     "${cooling_commands_run}" "${run_status}" "${skipped_reason}" \
     "${skip_reasons}" "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-capabilities.json" \
     "${OUTPUT_DIR}/pre-diagnose.json" \
     "${OUTPUT_DIR}/${run_stdout_name}" "${run_stdout_name}" "${run_stderr_name}" \
     "${rate_limit_retry_attempted}" "${rate_limit_retry_after}" \
-    "${rate_limit_initial_status}" "${CHILD_COMMAND[@]}" \
+    "${rate_limit_initial_status}" \
     > "${SUMMARY_JSON_PATH}"
 }
 

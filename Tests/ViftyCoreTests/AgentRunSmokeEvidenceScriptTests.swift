@@ -53,6 +53,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(metadata.contains("reason=omitted-for-privacy"))
         XCTAssertTrue(metadata.contains("reasonCharacterCount=20"))
         XCTAssertTrue(metadata.contains("reasonPrivacy=omitted"))
+        XCTAssertTrue(metadata.contains("childCommandName=sleep"))
+        XCTAssertTrue(metadata.contains("childCommandKind=path"))
+        XCTAssertTrue(metadata.contains("childArgumentCount=1"))
+        XCTAssertTrue(metadata.contains("childArgumentsPrivacy=omitted"))
         XCTAssertFalse(metadata.contains(harness.rootURL.path))
 
         let daemonRuntime = try harness.read("daemon-runtime.tsv")
@@ -108,7 +112,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["reason"] as? String, "omitted-for-privacy")
         XCTAssertEqual(summary["reasonCharacterCount"] as? Int, 20)
         XCTAssertEqual(summary["reasonPrivacy"] as? String, "omitted")
-        XCTAssertEqual(summary["childCommand"] as? [String], ["/bin/sleep", "5"])
+        XCTAssertEqual(summary["childCommand"] as? [String], ["sleep"])
+        XCTAssertEqual(summary["childCommandName"] as? String, "sleep")
+        XCTAssertEqual(summary["childCommandKind"] as? String, "path")
+        XCTAssertEqual(summary["childArgumentCount"] as? Int, 1)
+        XCTAssertEqual(summary["childArgumentsPrivacy"] as? String, "omitted")
         let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
         XCTAssertEqual(preflight["state"] as? String, "ready")
         XCTAssertEqual(preflight["safeToRequestCooling"] as? Bool, true)
@@ -259,6 +267,55 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(daemonRuntimeSummary["installedDaemonPathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPath"] as? String, harness.expectedDaemonURL.lastPathComponent)
         XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPathPrivacy"] as? String, "basenameOnly")
+    }
+
+    func testSmokeCollectorSummaryUsesPrivacySafeChildCommandEnvelope() throws {
+        let harness = try AgentRunSmokeEvidenceHarness()
+        let privateToolURL = harness.rootURL
+            .appendingPathComponent("Private Client", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent("client-build-tool")
+        try FileManager.default.createDirectory(
+            at: privateToolURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "#!/bin/sh\nexit 0\n".write(to: privateToolURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: privateToolURL.path)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--",
+            privateToolURL.path,
+            "--token",
+            "super-secret-token"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(try harness.loggedArguments().contains { invocation in
+            invocation.contains(privateToolURL.path) && invocation.contains("super-secret-token")
+        })
+
+        let metadata = try harness.read("metadata.txt")
+        XCTAssertFalse(metadata.contains("/Users/reidar"), metadata)
+        XCTAssertFalse(metadata.contains(harness.rootURL.path), metadata)
+        XCTAssertFalse(metadata.contains("super-secret-token"), metadata)
+        XCTAssertTrue(metadata.contains("childCommandName=client-build-tool"))
+        XCTAssertTrue(metadata.contains("childCommandKind=path"))
+        XCTAssertTrue(metadata.contains("childArgumentCount=2"))
+        XCTAssertTrue(metadata.contains("childArgumentsPrivacy=omitted"))
+
+        let summaryText = try harness.read("agent-run-smoke-evidence-summary.json")
+        XCTAssertFalse(summaryText.contains("/Users/reidar"), summaryText)
+        XCTAssertFalse(summaryText.contains(harness.rootURL.path), summaryText)
+        XCTAssertFalse(summaryText.contains("super-secret-token"), summaryText)
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["childCommand"] as? [String], ["client-build-tool"])
+        XCTAssertEqual(summary["childCommandName"] as? String, "client-build-tool")
+        XCTAssertEqual(summary["childCommandKind"] as? String, "path")
+        XCTAssertEqual(summary["childArgumentCount"] as? Int, 2)
+        XCTAssertEqual(summary["childArgumentsPrivacy"] as? String, "omitted")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenRequiredDaemonDoesNotMatchExpectedBuild() throws {
@@ -810,6 +867,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "sourceArtifactSHA256",
             "sourceArtifactBytes",
             "daemonRuntime",
+            "childCommand",
+            "childCommandName",
+            "childCommandKind",
+            "childArgumentCount",
+            "childArgumentsPrivacy",
             "preflight",
             "run",
             "commands",
@@ -829,6 +891,16 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reason["const"] as? String, "omitted-for-privacy")
         let reasonPrivacy = try XCTUnwrap(properties["reasonPrivacy"] as? [String: Any])
         XCTAssertEqual(reasonPrivacy["const"] as? String, "omitted")
+        let childCommand = try XCTUnwrap(properties["childCommand"] as? [String: Any])
+        XCTAssertEqual(childCommand["maxItems"] as? Int, 1)
+        let childCommandName = try XCTUnwrap(properties["childCommandName"] as? [String: Any])
+        XCTAssertEqual(childCommandName["pattern"] as? String, "^[^/]+$")
+        let childCommandKind = try XCTUnwrap(properties["childCommandKind"] as? [String: Any])
+        XCTAssertEqual(childCommandKind["enum"] as? [String], ["path", "pathLookup"])
+        let childArgumentCount = try XCTUnwrap(properties["childArgumentCount"] as? [String: Any])
+        XCTAssertEqual(childArgumentCount["minimum"] as? Int, 0)
+        let childArgumentsPrivacy = try XCTUnwrap(properties["childArgumentsPrivacy"] as? [String: Any])
+        XCTAssertEqual(childArgumentsPrivacy["const"] as? String, "omitted")
         let daemonRuntime = try XCTUnwrap(defs["daemonRuntime"] as? [String: Any])
         let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
         for field in [

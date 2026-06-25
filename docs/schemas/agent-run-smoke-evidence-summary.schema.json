@@ -30,6 +30,10 @@
     "reasonPrivacy",
     "auditLimit",
     "childCommand",
+    "childCommandName",
+    "childCommandKind",
+    "childArgumentCount",
+    "childArgumentsPrivacy",
     "preflight",
     "run",
     "commands"
@@ -127,9 +131,33 @@
     "childCommand": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 1,
+      "description": "Share-safe child command display. Full paths and child arguments are intentionally omitted; use childCommandName, childCommandKind, and childArgumentCount for review.",
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^[^/]+$"
       }
+    },
+    "childCommandName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/]+$",
+      "description": "Basename or PATH command token for the smoke child command."
+    },
+    "childCommandKind": {
+      "enum": [
+        "path",
+        "pathLookup"
+      ],
+      "description": "Whether the child command was supplied as a path or as a PATH lookup token."
+    },
+    "childArgumentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of child arguments after the executable. Argument values are intentionally omitted from shareable summaries."
+    },
+    "childArgumentsPrivacy": {
+      "const": "omitted"
     },
     "preflight": {
       "$ref": "#/$defs/preflight"

@@ -937,6 +937,38 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryWithPrivateChildCommand() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "passed")
+        var summary = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: smokeSummaryURL)) as? [String: Any]
+        )
+        summary["childCommand"] = [
+            "/Users/reidar/Private Client/bin/client-build-tool",
+            "--token",
+            "super-secret-token"
+        ]
+        summary["childCommandName"] = "client-build-tool"
+        summary["childCommandKind"] = "path"
+        summary["childArgumentCount"] = 2
+        summary["childArgumentsPrivacy"] = "omitted"
+        let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: smokeSummaryURL)
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary childCommand must contain only the basename command display value"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeLocalAdHocProvenanceWithoutSourceSHA() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -2137,7 +2169,11 @@ private final class ValidationEvidenceReviewHarness {
             "reasonCharacterCount": 20,
             "reasonPrivacy": "omitted",
             "auditLimit": 20,
-            "childCommand": ["/bin/sleep", "5"],
+            "childCommand": ["sleep"],
+            "childCommandName": "sleep",
+            "childCommandKind": "path",
+            "childArgumentCount": 1,
+            "childArgumentsPrivacy": "omitted",
             "preflight": preflight,
             "run": run,
             "commands": commands
