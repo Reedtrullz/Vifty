@@ -157,8 +157,21 @@ if grep -Fq 'uses: actions/cache@v4' "${CI_WORKFLOW}" || ! grep -Fq 'uses: actio
   exit 1
 fi
 
+if ! grep -Fq 'SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-ci-swiftpm-build' "${CI_WORKFLOW}" ||
+   ! grep -Fq 'path: ${{ runner.temp }}/vifty-ci-swiftpm-build' "${CI_WORKFLOW}" ||
+   ! grep -Fq 'swift test --build-path "${SWIFT_BUILD_PATH}"' "${CI_WORKFLOW}"; then
+  echo "error: ${CI_WORKFLOW} must isolate SwiftPM products with SWIFT_BUILD_PATH" >&2
+  exit 1
+fi
+
 if ! grep -Fq 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must opt GitHub JavaScript actions into Node.js 24" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-release-swiftpm-build' "${RELEASE_WORKFLOW}" ||
+   ! grep -Fq 'swift test --build-path "${SWIFT_BUILD_PATH}"' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must isolate SwiftPM products with SWIFT_BUILD_PATH" >&2
   exit 1
 fi
 

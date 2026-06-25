@@ -167,6 +167,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must use actions/cache@v5 for native Node.js 24 support"))
     }
 
+    func testValidatorRejectsCIWorkflowWithoutIsolatedSwiftBuildPath() throws {
+        let harness = try ReleaseMetadataHarness(includeCIWorkflowSwiftBuildPath: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must isolate SwiftPM products with SWIFT_BUILD_PATH"))
+    }
+
     func testValidatorRejectsReleaseWorkflowWithoutNode24ActionsRuntime() throws {
         let harness = try ReleaseMetadataHarness(includeReleaseWorkflowNode24ActionsRuntime: false)
 
@@ -174,6 +183,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 1)
         XCTAssertTrue(result.stderr.contains(".github/workflows/release.yml must opt GitHub JavaScript actions into Node.js 24"))
+    }
+
+    func testValidatorRejectsReleaseWorkflowWithoutIsolatedSwiftBuildPath() throws {
+        let harness = try ReleaseMetadataHarness(includeReleaseWorkflowSwiftBuildPath: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/release.yml must isolate SwiftPM products with SWIFT_BUILD_PATH"))
     }
 
     func testValidatorRejectsWorkflowWithoutNotarization() throws {
@@ -1436,7 +1454,9 @@ private final class ReleaseMetadataHarness {
         includeVerifyTag: Bool = true,
         includeCIWorkflowNode24ActionsRuntime: Bool = true,
         includeCINode24CacheAction: Bool = true,
+        includeCIWorkflowSwiftBuildPath: Bool = true,
         includeReleaseWorkflowNode24ActionsRuntime: Bool = true,
+        includeReleaseWorkflowSwiftBuildPath: Bool = true,
         includeCaskDisable: Bool = false
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -1465,7 +1485,8 @@ private final class ReleaseMetadataHarness {
         )
         try writeCIWorkflow(
             includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime,
-            includeNode24CacheAction: includeCINode24CacheAction
+            includeNode24CacheAction: includeCINode24CacheAction,
+            includeSwiftBuildPath: includeCIWorkflowSwiftBuildPath
         )
         try writeReleaseWorkflow(
             includeTagVersionDerivation: includeTagVersionDerivation,
@@ -1486,7 +1507,8 @@ private final class ReleaseMetadataHarness {
             includePublishedChecksum: includePublishedChecksum,
             includeReleaseChecklist: includeReleaseChecklist,
             includeVerifyTag: includeVerifyTag,
-            includeNode24ActionsRuntime: includeReleaseWorkflowNode24ActionsRuntime
+            includeNode24ActionsRuntime: includeReleaseWorkflowNode24ActionsRuntime,
+            includeSwiftBuildPath: includeReleaseWorkflowSwiftBuildPath
         )
     }
 
@@ -1935,7 +1957,8 @@ private final class ReleaseMetadataHarness {
         includePublishedChecksum: Bool,
         includeReleaseChecklist: Bool,
         includeVerifyTag: Bool,
-        includeNode24ActionsRuntime: Bool
+        includeNode24ActionsRuntime: Bool,
+        includeSwiftBuildPath: Bool
     ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
             ? """
@@ -2031,10 +2054,18 @@ private final class ReleaseMetadataHarness {
         let verifyTagLine = includeVerifyTag
             ? "                    --verify-tag"
             : ""
+        let swiftBuildPathEnvLine = includeSwiftBuildPath
+            ? "              SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-release-swiftpm-build\n"
+            : ""
+        let testCommand = includeSwiftBuildPath
+            ? "swift test --build-path \"${SWIFT_BUILD_PATH}\""
+            : "swift test"
         let contents = """
         name: Release
         \(node24RuntimeLines)jobs:
           signed-notarized-app:
+            env:
+        \(swiftBuildPathEnvLine)      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
             steps:
               - name: Validate release version
                 run: |
@@ -2051,6 +2082,8 @@ private final class ReleaseMetadataHarness {
                   \(buildCommand)
                   \(releaseHelperIdentifierVerificationLine)
                   \(launchDaemonTeamIDVerificationLine)
+              - name: Run tests
+                run: \(testCommand)
               - name: Create release artifacts
                 run: |
                   ZIP_PATH=".build/Vifty-v${VERSION}.zip"
@@ -2081,7 +2114,8 @@ private final class ReleaseMetadataHarness {
 
     private func writeCIWorkflow(
         includeNode24ActionsRuntime: Bool,
-        includeNode24CacheAction: Bool
+        includeNode24CacheAction: Bool,
+        includeSwiftBuildPath: Bool
     ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
             ? """
@@ -2091,13 +2125,32 @@ private final class ReleaseMetadataHarness {
         """
             : ""
         let cacheAction = includeNode24CacheAction ? "actions/cache@v5" : "actions/cache@v4"
+        let swiftBuildPathEnvLines = includeSwiftBuildPath
+            ? """
+            env:
+              SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-ci-swiftpm-build
+
+        """
+            : ""
+        let cachePath = includeSwiftBuildPath
+            ? "                path: ${{ runner.temp }}/vifty-ci-swiftpm-build"
+            : "                path: .build"
+        let testCommand = includeSwiftBuildPath
+            ? "swift test --build-path \"${SWIFT_BUILD_PATH}\""
+            : "swift test"
         let contents = """
         name: CI
         \(node24RuntimeLines)jobs:
           swiftpm:
-            steps:
+        \(swiftBuildPathEnvLines)    steps:
               - name: Cache SPM build artifacts
                 uses: \(cacheAction)
+                with:
+        \(cachePath)
+              - name: Run tests
+                run: \(testCommand)
+              - name: Build release app bundle
+                run: make app CONFIGURATION=release
         """
         try contents.write(
             to: rootURL.appendingPathComponent(".github/workflows/ci.yml"),

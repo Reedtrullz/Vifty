@@ -29,6 +29,7 @@ jobs:
 
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-release-swiftpm-build
 
     steps:
       - name: Check out release tag
@@ -103,7 +104,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
 
       - name: Run tests
-        run: swift test
+        run: swift test --build-path "${SWIFT_BUILD_PATH}"
 
       - name: Build signed app
         env:

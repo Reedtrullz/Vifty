@@ -110,7 +110,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs `ViftyCoreTests` (862 tests)."))
+        XCTAssertTrue(agents.contains("`swift test` runs the full `ViftyCoreTests` XCTest suite."))
+        XCTAssertFalse(agents.contains("862 tests"))
+        XCTAssertFalse(agents.contains("904 tests"))
+        XCTAssertFalse(agents.contains("905 tests"))
         XCTAssertTrue(agents.contains("`scripts/check-agent-run-smoke-readiness.sh`"))
         XCTAssertTrue(agents.contains("read-only preflight before supervised `viftyctl run` smoke evidence"))
         XCTAssertTrue(agents.contains("`Sources/Vifty/AppPreferencesStore.swift`"))
