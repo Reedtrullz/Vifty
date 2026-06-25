@@ -741,6 +741,8 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewSource"] as? String, "privacy-review.tsv")
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewStatus"] as? String, "0")
         XCTAssertEqual(summary["agentRunSmokeStartupMode"] as? String, "Auto")
         XCTAssertEqual(summary["agentRunSmokeStartupModeSource"] as? String, "persisted")
         XCTAssertEqual(summary["agentRunSmokeStartupModeReadError"] as? String, "")
@@ -769,6 +771,8 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "passed")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, smokeSummarySource(smokeSummaryURL))
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewSource"] as? String, "privacy-review.tsv")
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewStatus"] as? String, "0")
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
@@ -877,9 +881,11 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
             redaction-needed\tviftyctl-run.json\t1\tuser-home-path
             """
         )
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/agent-run-privacy-review-failed.json")
 
         let result = try harness.runReview(
             mode: "supported-hardware",
+            summaryURL: summaryURL,
             manualSmokeResult: "passed-auto-restored",
             manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
             agentRunSmokeSummaryURL: smokeSummaryURL
@@ -890,6 +896,10 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
             result.stderr.contains("agent-run-smoke privacy-review found redaction-needed entry in viftyctl-run.json:1"),
             result.stderr
         )
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "failed")
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewSource"] as? String, "privacy-review.tsv")
+        XCTAssertEqual(summary["agentRunSmokePrivacyReviewStatus"] as? String, "1")
     }
 
     func testReviewRejectsAgentRunSmokeSummarySchemaDrift() throws {

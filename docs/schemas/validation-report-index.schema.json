@@ -255,6 +255,8 @@
         "agentRunSmokeSource",
         "agentRunSmokeReadinessSource",
         "agentRunSmokeValidated",
+        "agentRunSmokePrivacyReviewSource",
+        "agentRunSmokePrivacyReviewStatus",
         "agentRunSmokeStartupMode",
         "agentRunSmokeStartupModeSource",
         "agentRunSmokeStartupModeReadError",
@@ -334,6 +336,15 @@
         },
         "agentRunSmokeValidated": {
           "$ref": "#/$defs/booleanString"
+        },
+        "agentRunSmokePrivacyReviewSource": {
+          "type": "string",
+          "description": "Bundle-local privacy-review TSV path reviewed before accepting captured supervised agent-run smoke evidence. Empty for issue-template-only or legacy agent-run smoke evidence."
+        },
+        "agentRunSmokePrivacyReviewStatus": {
+          "type": "string",
+          "pattern": "^(|[0-9]+)$",
+          "description": "Recorded status from the captured supervised agent-run smoke privacy-review command. Passing reviewed bundles should record 0."
         },
         "agentRunSmokeStartupMode": {
           "$ref": "#/$defs/agentRunSmokeStartupMode",

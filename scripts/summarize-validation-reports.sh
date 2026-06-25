@@ -204,6 +204,11 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       failures << "#{path} agentRunSmokeStartupModeSource is not a supported value"
       valid = false
     end
+    privacy_review_status = result.fetch("agentRunSmokePrivacyReviewStatus", "").to_s
+    unless privacy_review_status.empty? || privacy_review_status.match?(/\A[0-9]+\z/)
+      failures << "#{path} agentRunSmokePrivacyReviewStatus must be blank or a nonnegative integer string"
+      valid = false
+    end
 
     unless %w[
       requestCooling
@@ -506,6 +511,16 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     "#{mode_text} (#{source_text}#{read_error_text})"
   end
 
+  def agent_run_privacy_evidence_for(row)
+    source = row["agentRunSmokePrivacyReviewSource"].to_s.strip
+    status = row["agentRunSmokePrivacyReviewStatus"].to_s.strip
+    return "" if source.empty? && status.empty?
+
+    source_text = source.empty? ? "unknown source" : source
+    status_text = status.empty? ? "unknown status" : "status #{status}"
+    "#{status_text} (#{source_text})"
+  end
+
   def render_markdown_matrix(rows)
     hardware_rows = rows.reject { |row| row["mode"] == "release" }
     groups = Hash.new { |hash, key| hash[key] = [] }
@@ -546,12 +561,14 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       agent_sources = group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| row["agentRunSmokeSource"] }
       manual_joined = join_unique(manual_sources)
       agent_joined = join_unique(agent_sources)
+      agent_privacy_joined = join_unique(group.select { |row| row["agentRunSmokeValidated"] == "true" }.map { |row| agent_run_privacy_evidence_for(row) })
       agent_startup_joined = join_unique(group.map { |row| agent_run_startup_evidence_for(row) })
       evidence << "source: #{source_joined}" unless source_joined.empty?
       evidence << "reviewed: #{reviewed_joined}" unless reviewed_joined.empty?
       evidence << "manual: #{manual_joined}" unless manual_joined.empty?
       evidence << "manual: not recorded" if candidate_count.positive? && validated_count.zero?
       evidence << "agent-run: #{agent_joined}" unless agent_joined.empty?
+      evidence << "agent-run privacy: #{agent_privacy_joined}" unless agent_privacy_joined.empty?
       evidence << "agent-run startup: #{agent_startup_joined}" unless agent_startup_joined.empty?
       evidence << "reviewed index only" if evidence.empty?
 
@@ -622,6 +639,8 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
       "agentRunSmokeReadinessSource" => result["agentRunSmokeReadinessSource"].to_s,
       "agentRunSmokeValidated" => boolean_string(agent_run_smoke_validated),
+      "agentRunSmokePrivacyReviewSource" => result["agentRunSmokePrivacyReviewSource"].to_s,
+      "agentRunSmokePrivacyReviewStatus" => result["agentRunSmokePrivacyReviewStatus"].to_s,
       "agentRunSmokeStartupMode" => result["agentRunSmokeStartupMode"].to_s,
       "agentRunSmokeStartupModeSource" => result["agentRunSmokeStartupModeSource"].to_s,
       "agentRunSmokeStartupModeReadError" => result["agentRunSmokeStartupModeReadError"].to_s,
@@ -722,6 +741,8 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     agentRunSmokeSource
     agentRunSmokeReadinessSource
     agentRunSmokeValidated
+    agentRunSmokePrivacyReviewSource
+    agentRunSmokePrivacyReviewStatus
     agentRunSmokeStartupMode
     agentRunSmokeStartupModeSource
     agentRunSmokeStartupModeReadError

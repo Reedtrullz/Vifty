@@ -24,6 +24,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
             agentRunSmokeResult: "passed-auto-restored",
             agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke",
             agentRunSmokeReadinessSource: "agent-run-smoke-readiness/agent-run-smoke-readiness.json",
+            agentRunSmokePrivacyReviewSource: "privacy-review.tsv",
+            agentRunSmokePrivacyReviewStatus: "0",
             agentRunSmokeStartupMode: "Auto",
             agentRunSmokeStartupModeSource: "persisted"
         )
@@ -70,7 +72,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(tsv.contains("supported-hardware-evidence-needs-manual-smoke\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("validated-hardware-evidence\tsource-build-tag\tv1.1.0"))
         XCTAssertTrue(tsv.contains("\tpassed-auto-restored"))
-        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\tmanual-smoke-readiness/manual-smoke-readiness.json\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\tagent-run-smoke-readiness/agent-run-smoke-readiness.json\ttrue\tAuto\tpersisted\t\"\"\tMacBookPro18,3\tMacBookPro18"))
+        XCTAssertTrue(tsv.contains("https://github.com/reidar/vifty/issues/42\tmanual-smoke-readiness/manual-smoke-readiness.json\ttrue\tpassed-auto-restored\thttps://github.com/reidar/vifty/issues/42#agent-run-smoke\tagent-run-smoke-readiness/agent-run-smoke-readiness.json\ttrue\tprivacy-review.tsv\t0\tAuto\tpersisted\t\"\"\tMacBookPro18,3\tMacBookPro18"))
         XCTAssertTrue(tsv.contains("MacBookPro18,3\tMacBookPro18\ttrue\ttrue\tready\trequestCooling\tnone\t\"\"\t\"\"\ttrue\ttrue"))
         XCTAssertTrue(tsv.contains("Mac14,2\tMac14\ttrue\tfalse\tblocked\tdoNotRequestCooling\tcollectHardwareEvidence\t\"\"\t\"\"\tfalse\ttrue"))
         XCTAssertTrue(tsv.contains("safe-block-evidence\tsource-build-tag\tv1.1.0"))
@@ -113,6 +115,10 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reports.contains {
             ($0["agentRunSmokeReadinessSource"] as? String) == "agent-run-smoke-readiness/agent-run-smoke-readiness.json"
         })
+        XCTAssertTrue(reports.contains {
+            ($0["agentRunSmokePrivacyReviewSource"] as? String) == "privacy-review.tsv" &&
+                ($0["agentRunSmokePrivacyReviewStatus"] as? String) == "0"
+        })
         XCTAssertTrue(reports.contains { ($0["modelIdentifier"] as? String) == "Mac14,2" && ($0["modelFamily"] as? String) == "Mac14" })
         let countsByClaim = try XCTUnwrap(json["countsByClaim"] as? [String: Int])
         XCTAssertEqual(countsByClaim["supported-hardware-evidence-needs-manual-smoke"], 1)
@@ -149,7 +155,7 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(markdown.contains("source-first and unsigned-dev reports as compatibility evidence only"))
         XCTAssertTrue(markdown.contains("| Model family | Public status | Validated reports | Candidate reports | Agent run smoke reports | Safe-block reports | Rejected reports | Model identifiers | Install sources | Readiness | Evidence |"))
         XCTAssertTrue(markdown.contains("| Mac14 | Expected blocked | 0 | 0 | 0 | 1 | 0 | Mac14,2 | source-build-tag | safeToRequestCooling=false<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=doNotRequestCooling<br>recoveryAction=collectHardwareEvidence | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11 |"))
-        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | safeToRequestCooling=true<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=requestCooling<br>recoveryAction=none | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke<br>agent-run startup: Auto (persisted) |"))
+        XCTAssertTrue(markdown.contains("| MacBookPro18 | Validated hardware evidence | 1 | 1 | 1 | 0 | 1 | MacBookPro18,3 | source-build-tag | safeToRequestCooling=true<br>daemonControlPathReady=true<br>manualControlActive=false<br>agentAction=requestCooling<br>recoveryAction=none | source: v1.1.0@aaaaaaa<br>reviewed: 2026-06-11<br>manual: https://github.com/reidar/vifty/issues/42<br>agent-run: https://github.com/reidar/vifty/issues/42#agent-run-smoke<br>agent-run privacy: status 0 (privacy-review.tsv)<br>agent-run startup: Auto (persisted) |"))
         XCTAssertFalse(markdown.contains("release-trust-evidence"))
     }
 
@@ -337,6 +343,27 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         )
     }
 
+    func testSummarizerRejectsMalformedAgentRunSmokePrivacyReviewStatus() throws {
+        let harness = try ValidationReportSummaryHarness()
+        let reviewURL = try harness.writeReviewResult(
+            at: "bad-agent-privacy-status/review-result.json",
+            status: "passed",
+            mode: "supported-hardware",
+            modelIdentifier: "MacBookPro18,1",
+            safeToRequestCooling: true,
+            agentRunSmokePrivacyReviewSource: "privacy-review.tsv",
+            agentRunSmokePrivacyReviewStatus: "passed"
+        )
+
+        let result = try harness.runSummarizer(["--input", reviewURL.path])
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agentRunSmokePrivacyReviewStatus must be blank or a nonnegative integer string"),
+            result.stderr
+        )
+    }
+
     func testValidationReportIndexSchemaDocumentsSummarizerContract() throws {
         let schemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/validation-report-index.schema.json")
@@ -386,6 +413,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertTrue(reportRequired.contains("coolingBlockerIDs"))
         XCTAssertTrue(reportRequired.contains("manualSmokeReadinessSource"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeReadinessSource"))
+        XCTAssertTrue(reportRequired.contains("agentRunSmokePrivacyReviewSource"))
+        XCTAssertTrue(reportRequired.contains("agentRunSmokePrivacyReviewStatus"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupMode"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeSource"))
         XCTAssertTrue(reportRequired.contains("agentRunSmokeStartupModeReadError"))
@@ -410,6 +439,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(reportProperties["coolingBlockerIDs"] as? [String: String], ["type": "string"])
         let agentRunSmokeReadinessSource = try XCTUnwrap(reportProperties["agentRunSmokeReadinessSource"] as? [String: Any])
         XCTAssertEqual(agentRunSmokeReadinessSource["type"] as? String, "string")
+        let agentRunSmokePrivacyReviewStatus = try XCTUnwrap(reportProperties["agentRunSmokePrivacyReviewStatus"] as? [String: Any])
+        XCTAssertEqual(agentRunSmokePrivacyReviewStatus["pattern"] as? String, "^(|[0-9]+)$")
         let reportGeneratedAt = try XCTUnwrap(reportProperties["reviewGeneratedAtUTC"] as? [String: Any])
         XCTAssertEqual(reportGeneratedAt["$ref"] as? String, "#/$defs/utcTimestamp")
         let reportStartupMode = try XCTUnwrap(reportProperties["agentRunSmokeStartupMode"] as? [String: Any])
@@ -507,6 +538,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertFalse(required.contains("agentRunSmokeStartupModeSource"))
         XCTAssertFalse(required.contains("agentRunSmokeStartupModeReadError"))
         XCTAssertFalse(required.contains("agentRunSmokeReadinessSource"))
+        XCTAssertFalse(required.contains("agentRunSmokePrivacyReviewSource"))
+        XCTAssertFalse(required.contains("agentRunSmokePrivacyReviewStatus"))
         XCTAssertFalse(required.contains("failedCheckIDs"))
         XCTAssertFalse(required.contains("coolingBlockerIDs"))
 
@@ -515,6 +548,8 @@ final class ValidationReportSummaryScriptTests: XCTestCase {
         XCTAssertEqual(properties["coolingBlockerIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertNotNil(properties["manualSmokeReadinessSource"] as? [String: Any])
         XCTAssertNotNil(properties["agentRunSmokeReadinessSource"] as? [String: Any])
+        let agentRunSmokePrivacyReviewStatus = try XCTUnwrap(properties["agentRunSmokePrivacyReviewStatus"] as? [String: Any])
+        XCTAssertEqual(agentRunSmokePrivacyReviewStatus["pattern"] as? String, "^(|[0-9]+)$")
         let startupMode = try XCTUnwrap(properties["agentRunSmokeStartupMode"] as? [String: Any])
         XCTAssertEqual(startupMode["$ref"] as? String, "#/$defs/agentRunSmokeStartupMode")
 
@@ -963,6 +998,8 @@ private final class ValidationReportSummaryHarness {
         agentRunSmokeResult: String = "not-recorded",
         agentRunSmokeSource: String = "",
         agentRunSmokeReadinessSource: String = "",
+        agentRunSmokePrivacyReviewSource: String = "",
+        agentRunSmokePrivacyReviewStatus: String = "",
         agentRunSmokeStartupMode: String = "",
         agentRunSmokeStartupModeSource: String = "",
         agentRunSmokeStartupModeReadError: String = "",
@@ -1017,6 +1054,8 @@ private final class ValidationReportSummaryHarness {
             "agentRunSmokeResult": agentRunSmokeResult,
             "agentRunSmokeSource": agentRunSmokeSource,
             "agentRunSmokeReadinessSource": agentRunSmokeReadinessSource,
+            "agentRunSmokePrivacyReviewSource": agentRunSmokePrivacyReviewSource,
+            "agentRunSmokePrivacyReviewStatus": agentRunSmokePrivacyReviewStatus,
             "agentRunSmokeStartupMode": agentRunSmokeStartupMode,
             "agentRunSmokeStartupModeSource": agentRunSmokeStartupModeSource,
             "agentRunSmokeStartupModeReadError": agentRunSmokeStartupModeReadError,

@@ -1002,6 +1002,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
 
   def validate_agent_run_smoke_bundle(summary_path, summary, failures)
+    privacy_review = {
+      "source" => "",
+      "status" => ""
+    }
     smoke_bundle = File.dirname(summary_path)
     manifest_path = File.join(smoke_bundle, "manifest.tsv")
     checksum_path = File.join(smoke_bundle, "checksums.tsv")
@@ -1113,6 +1117,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       end
       relative_path = agent_run_smoke_local_filename(privacy_command["stdout"], "privacy-review stdout", failures)
       unless relative_path.nil?
+        privacy_review["source"] = relative_path
+        privacy_review["status"] = privacy_command["status"].to_s
         privacy_rows = parse_external_tsv(File.join(smoke_bundle, relative_path), failures, "agent-run-smoke privacy-review.tsv")
         privacy_rows.each do |row|
           if row["finding"].to_s == "redaction-needed"
@@ -1136,13 +1142,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
     if checksum_rows.empty?
       failures << "agent-run-smoke checksums.tsv must include evidence rows"
-      return
+      return privacy_review
     end
 
     missing_checksum_headers = %w[sha256 bytes file].reject { |header| checksum_rows.first.key?(header) }
     unless missing_checksum_headers.empty?
       failures << "agent-run-smoke checksums.tsv is missing required header(s): #{missing_checksum_headers.join(", ")}"
-      return
+      return privacy_review
     end
 
     checksum_by_file = {}
@@ -1186,8 +1192,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     required_files.keys.sort.each do |relative_path|
       failures << "agent-run-smoke checksums.tsv is missing file #{relative_path}" unless checksum_by_file.key?(relative_path)
     end
+    privacy_review
   rescue StandardError => error
     failures << "could not validate agent-run-smoke bundle: #{error.message}"
+    privacy_review || { "source" => "", "status" => "" }
   end
 
   def agent_run_smoke_command_json(summary_path, summary, command_name, failures)
@@ -1465,7 +1473,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     summary = parse_external_json(path, failures, "agent-run-smoke summary")
     return nil if summary.nil?
 
-    validate_agent_run_smoke_bundle(path, summary, failures)
+    privacy_review = validate_agent_run_smoke_bundle(path, summary, failures) || { "source" => "", "status" => "" }
     validate_agent_run_smoke_rate_limit_retry(path, summary, failures)
     validate_agent_run_smoke_provenance(summary, failures)
     validate_agent_run_smoke_viftyctl_path(summary, failures)
@@ -1703,7 +1711,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
 
     {
       "result" => derived_result,
-      "appPreferences" => review_agent_run_smoke_app_preferences(preflight["appPreferences"])
+      "appPreferences" => review_agent_run_smoke_app_preferences(preflight["appPreferences"]),
+      "privacyReview" => privacy_review
     }
   end
 
@@ -1718,7 +1727,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     value.split(",", 2).first
   end
 
-  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
+  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences, agent_run_smoke_privacy_review)
     return if path.to_s.empty?
 
     failed_check_ids = string_array?(diagnose["failedCheckIDs"]) ? diagnose["failedCheckIDs"] : []
@@ -1764,6 +1773,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => agent_run_smoke_source,
       "agentRunSmokeReadinessSource" => agent_run_smoke_readiness_source,
+      "agentRunSmokePrivacyReviewSource" => agent_run_smoke_privacy_review["source"].to_s,
+      "agentRunSmokePrivacyReviewStatus" => agent_run_smoke_privacy_review["status"].to_s,
       "agentRunSmokeStartupMode" => agent_run_smoke_app_preferences["startupMode"].to_s,
       "agentRunSmokeStartupModeSource" => agent_run_smoke_app_preferences["startupModeSource"].to_s,
       "agentRunSmokeStartupModeReadError" => agent_run_smoke_app_preferences["readError"].to_s,
@@ -1929,6 +1940,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "startupModeSource" => "",
     "readError" => ""
   }
+  agent_run_smoke_privacy_review = {
+    "source" => "",
+    "status" => ""
+  }
   manual_smoke_readiness = nil
   manual_smoke_readiness_source = ""
   unless manual_smoke_readiness_summary_path.to_s.empty?
@@ -1962,6 +1977,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     unless derived_agent_run_smoke.nil?
       derived_agent_run_smoke_result = derived_agent_run_smoke["result"]
       agent_run_smoke_app_preferences = derived_agent_run_smoke["appPreferences"]
+      agent_run_smoke_privacy_review = derived_agent_run_smoke["privacyReview"] || { "source" => "", "status" => "" }
       if agent_run_smoke_result == "not-recorded"
         agent_run_smoke_result = derived_agent_run_smoke_result
       elsif agent_run_smoke_result != derived_agent_run_smoke_result
@@ -2223,14 +2239,14 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
 
   if failures.empty?
-    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
+    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences, agent_run_smoke_privacy_review)
     puts "Validation evidence review OK: mode #{mode}"
     puts "Bundle: #{bundle}"
     warnings.each { |warning| warn "warning: #{warning}" }
     exit 0
   end
 
-  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
+  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences, agent_run_smoke_privacy_review)
   warn "Validation evidence review failed: mode #{mode}"
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }

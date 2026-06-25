@@ -173,6 +173,15 @@
       "type": "string",
       "description": "Share-safe path to the read-only agent-run-smoke-readiness JSON reviewed before accepting local-ad-hoc issue-template agent-run smoke evidence. Empty when no captured readiness summary was reviewed."
     },
+    "agentRunSmokePrivacyReviewSource": {
+      "type": "string",
+      "description": "Bundle-local privacy-review TSV path reviewed before accepting captured supervised agent-run smoke evidence. Empty for issue-template-only or legacy agent-run smoke evidence."
+    },
+    "agentRunSmokePrivacyReviewStatus": {
+      "type": "string",
+      "pattern": "^(|[0-9]+)$",
+      "description": "Recorded status from the captured supervised agent-run smoke privacy-review command. Passing reviewed bundles should record 0; failed review output may preserve the nonzero status for triage."
+    },
     "agentRunSmokeStartupMode": {
       "$ref": "#/$defs/agentRunSmokeStartupMode",
       "description": "Read-only startup mode copied from reviewed supervised agent-run smoke preflight app preferences when present. This is not a cooling authorization."
