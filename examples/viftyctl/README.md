@@ -7,8 +7,8 @@ common developer workloads on Vifty's safe path:
 2. reject malformed wrapper arguments before contacting Vifty, including empty or blank reasons, non-positive durations, unsupported duration suffixes, and RPM percentages outside `1...100`;
 3. read-only `viftyctl capabilities --json`, require schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, require any nonzero exit to match the advertised unavailable exit code, require advertised `run` command support, require the requested workload name, require the safe `runLifecycle` contract used by `viftyctl run`, including `resolvedChildExecutableReported=true` so completed run reports identify the cooled executable, include `childTerminationReason` plus inferred signal fields for shell-style signal exit codes, and include `resolvedChildExecutableSHA256Status` plus `resolvedChildExecutableSHA256` when the executable bytes are readable, require `wrapperResources` for machine-readable source/app-bundle wrapper discovery, require audited `workloadTemplates` for every advertised shortcut wrapper, require `policyStatusAvailable: true` before trusting policy duration/RPM limits, require `policy.enabled: true` before requesting cooling, and require `metadataLimits`, then reject durations or RPM percentages outside the advertised policy range and reasons longer than the advertised maximum before readiness or cooling;
 4. read-only `viftyctl diagnose --json`, require diagnose readiness schema version `1`, and require recognized command-error schema identity when diagnose exits nonzero with a command-error payload;
-5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `failedCheckIDs`, and `coolingBlockerIDs` so wrappers do not infer safety from prose or fallback telemetry;
-6. fail closed when readiness is blocked, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, and print `recoverySteps` guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto. When diagnose reports a persisted `Curve` or `Fixed` default, the wrapper also prints that saved default in plain stderr before the JSON;
+5. require `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `daemonRuntime`, `failedCheckIDs`, and `coolingBlockerIDs` so wrappers do not infer safety from prose or fallback telemetry;
+6. fail closed when readiness is blocked, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, `daemonRuntime.matchRequired` is true while `daemonRuntime.matchesExpectedDaemon` is not true, or `coolingBlockerIDs` is non-empty, and print `recoverySteps` guidance for helper repair, Auto restore, workload backoff, policy inspection, or hardware-evidence follow-up. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto. When diagnose reports a persisted `Curve` or `Fixed` default, the wrapper also prints that saved default in plain stderr before the JSON;
 7. in `--preflight-only` / `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1` mode, exit after the read-only gates with decision JSON and without requesting cooling or launching the child;
 8. delegate to `viftyctl run --json` with one bounded lease;
 9. let `viftyctl run` revalidate the child command and restore Auto afterward.
@@ -24,7 +24,8 @@ or preflight-only decisions with `guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_
 summarize `coolingRequested`, `uncooledFallbackRequested`,
 `uncooledFallbackAllowed`, `decisionReason`, `recommendedAgentAction`,
 `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`,
-`manualControlActive`, `failedCheckIDs`, and `coolingBlockerIDs`. Extract the
+`manualControlActive`, `daemonRuntime`, `failedCheckIDs`, and
+`coolingBlockerIDs`. Extract the
 exact JSON between those markers instead of scraping human recovery text.
 
 If a capabilities payload does not advertise schema version `1`, the stable
@@ -97,8 +98,9 @@ capabilities and diagnose checks, still refuses to request cooling, prints the
 diagnose JSON, and then execs the child directly. It will not use this fallback
 when Vifty recommends `repairHelper`, `backOffWorkload`, or
 `restoreAutoBeforeRetry`, `inspectPolicy`, or `collectHardwareEvidence`, when
-`manualControlActive` is true, when `daemonControlPathReady` is false, or when
-`VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
+`manualControlActive` is true, when `daemonControlPathReady` is false, when
+`daemonRuntime.matchRequired` is true and `daemonRuntime.matchesExpectedDaemon`
+is not true, or when `VIFTY_GUARDED_RUN_FORCE_RETRY=1` is also set.
 It also refuses to combine uncooled fallback with
 `VIFTY_GUARDED_RUN_PREFLIGHT_ONLY=1`.
 Do not catch guarded-run failures and rerun the child command yourself.

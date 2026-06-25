@@ -55,6 +55,8 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(rule.contains("safeToRequestCooling"))
         XCTAssertTrue(rule.contains("daemonControlPathReady"))
         XCTAssertTrue(rule.contains("manualControlActive"))
+        XCTAssertTrue(rule.contains("daemonRuntime.matchRequired"))
+        XCTAssertTrue(rule.contains("daemonRuntime.matchesExpectedDaemon"))
         XCTAssertTrue(rule.contains("coolingBlockerIDs"))
         XCTAssertTrue(rule.contains("guarded-run.sh"))
         XCTAssertTrue(rule.contains("--preflight-only"))

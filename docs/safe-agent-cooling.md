@@ -166,6 +166,7 @@ Decision table:
 | `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"` | Stop before cooling. Ask the user whether to restore Auto once or wait; do not loop restore attempts. |
 | `state: "blocked"` or `safeToRequestCooling: false` | Do not request cooling. Show the JSON and run without Vifty only if the user explicitly wants that and the guarded wrapper allows it; use `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED=1` rather than catching wrapper failures yourself. |
 | `daemonControlPathReady: false` | Do not request cooling. Ask the user to repair or reinstall the helper before retrying; source checkouts can use `make repair-helper` for the same explicit administrator-approved LaunchDaemon repair. |
+| `daemonRuntime.matchRequired: true` with `daemonRuntime.matchesExpectedDaemon` not `true` | Do not request cooling. Repair or reinstall the helper so the installed LaunchDaemon matches the `viftyctl` build before retrying. |
 | Diagnose `recommendedRecoveryAction: "repairHelper"` | Show payload-local `recoverySteps` when available, falling back to `repairHelperRecoveryActions` from `viftyctl agent-rule --json`: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper`, then rerun `diagnose --json`. Do not attempt direct SMC writes or uncooled guarded fallback. |
 | Diagnose `recommendedRecoveryAction: "restoreAutoBeforeRetry"` | Restore Auto once, re-run diagnose, clear manual/user ownership, or wait for the active lease to clear before retrying. |
 | Diagnose `recommendedRecoveryAction: "backOffWorkload"` | Pause or reduce the workload; do not fight critical system thermals. |
@@ -175,7 +176,7 @@ Decision table:
 | `recommendedRecoveryAction: "waitBeforeRetry"` | Do not busy-loop. Show the JSON or wait for `retryAfterSeconds` only when the user approved retrying. |
 | `recommendedRecoveryAction: "fixChildCommand"` | Fix the workload command/path or show the launch error. Do not treat this as a helper failure. |
 
-Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `failedCheckIDs`, `coolingBlockerIDs`, `appPreferences.startupMode`, `checks`, and `agentControl`.
+Do not parse human-readable warning text when the JSON fields exist. Pin automation to `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `daemonRuntime`, `failedCheckIDs`, `coolingBlockerIDs`, `appPreferences.startupMode`, `checks`, and `agentControl`.
 The guarded wrapper may echo the saved `Curve` or `Fixed` startup mode in plain stderr when manual control blocks cooling; treat that as recovery guidance for humans, not as a replacement for the JSON gate.
 
 If a supervised script runs `/Applications/Vifty.app/Contents/MacOS/viftyctl restore-auto --json`, a successful command clears the same local `manualControlActive` marker that `diagnose --json` uses for the restore-first gate. Always re-run `diagnose --json` after restore and require `manualControlActive: false`, `safeToRequestCooling: true`, and `daemonControlPathReady: true` before requesting cooling. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto before another cooling request.
@@ -323,6 +324,7 @@ run. Its JSON summary declares
 The `diagnoseDecision` summary records the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`,
 `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`,
+`daemonRuntime`,
 `failedCheckIDs`, `coolingBlockerIDs`, and `appPreferences.startupMode` so
 maintainers can route blocked readiness without parsing human text. A non-empty
 `coolingBlockerIDs` list is a hard stop and must not be paired with

@@ -29,7 +29,7 @@ On unsupported hardware, Vifty should:
 - avoid raw SMC writes and helper fan-write fallback paths;
 - preserve read-only evidence for triage and compatibility reporting.
 
-Local agents must treat `safeToRequestCooling: false`, `daemonControlPathReady: false`, `manualControlActive: true`, non-empty `coolingBlockerIDs`, `recommendedAgentAction: "doNotRequestCooling"`, and `state: "blocked"` as hard stops, then follow `recommendedRecoveryAction` without parsing check prose. They may continue the workload without Vifty cooling only when the user explicitly wants that.
+Local agents must treat `safeToRequestCooling: false`, `daemonControlPathReady: false`, `manualControlActive: true`, `daemonRuntime.matchRequired: true` with `daemonRuntime.matchesExpectedDaemon` not `true`, non-empty `coolingBlockerIDs`, `recommendedAgentAction: "doNotRequestCooling"`, and `state: "blocked"` as hard stops, then follow `recommendedRecoveryAction` without parsing check prose. They may continue the workload without Vifty cooling only when the user explicitly wants that.
 
 ## Safe Evidence To Collect
 

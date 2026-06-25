@@ -149,6 +149,7 @@ public enum ViftyAgentRule {
         "safeToRequestCooling == true",
         "daemonControlPathReady == true",
         "manualControlActive == false",
+        "daemonRuntime.matchRequired != true || daemonRuntime.matchesExpectedDaemon == true",
         "coolingBlockerIDs is empty"
     ]
 
@@ -187,7 +188,7 @@ public enum ViftyAgentRule {
 
         Use `wrapperResources.bundleDirectory`, `wrapperResources.sourceDirectory`, `wrapperResources.guardedRunScript`, `wrapperResources.workloadScripts`, and `workloadTemplates` to choose the installed or source wrapper and audited workload defaults instead of inventing unaudited fan-control commands.
 
-        If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
+        If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, `daemonRuntime.matchRequired` is true while `daemonRuntime.matchesExpectedDaemon` is not true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
 
         If `recommendedRecoveryAction` is `repairHelper`, show `repairHelperRecoveryActions` from this report when present: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper` as an explicit administrator-approved repair, then rerun `diagnose --json`. Do not request cooling, use uncooled fallback, or call direct SMC/helper commands while repair is pending.
 

@@ -208,6 +208,11 @@
         },
         {
           "contains": {
+            "const": "daemonRuntime.matchRequired != true || daemonRuntime.matchesExpectedDaemon == true"
+          }
+        },
+        {
+          "contains": {
             "const": "coolingBlockerIDs is empty"
           }
         }

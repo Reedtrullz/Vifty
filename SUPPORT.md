@@ -81,8 +81,8 @@ were run. Its JSON summary declares
 It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 records a `diagnoseDecision` object with the diagnose exit status, readiness
 state, `recommendedAgentAction`, `recommendedRecoveryAction`,
-`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and
-`appPreferences.startupMode`. Missing or contradictory diagnose decision fields
+`safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`,
+`daemonRuntime`, and `appPreferences.startupMode`. Missing or contradictory diagnose decision fields
 fail review, except legacy `v1.1.x` bundles that omit `daemonControlPathReady`
 or `appPreferences` may pass only with a warning; `daemonControlPathReady` must
 still be inferred from structured readiness and recovery fields. Manual-control
@@ -137,7 +137,9 @@ shared privately.
 
 - Do not run `sudo ViftyHelper setFixed`, raw SMC tools, or manual fan-write
   smoke tests when `diagnose --json` reports `state: "blocked"` or
-  `safeToRequestCooling: false` or `daemonControlPathReady: false`.
+  `safeToRequestCooling: false` or `daemonControlPathReady: false`, or when
+  `daemonRuntime.matchRequired` is true and `daemonRuntime.matchesExpectedDaemon`
+  is not true.
 - Do not retry `viftyctl prepare` or `viftyctl run` while readiness is blocked,
   thermal pressure is critical, sensors are missing, no controllable fans are
   present, fan IDs or RPM ranges are invalid, or Auto restore is pending.
