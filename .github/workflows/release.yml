@@ -29,7 +29,6 @@ jobs:
 
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-release-swiftpm-build
 
     steps:
       - name: Check out release tag
@@ -42,6 +41,9 @@ jobs:
           sw_vers
           xcodebuild -version
           swift --version
+
+      - name: Configure SwiftPM build path
+        run: echo "SWIFT_BUILD_PATH=${RUNNER_TEMP}/vifty-release-swiftpm-build" >> "${GITHUB_ENV}"
 
       - name: Validate release version
         run: |

@@ -176,6 +176,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must isolate SwiftPM products with SWIFT_BUILD_PATH"))
     }
 
+    func testValidatorRejectsCIWorkflowWithRunnerTempInJobEnv() throws {
+        let harness = try ReleaseMetadataHarness(includeCIWorkflowRunnerTempJobEnv: true)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must not use runner.temp in job-level SWIFT_BUILD_PATH env"))
+    }
+
     func testValidatorRejectsReleaseWorkflowWithoutNode24ActionsRuntime() throws {
         let harness = try ReleaseMetadataHarness(includeReleaseWorkflowNode24ActionsRuntime: false)
 
@@ -192,6 +201,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 1)
         XCTAssertTrue(result.stderr.contains(".github/workflows/release.yml must isolate SwiftPM products with SWIFT_BUILD_PATH"))
+    }
+
+    func testValidatorRejectsReleaseWorkflowWithRunnerTempInJobEnv() throws {
+        let harness = try ReleaseMetadataHarness(includeReleaseWorkflowRunnerTempJobEnv: true)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/release.yml must not use runner.temp in job-level SWIFT_BUILD_PATH env"))
     }
 
     func testValidatorRejectsWorkflowWithoutNotarization() throws {
@@ -1455,8 +1473,10 @@ private final class ReleaseMetadataHarness {
         includeCIWorkflowNode24ActionsRuntime: Bool = true,
         includeCINode24CacheAction: Bool = true,
         includeCIWorkflowSwiftBuildPath: Bool = true,
+        includeCIWorkflowRunnerTempJobEnv: Bool = false,
         includeReleaseWorkflowNode24ActionsRuntime: Bool = true,
         includeReleaseWorkflowSwiftBuildPath: Bool = true,
+        includeReleaseWorkflowRunnerTempJobEnv: Bool = false,
         includeCaskDisable: Bool = false
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
@@ -1486,7 +1506,8 @@ private final class ReleaseMetadataHarness {
         try writeCIWorkflow(
             includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime,
             includeNode24CacheAction: includeCINode24CacheAction,
-            includeSwiftBuildPath: includeCIWorkflowSwiftBuildPath
+            includeSwiftBuildPath: includeCIWorkflowSwiftBuildPath,
+            includeRunnerTempJobEnv: includeCIWorkflowRunnerTempJobEnv
         )
         try writeReleaseWorkflow(
             includeTagVersionDerivation: includeTagVersionDerivation,
@@ -1508,7 +1529,8 @@ private final class ReleaseMetadataHarness {
             includeReleaseChecklist: includeReleaseChecklist,
             includeVerifyTag: includeVerifyTag,
             includeNode24ActionsRuntime: includeReleaseWorkflowNode24ActionsRuntime,
-            includeSwiftBuildPath: includeReleaseWorkflowSwiftBuildPath
+            includeSwiftBuildPath: includeReleaseWorkflowSwiftBuildPath,
+            includeRunnerTempJobEnv: includeReleaseWorkflowRunnerTempJobEnv
         )
     }
 
@@ -1958,7 +1980,8 @@ private final class ReleaseMetadataHarness {
         includeReleaseChecklist: Bool,
         includeVerifyTag: Bool,
         includeNode24ActionsRuntime: Bool,
-        includeSwiftBuildPath: Bool
+        includeSwiftBuildPath: Bool,
+        includeRunnerTempJobEnv: Bool
     ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
             ? """
@@ -2054,8 +2077,14 @@ private final class ReleaseMetadataHarness {
         let verifyTagLine = includeVerifyTag
             ? "                    --verify-tag"
             : ""
-        let swiftBuildPathEnvLine = includeSwiftBuildPath
+        let swiftBuildPathEnvLine = includeRunnerTempJobEnv
             ? "              SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-release-swiftpm-build\n"
+            : ""
+        let swiftBuildPathSetupStep = includeSwiftBuildPath
+            ? """
+              - name: Configure SwiftPM build path
+                run: echo "SWIFT_BUILD_PATH=${RUNNER_TEMP}/vifty-release-swiftpm-build" >> "${GITHUB_ENV}"
+        """
             : ""
         let testCommand = includeSwiftBuildPath
             ? "swift test --build-path \"${SWIFT_BUILD_PATH}\""
@@ -2067,6 +2096,7 @@ private final class ReleaseMetadataHarness {
             env:
         \(swiftBuildPathEnvLine)      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
             steps:
+        \(swiftBuildPathSetupStep)
               - name: Validate release version
                 run: |
                   TAG="${RELEASE_TAG}"
@@ -2115,7 +2145,8 @@ private final class ReleaseMetadataHarness {
     private func writeCIWorkflow(
         includeNode24ActionsRuntime: Bool,
         includeNode24CacheAction: Bool,
-        includeSwiftBuildPath: Bool
+        includeSwiftBuildPath: Bool,
+        includeRunnerTempJobEnv: Bool
     ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
             ? """
@@ -2125,10 +2156,17 @@ private final class ReleaseMetadataHarness {
         """
             : ""
         let cacheAction = includeNode24CacheAction ? "actions/cache@v5" : "actions/cache@v4"
-        let swiftBuildPathEnvLines = includeSwiftBuildPath
+        let swiftBuildPathEnvLines = includeRunnerTempJobEnv
             ? """
             env:
               SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-ci-swiftpm-build
+
+        """
+            : ""
+        let swiftBuildPathSetupStep = includeSwiftBuildPath
+            ? """
+              - name: Configure SwiftPM build path
+                run: echo "SWIFT_BUILD_PATH=${RUNNER_TEMP}/vifty-ci-swiftpm-build" >> "${GITHUB_ENV}"
 
         """
             : ""
@@ -2143,6 +2181,7 @@ private final class ReleaseMetadataHarness {
         \(node24RuntimeLines)jobs:
           swiftpm:
         \(swiftBuildPathEnvLines)    steps:
+        \(swiftBuildPathSetupStep)
               - name: Cache SPM build artifacts
                 uses: \(cacheAction)
                 with:

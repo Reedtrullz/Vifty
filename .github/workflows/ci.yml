@@ -24,12 +24,12 @@ jobs:
     name: SwiftPM checks
     runs-on: macos-15
     timeout-minutes: 20
-    env:
-      SWIFT_BUILD_PATH: ${{ runner.temp }}/vifty-ci-swiftpm-build
-
     steps:
       - name: Check out
         uses: actions/checkout@v6
+
+      - name: Configure SwiftPM build path
+        run: echo "SWIFT_BUILD_PATH=${RUNNER_TEMP}/vifty-ci-swiftpm-build" >> "${GITHUB_ENV}"
 
       - name: Cache SPM build artifacts
         uses: actions/cache@v5
