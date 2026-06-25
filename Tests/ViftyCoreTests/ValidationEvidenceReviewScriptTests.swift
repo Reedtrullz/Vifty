@@ -906,6 +906,37 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         )
     }
 
+    func testReviewRejectsAgentRunSmokeSummaryWithPrivateReasonOrDaemonPaths() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(status: "passed")
+        var summary = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: smokeSummaryURL)) as? [String: Any]
+        )
+        summary["reason"] = "agent smoke from /Users/reidar/private-client/build-output"
+        var daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        daemonRuntime["expectedDaemonPath"] = "/Users/reidar/Projectos/Vifty/.build/ViftyDaemon"
+        summary["daemonRuntime"] = daemonRuntime
+        let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: smokeSummaryURL)
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary reason must not contain /Users/... paths"),
+            result.stderr
+        )
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke summary daemonRuntime.expectedDaemonPath must not contain /Users/... paths"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsAgentRunSmokeLocalAdHocProvenanceWithoutSourceSHA() throws {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
@@ -1662,9 +1693,11 @@ private final class ValidationEvidenceReviewHarness {
             ],
             "daemonRuntime": [
                 "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                "installedDaemonPathPrivacy": "system",
                 "installedDaemonPresent": true,
                 "installedDaemonSHA256": String(repeating: "a", count: 64),
-                "expectedDaemonPath": "/tmp/ViftyDaemon",
+                "expectedDaemonPath": "ViftyDaemon",
+                "expectedDaemonPathPrivacy": "basenameOnly",
                 "expectedDaemonSHA256": String(repeating: daemonRuntimeMatchesExpected == false ? "b" : "a", count: 64),
                 "matchesExpectedDaemon": daemonRuntimeMatchesExpected as Any? ?? NSNull(),
                 "matchRequired": daemonRuntimeMatchRequired
@@ -2100,7 +2133,9 @@ private final class ValidationEvidenceReviewHarness {
             "workload": "test",
             "duration": "2m",
             "maxRPMPercent": 55,
-            "reason": "agent run smoke test",
+            "reason": "omitted-for-privacy",
+            "reasonCharacterCount": 20,
+            "reasonPrivacy": "omitted",
             "auditLimit": 20,
             "childCommand": ["/bin/sleep", "5"],
             "preflight": preflight,

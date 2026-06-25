@@ -46,13 +46,21 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(metadata.contains("sourceRef="))
         XCTAssertTrue(metadata.contains("sourceSHA="))
         XCTAssertTrue(metadata.contains("sourceArtifactName="))
-        XCTAssertTrue(metadata.contains("installedDaemonPath=\(harness.installedDaemonURL.path)"))
+        XCTAssertTrue(metadata.contains("installedDaemonPath=\(harness.installedDaemonURL.lastPathComponent)"))
+        XCTAssertTrue(metadata.contains("installedDaemonPathPrivacy=basenameOnly"))
         XCTAssertTrue(metadata.contains("installedDaemonPresent=true"))
         XCTAssertTrue(metadata.contains("daemonMatchesExpected=unknown"))
+        XCTAssertTrue(metadata.contains("reason=omitted-for-privacy"))
+        XCTAssertTrue(metadata.contains("reasonCharacterCount=20"))
+        XCTAssertTrue(metadata.contains("reasonPrivacy=omitted"))
+        XCTAssertFalse(metadata.contains(harness.rootURL.path))
 
         let daemonRuntime = try harness.read("daemon-runtime.tsv")
+        XCTAssertTrue(daemonRuntime.contains("installedDaemonPath\t\(harness.installedDaemonURL.lastPathComponent)"))
+        XCTAssertTrue(daemonRuntime.contains("installedDaemonPathPrivacy\tbasenameOnly"))
         XCTAssertTrue(daemonRuntime.contains("installedDaemonPresent\ttrue"))
         XCTAssertTrue(daemonRuntime.contains("daemonMatchesExpected\tunknown"))
+        XCTAssertFalse(daemonRuntime.contains(harness.rootURL.path))
 
         let manifest = try harness.read("manifest.tsv")
         XCTAssertTrue(manifest.contains("name\tstatus\tstdout\tstderr"))
@@ -85,17 +93,21 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["sourceArtifactSHA256"] as? String, "")
         XCTAssertEqual(summary["sourceArtifactBytes"] as? String, "")
         let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
-        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPath"] as? String, harness.installedDaemonURL.path)
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPath"] as? String, harness.installedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(daemonRuntimeSummary["installedDaemonPresent"] as? Bool, true)
         XCTAssertNotNil(daemonRuntimeSummary["installedDaemonSHA256"] as? String)
         XCTAssertTrue(daemonRuntimeSummary["expectedDaemonPath"] is NSNull)
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPathPrivacy"] as? String, "notProvided")
         XCTAssertTrue(daemonRuntimeSummary["expectedDaemonSHA256"] is NSNull)
         XCTAssertTrue(daemonRuntimeSummary["matchesExpectedDaemon"] is NSNull)
         XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, false)
         XCTAssertEqual(summary["workload"] as? String, "test")
         XCTAssertEqual(summary["duration"] as? String, "2m")
         XCTAssertEqual(summary["maxRPMPercent"] as? Int, 55)
-        XCTAssertEqual(summary["reason"] as? String, "agent run smoke test")
+        XCTAssertEqual(summary["reason"] as? String, "omitted-for-privacy")
+        XCTAssertEqual(summary["reasonCharacterCount"] as? Int, 20)
+        XCTAssertEqual(summary["reasonPrivacy"] as? String, "omitted")
         XCTAssertEqual(summary["childCommand"] as? [String], ["/bin/sleep", "5"])
         let preflight = try XCTUnwrap(summary["preflight"] as? [String: Any])
         XCTAssertEqual(preflight["state"] as? String, "ready")
@@ -205,16 +217,48 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
 
         let daemonRuntime = try harness.read("daemon-runtime.tsv")
-        XCTAssertTrue(daemonRuntime.contains("expectedDaemonPath\t\(harness.expectedDaemonURL.path)"))
+        XCTAssertTrue(daemonRuntime.contains("expectedDaemonPath\t\(harness.expectedDaemonURL.lastPathComponent)"))
+        XCTAssertTrue(daemonRuntime.contains("expectedDaemonPathPrivacy\tbasenameOnly"))
         XCTAssertTrue(daemonRuntime.contains("daemonMatchesExpected\ttrue"))
         XCTAssertTrue(daemonRuntime.contains("daemonMatchRequired\t1"))
 
         let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
         let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
-        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPath"] as? String, harness.expectedDaemonURL.path)
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPath"] as? String, harness.expectedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPathPrivacy"] as? String, "basenameOnly")
         XCTAssertNotNil(daemonRuntimeSummary["expectedDaemonSHA256"] as? String)
         XCTAssertEqual(daemonRuntimeSummary["matchesExpectedDaemon"] as? Bool, true)
         XCTAssertEqual(daemonRuntimeSummary["matchRequired"] as? Bool, true)
+    }
+
+    func testSmokeCollectorSummaryUsesPrivacySafeReasonAndDaemonPaths() throws {
+        let harness = try AgentRunSmokeEvidenceHarness()
+        let privateReason = "agent run smoke from /Users/reidar/private-client/build-output"
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--reason", privateReason,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+
+        let summaryText = try harness.read("agent-run-smoke-evidence-summary.json")
+        XCTAssertFalse(summaryText.contains("/Users/reidar"), summaryText)
+        XCTAssertFalse(summaryText.contains(harness.rootURL.path), summaryText)
+
+        let summary = try harness.readJSON("agent-run-smoke-evidence-summary.json")
+        XCTAssertEqual(summary["reason"] as? String, "omitted-for-privacy")
+        XCTAssertEqual(summary["reasonCharacterCount"] as? Int, privateReason.count)
+        XCTAssertEqual(summary["reasonPrivacy"] as? String, "omitted")
+
+        let daemonRuntimeSummary = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPath"] as? String, harness.installedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntimeSummary["installedDaemonPathPrivacy"] as? String, "basenameOnly")
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPath"] as? String, harness.expectedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntimeSummary["expectedDaemonPathPrivacy"] as? String, "basenameOnly")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenRequiredDaemonDoesNotMatchExpectedBuild() throws {
@@ -768,7 +812,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "daemonRuntime",
             "preflight",
             "run",
-            "commands"
+            "commands",
+            "reasonCharacterCount",
+            "reasonPrivacy"
         ] {
             XCTAssertTrue(required.contains(field), "missing required field \(field)")
         }
@@ -779,13 +825,19 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(pathKind["enum"] as? [String], ["appBundle", "sourceCheckout", "customExecutable"])
         let pathPrivacy = try XCTUnwrap(properties["viftyctlPathPrivacy"] as? [String: Any])
         XCTAssertEqual(pathPrivacy["const"] as? String, "basenameOnly")
+        let reason = try XCTUnwrap(properties["reason"] as? [String: Any])
+        XCTAssertEqual(reason["const"] as? String, "omitted-for-privacy")
+        let reasonPrivacy = try XCTUnwrap(properties["reasonPrivacy"] as? [String: Any])
+        XCTAssertEqual(reasonPrivacy["const"] as? String, "omitted")
         let daemonRuntime = try XCTUnwrap(defs["daemonRuntime"] as? [String: Any])
         let daemonRuntimeRequired = try XCTUnwrap(daemonRuntime["required"] as? [String])
         for field in [
             "installedDaemonPath",
+            "installedDaemonPathPrivacy",
             "installedDaemonPresent",
             "installedDaemonSHA256",
             "expectedDaemonPath",
+            "expectedDaemonPathPrivacy",
             "expectedDaemonSHA256",
             "matchesExpectedDaemon",
             "matchRequired"

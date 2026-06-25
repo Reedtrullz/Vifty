@@ -311,9 +311,39 @@ classify_viftyctl_path_kind() {
   esac
 }
 
+share_safe_path_value() {
+  local path="$1"
+  if [[ -z "${path}" ]]; then
+    printf ''
+  elif [[ "${path}" == /Library/PrivilegedHelperTools/* || "${path}" == /Applications/Vifty.app/* ]]; then
+    printf '%s' "${path}"
+  elif [[ "${path}" != /* ]]; then
+    printf '%s' "${path}"
+  else
+    /usr/bin/basename "${path}"
+  fi
+}
+
+share_safe_path_privacy() {
+  local path="$1"
+  if [[ -z "${path}" ]]; then
+    printf 'notProvided'
+  elif [[ "${path}" == /Library/PrivilegedHelperTools/* || "${path}" == /Applications/Vifty.app/* ]]; then
+    printf 'system'
+  elif [[ "${path}" != /* ]]; then
+    printf 'relative'
+  else
+    printf 'basenameOnly'
+  fi
+}
+
 VIFTYCTL_COMMAND_NAME="$(basename "${VIFTYCTL}")"
 VIFTYCTL_PATH_PRIVACY="basenameOnly"
 VIFTYCTL_PATH_KIND="$(classify_viftyctl_path_kind)"
+SAFE_INSTALLED_DAEMON_PATH="$(share_safe_path_value "${INSTALLED_DAEMON_PATH}")"
+INSTALLED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${INSTALLED_DAEMON_PATH}")"
+SAFE_EXPECTED_DAEMON_PATH="$(share_safe_path_value "${EXPECTED_DAEMON_PATH}")"
+EXPECTED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${EXPECTED_DAEMON_PATH}")"
 
 if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
   INSTALLED_DAEMON_PRESENT="true"
@@ -552,17 +582,21 @@ sourceSHA=${SOURCE_SHA}
 sourceArtifactName=${SOURCE_ARTIFACT_NAME}
 sourceArtifactSHA256=${SOURCE_ARTIFACT_SHA256}
 sourceArtifactBytes=${SOURCE_ARTIFACT_BYTES}
-installedDaemonPath=${INSTALLED_DAEMON_PATH}
+installedDaemonPath=${SAFE_INSTALLED_DAEMON_PATH}
+installedDaemonPathPrivacy=${INSTALLED_DAEMON_PATH_PRIVACY}
 installedDaemonPresent=${INSTALLED_DAEMON_PRESENT}
 installedDaemonSHA256=${INSTALLED_DAEMON_SHA256}
-expectedDaemonPath=${EXPECTED_DAEMON_PATH}
+expectedDaemonPath=${SAFE_EXPECTED_DAEMON_PATH}
+expectedDaemonPathPrivacy=${EXPECTED_DAEMON_PATH_PRIVACY}
 expectedDaemonSHA256=${EXPECTED_DAEMON_SHA256}
 daemonMatchesExpected=${DAEMON_MATCHES_EXPECTED}
 daemonMatchRequired=${REQUIRE_DAEMON_MATCH}
 workload=test
 duration=${DURATION}
 maxRPMPercent=${MAX_RPM_PERCENT}
-reason=${REASON}
+reason=omitted-for-privacy
+reasonCharacterCount=${#REASON}
+reasonPrivacy=omitted
 auditLimit=${AUDIT_LIMIT}
 childCommand=${CHILD_COMMAND[*]}
 EOF
@@ -571,10 +605,12 @@ EOF
 write_daemon_runtime() {
   cat > "${OUTPUT_DIR}/daemon-runtime.tsv" <<EOF
 key	value
-installedDaemonPath	${INSTALLED_DAEMON_PATH}
+installedDaemonPath	${SAFE_INSTALLED_DAEMON_PATH}
+installedDaemonPathPrivacy	${INSTALLED_DAEMON_PATH_PRIVACY}
 installedDaemonPresent	${INSTALLED_DAEMON_PRESENT}
 installedDaemonSHA256	${INSTALLED_DAEMON_SHA256}
-expectedDaemonPath	${EXPECTED_DAEMON_PATH}
+expectedDaemonPath	${SAFE_EXPECTED_DAEMON_PATH}
+expectedDaemonPathPrivacy	${EXPECTED_DAEMON_PATH_PRIVACY}
 expectedDaemonSHA256	${EXPECTED_DAEMON_SHA256}
 daemonMatchesExpected	${DAEMON_MATCHES_EXPECTED}
 daemonMatchRequired	${REQUIRE_DAEMON_MATCH}
@@ -599,12 +635,13 @@ write_summary_json() {
       viftyctl_path_privacy, install_source, source_ref, source_sha,
       source_artifact_name, source_artifact_sha256, source_artifact_bytes,
       installed_daemon_path, installed_daemon_present,
-      installed_daemon_sha256, expected_daemon_path, expected_daemon_sha256,
+      installed_daemon_path_privacy, installed_daemon_sha256,
+      expected_daemon_path, expected_daemon_path_privacy, expected_daemon_sha256,
       daemon_matches_expected, daemon_match_required, workload, duration, max_rpm_percent,
-      reason, status, read_only, cooling_commands_run, run_status,
+      reason_character_count, status, read_only, cooling_commands_run, run_status,
       skipped_reason, skip_reasons_text, audit_limit, pre_capabilities_path, pre_diagnose_path,
       run_json_path, run_stdout_name, run_stderr_name, rate_limit_retry_attempted,
-      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(37)
+      rate_limit_retry_after, rate_limit_initial_status = ARGV.shift(39)
 
     def boolean_or_nil(value)
       [true, false].include?(value) ? value : nil
@@ -737,10 +774,12 @@ write_summary_json() {
       "sourceArtifactSHA256" => source_artifact_sha256,
       "sourceArtifactBytes" => source_artifact_bytes,
       "daemonRuntime" => {
-        "installedDaemonPath" => installed_daemon_path,
+        "installedDaemonPath" => installed_daemon_path.empty? ? nil : installed_daemon_path,
+        "installedDaemonPathPrivacy" => installed_daemon_path_privacy,
         "installedDaemonPresent" => installed_daemon_present == "true",
         "installedDaemonSHA256" => installed_daemon_sha256.empty? ? nil : installed_daemon_sha256,
         "expectedDaemonPath" => expected_daemon_path.empty? ? nil : expected_daemon_path,
+        "expectedDaemonPathPrivacy" => expected_daemon_path_privacy,
         "expectedDaemonSHA256" => expected_daemon_sha256.empty? ? nil : expected_daemon_sha256,
         "matchesExpectedDaemon" => daemon_matches_expected == "unknown" ? nil : daemon_matches_expected == "true",
         "matchRequired" => daemon_match_required == "1"
@@ -748,7 +787,9 @@ write_summary_json() {
       "workload" => workload,
       "duration" => duration,
       "maxRPMPercent" => max_rpm_percent.to_i,
-      "reason" => reason,
+      "reason" => "omitted-for-privacy",
+      "reasonCharacterCount" => reason_character_count.to_i,
+      "reasonPrivacy" => "omitted",
       "auditLimit" => audit_limit.to_i,
       "childCommand" => ARGV,
       "preflight" => {
@@ -780,11 +821,13 @@ write_summary_json() {
     "${VIFTYCTL_PATH_KIND}" "${VIFTYCTL_PATH_PRIVACY}" \
     "${INSTALL_SOURCE}" "${SOURCE_REF}" "${SOURCE_SHA}" \
     "${SOURCE_ARTIFACT_NAME}" "${SOURCE_ARTIFACT_SHA256}" "${SOURCE_ARTIFACT_BYTES}" \
-    "${INSTALLED_DAEMON_PATH}" "${INSTALLED_DAEMON_PRESENT}" "${INSTALLED_DAEMON_SHA256}" \
-    "${EXPECTED_DAEMON_PATH}" "${EXPECTED_DAEMON_SHA256}" "${DAEMON_MATCHES_EXPECTED}" \
+    "${SAFE_INSTALLED_DAEMON_PATH}" "${INSTALLED_DAEMON_PRESENT}" \
+    "${INSTALLED_DAEMON_PATH_PRIVACY}" "${INSTALLED_DAEMON_SHA256}" \
+    "${SAFE_EXPECTED_DAEMON_PATH}" "${EXPECTED_DAEMON_PATH_PRIVACY}" \
+    "${EXPECTED_DAEMON_SHA256}" "${DAEMON_MATCHES_EXPECTED}" \
     "${REQUIRE_DAEMON_MATCH}" \
     "test" "${DURATION}" \
-    "${MAX_RPM_PERCENT}" "${REASON}" "${status}" "${read_only}" \
+    "${MAX_RPM_PERCENT}" "${#REASON}" "${status}" "${read_only}" \
     "${cooling_commands_run}" "${run_status}" "${skipped_reason}" \
     "${skip_reasons}" "${AUDIT_LIMIT}" "${OUTPUT_DIR}/pre-capabilities.json" \
     "${OUTPUT_DIR}/pre-diagnose.json" \

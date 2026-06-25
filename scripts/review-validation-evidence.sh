@@ -1331,6 +1331,17 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     unless [true, false, nil].include?(daemon_runtime["matchesExpectedDaemon"])
       failures << "agent-run-smoke summary daemonRuntime.matchesExpectedDaemon must be boolean or null"
     end
+    %w[installedDaemonPath expectedDaemonPath].each do |field|
+      if likely_user_home_path?(daemon_runtime[field])
+        failures << "agent-run-smoke summary daemonRuntime.#{field} must not contain /Users/... paths"
+      end
+    end
+    %w[installedDaemonPathPrivacy expectedDaemonPathPrivacy].each do |field|
+      next if daemon_runtime[field].nil?
+      unless %w[system relative basenameOnly notProvided].include?(daemon_runtime[field].to_s)
+        failures << "agent-run-smoke summary daemonRuntime.#{field} has unsupported privacy value"
+      end
+    end
     unless daemon_runtime["installedDaemonSHA256"].nil?
       require_sha256(
         daemon_runtime["installedDaemonSHA256"],
@@ -1421,6 +1432,15 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     unless summary["kind"] == "vifty-agent-run-smoke"
       failures << "agent-run-smoke summary kind must be vifty-agent-run-smoke"
+    end
+    if likely_user_home_path?(summary["reason"])
+      failures << "agent-run-smoke summary reason must not contain /Users/... paths"
+    end
+    unless summary["reasonCharacterCount"].nil?
+      require_positive_integer(summary["reasonCharacterCount"], "agent-run-smoke summary reasonCharacterCount", failures)
+    end
+    unless summary["reasonPrivacy"].nil?
+      failures << "agent-run-smoke summary reasonPrivacy must be omitted" unless summary["reasonPrivacy"].to_s == "omitted"
     end
 
     preflight = summary["preflight"].is_a?(Hash) ? summary["preflight"] : {}

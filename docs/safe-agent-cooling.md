@@ -232,8 +232,11 @@ next safe actions without asking agents to parse prose. Saved readiness
 summaries omit the full reason text, record `reasonCharacterCount`, and reduce
 private daemon paths to basename-only display values with path privacy labels. The
 collector itself first performs read-only capabilities/diagnose checks, but when readiness is
-safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`,
-with exactly one structured cooldown retry if the daemon returns
+safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`.
+The supervised smoke summary uses the same privacy envelope: it omits the full
+reason text, records `reasonCharacterCount`, and labels daemon path display
+values while preserving daemon identity through SHA-256 fields. The collector supports
+exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless
 `capabilities --json` reports schema version `1`, the stable capabilities,
 diagnose, command-error, and run schema IDs, daemon-backed policy status,

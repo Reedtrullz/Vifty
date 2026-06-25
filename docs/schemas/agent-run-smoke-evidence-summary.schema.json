@@ -26,6 +26,8 @@
     "duration",
     "maxRPMPercent",
     "reason",
+    "reasonCharacterCount",
+    "reasonPrivacy",
     "auditLimit",
     "childCommand",
     "preflight",
@@ -107,7 +109,15 @@
       "maximum": 100
     },
     "reason": {
-      "type": "string"
+      "const": "omitted-for-privacy",
+      "description": "The full audit reason is intentionally omitted from shareable supervised smoke summaries. Use reasonCharacterCount for metadata-limit evidence."
+    },
+    "reasonCharacterCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reasonPrivacy": {
+      "const": "omitted"
     },
     "auditLimit": {
       "type": "integer",
@@ -287,16 +297,30 @@
       "description": "Read-only provenance for the privileged daemon that actually services XPC during the smoke run. For current-build evidence, matchesExpectedDaemon must be true before cooling is requested.",
       "required": [
         "installedDaemonPath",
+        "installedDaemonPathPrivacy",
         "installedDaemonPresent",
         "installedDaemonSHA256",
         "expectedDaemonPath",
+        "expectedDaemonPathPrivacy",
         "expectedDaemonSHA256",
         "matchesExpectedDaemon",
         "matchRequired"
       ],
       "properties": {
         "installedDaemonPath": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "A share-safe path display value. Private absolute paths are reduced to basename-only."
+        },
+        "installedDaemonPathPrivacy": {
+          "enum": [
+            "system",
+            "relative",
+            "basenameOnly",
+            "notProvided"
+          ]
         },
         "installedDaemonPresent": {
           "type": "boolean"
@@ -312,6 +336,15 @@
           "type": [
             "string",
             "null"
+          ],
+          "description": "A share-safe path display value. Private absolute paths are reduced to basename-only."
+        },
+        "expectedDaemonPathPrivacy": {
+          "enum": [
+            "system",
+            "relative",
+            "basenameOnly",
+            "notProvided"
           ]
         },
         "expectedDaemonSHA256": {
