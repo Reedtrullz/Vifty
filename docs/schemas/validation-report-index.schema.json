@@ -253,6 +253,7 @@
         "manualSmokeValidated",
         "agentRunSmokeResult",
         "agentRunSmokeSource",
+        "agentRunSmokeReadinessSource",
         "agentRunSmokeValidated",
         "agentRunSmokeStartupMode",
         "agentRunSmokeStartupModeSource",
@@ -326,6 +327,10 @@
         },
         "agentRunSmokeSource": {
           "type": "string"
+        },
+        "agentRunSmokeReadinessSource": {
+          "type": "string",
+          "description": "Share-safe source path to the agent-run-smoke-readiness JSON reviewed before accepting local-ad-hoc issue-template agent-run smoke evidence."
         },
         "agentRunSmokeValidated": {
           "$ref": "#/$defs/booleanString"
@@ -496,6 +501,41 @@
                 "$ref": "#/$defs/requiredNonEmptyString"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "installSource": {
+                "const": "local-ad-hoc-build"
+              },
+              "agentRunSmokeResult": {
+                "const": "passed-auto-restored"
+              }
+            },
+            "required": [
+              "installSource",
+              "agentRunSmokeResult"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "agentRunSmokeReadinessSource": {
+                    "$ref": "#/$defs/requiredNonEmptyString"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "agentRunSmokeSource": {
+                    "type": "string",
+                    "pattern": "agent-run-smoke-evidence-summary\\.json$"
+                  }
+                }
+              }
+            ]
           }
         }
       ]

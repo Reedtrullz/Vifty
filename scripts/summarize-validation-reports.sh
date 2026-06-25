@@ -341,6 +341,13 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       failures << "#{path} manualSmokeReadinessSource is required for passed local-ad-hoc manual smoke evidence"
       valid = false
     end
+    if install_source == "local-ad-hoc-build" &&
+        result["agentRunSmokeResult"].to_s == "passed-auto-restored" &&
+        result.fetch("agentRunSmokeReadinessSource", "").to_s.strip.empty? &&
+        !result["agentRunSmokeSource"].to_s.end_with?("agent-run-smoke-evidence-summary.json")
+      failures << "#{path} agentRunSmokeReadinessSource or captured agentRunSmokeSource is required for passed local-ad-hoc agent-run smoke evidence"
+      valid = false
+    end
 
     valid
   end
@@ -613,6 +620,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
       "manualSmokeValidated" => boolean_string(manual_smoke_validated),
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => result["agentRunSmokeSource"].to_s,
+      "agentRunSmokeReadinessSource" => result["agentRunSmokeReadinessSource"].to_s,
       "agentRunSmokeValidated" => boolean_string(agent_run_smoke_validated),
       "agentRunSmokeStartupMode" => result["agentRunSmokeStartupMode"].to_s,
       "agentRunSmokeStartupModeSource" => result["agentRunSmokeStartupModeSource"].to_s,
@@ -712,6 +720,7 @@ ruby -rjson -rcsv -rfileutils -rpathname -rtime -e '
     manualSmokeValidated
     agentRunSmokeResult
     agentRunSmokeSource
+    agentRunSmokeReadinessSource
     agentRunSmokeValidated
     agentRunSmokeStartupMode
     agentRunSmokeStartupModeSource

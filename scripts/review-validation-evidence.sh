@@ -40,6 +40,13 @@ Options:
   --agent-run-smoke-source <text>
                          Issue URL, note, or other source for the supervised
                          viftyctl run smoke result.
+  --agent-run-smoke-readiness-summary <path>
+                         Captured agent-run-smoke-readiness JSON from
+                         scripts/check-agent-run-smoke-readiness.sh --json.
+                         For passed local-ad-hoc agent-run smoke evidence
+                         without a captured smoke bundle, the reviewer requires
+                         this summary to prove the preflight was read-only,
+                         safe, and daemon-matched before smoke.
   --agent-run-smoke-summary <path>
                          Captured agent-run-smoke-evidence-summary.json from
                          scripts/collect-agent-run-smoke-evidence.sh. When
@@ -57,6 +64,7 @@ MANUAL_SMOKE_SOURCE=""
 MANUAL_SMOKE_READINESS_SUMMARY_PATH=""
 AGENT_RUN_SMOKE_RESULT="not-recorded"
 AGENT_RUN_SMOKE_SOURCE=""
+AGENT_RUN_SMOKE_READINESS_SUMMARY_PATH=""
 AGENT_RUN_SMOKE_SUMMARY_PATH=""
 
 while [[ $# -gt 0 ]]; do
@@ -123,6 +131,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       AGENT_RUN_SMOKE_SOURCE="$2"
+      shift 2
+      ;;
+    --agent-run-smoke-readiness-summary)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --agent-run-smoke-readiness-summary requires a path" >&2
+        exit 64
+      fi
+      AGENT_RUN_SMOKE_READINESS_SUMMARY_PATH="$2"
       shift 2
       ;;
     --agent-run-smoke-summary)
@@ -195,11 +211,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   manual_smoke_readiness_summary_path = ARGV.fetch(5, "")
   agent_run_smoke_result = ARGV.fetch(6, "not-recorded")
   agent_run_smoke_source = ARGV.fetch(7, "")
-  agent_run_smoke_summary_path = ARGV.fetch(8, "")
+  agent_run_smoke_readiness_summary_path = ARGV.fetch(8, "")
+  agent_run_smoke_summary_path = ARGV.fetch(9, "")
   failures = []
   warnings = []
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
   MANUAL_SMOKE_READINESS_SCHEMA_ID = "https://vifty.local/schemas/manual-smoke-readiness.schema.json"
+  AGENT_RUN_SMOKE_READINESS_SCHEMA_ID = "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json"
   AGENT_RUN_SMOKE_SUMMARY_SCHEMA_ID = "https://vifty.local/schemas/agent-run-smoke-evidence-summary.schema.json"
   CAPABILITIES_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-capabilities.schema.json"
   DIAGNOSE_SCHEMA_ID = "https://vifty.local/schemas/viftyctl-diagnose.schema.json"
@@ -705,6 +723,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "#{File.basename(File.dirname(summary_path))}/#{File.basename(summary_path)}"
   end
 
+  def agent_run_smoke_readiness_share_safe_source(summary_path)
+    "#{File.basename(File.dirname(summary_path))}/#{File.basename(summary_path)}"
+  end
+
   def validate_manual_smoke_readiness_daemon_runtime(summary, failures)
     daemon_runtime = summary["daemonRuntime"]
     unless daemon_runtime.is_a?(Hash)
@@ -807,6 +829,151 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
 
     validate_manual_smoke_readiness_daemon_runtime(summary, failures)
+    summary
+  end
+
+  def validate_agent_run_smoke_readiness_daemon_runtime(summary, failures)
+    daemon_runtime = summary["daemonRuntime"]
+    unless daemon_runtime.is_a?(Hash)
+      failures << "agent-run-smoke readiness summary daemonRuntime is required"
+      return
+    end
+
+    unless [true, false].include?(daemon_runtime["installedDaemonPresent"])
+      failures << "agent-run-smoke readiness summary daemonRuntime.installedDaemonPresent must be boolean"
+    end
+    unless [true, false].include?(daemon_runtime["matchRequired"])
+      failures << "agent-run-smoke readiness summary daemonRuntime.matchRequired must be boolean"
+    end
+    unless [true, false, nil].include?(daemon_runtime["matchesExpectedDaemon"])
+      failures << "agent-run-smoke readiness summary daemonRuntime.matchesExpectedDaemon must be boolean or null"
+    end
+    unless daemon_runtime["installedDaemonSHA256"].nil?
+      require_sha256(
+        daemon_runtime["installedDaemonSHA256"],
+        "agent-run-smoke readiness summary daemonRuntime.installedDaemonSHA256",
+        failures
+      )
+    end
+    unless daemon_runtime["expectedDaemonSHA256"].nil?
+      require_sha256(
+        daemon_runtime["expectedDaemonSHA256"],
+        "agent-run-smoke readiness summary daemonRuntime.expectedDaemonSHA256",
+        failures
+      )
+    end
+  end
+
+  def validate_agent_run_smoke_readiness_summary(path, expected_schema_id, diagnose, failures)
+    summary = parse_external_json(path, failures, "agent-run-smoke readiness summary")
+    return nil if summary.nil?
+
+    unless summary["schemaVersion"] == 1
+      failures << "agent-run-smoke readiness summary schemaVersion must be 1"
+    end
+    unless summary["schemaID"] == expected_schema_id
+      failures << "agent-run-smoke readiness summary schemaID must be #{expected_schema_id}"
+    end
+    unless summary["kind"].to_s == "vifty-agent-run-smoke-readiness"
+      failures << "agent-run-smoke readiness summary kind must be vifty-agent-run-smoke-readiness"
+    end
+    unless summary["readOnly"] == true
+      failures << "agent-run-smoke readiness summary must declare readOnly=true"
+    end
+    unless summary["coolingCommandsRun"] == false
+      failures << "agent-run-smoke readiness summary must declare coolingCommandsRun=false"
+    end
+    unless string_array?(summary["recoverySteps"])
+      failures << "agent-run-smoke readiness summary recoverySteps must be an array of strings"
+    end
+    failures << "agent-run-smoke readiness summary failedCheckIDs must be an array of strings" unless string_array?(summary["failedCheckIDs"])
+    failures << "agent-run-smoke readiness summary coolingBlockerIDs must be an array of strings" unless string_array?(summary["coolingBlockerIDs"])
+    failures << "agent-run-smoke readiness summary blockers must be an array of strings" unless string_array?(summary["blockers"])
+    failures << "agent-run-smoke readiness summary parseErrors must be an array of strings" unless string_array?(summary["parseErrors"])
+
+    if summary["status"].to_s == "ready"
+      unless summary["agentRunSmokeReady"] == true
+        failures << "agent-run-smoke readiness summary agentRunSmokeReady must be true when ready"
+      end
+      unless summary["capabilitiesExitStatus"] == 0
+        failures << "agent-run-smoke readiness summary capabilitiesExitStatus must be 0 before passed agent-run smoke"
+      end
+      unless summary["diagnoseExitStatus"] == 0
+        failures << "agent-run-smoke readiness summary diagnoseExitStatus must be 0 before passed agent-run smoke"
+      end
+      unless %w[ready degraded].include?(summary["state"].to_s)
+        failures << "agent-run-smoke readiness summary state must be ready or degraded"
+      end
+      unless %w[requestCooling requestCoolingWithCaution].include?(summary["recommendedAgentAction"].to_s)
+        failures << "agent-run-smoke readiness summary must recommend requestCooling or requestCoolingWithCaution"
+      end
+      unless summary["safeToRequestCooling"] == true
+        failures << "agent-run-smoke readiness summary safeToRequestCooling must be true"
+      end
+      unless summary["daemonControlPathReady"] == true
+        failures << "agent-run-smoke readiness summary daemonControlPathReady must be true"
+      end
+      unless summary["manualControlActive"] == false
+        failures << "agent-run-smoke readiness summary manualControlActive must be false"
+      end
+      unless summary["isAppleSilicon"] == true && summary["isMacBookPro"] == true
+        failures << "agent-run-smoke readiness summary must be from an Apple Silicon MacBook Pro"
+      end
+      require_positive_integer(summary["fanCount"], "agent-run-smoke readiness summary fanCount", failures)
+      require_positive_integer(summary["controllableFanCount"], "agent-run-smoke readiness summary controllableFanCount", failures)
+      require_positive_integer(summary["temperatureSensorCount"], "agent-run-smoke readiness summary temperatureSensorCount", failures)
+      if string_array?(summary["coolingBlockerIDs"]) && !summary["coolingBlockerIDs"].empty?
+        failures << "agent-run-smoke readiness summary coolingBlockerIDs must be empty before passed agent-run smoke"
+      end
+      if string_array?(summary["blockers"]) && !summary["blockers"].empty?
+        failures << "agent-run-smoke readiness summary blockers must be empty before passed agent-run smoke"
+      end
+      if string_array?(summary["parseErrors"]) && !summary["parseErrors"].empty?
+        failures << "agent-run-smoke readiness summary parseErrors must be empty before passed agent-run smoke"
+      end
+      capabilities = summary["capabilities"].is_a?(Hash) ? summary["capabilities"] : {}
+      unless capabilities["daemonStatusAvailable"] == true &&
+          capabilities["policySource"] == "daemonStatus" &&
+          capabilities["policyStatusAvailable"] == true &&
+          capabilities["policyEnabled"] == true &&
+          capabilities["supportsForceRetry"] == true &&
+          capabilities["resolvedChildExecutableReported"] == true
+        failures << "agent-run-smoke readiness summary must have daemon-backed policy and run lifecycle capability evidence"
+      end
+    elsif summary["status"].to_s == "blocked"
+      unless summary["agentRunSmokeReady"] == false
+        failures << "agent-run-smoke readiness summary agentRunSmokeReady must be false when blocked"
+      end
+      unless [false, nil].include?(summary["safeToRequestCooling"])
+        failures << "agent-run-smoke readiness summary safeToRequestCooling must be false or null when blocked"
+      end
+    else
+      failures << "agent-run-smoke readiness summary status must be ready or blocked"
+    end
+
+    field_pairs = {
+      "state" => "state",
+      "modelIdentifier" => "modelIdentifier",
+      "isAppleSilicon" => "isAppleSilicon",
+      "isMacBookPro" => "isMacBookPro",
+      "safeToRequestCooling" => "safeToRequestCooling",
+      "daemonControlPathReady" => "daemonControlPathReady",
+      "manualControlActive" => "manualControlActive",
+      "fanCount" => "fanCount",
+      "controllableFanCount" => "controllableFanCount",
+      "temperatureSensorCount" => "temperatureSensorCount",
+      "thermalPressure" => "thermalPressure",
+      "recommendedAgentAction" => "recommendedAgentAction",
+      "recommendedRecoveryAction" => "recommendedRecoveryAction"
+    }
+    field_pairs.each do |summary_field, diagnose_field|
+      next if diagnose[diagnose_field].nil? && summary[summary_field].nil?
+      unless summary[summary_field] == diagnose[diagnose_field]
+        failures << "agent-run-smoke readiness summary #{summary_field} must match viftyctl-diagnose.json"
+      end
+    end
+
+    validate_agent_run_smoke_readiness_daemon_runtime(summary, failures)
     summary
   end
 
@@ -1446,7 +1613,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     value.split(",", 2).first
   end
 
-  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_app_preferences)
+  def write_review_result(path, bundle, mode, status, failures, warnings, review_summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
     return if path.to_s.empty?
 
     failed_check_ids = string_array?(diagnose["failedCheckIDs"]) ? diagnose["failedCheckIDs"] : []
@@ -1491,6 +1658,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       "manualSmokeReadinessSource" => manual_smoke_readiness_source,
       "agentRunSmokeResult" => agent_run_smoke_result,
       "agentRunSmokeSource" => agent_run_smoke_source,
+      "agentRunSmokeReadinessSource" => agent_run_smoke_readiness_source,
       "agentRunSmokeStartupMode" => agent_run_smoke_app_preferences["startupMode"].to_s,
       "agentRunSmokeStartupModeSource" => agent_run_smoke_app_preferences["startupModeSource"].to_s,
       "agentRunSmokeStartupModeReadError" => agent_run_smoke_app_preferences["readError"].to_s,
@@ -1668,6 +1836,18 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     )
     manual_smoke_readiness_source = manual_smoke_readiness_share_safe_source(expanded_manual_smoke_readiness_path) unless manual_smoke_readiness.nil?
   end
+  agent_run_smoke_readiness = nil
+  agent_run_smoke_readiness_source = ""
+  unless agent_run_smoke_readiness_summary_path.to_s.empty?
+    expanded_agent_run_smoke_readiness_path = File.expand_path(agent_run_smoke_readiness_summary_path)
+    agent_run_smoke_readiness = validate_agent_run_smoke_readiness_summary(
+      expanded_agent_run_smoke_readiness_path,
+      AGENT_RUN_SMOKE_READINESS_SCHEMA_ID,
+      diagnose,
+      failures
+    )
+    agent_run_smoke_readiness_source = agent_run_smoke_readiness_share_safe_source(expanded_agent_run_smoke_readiness_path) unless agent_run_smoke_readiness.nil?
+  end
   unless agent_run_smoke_summary_path.to_s.empty?
     derived_agent_run_smoke = validate_agent_run_smoke_summary(
       File.expand_path(agent_run_smoke_summary_path),
@@ -1758,6 +1938,20 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     when "passed-auto-restored"
       if agent_run_smoke_source.to_s.empty?
         warnings << "supervised viftyctl run smoke test passed, but no issue URL or source note was recorded"
+      end
+      if install_fields["installSource"].to_s == "local-ad-hoc-build" && agent_run_smoke_summary_path.to_s.empty?
+        if agent_run_smoke_readiness.nil?
+          failures << "passed local-ad-hoc agent-run smoke requires --agent-run-smoke-readiness-summary or --agent-run-smoke-summary"
+        else
+          daemon_runtime = agent_run_smoke_readiness["daemonRuntime"].is_a?(Hash) ? agent_run_smoke_readiness["daemonRuntime"] : {}
+          unless daemon_runtime["matchRequired"] == true &&
+              daemon_runtime["installedDaemonPresent"] == true &&
+              daemon_runtime["matchesExpectedDaemon"] == true &&
+              daemon_runtime["installedDaemonSHA256"].is_a?(String) &&
+              daemon_runtime["expectedDaemonSHA256"].is_a?(String)
+            failures << "passed local-ad-hoc agent-run smoke readiness summary must match the installed daemon to the expected build daemon"
+          end
+        end
       end
     when "failed"
       failures << "supported hardware validation cannot pass with a failed supervised viftyctl run smoke test"
@@ -1924,16 +2118,16 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   end
 
   if failures.empty?
-    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_app_preferences)
+    write_review_result(summary_path, bundle, mode, "passed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
     puts "Validation evidence review OK: mode #{mode}"
     puts "Bundle: #{bundle}"
     warnings.each { |warning| warn "warning: #{warning}" }
     exit 0
   end
 
-  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_app_preferences)
+  write_review_result(summary_path, bundle, mode, "failed", failures, warnings, summary, diagnose, install_fields, manual_smoke_result, manual_smoke_source, manual_smoke_readiness_source, agent_run_smoke_result, agent_run_smoke_source, agent_run_smoke_readiness_source, agent_run_smoke_app_preferences)
   warn "Validation evidence review failed: mode #{mode}"
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }
   exit 65
-' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${MANUAL_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_SUMMARY_PATH}"
+' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${MANUAL_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_SUMMARY_PATH}"

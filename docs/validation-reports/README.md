@@ -24,6 +24,11 @@ Passed local-ad-hoc manual smoke summaries must also carry a
 `manualSmokeReadinessSource` from the read-only manual-smoke preflight, proving
 the installed daemon matched the expected build before the smoke result was
 accepted.
+Passed local-ad-hoc issue-template agent-run smoke summaries must carry either
+an `agentRunSmokeReadinessSource` from the read-only agent-run preflight or an
+`agentRunSmokeSource` pointing to a captured
+`agent-run-smoke-evidence-summary.json` bundle, proving the helper/build
+boundary was checked before accepting developer-workload proof.
 Source-first, unsigned-dev, and local ad-hoc reports are compatibility evidence
 only; they are not Developer ID, notarization, Homebrew, or trusted binary
 evidence.

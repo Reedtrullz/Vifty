@@ -169,6 +169,10 @@
       "type": "string",
       "description": "Share-safe source reference for supervised agent-run smoke evidence, such as an issue URL or bundle-local summary path; auto-derived local filesystem paths should not be absolute."
     },
+    "agentRunSmokeReadinessSource": {
+      "type": "string",
+      "description": "Share-safe path to the read-only agent-run-smoke-readiness JSON reviewed before accepting local-ad-hoc issue-template agent-run smoke evidence. Empty when no captured readiness summary was reviewed."
+    },
     "agentRunSmokeStartupMode": {
       "$ref": "#/$defs/agentRunSmokeStartupMode",
       "description": "Read-only startup mode copied from reviewed supervised agent-run smoke preflight app preferences when present. This is not a cooling authorization."
@@ -274,6 +278,41 @@
             "$ref": "#/$defs/requiredNonEmptyString"
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "installSource": {
+            "const": "local-ad-hoc-build"
+          },
+          "agentRunSmokeResult": {
+            "const": "passed-auto-restored"
+          }
+        },
+        "required": [
+          "installSource",
+          "agentRunSmokeResult"
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "agentRunSmokeReadinessSource": {
+                "$ref": "#/$defs/requiredNonEmptyString"
+              }
+            }
+          },
+          {
+            "properties": {
+              "agentRunSmokeSource": {
+                "type": "string",
+                "pattern": "agent-run-smoke-evidence-summary\\.json$"
+              }
+            }
+          }
+        ]
       }
     }
   ],

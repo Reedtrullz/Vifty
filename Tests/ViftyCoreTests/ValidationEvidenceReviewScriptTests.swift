@@ -476,6 +476,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["thermalPressure"] as? String, "nominal")
         XCTAssertEqual(summary["manualSmokeTestResult"] as? String, "not-recorded")
         XCTAssertEqual(summary["manualSmokeTestSource"] as? String, "")
+        XCTAssertEqual(summary["agentRunSmokeReadinessSource"] as? String, "")
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "not-recorded")
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, "")
         XCTAssertTrue((summary["failures"] as? [String])?.isEmpty == true)
@@ -625,6 +626,77 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "passed-auto-restored")
         XCTAssertEqual(summary["agentRunSmokeSource"] as? String, "https://github.com/reidar/vifty/issues/42#agent-run-smoke")
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewWritesAgentRunSmokeReadinessSummarySource() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let readinessSummaryURL = try harness.writeAgentRunSmokeReadinessSummary()
+        let summaryURL = harness.rootURL.appendingPathComponent("summaries/agent-run-readiness-review.json")
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            summaryURL: summaryURL,
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeReadinessSummaryURL: readinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try harness.readJSON(summaryURL)
+        XCTAssertEqual(summary["status"] as? String, "passed")
+        XCTAssertEqual(summary["agentRunSmokeReadinessSource"] as? String, smokeSummarySource(readinessSummaryURL))
+        XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "not-recorded")
+        XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewRejectsLocalAdHocAgentRunSmokeWithoutReadinessOrSmokeSummary() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: String(repeating: "1", count: 40)
+        )
+        let manualReadinessSummaryURL = try harness.writeManualSmokeReadinessSummary()
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            manualSmokeReadinessSummaryURL: manualReadinessSummaryURL,
+            agentRunSmokeResult: "passed-auto-restored",
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke"
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed local-ad-hoc agent-run smoke requires --agent-run-smoke-readiness-summary or --agent-run-smoke-summary"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsLocalAdHocAgentRunSmokeWhenReadinessDaemonDoesNotMatchBuild() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: String(repeating: "1", count: 40)
+        )
+        let manualReadinessSummaryURL = try harness.writeManualSmokeReadinessSummary()
+        let agentReadinessSummaryURL = try harness.writeAgentRunSmokeReadinessSummary(daemonRuntimeMatchesExpected: false)
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            manualSmokeReadinessSummaryURL: manualReadinessSummaryURL,
+            agentRunSmokeResult: "passed-auto-restored",
+            agentRunSmokeSource: "https://github.com/reidar/vifty/issues/42#agent-run-smoke",
+            agentRunSmokeReadinessSummaryURL: agentReadinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("passed local-ad-hoc agent-run smoke readiness summary must match the installed daemon to the expected build daemon"),
+            result.stderr
+        )
     }
 
     func testReviewDerivesValidatedAgentRunSmokeFromCapturedSummary() throws {
@@ -1472,6 +1544,7 @@ private final class ValidationEvidenceReviewHarness {
         manualSmokeReadinessSummaryURL: URL? = nil,
         agentRunSmokeResult: String? = nil,
         agentRunSmokeSource: String? = nil,
+        agentRunSmokeReadinessSummaryURL: URL? = nil,
         agentRunSmokeSummaryURL: URL? = nil
     ) throws -> ValidationEvidenceReviewProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -1501,6 +1574,9 @@ private final class ValidationEvidenceReviewHarness {
         }
         if let agentRunSmokeSource {
             arguments += ["--agent-run-smoke-source", agentRunSmokeSource]
+        }
+        if let agentRunSmokeReadinessSummaryURL {
+            arguments += ["--agent-run-smoke-readiness-summary", agentRunSmokeReadinessSummaryURL.path]
         }
         if let agentRunSmokeSummaryURL {
             arguments += ["--agent-run-smoke-summary", agentRunSmokeSummaryURL.path]
@@ -1576,6 +1652,80 @@ private final class ValidationEvidenceReviewHarness {
             "blockers": [],
             "nextAction": "Capture baseline diagnose/probe evidence, run one human-supervised conservative Fixed smoke, restore Auto, then repeat with one conservative Curve smoke.",
             "parseError": NSNull()
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: summaryURL)
+        return summaryURL
+    }
+
+    func writeAgentRunSmokeReadinessSummary(
+        status: String = "ready",
+        schemaID: String = "https://vifty.local/schemas/agent-run-smoke-readiness.schema.json",
+        agentRunSmokeReady: Bool = true,
+        safeToRequestCooling: Bool = true,
+        daemonControlPathReady: Bool = true,
+        manualControlActive: Bool = false,
+        daemonRuntimeMatchesExpected: Bool? = true,
+        daemonRuntimeMatchRequired: Bool = true
+    ) throws -> URL {
+        let readinessBundleURL = rootURL.appendingPathComponent("agent-run-smoke-readiness-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: readinessBundleURL, withIntermediateDirectories: true)
+        let summaryURL = readinessBundleURL.appendingPathComponent("agent-run-smoke-readiness.json")
+        let json: [String: Any] = [
+            "kind": "vifty-agent-run-smoke-readiness",
+            "schemaVersion": 1,
+            "schemaID": schemaID,
+            "status": status,
+            "agentRunSmokeReady": agentRunSmokeReady,
+            "readOnly": true,
+            "coolingCommandsRun": false,
+            "duration": "2m",
+            "durationSeconds": 120,
+            "maxRPMPercent": 55,
+            "reason": "agent run smoke test",
+            "capabilitiesExitStatus": 0,
+            "diagnoseExitStatus": status == "ready" ? 0 : 75,
+            "modelIdentifier": "MacBookPro18,3",
+            "state": status == "ready" ? "ready" : "blocked",
+            "recommendedAgentAction": status == "ready" ? "requestCooling" : "doNotRequestCooling",
+            "recommendedRecoveryAction": status == "ready" ? "none" : "repairHelper",
+            "recoverySteps": [],
+            "safeToRequestCooling": safeToRequestCooling,
+            "daemonControlPathReady": daemonControlPathReady,
+            "manualControlActive": manualControlActive,
+            "isAppleSilicon": true,
+            "isMacBookPro": true,
+            "fanCount": 2,
+            "controllableFanCount": 2,
+            "temperatureSensorCount": 2,
+            "thermalPressure": "nominal",
+            "failedCheckIDs": [],
+            "coolingBlockerIDs": [],
+            "appPreferences": [
+                "startupMode": "Auto",
+                "startupModeSource": "persisted",
+                "readError": NSNull()
+            ],
+            "capabilities": [
+                "daemonStatusAvailable": true,
+                "policySource": "daemonStatus",
+                "policyStatusAvailable": true,
+                "policyEnabled": true,
+                "supportsForceRetry": true,
+                "resolvedChildExecutableReported": true
+            ],
+            "daemonRuntime": [
+                "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                "installedDaemonPresent": true,
+                "installedDaemonSHA256": String(repeating: "a", count: 64),
+                "expectedDaemonPath": "/tmp/ViftyDaemon",
+                "expectedDaemonSHA256": String(repeating: daemonRuntimeMatchesExpected == false ? "b" : "a", count: 64),
+                "matchesExpectedDaemon": daemonRuntimeMatchesExpected as Any? ?? NSNull(),
+                "matchRequired": daemonRuntimeMatchRequired
+            ],
+            "blockers": [],
+            "nextAction": "Run make agent-run-smoke-evidence-current-build for clean current-source proof.",
+            "parseErrors": []
         ]
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: summaryURL)
