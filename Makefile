@@ -1,4 +1,4 @@
-.PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -22,6 +22,7 @@ VALIDATION_EVIDENCE_RELEASE_SUMMARY ?=
 VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
 VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
 VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1
+REPAIR_HELPER_APP ?= /Applications/Vifty.app
 CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 VALIDATION_EVIDENCE_BUNDLE ?=
@@ -96,6 +97,9 @@ app: ## Build the release app bundle
 install: ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
 
+repair-helper: ## Explicitly repair the installed privileged helper
+	./scripts/repair-vifty-helper.sh --app "$(REPAIR_HELPER_APP)"
+
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
 
@@ -169,6 +173,7 @@ verify: ## Run local trust gates without installing
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
 	test -x scripts/check-manual-smoke-readiness.sh
 	test -x scripts/check-agent-run-smoke-readiness.sh
+	test -x scripts/repair-vifty-helper.sh
 	@source_wrappers="$$(find examples/viftyctl -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
 	bundle_wrappers="$$(find "$(WRAPPERS)" -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
 	if [ "$$source_wrappers" != "$$bundle_wrappers" ]; then \

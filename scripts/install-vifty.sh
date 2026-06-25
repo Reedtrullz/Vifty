@@ -84,7 +84,8 @@ report_helper_daemon_status() {
   echo "==> Fan helper daemon differs from the installed app bundle."
   echo "    Bundled daemon:   ${bundled_sha}"
   echo "    Installed helper: ${installed_sha}"
-  echo "    Open Vifty and choose Reinstall Helper or Repair Helper before current-build manual/agent smoke evidence."
+  echo "    Open Vifty and choose Reinstall Helper or Repair Helper, or run: make repair-helper"
+  echo "    Do that before current-build manual/agent smoke evidence."
   echo "    Then rerun: AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build"
 }
 

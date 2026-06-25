@@ -6,6 +6,7 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))
         XCTAssertTrue(makefile.contains("validation-evidence: ## Collect read-only release/hardware validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-review: ## Review a captured validation evidence bundle"))
@@ -35,6 +36,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?="))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1"))
+        XCTAssertTrue(makefile.contains("REPAIR_HELPER_APP ?= /Applications/Vifty.app"))
         XCTAssertTrue(makefile.contains("CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)"))
         XCTAssertTrue(makefile.contains("CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_BUNDLE ?="))
@@ -97,6 +99,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("test -x \"$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh\""))
         XCTAssertTrue(makefile.contains("test -x scripts/check-manual-smoke-readiness.sh"))
         XCTAssertTrue(makefile.contains("test -x scripts/check-agent-run-smoke-readiness.sh"))
+        XCTAssertTrue(makefile.contains("test -x scripts/repair-vifty-helper.sh"))
         XCTAssertTrue(makefile.contains("source_wrappers=\"$$(find examples/viftyctl -maxdepth 1 -type f -name '*.sh' -exec basename {} \\; | sort)\""))
         XCTAssertTrue(makefile.contains("bundle_wrappers=\"$$(find \"$(WRAPPERS)\" -maxdepth 1 -type f -name '*.sh' -exec basename {} \\; | sort)\""))
         XCTAssertTrue(makefile.contains("Bundled viftyctl wrapper list does not match source examples."))
@@ -114,8 +117,10 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean"))
         XCTAssertTrue(makefile.contains("verify: ## Run local trust gates without installing"))
+        XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))
+        XCTAssertTrue(makefile.contains("./scripts/repair-vifty-helper.sh --app \"$(REPAIR_HELPER_APP)\""))
         XCTAssertTrue(makefile.contains("validation-evidence: ## Collect read-only release/hardware validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-review: ## Review a captured validation evidence bundle"))
