@@ -133,6 +133,7 @@ diagnose_decision = {
   "state" => nil,
   "recommendedAgentAction" => nil,
   "recommendedRecoveryAction" => nil,
+  "recoverySteps" => [],
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil,
   "manualControlActive" => nil,
@@ -182,6 +183,7 @@ guarded_run_decision = {
   "message" => nil,
   "recommendedAgentAction" => nil,
   "recommendedRecoveryAction" => nil,
+  "recoverySteps" => [],
   "diagnoseState" => nil,
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil,
@@ -639,6 +641,8 @@ if File.file?(diagnose_path)
       state = diagnose["state"]
       agent_action = diagnose["recommendedAgentAction"]
       recovery_action = diagnose["recommendedRecoveryAction"]
+      recovery_steps = diagnose["recoverySteps"]
+      recovery_steps_present = diagnose.key?("recoverySteps")
       safe_to_request = diagnose["safeToRequestCooling"]
       daemon_ready = diagnose["daemonControlPathReady"]
       daemon_ready_present = diagnose.key?("daemonControlPathReady")
@@ -654,6 +658,15 @@ if File.file?(diagnose_path)
       diagnose_decision["state"] = state if DIAGNOSE_STATES.include?(state)
       diagnose_decision["recommendedAgentAction"] = agent_action if DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
       diagnose_decision["recommendedRecoveryAction"] = recovery_action if DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
+      if recovery_steps_present
+        if string_array?(recovery_steps)
+          diagnose_decision["recoverySteps"] = recovery_steps
+        else
+          failures << "viftyctl-diagnose.json recoverySteps must be an array of strings"
+        end
+      else
+        warnings << "viftyctl-diagnose.json is missing recoverySteps; legacy reports may require recommendedRecoveryAction fallback guidance"
+      end
       diagnose_decision["safeToRequestCooling"] = safe_to_request if [true, false].include?(safe_to_request)
       diagnose_decision["manualControlActive"] = manual_control_active if [true, false].include?(manual_control_active)
       if failed_check_ids_present
@@ -838,6 +851,7 @@ if File.file?(guarded_run_stderr_path)
     message = guarded_payload["message"]
     agent_action = guarded_payload["recommendedAgentAction"]
     recovery_action = guarded_payload["recommendedRecoveryAction"]
+    recovery_steps = guarded_payload["recoverySteps"]
     diagnose_state = guarded_payload["diagnoseState"]
     safe_to_request = guarded_payload["safeToRequestCooling"]
     daemon_ready = guarded_payload["daemonControlPathReady"]
@@ -864,6 +878,7 @@ if File.file?(guarded_run_stderr_path)
     guarded_run_decision["message"] = message if message.is_a?(String)
     guarded_run_decision["recommendedAgentAction"] = agent_action if optional_string?(agent_action)
     guarded_run_decision["recommendedRecoveryAction"] = recovery_action if optional_string?(recovery_action)
+    guarded_run_decision["recoverySteps"] = recovery_steps if string_array?(recovery_steps)
     guarded_run_decision["diagnoseState"] = diagnose_state if optional_string?(diagnose_state)
     guarded_run_decision["safeToRequestCooling"] = safe_to_request if boolean?(safe_to_request)
     guarded_run_decision["daemonControlPathReady"] = daemon_ready if boolean?(daemon_ready)
@@ -891,6 +906,7 @@ if File.file?(guarded_run_stderr_path)
     failures << "guarded-run decision message must be nonempty" unless message.is_a?(String) && !message.strip.empty?
     failures << "guarded-run decision recommendedAgentAction is unsupported" unless agent_action.nil? || DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
     failures << "guarded-run decision recommendedRecoveryAction is unsupported" unless recovery_action.nil? || DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
+    failures << "guarded-run decision recoverySteps must be an array of strings" unless string_array?(recovery_steps)
     failures << "guarded-run decision diagnoseState is unsupported" unless diagnose_state.nil? || DIAGNOSE_STATES.include?(diagnose_state)
     failures << "guarded-run decision safeToRequestCooling must be boolean" unless boolean?(safe_to_request)
     failures << "guarded-run decision daemonControlPathReady must be boolean" unless boolean?(daemon_ready)
@@ -961,6 +977,9 @@ if File.file?(guarded_run_stderr_path)
     end
     if string_array?(cooling_blocker_ids) && diagnose_decision["coolingBlockerIDs"].any? && cooling_blocker_ids != diagnose_decision["coolingBlockerIDs"]
       failures << "guarded-run decision coolingBlockerIDs do not match diagnose evidence"
+    end
+    if string_array?(recovery_steps) && diagnose_decision["recoverySteps"].any? && recovery_steps != diagnose_decision["recoverySteps"]
+      failures << "guarded-run decision recoverySteps do not match diagnose evidence"
     end
   elsif !guarded_payload.nil?
     failures << "guarded-run decision JSON must contain an object"

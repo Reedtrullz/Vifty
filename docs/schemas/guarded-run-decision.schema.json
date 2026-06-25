@@ -15,6 +15,7 @@
     "message",
     "recommendedAgentAction",
     "recommendedRecoveryAction",
+    "recoverySteps",
     "diagnoseState",
     "safeToRequestCooling",
     "daemonControlPathReady",
@@ -100,6 +101,15 @@
         "collectHardwareEvidence",
         null
       ]
+    },
+    "recoverySteps": {
+      "type": "array",
+      "description": "Ordered payload-local recovery steps copied from viftyctl diagnose --json. Empty when no recovery is needed.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
     },
     "diagnoseState": {
       "type": ["string", "null"],

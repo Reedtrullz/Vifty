@@ -203,7 +203,7 @@ public enum ViftyAgentRule {
         \(commands.guardedRunPreflightCommand)
         ```
 
-        When guarded-run refuses before cooling or completes preflight-only, extract only the JSON payload between the marker pairs in `guardedRunJSONMarkers`: use `guardedRunJSONMarkers.capabilities.begin` / `.end`, `guardedRunJSONMarkers.diagnose.begin` / `.end`, and `guardedRunJSONMarkers.decision.begin` / `.end` instead of hardcoding marker strings. Decision payloads must use the `guardedRunDecisionSchemaID` from this report, include `decisionReason`, and preflight-only success must report `coolingRequested: false`. Do not parse surrounding recovery prose.
+        When guarded-run refuses before cooling or completes preflight-only, extract only the JSON payload between the marker pairs in `guardedRunJSONMarkers`: use `guardedRunJSONMarkers.capabilities.begin` / `.end`, `guardedRunJSONMarkers.diagnose.begin` / `.end`, and `guardedRunJSONMarkers.decision.begin` / `.end` instead of hardcoding marker strings. Decision payloads must use the `guardedRunDecisionSchemaID` from this report, include `decisionReason` and `recoverySteps`, and preflight-only success must report `coolingRequested: false`. Do not parse surrounding recovery prose.
 
         Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` and `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset unless the user explicitly approves that supervised behavior after seeing Vifty's structured readiness output. Do not catch a guarded-run failure and rerun the same workload without Vifty.
 

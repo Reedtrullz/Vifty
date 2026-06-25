@@ -808,6 +808,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(decisionMarker["begin"] as? String, "guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON")
         XCTAssertEqual(decisionMarker["end"] as? String, "guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON")
         XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("safeToRequestCooling") == true)
+        XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("include `decisionReason` and `recoverySteps`") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunDecisionSchemaID") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)

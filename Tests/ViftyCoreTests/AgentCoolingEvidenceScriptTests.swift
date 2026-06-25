@@ -248,6 +248,10 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
               "daemonControlPathReady": true,
               "manualControlActive": true,
               "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+              "recoverySteps": [
+                "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+                "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+              ],
               "failedCheckIDs": ["manualControlClear"],
               "coolingBlockerIDs": ["manualControlClear"],
               "appPreferences": {
@@ -264,7 +268,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         try """
         guarded-run: Vifty readiness state blocked does not allow cooling.
         guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"readinessBlocked","exitCode":75,"message":"Vifty readiness state blocked does not allow cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"startupMode":"Curve","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"readinessBlocked","exitCode":75,"message":"Vifty readiness state blocked does not allow cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","recoverySteps":["Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.","If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."],"diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"startupMode":"Curve","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
         guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
         """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
 
@@ -305,6 +309,13 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(guardedRunDecision["exitCode"] as? Int, 75)
         XCTAssertEqual(guardedRunDecision["recommendedAgentAction"] as? String, "doNotRequestCooling")
         XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "restoreAutoBeforeRetry")
+        XCTAssertEqual(
+            guardedRunDecision["recoverySteps"] as? [String],
+            [
+                "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+                "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+            ]
+        )
         XCTAssertEqual(guardedRunDecision["diagnoseState"] as? String, "blocked")
         XCTAssertEqual(guardedRunDecision["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(guardedRunDecision["daemonControlPathReady"] as? Bool, true)
@@ -331,6 +342,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
               "daemonControlPathReady": true,
               "manualControlActive": false,
               "recommendedRecoveryAction": "none",
+              "recoverySteps": [],
               "failedCheckIDs": [],
               "coolingBlockerIDs": [],
               "appPreferences": {
@@ -346,7 +358,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         try """
         guarded-run: Guarded-run read-only preflight passed; no cooling command or child command was run.
         guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":true,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"preflightReady","exitCode":0,"message":"Guarded-run read-only preflight passed; no cooling command or child command was run.","recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","diagnoseState":"ready","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","failedCheckIDs":[],"coolingBlockerIDs":[],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":true,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"preflightReady","exitCode":0,"message":"Guarded-run read-only preflight passed; no cooling command or child command was run.","recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","recoverySteps":[],"diagnoseState":"ready","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","failedCheckIDs":[],"coolingBlockerIDs":[],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
         guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
         """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
 
@@ -453,6 +465,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
         XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "preflightReady")
         XCTAssertEqual(guardedRunDecision["exitCode"] as? Int, 0)
+        XCTAssertEqual(guardedRunDecision["recoverySteps"] as? [String], [])
         XCTAssertEqual(guardedRunDecision["requestedWorkload"] as? String, "test")
         XCTAssertEqual(guardedRunDecision["requestedDuration"] as? String, "20m")
         XCTAssertEqual(guardedRunDecision["requestedMaxRPMPercent"] as? Int, 70)
@@ -472,6 +485,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
               "daemonControlPathReady": true,
               "manualControlActive": true,
               "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+              "recoverySteps": [
+                "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json."
+              ],
               "failedCheckIDs": ["manualControlClear"],
               "coolingBlockerIDs": ["manualControlClear"],
               "appPreferences": {
@@ -488,7 +504,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         try """
         guarded-run: Vifty readiness state blocked does not allow cooling.
         guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"parseTheMessagePlease","exitCode":75,"message":"Vifty readiness state blocked does not allow cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"startupMode":"Curve","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"parseTheMessagePlease","exitCode":75,"message":"Vifty readiness state blocked does not allow cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"restoreAutoBeforeRetry","recoverySteps":["Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json."],"diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":true,"startupMode":"Curve","failedCheckIDs":["manualControlClear"],"coolingBlockerIDs":["manualControlClear"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
         guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
         """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
         let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
@@ -1412,6 +1428,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "state",
             "recommendedAgentAction",
             "recommendedRecoveryAction",
+            "recoverySteps",
             "safeToRequestCooling",
             "daemonControlPathReady",
             "manualControlActive",
@@ -1423,6 +1440,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         }
 
         let diagnoseProperties = try XCTUnwrap(diagnoseDecision["properties"] as? [String: Any])
+        XCTAssertEqual(diagnoseProperties["recoverySteps"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["failedCheckIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["coolingBlockerIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["appPreferences"] as? [String: String], ["$ref": "#/$defs/appPreferencesDiagnostic"])
@@ -1481,6 +1499,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "message",
             "recommendedAgentAction",
             "recommendedRecoveryAction",
+            "recoverySteps",
             "diagnoseState",
             "safeToRequestCooling",
             "daemonControlPathReady",
@@ -1509,6 +1528,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(decisionReasonValues.contains("preflightReady"))
         XCTAssertTrue(decisionReasonValues.contains("daemonRuntimeMismatch"))
         XCTAssertNotNil(sourceProperties["daemonRuntime"] as? [String: Any])
+        XCTAssertNotNil(sourceProperties["recoverySteps"] as? [String: Any])
     }
 }
 
@@ -1543,7 +1563,7 @@ private final class AgentCoolingEvidenceHarness {
     init(
         capabilitiesJSON: String = AgentCoolingEvidenceHarness.defaultCapabilitiesJSON,
         capabilitiesExitCode: Int = 0,
-        diagnoseJSON: String = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
+        diagnoseJSON: String = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"ready","recommendedAgentAction":"requestCooling","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"recommendedRecoveryAction":"none","recoverySteps":[],"failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"checks":[]}"#,
         diagnoseExitCode: Int = 0,
         statusJSON: String = #"{"enabled":true,"activeLease":null,"lastDecision":null}"#,
         statusExitCode: Int = 0,

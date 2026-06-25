@@ -262,6 +262,7 @@
         "message",
         "recommendedAgentAction",
         "recommendedRecoveryAction",
+        "recoverySteps",
         "diagnoseState",
         "safeToRequestCooling",
         "daemonControlPathReady",
@@ -393,6 +394,9 @@
             null
           ]
         },
+        "recoverySteps": {
+          "$ref": "#/$defs/stringArray"
+        },
         "diagnoseState": {
           "type": [
             "string",
@@ -498,6 +502,7 @@
         "state",
         "recommendedAgentAction",
         "recommendedRecoveryAction",
+        "recoverySteps",
         "safeToRequestCooling",
         "daemonControlPathReady",
         "manualControlActive",
@@ -551,6 +556,9 @@
             "collectHardwareEvidence",
             null
           ]
+        },
+        "recoverySteps": {
+          "$ref": "#/$defs/stringArray"
         },
         "safeToRequestCooling": {
           "type": [

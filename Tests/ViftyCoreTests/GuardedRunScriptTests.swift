@@ -47,6 +47,7 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(decision["exitCode"] as? Int, 0)
         XCTAssertEqual(decision["recommendedAgentAction"] as? String, "requestCooling")
         XCTAssertEqual(decision["recommendedRecoveryAction"] as? String, "none")
+        XCTAssertEqual(decision["recoverySteps"] as? [String], [])
         XCTAssertEqual(decision["diagnoseState"] as? String, "ready")
         XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
@@ -768,7 +769,12 @@ final class GuardedRunScriptTests: XCTestCase {
         let harness = try ScriptHarness(
             state: "blocked",
             recommendedRecoveryAction: "repairHelper",
-            daemonControlPathReady: false
+            daemonControlPathReady: false,
+            recoverySteps: [
+                "Open Vifty and choose Repair/Reinstall Helper.",
+                "Approve Login Items if macOS asks.",
+                "Run make repair-helper from a source checkout if the app repair still fails."
+            ]
         )
 
         let result = try harness.runGuardedRun([
@@ -778,7 +784,9 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 75)
         XCTAssertTrue(result.stderr.contains("readiness is blocked"))
         XCTAssertTrue(result.stderr.contains("recovery action is repairHelper"))
-        XCTAssertTrue(result.stderr.contains("Repair/Reinstall Helper"))
+        XCTAssertTrue(result.stderr.contains("Vifty recovery step: Open Vifty and choose Repair/Reinstall Helper."))
+        XCTAssertTrue(result.stderr.contains("Vifty recovery step: Approve Login Items if macOS asks."))
+        XCTAssertTrue(result.stderr.contains("Vifty recovery step: Run make repair-helper from a source checkout if the app repair still fails."))
         XCTAssertTrue(result.stderr.contains("Do not rerun the child command yourself after this guarded-run failure"), result.stderr)
         XCTAssertTrue(result.stderr.contains("BEGIN_VIFTY_DIAGNOSE_JSON"), result.stderr)
         XCTAssertTrue(result.stderr.contains("END_VIFTY_DIAGNOSE_JSON"), result.stderr)
@@ -812,6 +820,13 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(decision["exitCode"] as? Int, 75)
         XCTAssertEqual(decision["recommendedAgentAction"] as? String, "requestCooling")
         XCTAssertEqual(decision["recommendedRecoveryAction"] as? String, "restoreAutoBeforeRetry")
+        XCTAssertEqual(
+            decision["recoverySteps"] as? [String],
+            [
+                "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+                "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+            ]
+        )
         XCTAssertEqual(decision["diagnoseState"] as? String, "degraded")
         XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
@@ -1184,6 +1199,38 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunFailsClosedWhenReadinessRecoveryStepsAreMissing() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            includeRecoverySteps: false
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("missing agent decision fields"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("BEGIN_VIFTY_DIAGNOSE_JSON"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunFailsClosedWhenReadinessRecoveryStepsAreMalformed() throws {
+        let harness = try ScriptHarness(
+            state: "degraded",
+            decisionFieldsOverride: #","recommendedAgentAction":"requestCoolingWithCaution","recommendedRecoveryAction":"none","recoverySteps":[42],"safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("missing agent decision fields"), result.stderr)
+        XCTAssertTrue(result.stderr.contains(#""recoverySteps":[42]"#), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunTreatsNonzeroBlockedDiagnoseAsReadinessBlock() throws {
         let harness = try ScriptHarness(state: "blocked", diagnoseExitCode: 75, emitReadinessOnDiagnoseFailure: true)
 
@@ -1452,6 +1499,8 @@ private final class ScriptHarness {
         startupMode: String? = nil,
         failedCheckIDs: [String] = [],
         coolingBlockerIDs: [String] = [],
+        includeRecoverySteps: Bool = true,
+        recoverySteps: [String]? = nil,
         diagnoseExitCode: Int = 0,
         diagnoseSchemaVersion: Int = 1,
         emitReadinessOnDiagnoseFailure: Bool = false,
@@ -1501,6 +1550,8 @@ private final class ScriptHarness {
                 startupMode: startupMode,
                 failedCheckIDs: failedCheckIDs,
                 coolingBlockerIDs: coolingBlockerIDs,
+                includeRecoverySteps: includeRecoverySteps,
+                recoverySteps: recoverySteps,
                 diagnoseExitCode: diagnoseExitCode,
                 diagnoseSchemaVersion: diagnoseSchemaVersion,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
@@ -1627,6 +1678,8 @@ private final class ScriptHarness {
         startupMode: String?,
         failedCheckIDs: [String],
         coolingBlockerIDs: [String],
+        includeRecoverySteps: Bool,
+        recoverySteps: [String]?,
         diagnoseExitCode: Int,
         diagnoseSchemaVersion: Int,
         emitReadinessOnDiagnoseFailure: Bool,
@@ -1656,6 +1709,10 @@ private final class ScriptHarness {
         let decisionFields = decisionFieldsOverride ?? (includeDecisionFields
             ? #","recommendedAgentAction":"\#(recommendedAction)","recommendedRecoveryAction":"\#(recommendedRecoveryAction)","safeToRequestCooling":\#(safeToRequestCooling),"daemonControlPathReady":\#(daemonControlPathReady),"manualControlActive":\#(manualControlActive)"#
             : "")
+        let hasRecoveryStepsOverride = decisionFieldsOverride?.contains(#""recoverySteps""#) == true
+        let recoveryStepsField = includeRecoverySteps && !hasRecoveryStepsOverride
+            ? #","recoverySteps":\#(Self.jsonStringArray(recoverySteps ?? Self.defaultRecoverySteps(for: recommendedRecoveryAction)))"#
+            : ""
         let appPreferences = startupMode.map {
             #","appPreferences":{"startupMode":"\#($0)","startupModeSource":"persisted","readError":null}"#
         } ?? ""
@@ -1701,7 +1758,7 @@ private final class ScriptHarness {
 
         if [ "$#" -ge 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then
-            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(readinessIDs)\(appPreferences),"checks":[]}\n'
+            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(recoveryStepsField)\(readinessIDs)\(appPreferences),"checks":[]}\n'
           else
             printf '\(commandError)\n'
           fi
@@ -1752,6 +1809,36 @@ private final class ScriptHarness {
 
     private static func defaultSafeToRequestCooling(for state: String) -> Bool {
         state == "ready" || state == "degraded"
+    }
+
+    private static func defaultRecoverySteps(for recoveryAction: String) -> [String] {
+        switch recoveryAction {
+        case "repairHelper":
+            return [
+                "Open Vifty and choose Repair/Reinstall Helper.",
+                "Approve Login Items if macOS asks.",
+                "If the app repair still fails, run make repair-helper from a source checkout."
+            ]
+        case "restoreAutoBeforeRetry":
+            return [
+                "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+                "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+            ]
+        case "backOffWorkload":
+            return [
+                "Pause or reduce the workload, then rerun diagnose --json when thermals settle."
+            ]
+        case "inspectPolicy":
+            return [
+                "Inspect viftyctl status --json and Vifty settings before retrying."
+            ]
+        case "collectHardwareEvidence":
+            return [
+                "Collect read-only validation evidence before requesting cooling on this Mac."
+            ]
+        default:
+            return []
+        }
     }
 
     private static func jsonStringArray(_ values: [String]) -> String {
