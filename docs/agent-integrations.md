@@ -252,11 +252,11 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `blocked` readiness: do not request cooling; show the JSON.
 - `restoreAutoBeforeRequestingCooling`: ask the user whether to restore Auto once before retrying, then re-run diagnose.
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
-- Diagnose `recommendedRecoveryAction: "repairHelper"`: show `repairHelperRecoveryActions` from `viftyctl agent-rule --json` when available; ask the user to open Vifty and use Repair/Reinstall Helper or, from a source checkout, run `make repair-helper`, then approve Login Items if prompted.
+- Diagnose `recommendedRecoveryAction: "repairHelper"`: show payload-local `recoverySteps` when available, falling back to `repairHelperRecoveryActions` from `viftyctl agent-rule --json`; ask the user to open Vifty and use Repair/Reinstall Helper or, from a source checkout, run `make repair-helper`, then approve Login Items if prompted.
 - Diagnose `recommendedRecoveryAction: "backOffWorkload"`: pause or reduce the workload; do not fight critical system thermals.
 - Diagnose `recommendedRecoveryAction: "inspectPolicy"`: inspect local policy/status before retrying; do not use the guarded uncooled fallback.
 - Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"`: collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback.
-- Command-error `recommendedRecoveryAction: "repairHelper"`: recover daemon/transport failures through the Vifty helper repair path or explicit `make repair-helper`; do not attempt direct SMC writes.
+- Command-error `recommendedRecoveryAction: "repairHelper"`: show the command-error `recoverySteps`, recover daemon/transport failures through the Vifty helper repair path or explicit `make repair-helper`, and do not attempt direct SMC writes.
 - `recommendedRecoveryAction: "fixChildCommand"`: fix the workload command/path or show the launch error; do not repair Vifty helper state.
 - `recommendedRecoveryAction: "waitBeforeRetry"`: wait for `retryAfterSeconds`; do not busy-loop retries.
 - `recommendedRecoveryAction: "restoreAutoBeforeRetry"`: ask the user whether to restore Auto once before requesting another lease, then re-run diagnose. Do not loop `restore-auto`; if `manualControlActive` stays true after one restore, inspect `appPreferences.startupMode`, then stop and ask the user to switch Vifty/default startup mode to Auto.

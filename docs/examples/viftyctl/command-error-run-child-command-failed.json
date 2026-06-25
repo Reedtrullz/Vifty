@@ -7,6 +7,9 @@
   "generatedAt": 700000003,
   "message": "Child command was not found on PATH: missing-tool",
   "recommendedRecoveryAction": "fixChildCommand",
+  "recoverySteps": [
+    "Fix the workload command/path or show the launch error; do not treat this as a helper failure."
+  ],
   "safeToProceed": false,
   "schemaID": "https://vifty.local/schemas/viftyctl-command-error.schema.json",
   "schemaVersion": 1

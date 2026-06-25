@@ -828,6 +828,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var message: String
     public var safeToProceed: Bool
     public var recommendedRecoveryAction: ViftyCtlCommandErrorRecoveryAction
+    public var recoverySteps: [String]
     public var coolingLeasePrepared: Bool
     public var autoRestoreAttempted: Bool
     public var autoRestoreSucceeded: Bool?
@@ -842,6 +843,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         message: String,
         safeToProceed: Bool = false,
         recommendedRecoveryAction: ViftyCtlCommandErrorRecoveryAction? = nil,
+        recoverySteps: [String]? = nil,
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
         autoRestoreSucceeded: Bool? = nil,
@@ -854,7 +856,9 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         self.errorCode = errorCode
         self.message = message
         self.safeToProceed = safeToProceed
-        self.recommendedRecoveryAction = recommendedRecoveryAction ?? .recommended(for: errorCode)
+        let resolvedRecoveryAction = recommendedRecoveryAction ?? .recommended(for: errorCode)
+        self.recommendedRecoveryAction = resolvedRecoveryAction
+        self.recoverySteps = recoverySteps ?? ViftyCtlRecoverySteps.steps(for: resolvedRecoveryAction)
         self.coolingLeasePrepared = coolingLeasePrepared
         self.autoRestoreAttempted = autoRestoreAttempted
         self.autoRestoreSucceeded = autoRestoreSucceeded
@@ -870,6 +874,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         case message
         case safeToProceed
         case recommendedRecoveryAction
+        case recoverySteps
         case coolingLeasePrepared
         case autoRestoreAttempted
         case autoRestoreSucceeded
@@ -890,6 +895,8 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
             ViftyCtlCommandErrorRecoveryAction.self,
             forKey: .recommendedRecoveryAction
         ) ?? .recommended(for: errorCode)
+        recoverySteps = try container.decodeIfPresent([String].self, forKey: .recoverySteps)
+            ?? ViftyCtlRecoverySteps.steps(for: recommendedRecoveryAction)
         coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? false
         autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? false
         autoRestoreSucceeded = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreSucceeded)
@@ -906,6 +913,7 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         try container.encode(message, forKey: .message)
         try container.encode(safeToProceed, forKey: .safeToProceed)
         try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
+        try container.encode(recoverySteps, forKey: .recoverySteps)
         try container.encode(coolingLeasePrepared, forKey: .coolingLeasePrepared)
         try container.encode(autoRestoreAttempted, forKey: .autoRestoreAttempted)
         if let autoRestoreSucceeded {

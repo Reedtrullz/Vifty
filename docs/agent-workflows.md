@@ -110,7 +110,7 @@ Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCo
 
 `failedCheckIDs` mirrors every failed readiness check ID in order. `coolingBlockerIDs` is the hard-stop subset: failed error checks plus restore-first ownership checks such as `activeLeaseClear` and `manualControlClear`. Warning-only caution states can have `failedCheckIDs` such as `thermalPressureSafe` while `coolingBlockerIDs` remains empty, so agents should still use `safeToRequestCooling` and `recommendedAgentAction` as the final gate.
 
-`recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`:
+`recommendedRecoveryAction` gives the next safe follow-up without parsing `checks[].message`. Current payloads also include ordered `recoverySteps` that agents may show directly after applying the safety gates:
 
 - `none` - no recovery is needed before following `recommendedAgentAction`.
 - `repairHelper` - open Vifty and use Repair/Reinstall Helper; do not attempt direct SMC writes.
@@ -129,6 +129,7 @@ Important fields:
 - `thermalPressure`
 - `recommendedAgentAction`
 - `recommendedRecoveryAction`
+- `recoverySteps`
 - `safeToRequestCooling`
 - `daemonControlPathReady`
 - `manualControlActive`
@@ -226,7 +227,7 @@ Use this output rather than hardcoding policy limits, metadata limits, wrapper p
 
 Canonical examples live in [docs/examples/viftyctl](examples/viftyctl/README.md). The XCTest suite decodes those fixtures against the current Swift models so agent-facing examples stay aligned with implementation.
 
-Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `failedCheckIDs`, `coolingBlockerIDs`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The additive `appPreferences.startupMode` field helps diagnose persistent manual-control markers, but it is not a cooling authorization. The same folder also documents capabilities, audit, status/prepare/restore-auto, completed run reports, and structured command-error payloads.
+Agent-facing schemas live in [docs/schemas](schemas) and are bundled into release app artifacts at `Vifty.app/Contents/Resources/schemas`. Agents should pin readiness behavior to [viftyctl-diagnose.schema.json](schemas/viftyctl-diagnose.schema.json)'s safety fields: `state`, `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `failedCheckIDs`, `coolingBlockerIDs`, hardware support flags, fan/sensor counts, `agentControl`, and `checks`. The additive `appPreferences.startupMode` field helps diagnose persistent manual-control markers, but it is not a cooling authorization. The same folder also documents capabilities, audit, status/prepare/restore-auto, completed run reports, and structured command-error payloads.
 
 For copy/paste instructions tailored to Codex, Claude Code, Cursor, and shell runners, see [agent-integrations.md](agent-integrations.md).
 
@@ -273,12 +274,13 @@ For JSON command/parse/transport failures, Vifty emits:
 - `message`
 - `safeToProceed: false`
 - `recommendedRecoveryAction`
+- `recoverySteps`
 - `coolingLeasePrepared`
 - `autoRestoreAttempted`
 - `autoRestoreSucceeded`
 - `retryAfterSeconds` when the error is `PREPARE_RATE_LIMITED` and Vifty can report a retry wait
 
-`recommendedRecoveryAction` is the stable machine-readable next step for command failures. Current values are `runDiagnose`, `repairHelper`, `fixArguments`, `fixChildCommand`, `restoreAutoBeforeRetry`, and `waitBeforeRetry`. Agents should prefer this field over parsing `message` text.
+`recommendedRecoveryAction` is the stable machine-readable next step for command failures. Current values are `runDiagnose`, `repairHelper`, `fixArguments`, `fixChildCommand`, `restoreAutoBeforeRetry`, and `waitBeforeRetry`. Current payloads also include ordered `recoverySteps`; agents should prefer these fields over parsing `message` text.
 
 ### `audit --json`
 
@@ -332,11 +334,11 @@ The wrapper:
 - treats nonzero blocked diagnose reports as readiness blocks,
 - fails closed and prints any structured diagnose failure before requesting cooling only when a nonzero diagnose command-error payload matches the advertised command-error schema identity,
 - refuses to continue on `blocked`,
-- requires `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` to be present,
+- requires `recommendedAgentAction`, `recommendedRecoveryAction`, `recoverySteps`, `safeToRequestCooling`, `daemonControlPathReady`, and `manualControlActive` to be present,
 - treats `safeToRequestCooling: false` as a hard stop, including the restore-first active-lease or manual-control case,
 - treats `daemonControlPathReady: false` as a hard stop before cooling,
 - treats `manualControlActive: true` as a restore-Auto stop before cooling,
-- prints `recommendedRecoveryAction` guidance for blocked or restore-first readiness; for `repairHelper`, agents should prefer the optional `repairHelperRecoveryActions` array from `viftyctl agent-rule --json`, including the source-checkout `make repair-helper` path,
+- prints `recommendedRecoveryAction` and `recoverySteps` guidance for blocked or restore-first readiness; for older `repairHelper` payloads without `recoverySteps`, agents should fall back to the optional `repairHelperRecoveryActions` array from `viftyctl agent-rule --json`, including the source-checkout `make repair-helper` path,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
 - exits after decision JSON when preflight-only is requested,

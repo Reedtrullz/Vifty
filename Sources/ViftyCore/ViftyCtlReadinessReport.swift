@@ -134,6 +134,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var state: ViftyCtlReadinessState
     public var recommendedAgentAction: ViftyCtlRecommendedAgentAction?
     public var recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction
+    public var recoverySteps: [String]
     public var safeToRequestCooling: Bool?
     public var daemonControlPathReady: Bool
     public var manualControlActive: Bool
@@ -162,6 +163,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case state
         case recommendedAgentAction
         case recommendedRecoveryAction
+        case recoverySteps
         case safeToRequestCooling
         case daemonControlPathReady
         case manualControlActive
@@ -191,6 +193,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         state: ViftyCtlReadinessState,
         recommendedAgentAction: ViftyCtlRecommendedAgentAction? = nil,
         recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction? = nil,
+        recoverySteps: [String]? = nil,
         safeToRequestCooling: Bool? = nil,
         daemonControlPathReady: Bool? = nil,
         manualControlActive: Bool = false,
@@ -216,8 +219,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.state = state
         let resolvedAction = recommendedAgentAction ?? Self.recommendedAgentAction(for: state, checks: checks)
         self.recommendedAgentAction = resolvedAction
-        self.recommendedRecoveryAction = recommendedRecoveryAction
+        let resolvedRecoveryAction = recommendedRecoveryAction
             ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
+        self.recommendedRecoveryAction = resolvedRecoveryAction
+        self.recoverySteps = recoverySteps ?? ViftyCtlRecoverySteps.steps(for: resolvedRecoveryAction)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
@@ -257,6 +262,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 ViftyCtlReadinessRecoveryAction.self,
                 forKey: .recommendedRecoveryAction
             ),
+            recoverySteps: try container.decodeIfPresent([String].self, forKey: .recoverySteps),
             safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
             daemonControlPathReady: try container.decodeIfPresent(Bool.self, forKey: .daemonControlPathReady),
             manualControlActive: try container.decodeIfPresent(Bool.self, forKey: .manualControlActive) ?? false,
@@ -298,6 +304,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encode(state, forKey: .state)
         try container.encodeIfPresent(recommendedAgentAction, forKey: .recommendedAgentAction)
         try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
+        try container.encode(recoverySteps, forKey: .recoverySteps)
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
         try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
         try container.encode(manualControlActive, forKey: .manualControlActive)

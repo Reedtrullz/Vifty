@@ -158,6 +158,7 @@
   "modelIdentifier": "MacBookPro18,3",
   "recommendedAgentAction": "requestCoolingWithCaution",
   "recommendedRecoveryAction": "none",
+  "recoverySteps": [],
   "safeToRequestCooling": true,
   "schemaVersion": 1,
   "state": "degraded",

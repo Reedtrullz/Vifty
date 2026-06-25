@@ -93,7 +93,7 @@ Agent control rules:
 - user Auto restore preempts active and in-flight agent cooling;
 - `viftyctl run` resolves the child executable before preparing cooling and restores Auto after normal exit, handled signal exit, or launch failure.
 
-Agents should run `viftyctl diagnose --json` before long build/test workloads, use `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `coolingBlockerIDs` as machine-readable gates, treat `recommendedAgentAction: "doNotRequestCooling"` or `"restoreAutoBeforeRequestingCooling"` as stop-before-cooling decisions, and use `recommendedRecoveryAction` for helper repair, Auto restore, workload backoff, policy inspection, or read-only hardware evidence follow-up. If a restore leaves `manualControlActive` true, agents should inspect `appPreferences.startupMode`, then stop instead of looping and ask the user to switch Vifty/default startup mode to Auto before another cooling request.
+Agents should run `viftyctl diagnose --json` before long build/test workloads, use `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `coolingBlockerIDs` as machine-readable gates, treat `recommendedAgentAction: "doNotRequestCooling"` or `"restoreAutoBeforeRequestingCooling"` as stop-before-cooling decisions, and use `recommendedRecoveryAction` plus `recoverySteps` for helper repair, Auto restore, workload backoff, policy inspection, or read-only hardware evidence follow-up. If a restore leaves `manualControlActive` true, agents should inspect `appPreferences.startupMode`, then stop instead of looping and ask the user to switch Vifty/default startup mode to Auto before another cooling request.
 
 ## Local Data and Privacy
 

@@ -71,6 +71,15 @@
         "waitBeforeRetry"
       ]
     },
+    "recoverySteps": {
+      "description": "Ordered human-safe recovery guidance for the recommendedRecoveryAction. Agents may show these steps directly, but must not treat them as cooling authorization.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
     "coolingLeasePrepared": {
       "description": "True only when viftyctl run successfully prepared a matching cooling lease before reporting this error.",
       "type": "boolean"

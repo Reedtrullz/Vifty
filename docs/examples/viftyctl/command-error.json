@@ -7,6 +7,9 @@
   "generatedAt": 700000000,
   "message": "Prepare rate-limited. Wait 20s between prepare calls.",
   "recommendedRecoveryAction": "waitBeforeRetry",
+  "recoverySteps": [
+    "Wait for retryAfterSeconds before retrying, or show the JSON to the user if no retryAfterSeconds is present."
+  ],
   "retryAfterSeconds": 20,
   "safeToProceed": false,
   "schemaID": "https://vifty.local/schemas/viftyctl-command-error.schema.json",

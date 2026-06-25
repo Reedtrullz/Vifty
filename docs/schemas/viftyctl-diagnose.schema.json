@@ -60,6 +60,15 @@
         "collectHardwareEvidence"
       ]
     },
+    "recoverySteps": {
+      "description": "Ordered human-safe recovery guidance for the recommendedRecoveryAction. Agents may show these steps directly, but must still use the safety fields as authorization gates.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
     "safeToRequestCooling": {
       "type": "boolean"
     },

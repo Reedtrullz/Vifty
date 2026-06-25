@@ -159,6 +159,11 @@
   "modelIdentifier": "MacBookPro18,3",
   "recommendedAgentAction": "doNotRequestCooling",
   "recommendedRecoveryAction": "repairHelper",
+  "recoverySteps": [
+    "Open Vifty and use Repair/Reinstall Helper, then approve Login Items if macOS asks.",
+    "In a source checkout, run make repair-helper for the same explicit administrator-approved LaunchDaemon repair.",
+    "After repair, rerun diagnose --json and require safe readiness before requesting cooling."
+  ],
   "safeToRequestCooling": false,
   "schemaVersion": 1,
   "state": "blocked",

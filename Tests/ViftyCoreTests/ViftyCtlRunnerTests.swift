@@ -3,6 +3,11 @@ import XCTest
 @testable import ViftyCore
 
 final class ViftyCtlRunnerTests: XCTestCase {
+    private static let restoreAutoRecoverySteps = [
+        "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+        "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+    ]
+
     func testCommandErrorRecoveryActionsMapSafeNextSteps() {
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .helperUnreachable), .repairHelper)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .invalidArguments), .fixArguments)
@@ -65,6 +70,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.helperUnreachable.rawValue)
         XCTAssertEqual(json["safeToProceed"] as? Bool, false)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlCommandErrorRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["recoverySteps"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertTrue((json["message"] as? String)?.contains("Daemon request timed out") == true)
     }
 
@@ -466,6 +472,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["state"] as? String, "ready")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.requestCooling.rawValue)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.none.rawValue)
+        XCTAssertEqual(json["recoverySteps"] as? [String], [])
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["manualControlActive"] as? Bool, false)
@@ -537,6 +544,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["state"] as? String, "blocked")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["recoverySteps"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["failedCheckIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
         XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
@@ -589,6 +597,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["state"] as? String, "blocked")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["recoverySteps"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "unknown")
@@ -645,6 +654,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["state"] as? String, "blocked")
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["recoverySteps"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, false)
         XCTAssertEqual(json["modelIdentifier"] as? String, "MacBookPro18,3")
@@ -725,6 +735,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             json["recommendedRecoveryAction"] as? String,
             ViftyCtlReadinessRecoveryAction.restoreAutoBeforeRetry.rawValue
         )
+        XCTAssertEqual(json["recoverySteps"] as? [String], Self.restoreAutoRecoverySteps)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["failedCheckIDs"] as? [String], ["activeLeaseClear"])
@@ -780,6 +791,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             json["recommendedRecoveryAction"] as? String,
             ViftyCtlReadinessRecoveryAction.restoreAutoBeforeRetry.rawValue
         )
+        XCTAssertEqual(json["recoverySteps"] as? [String], Self.restoreAutoRecoverySteps)
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["daemonControlPathReady"] as? Bool, true)
         XCTAssertEqual(json["manualControlActive"] as? Bool, true)
@@ -946,6 +958,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .requestCoolingWithCaution)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.recoverySteps, [])
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertEqual(report.failedCheckIDs, ["thermalPressureSafe"])
@@ -976,6 +989,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.recoverySteps, Self.restoreAutoRecoverySteps)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertEqual(report.failedCheckIDs, ["activeLeaseClear"])
@@ -1000,6 +1014,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.recoverySteps, Self.restoreAutoRecoverySteps)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertTrue(report.manualControlActive)
@@ -1035,6 +1050,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.state, .blocked)
         XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.recoverySteps, ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertEqual(report.failedCheckIDs, ["daemonRuntimeMatchesExpected"])
         XCTAssertEqual(report.coolingBlockerIDs, ["daemonRuntimeMatchesExpected"])

@@ -3,6 +3,21 @@ import XCTest
 @testable import ViftyCore
 
 final class ViftyCtlJSONExampleTests: XCTestCase {
+    private static let repairHelperRecoverySteps = ViftyAgentRule.repairHelperRecoveryActions
+    private static let restoreAutoRecoverySteps = [
+        "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+        "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+    ]
+    private static let fixChildCommandRecoverySteps = [
+        "Fix the workload command/path or show the launch error; do not treat this as a helper failure."
+    ]
+    private static let runDiagnoseRecoverySteps = [
+        "Run viftyctl diagnose --json and follow its readiness fields before requesting cooling."
+    ]
+    private static let waitBeforeRetryRecoverySteps = [
+        "Wait for retryAfterSeconds before retrying, or show the JSON to the user if no retryAfterSeconds is present."
+    ]
+
     func testCapabilitiesExampleDecodesAgainstCurrentModel() throws {
         let capabilities = try decode(ViftyCtlCapabilities.self, from: "capabilities.json")
 
@@ -144,6 +159,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .ready)
         XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.recoverySteps, [])
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
@@ -168,6 +184,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .blocked)
         XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.recoverySteps, Self.repairHelperRecoverySteps)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertFalse(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
@@ -203,6 +220,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.recoverySteps, Self.restoreAutoRecoverySteps)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
@@ -227,6 +245,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .restoreAutoBeforeRequestingCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .restoreAutoBeforeRetry)
+        XCTAssertEqual(report.recoverySteps, Self.restoreAutoRecoverySteps)
         XCTAssertEqual(report.safeToRequestCooling, false)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertTrue(report.manualControlActive)
@@ -259,6 +278,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .degraded)
         XCTAssertEqual(report.recommendedAgentAction, .requestCoolingWithCaution)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.recoverySteps, [])
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
@@ -277,6 +297,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
     func testDiagnoseLegacyPayloadDecodesWithRecoveryDefault() throws {
         var payload = try readJSON(fixtureURL("diagnose-ready.json"))
         payload.removeValue(forKey: "recommendedRecoveryAction")
+        payload.removeValue(forKey: "recoverySteps")
         payload.removeValue(forKey: "daemonControlPathReady")
         payload.removeValue(forKey: "manualControlActive")
         payload.removeValue(forKey: "appPreferences")
@@ -289,6 +310,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.state, .ready)
         XCTAssertEqual(report.recommendedAgentAction, .requestCooling)
         XCTAssertEqual(report.recommendedRecoveryAction, .none)
+        XCTAssertEqual(report.recoverySteps, [])
         XCTAssertEqual(report.safeToRequestCooling, true)
         XCTAssertTrue(report.daemonControlPathReady)
         XCTAssertFalse(report.manualControlActive)
@@ -324,6 +346,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.errorCode, .prepareRateLimited)
         XCTAssertFalse(report.safeToProceed)
         XCTAssertEqual(report.recommendedRecoveryAction, .waitBeforeRetry)
+        XCTAssertEqual(report.recoverySteps, Self.waitBeforeRetryRecoverySteps)
         XCTAssertFalse(report.coolingLeasePrepared)
         XCTAssertFalse(report.autoRestoreAttempted)
         XCTAssertNil(report.autoRestoreSucceeded)
@@ -350,6 +373,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.errorCode, .helperUnreachable)
         XCTAssertFalse(report.safeToProceed)
         XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.recoverySteps, Self.repairHelperRecoverySteps)
         XCTAssertFalse(report.coolingLeasePrepared)
         XCTAssertFalse(report.autoRestoreAttempted)
         XCTAssertNil(report.autoRestoreSucceeded)
@@ -363,6 +387,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(preflight.errorCode, .childCommandFailed)
         XCTAssertFalse(preflight.safeToProceed)
         XCTAssertEqual(preflight.recommendedRecoveryAction, .fixChildCommand)
+        XCTAssertEqual(preflight.recoverySteps, Self.fixChildCommandRecoverySteps)
         XCTAssertFalse(preflight.coolingLeasePrepared)
         XCTAssertFalse(preflight.autoRestoreAttempted)
         XCTAssertNil(preflight.autoRestoreSucceeded)
@@ -372,6 +397,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(restored.errorCode, .childCommandFailed)
         XCTAssertFalse(restored.safeToProceed)
         XCTAssertEqual(restored.recommendedRecoveryAction, .fixChildCommand)
+        XCTAssertEqual(restored.recoverySteps, Self.fixChildCommandRecoverySteps)
         XCTAssertTrue(restored.coolingLeasePrepared)
         XCTAssertTrue(restored.autoRestoreAttempted)
         XCTAssertEqual(restored.autoRestoreSucceeded, true)
@@ -381,6 +407,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(failed.errorCode, .restoreFailed)
         XCTAssertFalse(failed.safeToProceed)
         XCTAssertEqual(failed.recommendedRecoveryAction, .runDiagnose)
+        XCTAssertEqual(failed.recoverySteps, Self.runDiagnoseRecoverySteps)
         XCTAssertTrue(failed.coolingLeasePrepared)
         XCTAssertTrue(failed.autoRestoreAttempted)
         XCTAssertEqual(failed.autoRestoreSucceeded, false)
@@ -449,6 +476,11 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(daemonRuntimeProperty["$ref"] as? String, "#/$defs/daemonRuntimeDiagnostic")
         XCTAssertNotNil(properties["failedCheckIDs"])
         XCTAssertNotNil(properties["coolingBlockerIDs"])
+        let recoverySteps = try XCTUnwrap(properties["recoverySteps"] as? [String: Any])
+        XCTAssertEqual(recoverySteps["type"] as? String, "array")
+        let recoveryStepItems = try XCTUnwrap(recoverySteps["items"] as? [String: Any])
+        XCTAssertEqual(recoveryStepItems["type"] as? String, "string")
+        XCTAssertFalse(required.contains("recoverySteps"))
         XCTAssertEqual(enumValues(named: "state", in: properties), ["ready", "degraded", "blocked"])
         XCTAssertEqual(enumValues(named: "recommendedAgentAction", in: properties), [
             "requestCooling",
@@ -565,6 +597,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
 
             XCTAssertEqual(example["failedCheckIDs"] as? [String], failedIDs, exampleFilename)
             XCTAssertEqual(example["coolingBlockerIDs"] as? [String], blockerIDs, exampleFilename)
+            XCTAssertNotNil(example["recoverySteps"] as? [String], "\(exampleFilename) should include recoverySteps")
         }
     }
 
@@ -803,6 +836,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(commandErrorProperties["coolingLeasePrepared"] as? [String: Any])
         XCTAssertNotNil(commandErrorProperties["autoRestoreAttempted"] as? [String: Any])
         XCTAssertNotNil(commandErrorProperties["autoRestoreSucceeded"] as? [String: Any])
+        let commandErrorRecoverySteps = try XCTUnwrap(commandErrorProperties["recoverySteps"] as? [String: Any])
+        XCTAssertEqual(commandErrorRecoverySteps["type"] as? String, "array")
         XCTAssertEqual(
             (commandErrorProperties["recommendedRecoveryAction"] as? [String: Any])?["enum"] as? [String],
             [
@@ -819,6 +854,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let commandErrorExample = try readJSON(fixtureURL("command-error.json"))
         XCTAssertEqual(commandErrorExample["safeToProceed"] as? Bool, false)
         XCTAssertEqual(commandErrorExample["recommendedRecoveryAction"] as? String, "waitBeforeRetry")
+        XCTAssertEqual(commandErrorExample["recoverySteps"] as? [String], Self.waitBeforeRetryRecoverySteps)
         XCTAssertEqual(commandErrorExample["coolingLeasePrepared"] as? Bool, false)
         XCTAssertEqual(commandErrorExample["autoRestoreAttempted"] as? Bool, false)
         XCTAssertTrue(commandErrorExample["autoRestoreSucceeded"] is NSNull)

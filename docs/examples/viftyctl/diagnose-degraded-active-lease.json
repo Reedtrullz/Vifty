@@ -186,6 +186,10 @@
   "modelIdentifier": "MacBookPro18,3",
   "recommendedAgentAction": "restoreAutoBeforeRequestingCooling",
   "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+  "recoverySteps": [
+    "Restore Auto once with Vifty or viftyctl restore-auto --json, then rerun diagnose --json.",
+    "If manualControlActive remains true, switch Vifty/default startup mode to Auto before requesting cooling."
+  ],
   "safeToRequestCooling": false,
   "schemaVersion": 1,
   "state": "degraded",
