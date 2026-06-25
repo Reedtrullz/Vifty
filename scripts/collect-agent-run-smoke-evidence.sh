@@ -669,6 +669,34 @@ write_summary_json() {
       value.is_a?(Integer) ? value : nil
     end
 
+    def share_safe_path_value(path)
+      return nil unless path.is_a?(String) && !path.empty?
+      return path if path.start_with?("/Library/PrivilegedHelperTools/") || path.start_with?("/Applications/Vifty.app/")
+      return path unless path.start_with?("/")
+
+      File.basename(path)
+    end
+
+    def share_safe_path_privacy(path)
+      return "notProvided" unless path.is_a?(String) && !path.empty?
+      return "system" if path.start_with?("/Library/PrivilegedHelperTools/") || path.start_with?("/Applications/Vifty.app/")
+      return "relative" unless path.start_with?("/")
+
+      "basenameOnly"
+    end
+
+    def share_safe_executable_path_value(path)
+      return nil unless path.is_a?(String) && !path.empty?
+
+      File.basename(path)
+    end
+
+    def share_safe_executable_path_privacy(path)
+      return "notProvided" unless path.is_a?(String) && !path.empty?
+
+      "basenameOnly"
+    end
+
     commands = File.readlines(manifest_path, chomp: true).drop(1).map do |line|
       name, command_status, stdout, stderr = line.split("\t", 4)
       {
@@ -719,6 +747,7 @@ write_summary_json() {
         "childSignal" => nil,
         "childSignalName" => nil,
         "resolvedChildExecutable" => nil,
+        "resolvedChildExecutablePathPrivacy" => "notProvided",
         "resolvedChildExecutableSHA256" => nil,
         "resolvedChildExecutableSHA256Status" => nil
       }
@@ -734,7 +763,9 @@ write_summary_json() {
       child_termination_reason = run_report["childTerminationReason"].is_a?(String) ? run_report["childTerminationReason"] : nil
       child_signal = integer_or_nil(run_report["childSignal"])
       child_signal_name = run_report["childSignalName"].is_a?(String) ? run_report["childSignalName"] : nil
-      resolved_child_executable = run_report["resolvedChildExecutable"].is_a?(String) ? run_report["resolvedChildExecutable"] : nil
+      raw_resolved_child_executable = run_report["resolvedChildExecutable"].is_a?(String) ? run_report["resolvedChildExecutable"] : nil
+      resolved_child_executable = share_safe_executable_path_value(raw_resolved_child_executable)
+      resolved_child_executable_path_privacy = share_safe_executable_path_privacy(raw_resolved_child_executable)
       resolved_child_executable_sha256 = run_report["resolvedChildExecutableSHA256"].is_a?(String) ? run_report["resolvedChildExecutableSHA256"] : nil
       resolved_child_executable_sha256_status = run_report["resolvedChildExecutableSHA256Status"].is_a?(String) ? run_report["resolvedChildExecutableSHA256Status"] : nil
 
@@ -763,6 +794,7 @@ write_summary_json() {
         "childSignal" => child_signal,
         "childSignalName" => child_signal_name,
         "resolvedChildExecutable" => resolved_child_executable,
+        "resolvedChildExecutablePathPrivacy" => resolved_child_executable_path_privacy,
         "resolvedChildExecutableSHA256" => resolved_child_executable_sha256,
         "resolvedChildExecutableSHA256Status" => resolved_child_executable_sha256_status
       }

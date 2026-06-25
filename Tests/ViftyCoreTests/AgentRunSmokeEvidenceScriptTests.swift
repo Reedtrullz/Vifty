@@ -159,7 +159,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["childTerminationReason"] as? String, "exited")
         XCTAssertTrue(run["childSignal"] is NSNull)
         XCTAssertTrue(run["childSignalName"] is NSNull)
-        XCTAssertEqual(run["resolvedChildExecutable"] as? String, "/bin/sleep")
+        XCTAssertEqual(run["resolvedChildExecutable"] as? String, "sleep")
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(run["resolvedChildExecutableSHA256"] as? String, String(repeating: "a", count: 64))
         XCTAssertEqual(run["resolvedChildExecutableSHA256Status"] as? String, "computed")
         XCTAssertEqual(run["skipReasons"] as? [String], [])
@@ -270,7 +271,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
     }
 
     func testSmokeCollectorSummaryUsesPrivacySafeChildCommandEnvelope() throws {
-        let harness = try AgentRunSmokeEvidenceHarness()
+        let reportedResolvedExecutable = "/Users/reidar/Private Client/bin/client-build-tool"
+        let runJSON = """
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"\(reportedResolvedExecutable)","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","autoRestoreError":null,"generatedAt":700000000}
+        """
+        let harness = try AgentRunSmokeEvidenceHarness(runJSON: runJSON)
         let privateToolURL = harness.rootURL
             .appendingPathComponent("Private Client", isDirectory: true)
             .appendingPathComponent("bin", isDirectory: true)
@@ -316,6 +321,11 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(summary["childCommandKind"] as? String, "path")
         XCTAssertEqual(summary["childArgumentCount"] as? Int, 2)
         XCTAssertEqual(summary["childArgumentsPrivacy"] as? String, "omitted")
+        let run = try XCTUnwrap(summary["run"] as? [String: Any])
+        XCTAssertEqual(run["resolvedChildExecutable"] as? String, "client-build-tool")
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
+        XCTAssertEqual(run["resolvedChildExecutableSHA256Status"] as? String, "computed")
+        XCTAssertEqual(run["resolvedChildExecutableSHA256"] as? String, String(repeating: "a", count: 64))
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenRequiredDaemonDoesNotMatchExpectedBuild() throws {
@@ -458,6 +468,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(run["childSignal"] is NSNull)
         XCTAssertTrue(run["childSignalName"] is NSNull)
         XCTAssertTrue(run["resolvedChildExecutable"] is NSNull)
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "notProvided")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenManualControlIsActive() throws {
@@ -539,6 +550,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(run["childSignal"] is NSNull)
         XCTAssertTrue(run["childSignalName"] is NSNull)
         XCTAssertTrue(run["resolvedChildExecutable"] is NSNull)
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "notProvided")
     }
 
     func testSmokeCollectorBlocksBeforeRunWhenPolicyStatusIsUnavailable() throws {
@@ -727,6 +739,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
         XCTAssertTrue(run["resolvedChildExecutable"] is NSNull)
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "notProvided")
         XCTAssertEqual(run["skipReasons"] as? [String], [])
     }
 
@@ -813,7 +826,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["autoRestoreSucceeded"] as? Bool, true)
         XCTAssertEqual(run["childExitCode"] as? Int, 0)
         XCTAssertEqual(run["childTerminationReason"] as? String, "exited")
-        XCTAssertEqual(run["resolvedChildExecutable"] as? String, "/bin/sleep")
+        XCTAssertEqual(run["resolvedChildExecutable"] as? String, "sleep")
+        XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(run["skipReasons"] as? [String], [])
         let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
         XCTAssertEqual(commands.count, 8)
@@ -926,7 +940,8 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "autoRestoreAttempted",
             "autoRestoreSucceeded",
             "childExitCode",
-            "resolvedChildExecutable"
+            "resolvedChildExecutable",
+            "resolvedChildExecutablePathPrivacy"
         ] {
             XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
         }
@@ -940,6 +955,14 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(terminationEnum[2] is NSNull)
         XCTAssertNotNil(runProperties["childSignal"], "run should document optional childSignal")
         XCTAssertNotNil(runProperties["childSignalName"], "run should document optional childSignalName")
+        let resolvedChildExecutable = try XCTUnwrap(runProperties["resolvedChildExecutable"] as? [String: Any])
+        XCTAssertEqual(resolvedChildExecutable["pattern"] as? String, "^[^/]+$")
+        let resolvedChildExecutablePathPrivacy = try XCTUnwrap(runProperties["resolvedChildExecutablePathPrivacy"] as? [String: Any])
+        let resolvedPathPrivacyEnum = try XCTUnwrap(resolvedChildExecutablePathPrivacy["enum"] as? [Any])
+        XCTAssertEqual(resolvedPathPrivacyEnum.count, 3)
+        XCTAssertEqual(resolvedPathPrivacyEnum[0] as? String, "basenameOnly")
+        XCTAssertEqual(resolvedPathPrivacyEnum[1] as? String, "notProvided")
+        XCTAssertTrue(resolvedPathPrivacyEnum[2] is NSNull)
         let resolvedChildExecutableSHA256 = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256"] as? [String: Any])
         XCTAssertEqual(resolvedChildExecutableSHA256["pattern"] as? String, "^[a-f0-9]{64}$")
         let resolvedChildExecutableSHA256Status = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256Status"] as? [String: Any])

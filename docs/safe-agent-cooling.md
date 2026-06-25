@@ -236,7 +236,8 @@ safe it may request one bounded `viftyctl run --json` lease for `/bin/sleep 5`.
 The supervised smoke summary uses the same privacy envelope: it omits the full
 reason text, records `reasonCharacterCount`, labels daemon path display
 values, and records only the child command basename, command kind, argument
-count, and `childArgumentsPrivacy=omitted` while preserving daemon identity
+count, resolved executable basename, `childArgumentsPrivacy=omitted`, and
+`resolvedChildExecutablePathPrivacy=basenameOnly` while preserving daemon identity
 through SHA-256 fields. The collector supports
 exactly one structured cooldown retry if the daemon returns
 `PREPARE_RATE_LIMITED`. The collector stops before cooling unless

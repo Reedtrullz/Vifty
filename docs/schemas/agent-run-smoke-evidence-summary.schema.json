@@ -450,7 +450,8 @@
         "autoRestoreAttempted",
         "autoRestoreSucceeded",
         "childExitCode",
-        "resolvedChildExecutable"
+        "resolvedChildExecutable",
+        "resolvedChildExecutablePathPrivacy"
       ],
       "properties": {
         "exitStatus": {
@@ -560,8 +561,20 @@
             "string",
             "null"
           ],
-          "pattern": "^/.*$",
-          "description": "Absolute executable path copied from completed viftyctl run --json output when runLifecycle.resolvedChildExecutableReported is true."
+          "pattern": "^[^/]+$",
+          "description": "Share-safe resolved child executable display value copied from completed viftyctl run --json output. Private absolute paths are reduced to basename-only; use resolvedChildExecutableSHA256 for identity proof."
+        },
+        "resolvedChildExecutablePathPrivacy": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "basenameOnly",
+            "notProvided",
+            null
+          ],
+          "description": "Privacy label for run.resolvedChildExecutable in the shareable summary. Raw private absolute paths remain only in the captured viftyctl-run JSON files for local review."
         },
         "resolvedChildExecutableSHA256": {
           "type": [
