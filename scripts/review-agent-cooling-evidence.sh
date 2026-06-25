@@ -95,6 +95,7 @@ GUARDED_RUN_DECISION_REASONS = %w[
   safeToRequestCoolingFalse
   daemonControlPathNotReady
   manualControlActive
+  daemonRuntimeMismatch
   coolingBlockersPresent
   recoveryActionBlocksUncooledFallback
   preflightReady
@@ -189,6 +190,7 @@ guarded_run_decision = {
   "daemonControlPathReady" => nil,
   "manualControlActive" => nil,
   "startupMode" => nil,
+  "daemonRuntime" => nil,
   "failedCheckIDs" => [],
   "coolingBlockerIDs" => [],
   "requestedWorkload" => nil,
@@ -857,6 +859,7 @@ if File.file?(guarded_run_stderr_path)
     daemon_ready = guarded_payload["daemonControlPathReady"]
     manual_active = guarded_payload["manualControlActive"]
     startup_mode = guarded_payload["startupMode"]
+    daemon_runtime = guarded_payload["daemonRuntime"]
     failed_check_ids = guarded_payload["failedCheckIDs"]
     cooling_blocker_ids = guarded_payload["coolingBlockerIDs"]
     requested_workload = guarded_payload["requestedWorkload"]
@@ -884,6 +887,7 @@ if File.file?(guarded_run_stderr_path)
     guarded_run_decision["daemonControlPathReady"] = daemon_ready if boolean?(daemon_ready)
     guarded_run_decision["manualControlActive"] = manual_active if boolean?(manual_active)
     guarded_run_decision["startupMode"] = startup_mode if optional_string?(startup_mode)
+    guarded_run_decision["daemonRuntime"] = daemon_runtime if daemon_runtime.nil? || daemon_runtime.is_a?(Hash)
     guarded_run_decision["failedCheckIDs"] = failed_check_ids if string_array?(failed_check_ids)
     guarded_run_decision["coolingBlockerIDs"] = cooling_blocker_ids if string_array?(cooling_blocker_ids)
     guarded_run_decision["requestedWorkload"] = requested_workload if optional_string?(requested_workload)
@@ -912,6 +916,7 @@ if File.file?(guarded_run_stderr_path)
     failures << "guarded-run decision daemonControlPathReady must be boolean" unless boolean?(daemon_ready)
     failures << "guarded-run decision manualControlActive must be boolean" unless boolean?(manual_active)
     failures << "guarded-run decision startupMode is unsupported" unless startup_mode.nil? || STARTUP_MODES.include?(startup_mode)
+    failures << "guarded-run decision daemonRuntime must be an object or null" unless daemon_runtime.nil? || daemon_runtime.is_a?(Hash)
     failures << "guarded-run decision failedCheckIDs must be an array of strings" unless string_array?(failed_check_ids)
     failures << "guarded-run decision coolingBlockerIDs must be an array of strings" unless string_array?(cooling_blocker_ids)
 
@@ -957,6 +962,19 @@ if File.file?(guarded_run_stderr_path)
     end
     if manual_active == true && safe_to_proceed == true
       failures << "guarded-run decision must not proceed while manualControlActive is true"
+    end
+    if decision_reason == "daemonRuntimeMismatch"
+      failures << "guarded-run decision daemonRuntimeMismatch requires safeToRequestCooling false" unless safe_to_request == false
+      failures << "guarded-run decision daemonRuntimeMismatch requires daemonRuntime evidence" unless daemon_runtime.is_a?(Hash)
+      if daemon_runtime.is_a?(Hash)
+        failures << "guarded-run decision daemonRuntimeMismatch requires matchRequired true" unless daemon_runtime["matchRequired"] == true
+        failures << "guarded-run decision daemonRuntimeMismatch requires matchesExpectedDaemon not true" if daemon_runtime["matchesExpectedDaemon"] == true
+      end
+      if string_array?(cooling_blocker_ids)
+        unless cooling_blocker_ids.include?("daemonRuntimeMatchesExpected")
+          failures << "guarded-run decision daemonRuntimeMismatch requires daemonRuntimeMatchesExpected blocker"
+        end
+      end
     end
 
     comparisons = [

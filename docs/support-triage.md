@@ -20,8 +20,8 @@ the stderr transcript to be copied into the bundle with
 `AGENT_EVIDENCE_GUARDED_RUN_STDERR=/path/to/guarded-run.stderr make agent-cooling-evidence`
 or `--guarded-run-stderr-file <path>` so the reviewer can summarize only the
 schema-backed decision payload between the guarded-run markers, including the
-stable `decisionReason` category and privacy-conscious workload envelope when
-current wrappers provide them.
+stable `decisionReason` category, daemon-runtime mismatch evidence, and
+privacy-conscious workload envelope when current wrappers provide them.
 
 If the reporter has the exact guarded workload command but has not captured a
 transcript yet, prefer the collector's read-only wrapper preflight:

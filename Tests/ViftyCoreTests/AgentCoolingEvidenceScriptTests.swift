@@ -530,6 +530,73 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue((reviewSummary["failures"] as? [String])?.contains("guarded-run decision decisionReason is unsupported") == true)
     }
 
+    func testReviewerAcceptsGuardedRunDaemonRuntimeMismatchDecision() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"""
+            {
+              "state": "blocked",
+              "recommendedAgentAction": "doNotRequestCooling",
+              "safeToRequestCooling": false,
+              "daemonControlPathReady": true,
+              "manualControlActive": false,
+              "recommendedRecoveryAction": "repairHelper",
+              "recoverySteps": [
+                "Repair or reinstall the Vifty fan helper, then rerun diagnose --json."
+              ],
+              "failedCheckIDs": ["daemonRuntimeMatchesExpected"],
+              "coolingBlockerIDs": ["daemonRuntimeMatchesExpected"],
+              "appPreferences": {
+                "startupMode": "Auto",
+                "startupModeSource": "persisted",
+                "readError": null
+              },
+              "daemonRuntime": {
+                "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                "installedDaemonPresent": true,
+                "installedDaemonSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "expectedDaemonPath": "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+                "expectedDaemonPresent": true,
+                "expectedDaemonSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "matchesExpectedDaemon": false,
+                "matchRequired": true
+              },
+              "checks": []
+            }
+            """#,
+            diagnoseExitCode: 75
+        )
+        let guardedRunStderrURL = harness.rootURL.appendingPathComponent("guarded-run-source.stderr")
+        try """
+        guarded-run: Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling.
+        guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"daemonRuntimeMismatch","exitCode":75,"message":"Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"repairHelper","recoverySteps":["Repair or reinstall the Vifty fan helper, then rerun diagnose --json."],"diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","daemonRuntime":{"installedDaemonPath":"/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon","installedDaemonPresent":true,"installedDaemonSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expectedDaemonPath":"/Applications/Vifty.app/Contents/MacOS/ViftyDaemon","expectedDaemonPresent":true,"expectedDaemonSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matchesExpectedDaemon":false,"matchRequired":true},"failedCheckIDs":["daemonRuntimeMatchesExpected"],"coolingBlockerIDs":["daemonRuntimeMatchesExpected"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
+        guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
+        """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--guarded-run-stderr-file", guardedRunStderrURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
+        let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
+        XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "daemonRuntimeMismatch")
+        XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "repairHelper")
+        let daemonRuntime = try XCTUnwrap(guardedRunDecision["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
+    }
+
     func testCollectorPreservesBlockedDiagnoseExitAsEvidence() throws {
         let harness = try AgentCoolingEvidenceHarness(
             diagnoseJSON: #"{"state":"blocked","recommendedAgentAction":"doNotRequestCooling","safeToRequestCooling":false,"daemonControlPathReady":false,"recommendedRecoveryAction":"repairHelper","checks":[]}"#,
@@ -1505,6 +1572,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "daemonControlPathReady",
             "manualControlActive",
             "startupMode",
+            "daemonRuntime",
             "failedCheckIDs",
             "coolingBlockerIDs",
             "requestedWorkload",
