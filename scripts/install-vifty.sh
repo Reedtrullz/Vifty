@@ -15,7 +15,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_DIR="${ROOT_DIR}/.build/${APP_NAME}.app"
 DEST_APP="${INSTALL_DIR}/${APP_NAME}.app"
 ERR_LOG="$(mktemp -t vifty-install.XXXXXX)"
-trap 'rm -f "${ERR_LOG}"' EXIT
+BUILD_LOG="$(mktemp -t vifty-install-build.XXXXXX)"
+trap 'rm -f "${ERR_LOG}" "${BUILD_LOG}"' EXIT
 
 fallback_to_user_applications() {
   INSTALL_DIR="${HOME}/Applications"
@@ -54,10 +55,52 @@ sha256_file() {
   /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print $1}'
 }
 
+shell_quote() {
+  printf "'"
+  printf "%s" "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
+is_swiftpm_build_database_error() {
+  /usr/bin/grep -Eiq "build\\.db|build database|disk I/O error|database is locked" "${BUILD_LOG}"
+}
+
+make_app_once() {
+  local build_status
+  set +e
+  make app CONFIGURATION="${CONFIGURATION}" 2>&1 | tee "${BUILD_LOG}"
+  build_status=${PIPESTATUS[0]}
+  set -e
+  return "${build_status}"
+}
+
+build_app_bundle() {
+  local build_status
+  if make_app_once; then
+    return 0
+  else
+    build_status=$?
+  fi
+
+  if [[ -z "${SWIFT_BUILD_PATH:-}" ]] && is_swiftpm_build_database_error; then
+    local fallback_build_path="${TMPDIR:-/tmp}/vifty-install-swiftpm-$$"
+    echo "==> SwiftPM build database failed; retrying with SWIFT_BUILD_PATH=${fallback_build_path}"
+    set +e
+    SWIFT_BUILD_PATH="${fallback_build_path}" make app CONFIGURATION="${CONFIGURATION}" 2>&1 | tee "${BUILD_LOG}"
+    build_status=${PIPESTATUS[0]}
+    set -e
+  fi
+
+  return "${build_status}"
+}
+
 report_helper_daemon_status() {
   if [[ "${CHECK_HELPER_DAEMON}" != "1" ]]; then
     return 0
   fi
+
+  local repair_command
+  repair_command="REPAIR_HELPER_APP=$(shell_quote "${DEST_APP}") make repair-helper"
 
   local bundled_daemon="${DEST_APP}/Contents/MacOS/ViftyDaemon"
   if [[ ! -x "${bundled_daemon}" ]]; then
@@ -84,7 +127,7 @@ report_helper_daemon_status() {
   echo "==> Fan helper daemon differs from the installed app bundle."
   echo "    Bundled daemon:   ${bundled_sha}"
   echo "    Installed helper: ${installed_sha}"
-  echo "    Open Vifty and choose Reinstall Helper or Repair Helper, or run: make repair-helper"
+  echo "    Open Vifty and choose Reinstall Helper or Repair Helper, or run: ${repair_command}"
   echo "    Do that before current-build manual/agent smoke evidence."
   echo "    Then rerun: AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build"
 }
@@ -115,7 +158,7 @@ quit_running_app_if_needed() {
 
 echo "==> Building ${APP_NAME}.app (${CONFIGURATION})"
 cd "${ROOT_DIR}"
-make app CONFIGURATION="${CONFIGURATION}"
+build_app_bundle
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "error: expected app bundle was not created: ${APP_DIR}" >&2

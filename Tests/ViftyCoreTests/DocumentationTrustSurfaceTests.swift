@@ -98,7 +98,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testReadmeDocumentsSwiftBuildPathEscapeHatchForAgentWorkflows() throws {
         let readme = try read("README.md")
 
-        XCTAssertTrue(readme.contains("If SwiftPM's local `.build/build.db` becomes unhealthy, keep the trust gate reproducible by moving SwiftPM products to a fresh path:"))
+        XCTAssertTrue(readme.contains("If SwiftPM's local `.build/build.db` becomes unhealthy, the local installer retries once with an isolated temporary `SWIFT_BUILD_PATH` before failing."))
+        XCTAssertTrue(readme.contains("Set `SWIFT_BUILD_PATH` yourself when you want a stable reusable build-product path."))
+        XCTAssertTrue(readme.contains("For other trust gates, keep the build reproducible by moving SwiftPM products to a fresh path:"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make app CONFIGURATION=release"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install"))

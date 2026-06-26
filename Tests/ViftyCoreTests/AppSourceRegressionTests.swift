@@ -349,22 +349,44 @@ final class AppSourceRegressionTests: XCTestCase {
         let installScript = try read("scripts/install-vifty.sh")
         let readme = try read("README.md")
 
+        XCTAssertTrue(installScript.contains("shell_quote()"))
         XCTAssertTrue(installScript.contains("CHECK_HELPER_DAEMON=\"${CHECK_HELPER_DAEMON:-1}\""))
         XCTAssertTrue(installScript.contains("HELPER_TARGET=\"${VIFTY_HELPER_TARGET:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}\""))
         XCTAssertTrue(installScript.contains("report_helper_daemon_status"))
         XCTAssertTrue(installScript.contains("sha256_file \"${bundled_daemon}\""))
         XCTAssertTrue(installScript.contains("sha256_file \"${HELPER_TARGET}\""))
+        XCTAssertTrue(installScript.contains("repair_command=\"REPAIR_HELPER_APP=$(shell_quote \"${DEST_APP}\") make repair-helper\""))
         XCTAssertTrue(installScript.contains("Fan helper matches the installed app daemon."))
         XCTAssertTrue(installScript.contains("Fan helper daemon differs from the installed app bundle."))
-        XCTAssertTrue(installScript.contains("Open Vifty and choose Reinstall Helper or Repair Helper, or run: make repair-helper"))
+        XCTAssertTrue(installScript.contains("Open Vifty and choose Reinstall Helper or Repair Helper, or run: ${repair_command}"))
         XCTAssertTrue(installScript.contains("Do that before current-build manual/agent smoke evidence."))
         XCTAssertTrue(installScript.contains("AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build"))
         XCTAssertFalse(installScript.contains("repair-vifty-helper.sh"))
 
         XCTAssertTrue(readme.contains("The root LaunchDaemon helper is repaired only after an explicit user-approved action, not silently replaced by the app installer"))
         XCTAssertTrue(readme.contains("performs a read-only helper-daemon hash check"))
-        XCTAssertTrue(readme.contains("make repair-helper"))
+        XCTAssertTrue(readme.contains("REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper"))
+        XCTAssertTrue(readme.contains("If the installer falls back to `~/Applications`, use the exact `REPAIR_HELPER_APP=... make repair-helper` command printed by the installer so the helper is repaired from that copied app bundle."))
         XCTAssertTrue(readme.contains("before treating current-build manual or agent smoke evidence as valid"))
+    }
+
+    func testLocalInstallerRetriesSwiftPMBuildDatabaseFailuresWithIsolatedBuildPath() throws {
+        let installScript = try read("scripts/install-vifty.sh")
+        let readme = try read("README.md")
+
+        XCTAssertTrue(installScript.contains("BUILD_LOG=\"$(mktemp -t vifty-install-build.XXXXXX)\""))
+        XCTAssertTrue(installScript.contains("is_swiftpm_build_database_error()"))
+        XCTAssertTrue(installScript.contains("build\\\\.db|build database|disk I/O error|database is locked"))
+        XCTAssertTrue(installScript.contains("build_app_bundle()"))
+        XCTAssertTrue(installScript.contains("else\n    build_status=$?\n  fi"))
+        XCTAssertTrue(installScript.contains("if [[ -z \"${SWIFT_BUILD_PATH:-}\" ]] && is_swiftpm_build_database_error; then"))
+        XCTAssertTrue(installScript.contains("fallback_build_path=\"${TMPDIR:-/tmp}/vifty-install-swiftpm-$$\""))
+        XCTAssertTrue(installScript.contains("==> SwiftPM build database failed; retrying with SWIFT_BUILD_PATH=${fallback_build_path}"))
+        XCTAssertTrue(installScript.contains("SWIFT_BUILD_PATH=\"${fallback_build_path}\" make app CONFIGURATION=\"${CONFIGURATION}\""))
+        XCTAssertTrue(installScript.contains("build_app_bundle"))
+
+        XCTAssertTrue(readme.contains("If SwiftPM's local `.build/build.db` becomes unhealthy, the local installer retries once with an isolated temporary `SWIFT_BUILD_PATH` before failing."))
+        XCTAssertTrue(readme.contains("Set `SWIFT_BUILD_PATH` yourself when you want a stable reusable build-product path."))
     }
 
     func testExplicitHelperRepairScriptPreservesPrivilegedRepairBoundary() throws {

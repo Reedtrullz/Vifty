@@ -105,7 +105,7 @@ After installation, start Vifty from Spotlight, Launchpad, Finder, or Terminal:
 open /Applications/Vifty.app
 ```
 
-`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. The root LaunchDaemon helper is repaired only after an explicit user-approved action, not silently replaced by the app installer; after copying the app, `make install` performs a read-only helper-daemon hash check and warns when the installed helper differs from the bundled `ViftyDaemon`. Use **Reinstall Helper** or **Repair Helper** in the app, or run `make repair-helper` from the source checkout to get the same administrator-approved LaunchDaemon repair from the installed app bundle. Then rerun `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build` before treating current-build manual or agent smoke evidence as valid. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
+`make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. The root LaunchDaemon helper is repaired only after an explicit user-approved action, not silently replaced by the app installer; after copying the app, `make install` performs a read-only helper-daemon hash check and warns when the installed helper differs from the bundled `ViftyDaemon`. Use **Reinstall Helper** or **Repair Helper** in the app, or run `REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper` from the source checkout to get the same administrator-approved LaunchDaemon repair from the installed app bundle. If the installer falls back to `~/Applications`, use the exact `REPAIR_HELPER_APP=... make repair-helper` command printed by the installer so the helper is repaired from that copied app bundle. Then rerun `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build` before treating current-build manual or agent smoke evidence as valid. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
 
 In Vifty, enable **Start Vifty at startup** from the main window or menu-bar popover to register the app with macOS Login Items. If macOS shows a pending approval state, approve Vifty in System Settings > General > Login Items.
 
@@ -160,7 +160,7 @@ make install
 make pkg
 ```
 
-If SwiftPM's local `.build/build.db` becomes unhealthy, keep the trust gate reproducible by moving SwiftPM products to a fresh path:
+If SwiftPM's local `.build/build.db` becomes unhealthy, the local installer retries once with an isolated temporary `SWIFT_BUILD_PATH` before failing. Set `SWIFT_BUILD_PATH` yourself when you want a stable reusable build-product path. For other trust gates, keep the build reproducible by moving SwiftPM products to a fresh path:
 
 ```sh
 SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify
