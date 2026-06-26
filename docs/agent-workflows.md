@@ -114,7 +114,7 @@ Do not treat `state: degraded` as automatically safe or unsafe. `safeToRequestCo
 
 - `none` - no recovery is needed before following `recommendedAgentAction`.
 - `repairHelper` - open Vifty and use Repair/Reinstall Helper; do not attempt direct SMC writes.
-- `restoreAutoBeforeRetry` - restore Auto once, re-run diagnose, or wait for the active lease to clear before retrying. If `manualControlActive` stays true, inspect `appPreferences.startupMode`, then switch Vifty/default startup mode to Auto before another cooling request.
+- `restoreAutoBeforeRetry` - restore Auto once, re-run diagnose, or wait for the active lease to clear before retrying. If diagnose includes a display-only `restore-auto-current-app` operator command, show it to the human but do not run it automatically. If `manualControlActive` stays true, inspect `appPreferences.startupMode`, then switch Vifty/default startup mode to Auto before another cooling request.
 - `backOffWorkload` - thermal pressure is critical; pause or reduce the workload instead of fighting system thermals.
 - `inspectPolicy` - agent cooling policy is disabled; inspect local policy/status before retrying.
 - `collectHardwareEvidence` - hardware/fan/sensor evidence is missing or inconsistent; collect read-only validation evidence before considering support.
@@ -340,7 +340,7 @@ The wrapper:
 - treats `daemonControlPathReady: false` as a hard stop before cooling,
 - treats `manualControlActive: true` as a restore-Auto stop before cooling,
 - treats `daemonRuntime.matchRequired: true` with `daemonRuntime.matchesExpectedDaemon` not `true` as a helper-runtime mismatch stop before cooling,
-- prints `recommendedRecoveryAction`, `recoverySteps`, and any display-only `operatorRecoveryCommands` guidance for blocked or restore-first readiness, and copies `operatorRecoveryCommands` into the bracketed guarded-run decision JSON when present; for older `repairHelper` payloads without `recoverySteps`, agents should fall back to the optional `repairHelperRecoveryActions` array from `viftyctl agent-rule --json`, including the source-checkout `make repair-helper` path. Agents must not run `operatorRecoveryCommands` automatically when `safeForAgentsToRunAutomatically` is false,
+- prints `recommendedRecoveryAction`, `recoverySteps`, and any display-only `operatorRecoveryCommands` guidance for blocked or restore-first readiness, and copies `operatorRecoveryCommands` into the bracketed guarded-run decision JSON when present; this can include helper repair or Restore Auto commands tied to the current app bundle. For older `repairHelper` payloads without `recoverySteps`, agents should fall back to the optional `repairHelperRecoveryActions` array from `viftyctl agent-rule --json`, including the source-checkout `make repair-helper` path. Agents must not run `operatorRecoveryCommands` automatically when `safeForAgentsToRunAutomatically` is false,
 - proceeds only for `requestCooling` or `requestCoolingWithCaution`,
 - prints a warning for `requestCoolingWithCaution`,
 - exits after decision JSON when preflight-only is requested,

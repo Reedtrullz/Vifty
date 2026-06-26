@@ -644,10 +644,20 @@ final class ViftyCtlRunnerTests: XCTestCase {
             json["recoverySteps"] as? [String],
             ViftyAgentRule.repairHelperRecoveryActions + Self.restoreAutoRecoverySteps
         )
+        let operatorRecoveryCommands = try XCTUnwrap(json["operatorRecoveryCommands"] as? [[String: Any]])
+        XCTAssertEqual(operatorRecoveryCommands.count, 2)
+        XCTAssertEqual(operatorRecoveryCommands[0]["id"] as? String, "repair-helper-current-app")
         XCTAssertEqual(
-            (json["operatorRecoveryCommands"] as? [[String: Any]])?.first?["command"] as? String,
+            operatorRecoveryCommands[0]["command"] as? String,
             "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper"
         )
+        XCTAssertEqual(operatorRecoveryCommands[1]["id"] as? String, "restore-auto-current-app")
+        XCTAssertEqual(
+            operatorRecoveryCommands[1]["command"] as? String,
+            "'/Applications/Vifty.app/Contents/MacOS/viftyctl' restore-auto --json --reason 'operator recovery before agent cooling'"
+        )
+        XCTAssertEqual(operatorRecoveryCommands[1]["requiresUserApproval"] as? Bool, true)
+        XCTAssertEqual(operatorRecoveryCommands[1]["safeForAgentsToRunAutomatically"] as? Bool, false)
         let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
             (check["id"] as? String) == "manualControlClear"
@@ -1159,7 +1169,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(report.coolingBlockerIDs, ["activeLeaseClear"])
     }
 
-    func testReadinessReportRecommendsRestoreAutoBeforeNewCoolingWhenManualControlMarkerIsActive() {
+    func testReadinessReportRecommendsRestoreAutoBeforeNewCoolingWhenManualControlMarkerIsActive() throws {
         let report = ViftyCtlReadinessReport.make(
             snapshot: Self.readySnapshot(),
             agentControl: AgentControlStatus(
@@ -1171,7 +1181,17 @@ final class ViftyCtlRunnerTests: XCTestCase {
             ),
             thermalPressure: .nominal,
             generatedAt: Date(timeIntervalSince1970: 1_000),
-            manualControlActive: true
+            manualControlActive: true,
+            daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic(
+                installedDaemonPath: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+                installedDaemonPresent: true,
+                installedDaemonSHA256: String(repeating: "a", count: 64),
+                expectedDaemonPath: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+                expectedDaemonPresent: true,
+                expectedDaemonSHA256: String(repeating: "a", count: 64),
+                matchesExpectedDaemon: true,
+                matchRequired: true
+            )
         )
 
         XCTAssertEqual(report.state, .degraded)
@@ -1183,6 +1203,15 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(report.manualControlActive)
         XCTAssertEqual(report.failedCheckIDs, ["manualControlClear"])
         XCTAssertEqual(report.coolingBlockerIDs, ["manualControlClear"])
+        XCTAssertEqual(report.operatorRecoveryCommands?.map(\.id), ["restore-auto-current-app"])
+        let command = try XCTUnwrap(report.operatorRecoveryCommands?.first)
+        XCTAssertEqual(
+            command.command,
+            "'/Applications/Vifty.app/Contents/MacOS/viftyctl' restore-auto --json --reason 'operator recovery before agent cooling'"
+        )
+        XCTAssertTrue(command.requiresUserApproval)
+        XCTAssertFalse(command.safeForAgentsToRunAutomatically)
+        XCTAssertTrue(command.notes.contains("Requires an explicit human decision because restore-auto writes fan control state through the helper."))
         XCTAssertTrue(report.checks.contains { $0.id == "manualControlClear" && !$0.passed && $0.severity == .warning })
     }
 

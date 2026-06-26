@@ -70,7 +70,7 @@
       "uniqueItems": true
     },
     "operatorRecoveryCommands": {
-      "description": "Optional local operator commands that can be shown to a human for explicit recovery actions such as helper repair. These commands are not cooling authorization and must not be run automatically by agents.",
+      "description": "Optional local operator commands that can be shown to a human for explicit recovery actions such as helper repair or Restore Auto. These commands are not cooling authorization and must not be run automatically by agents.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/operatorRecoveryCommand"
@@ -285,7 +285,8 @@
       "properties": {
         "id": {
           "enum": [
-            "repair-helper-current-app"
+            "repair-helper-current-app",
+            "restore-auto-current-app"
           ]
         },
         "title": {

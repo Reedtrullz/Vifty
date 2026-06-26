@@ -552,7 +552,10 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "notes"
         ])
         let operatorRecoveryCommandProperties = try XCTUnwrap(operatorRecoveryCommand["properties"] as? [String: Any])
-        XCTAssertEqual(enumValues(named: "id", in: operatorRecoveryCommandProperties), ["repair-helper-current-app"])
+        XCTAssertEqual(
+            enumValues(named: "id", in: operatorRecoveryCommandProperties),
+            ["repair-helper-current-app", "restore-auto-current-app"]
+        )
         XCTAssertEqual(
             (operatorRecoveryCommandProperties["safeForAgentsToRunAutomatically"] as? [String: Any])?["const"] as? Bool,
             false

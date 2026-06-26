@@ -255,7 +255,11 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.recommendedRecoveryAction = resolvedRecoveryAction
         self.recoverySteps = recoverySteps ?? Self.recoverySteps(for: resolvedRecoveryAction, checks: checks)
         self.operatorRecoveryCommands = operatorRecoveryCommands
-            ?? Self.operatorRecoveryCommands(for: resolvedRecoveryAction, daemonRuntime: daemonRuntime)
+            ?? Self.operatorRecoveryCommands(
+                for: resolvedRecoveryAction,
+                checks: checks,
+                daemonRuntime: daemonRuntime
+            )
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
@@ -840,18 +844,19 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
 
     private static func operatorRecoveryCommands(
         for action: ViftyCtlReadinessRecoveryAction,
+        checks: [ViftyCtlReadinessCheck],
         daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic
     ) -> [ViftyCtlOperatorRecoveryCommand]? {
-        guard action == .repairHelper,
-              daemonRuntime.matchRequired,
+        guard daemonRuntime.matchRequired,
               daemonRuntime.expectedDaemonPresent,
-              let appPath = appBundlePath(forExpectedDaemonPath: daemonRuntime.expectedDaemonPath)
-        else {
+              let appPath = appBundlePath(forExpectedDaemonPath: daemonRuntime.expectedDaemonPath) else {
             return nil
         }
 
-        return [
-            ViftyCtlOperatorRecoveryCommand(
+        var commands: [ViftyCtlOperatorRecoveryCommand] = []
+
+        if action == .repairHelper {
+            commands.append(ViftyCtlOperatorRecoveryCommand(
                 id: "repair-helper-current-app",
                 title: "Repair helper from this Vifty app bundle",
                 command: "REPAIR_HELPER_APP=\(ViftyAgentRule.shellQuote(appPath)) make repair-helper",
@@ -863,8 +868,27 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                     "Does not request cooling or write fan state directly.",
                     "After repair, rerun viftyctl diagnose --json and require safe readiness before requesting cooling."
                 ]
-            )
-        ]
+            ))
+        }
+
+        if failedCheck("activeLeaseClear", in: checks) || failedCheck("manualControlClear", in: checks) {
+            let toolPath = "\(appPath)/Contents/MacOS/viftyctl"
+            commands.append(ViftyCtlOperatorRecoveryCommand(
+                id: "restore-auto-current-app",
+                title: "Restore Auto from this Vifty app bundle",
+                command: "\(ViftyAgentRule.shellQuote(toolPath)) restore-auto --json --reason \(ViftyAgentRule.shellQuote("operator recovery before agent cooling"))",
+                workingDirectoryHint: "Run from any directory.",
+                requiresUserApproval: true,
+                safeForAgentsToRunAutomatically: false,
+                notes: [
+                    "Requires an explicit human decision because restore-auto writes fan control state through the helper.",
+                    "If helper repair is also listed, repair the helper and rerun diagnose before considering restore-auto.",
+                    "Run at most once, then rerun viftyctl diagnose --json and require manualControlActive=false before requesting cooling."
+                ]
+            ))
+        }
+
+        return commands.isEmpty ? nil : commands
     }
 
     private static func appBundlePath(forExpectedDaemonPath expectedDaemonPath: String?) -> String? {
