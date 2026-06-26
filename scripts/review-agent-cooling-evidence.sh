@@ -185,6 +185,7 @@ guarded_run_decision = {
   "recommendedAgentAction" => nil,
   "recommendedRecoveryAction" => nil,
   "recoverySteps" => [],
+  "operatorRecoveryCommands" => [],
   "diagnoseState" => nil,
   "safeToRequestCooling" => nil,
   "daemonControlPathReady" => nil,
@@ -254,6 +255,22 @@ end
 
 def string_array?(value)
   value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
+end
+
+def operator_recovery_command?(value)
+  value.is_a?(Hash) &&
+    value["id"].is_a?(String) && !value["id"].empty? &&
+    value["title"].is_a?(String) && !value["title"].empty? &&
+    value["command"].is_a?(String) && !value["command"].empty? &&
+    value["workingDirectoryHint"].is_a?(String) && !value["workingDirectoryHint"].empty? &&
+    value["requiresUserApproval"] == true &&
+    value["safeForAgentsToRunAutomatically"] == false &&
+    string_array?(value["notes"]) &&
+    value["notes"].all? { |note| !note.empty? }
+end
+
+def operator_recovery_commands?(value)
+  value.is_a?(Array) && value.all? { |entry| operator_recovery_command?(entry) }
 end
 
 def optional_string?(value)
@@ -854,6 +871,7 @@ if File.file?(guarded_run_stderr_path)
     agent_action = guarded_payload["recommendedAgentAction"]
     recovery_action = guarded_payload["recommendedRecoveryAction"]
     recovery_steps = guarded_payload["recoverySteps"]
+    operator_recovery_commands = guarded_payload["operatorRecoveryCommands"]
     diagnose_state = guarded_payload["diagnoseState"]
     safe_to_request = guarded_payload["safeToRequestCooling"]
     daemon_ready = guarded_payload["daemonControlPathReady"]
@@ -882,6 +900,7 @@ if File.file?(guarded_run_stderr_path)
     guarded_run_decision["recommendedAgentAction"] = agent_action if optional_string?(agent_action)
     guarded_run_decision["recommendedRecoveryAction"] = recovery_action if optional_string?(recovery_action)
     guarded_run_decision["recoverySteps"] = recovery_steps if string_array?(recovery_steps)
+    guarded_run_decision["operatorRecoveryCommands"] = operator_recovery_commands if operator_recovery_commands?(operator_recovery_commands)
     guarded_run_decision["diagnoseState"] = diagnose_state if optional_string?(diagnose_state)
     guarded_run_decision["safeToRequestCooling"] = safe_to_request if boolean?(safe_to_request)
     guarded_run_decision["daemonControlPathReady"] = daemon_ready if boolean?(daemon_ready)
@@ -911,6 +930,7 @@ if File.file?(guarded_run_stderr_path)
     failures << "guarded-run decision recommendedAgentAction is unsupported" unless agent_action.nil? || DIAGNOSE_AGENT_ACTIONS.include?(agent_action)
     failures << "guarded-run decision recommendedRecoveryAction is unsupported" unless recovery_action.nil? || DIAGNOSE_RECOVERY_ACTIONS.include?(recovery_action)
     failures << "guarded-run decision recoverySteps must be an array of strings" unless string_array?(recovery_steps)
+    failures << "guarded-run decision operatorRecoveryCommands must be human-approved and not agent-runnable" unless operator_recovery_commands.nil? || operator_recovery_commands?(operator_recovery_commands)
     failures << "guarded-run decision diagnoseState is unsupported" unless diagnose_state.nil? || DIAGNOSE_STATES.include?(diagnose_state)
     failures << "guarded-run decision safeToRequestCooling must be boolean" unless boolean?(safe_to_request)
     failures << "guarded-run decision daemonControlPathReady must be boolean" unless boolean?(daemon_ready)
@@ -998,6 +1018,13 @@ if File.file?(guarded_run_stderr_path)
     end
     if string_array?(recovery_steps) && diagnose_decision["recoverySteps"].any? && recovery_steps != diagnose_decision["recoverySteps"]
       failures << "guarded-run decision recoverySteps do not match diagnose evidence"
+    end
+    diagnose_operator_commands = diagnose["operatorRecoveryCommands"]
+    if operator_recovery_commands?(operator_recovery_commands) &&
+        operator_recovery_commands?(diagnose_operator_commands) &&
+        diagnose_operator_commands.any? &&
+        operator_recovery_commands != diagnose_operator_commands
+      failures << "guarded-run decision operatorRecoveryCommands do not match diagnose evidence"
     end
   elsif !guarded_payload.nil?
     failures << "guarded-run decision JSON must contain an object"

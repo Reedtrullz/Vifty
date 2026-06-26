@@ -543,6 +543,20 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
               "recoverySteps": [
                 "Repair or reinstall the Vifty fan helper, then rerun diagnose --json."
               ],
+              "operatorRecoveryCommands": [
+                {
+                  "id": "repair-helper-current-app",
+                  "title": "Repair helper from this Vifty app bundle",
+                  "command": "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper",
+                  "workingDirectoryHint": "Run from the Vifty source checkout.",
+                  "requiresUserApproval": true,
+                  "safeForAgentsToRunAutomatically": false,
+                  "notes": [
+                    "Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.",
+                    "Does not request cooling or write fan state directly."
+                  ]
+                }
+              ],
               "failedCheckIDs": ["daemonRuntimeMatchesExpected"],
               "coolingBlockerIDs": ["daemonRuntimeMatchesExpected"],
               "appPreferences": {
@@ -569,7 +583,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         try """
         guarded-run: Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling.
         guarded-run: BEGIN_VIFTY_GUARDED_RUN_DECISION_JSON
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"daemonRuntimeMismatch","exitCode":75,"message":"Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"repairHelper","recoverySteps":["Repair or reinstall the Vifty fan helper, then rerun diagnose --json."],"diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","daemonRuntime":{"installedDaemonPath":"/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon","installedDaemonPresent":true,"installedDaemonSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expectedDaemonPath":"/Applications/Vifty.app/Contents/MacOS/ViftyDaemon","expectedDaemonPresent":true,"expectedDaemonSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matchesExpectedDaemon":false,"matchRequired":true},"failedCheckIDs":["daemonRuntimeMatchesExpected"],"coolingBlockerIDs":["daemonRuntimeMatchesExpected"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/guarded-run-decision.schema.json","command":"guarded-run","safeToProceed":false,"coolingRequested":false,"uncooledFallbackRequested":false,"uncooledFallbackAllowed":false,"decisionReason":"daemonRuntimeMismatch","exitCode":75,"message":"Vifty daemon runtime does not match this app build; use Repair/Reinstall Helper before requesting cooling.","recommendedAgentAction":"doNotRequestCooling","recommendedRecoveryAction":"repairHelper","recoverySteps":["Repair or reinstall the Vifty fan helper, then rerun diagnose --json."],"operatorRecoveryCommands":[{"id":"repair-helper-current-app","title":"Repair helper from this Vifty app bundle","command":"REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper","workingDirectoryHint":"Run from the Vifty source checkout.","requiresUserApproval":true,"safeForAgentsToRunAutomatically":false,"notes":["Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.","Does not request cooling or write fan state directly."]}],"diagnoseState":"blocked","safeToRequestCooling":false,"daemonControlPathReady":true,"manualControlActive":false,"startupMode":"Auto","daemonRuntime":{"installedDaemonPath":"/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon","installedDaemonPresent":true,"installedDaemonSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expectedDaemonPath":"/Applications/Vifty.app/Contents/MacOS/ViftyDaemon","expectedDaemonPresent":true,"expectedDaemonSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matchesExpectedDaemon":false,"matchRequired":true},"failedCheckIDs":["daemonRuntimeMatchesExpected"],"coolingBlockerIDs":["daemonRuntimeMatchesExpected"],"requestedWorkload":"test","requestedDuration":"20m","requestedMaxRPMPercent":70,"reasonCharacterCount":10,"childCommandName":"swift","childCommandKind":"pathLookup","childArgumentCount":1}
         guarded-run: END_VIFTY_GUARDED_RUN_DECISION_JSON
         """.write(to: guardedRunStderrURL, atomically: true, encoding: .utf8)
         let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
@@ -592,6 +606,13 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
         XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "daemonRuntimeMismatch")
         XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "repairHelper")
+        let operatorCommands = try XCTUnwrap(guardedRunDecision["operatorRecoveryCommands"] as? [[String: Any]])
+        XCTAssertEqual(operatorCommands.count, 1)
+        XCTAssertEqual(
+            operatorCommands.first?["command"] as? String,
+            "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper"
+        )
+        XCTAssertEqual(operatorCommands.first?["safeForAgentsToRunAutomatically"] as? Bool, false)
         let daemonRuntime = try XCTUnwrap(guardedRunDecision["daemonRuntime"] as? [String: Any])
         XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
         XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, false)
@@ -1567,6 +1588,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "recommendedAgentAction",
             "recommendedRecoveryAction",
             "recoverySteps",
+            "operatorRecoveryCommands",
             "diagnoseState",
             "safeToRequestCooling",
             "daemonControlPathReady",
@@ -1597,6 +1619,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(decisionReasonValues.contains("daemonRuntimeMismatch"))
         XCTAssertNotNil(sourceProperties["daemonRuntime"] as? [String: Any])
         XCTAssertNotNil(sourceProperties["recoverySteps"] as? [String: Any])
+        XCTAssertNotNil(sourceProperties["operatorRecoveryCommands"] as? [String: Any])
     }
 }
 

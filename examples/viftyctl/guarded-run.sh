@@ -148,6 +148,39 @@ end
 RUBY
 }
 
+print_operator_recovery_commands() {
+  if [ -z "${operator_recovery_commands_compact:-}" ] || [ "$operator_recovery_commands_compact" = "[]" ]; then
+    return
+  fi
+
+  VIFTY_GUARDED_RUN_OPERATOR_RECOVERY_COMMANDS="$operator_recovery_commands_compact" /usr/bin/ruby -rjson <<'RUBY' >&2
+begin
+  commands = JSON.parse(ENV.fetch("VIFTY_GUARDED_RUN_OPERATOR_RECOVERY_COMMANDS", "[]"))
+  exit 0 unless commands.is_a?(Array)
+  commands.each do |command|
+    next unless command.is_a?(Hash)
+    id = command["id"].to_s
+    title = command["title"].to_s
+    shell_command = command["command"].to_s
+    hint = command["workingDirectoryHint"].to_s
+    notes = command["notes"].is_a?(Array) ? command["notes"] : []
+    next if id.empty? || title.empty? || shell_command.empty?
+
+    puts "guarded-run: Vifty operator recovery command #{id}: #{title}"
+    puts "guarded-run: Vifty operator recovery command to show human: #{shell_command}"
+    puts "guarded-run: Vifty operator recovery command working directory: #{hint}" unless hint.empty?
+    puts "guarded-run: Vifty operator recovery command requires user approval; agents must not run it automatically."
+    notes.each do |note|
+      next unless note.is_a?(String) && !note.empty?
+      puts "guarded-run: Vifty operator recovery note: #{note}"
+    end
+  end
+rescue JSON::ParserError
+  exit 0
+end
+RUBY
+}
+
 print_manual_control_startup_mode_context() {
   if [ "${manual_control_active:-}" != "true" ]; then
     return
@@ -554,6 +587,48 @@ end
 RUBY
 }
 
+json_operator_recovery_commands_at_path() {
+  json_payload="$1"
+  json_path="$2"
+
+  VIFTY_JSON_PAYLOAD="$json_payload" \
+  VIFTY_JSON_PATH="$json_path" \
+  /usr/bin/ruby -rjson <<'RUBY'
+def nonempty_string?(value)
+  value.is_a?(String) && !value.empty?
+end
+
+def valid_operator_command?(value)
+  return false unless value.is_a?(Hash)
+  return false unless nonempty_string?(value["id"])
+  return false unless nonempty_string?(value["title"])
+  return false unless nonempty_string?(value["command"])
+  return false unless nonempty_string?(value["workingDirectoryHint"])
+  return false unless value["requiresUserApproval"] == true
+  return false unless value["safeForAgentsToRunAutomatically"] == false
+  return false unless value["notes"].is_a?(Array)
+  value["notes"].all? { |note| nonempty_string?(note) }
+end
+
+begin
+  payload = JSON.parse(ENV.fetch("VIFTY_JSON_PAYLOAD", ""))
+  current = payload
+  ENV.fetch("VIFTY_JSON_PATH", "").split(".").each do |component|
+    exit 0 unless current.is_a?(Hash) && current.key?(component)
+    current = current[component]
+  end
+  exit 0 if current.nil?
+  if current.is_a?(Array) && current.all? { |item| valid_operator_command?(item) }
+    puts JSON.generate(current)
+  else
+    puts "__invalid__"
+  end
+rescue JSON::ParserError
+  exit 1
+end
+RUBY
+}
+
 guarded_run_decision_json() {
   decision_message="$1"
   decision_safe_to_proceed="$2"
@@ -570,6 +645,7 @@ guarded_run_decision_json() {
   VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION="${recommended_action:-}" \
   VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_RECOVERY_ACTION="${recommended_recovery_action:-}" \
   VIFTY_GUARDED_RUN_DECISION_RECOVERY_STEPS="${recovery_steps_compact:-[]}" \
+  VIFTY_GUARDED_RUN_DECISION_OPERATOR_RECOVERY_COMMANDS="${operator_recovery_commands_compact:-[]}" \
   VIFTY_GUARDED_RUN_DECISION_STATE="${state:-}" \
   VIFTY_GUARDED_RUN_DECISION_SAFE_TO_REQUEST="${safe_to_request:-}" \
   VIFTY_GUARDED_RUN_DECISION_DAEMON_READY="${daemon_control_path_ready:-}" \
@@ -623,6 +699,14 @@ rescue JSON::ParserError
   nil
 end
 
+def operator_recovery_commands(name)
+  value = JSON.parse(ENV[name].to_s)
+  return value if value.is_a?(Array)
+  []
+rescue JSON::ParserError
+  []
+end
+
 daemon_runtime = optional_object("VIFTY_GUARDED_RUN_DECISION_DAEMON_RUNTIME")
 
 payload = {
@@ -639,6 +723,7 @@ payload = {
   "recommendedAgentAction" => optional_string("VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_ACTION"),
   "recommendedRecoveryAction" => optional_string("VIFTY_GUARDED_RUN_DECISION_RECOMMENDED_RECOVERY_ACTION"),
   "recoverySteps" => string_array("VIFTY_GUARDED_RUN_DECISION_RECOVERY_STEPS"),
+  "operatorRecoveryCommands" => operator_recovery_commands("VIFTY_GUARDED_RUN_DECISION_OPERATOR_RECOVERY_COMMANDS"),
   "diagnoseState" => optional_string("VIFTY_GUARDED_RUN_DECISION_STATE"),
   "safeToRequestCooling" => bool_value("VIFTY_GUARDED_RUN_DECISION_SAFE_TO_REQUEST"),
   "daemonControlPathReady" => bool_value("VIFTY_GUARDED_RUN_DECISION_DAEMON_READY"),
@@ -673,6 +758,7 @@ finish_without_cooling_request() {
   echo "guarded-run: $message" >&2
   print_readiness_recovery_action "$recommended_recovery_action"
   print_readiness_recovery_steps
+  print_operator_recovery_commands
   print_manual_control_startup_mode_context
   print_diagnose_json_evidence
 
@@ -1227,6 +1313,7 @@ diagnose_schema_id="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract 
 recommended_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedAgentAction raw -o - - 2>/dev/null || printf '')"
 recommended_recovery_action="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract recommendedRecoveryAction raw -o - - 2>/dev/null || printf '')"
 recovery_steps="$(json_string_array_at_path "$diagnose_json" recoverySteps 2>/dev/null || printf '')"
+operator_recovery_commands="$(json_operator_recovery_commands_at_path "$diagnose_json" operatorRecoveryCommands 2>/dev/null || printf '')"
 safe_to_request="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract safeToRequestCooling raw -o - - 2>/dev/null || printf '')"
 daemon_control_path_ready="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract daemonControlPathReady raw -o - - 2>/dev/null || printf '')"
 manual_control_active="$(printf '%s\n' "$diagnose_json" | /usr/bin/plutil -extract manualControlActive raw -o - - 2>/dev/null || printf '')"
@@ -1243,6 +1330,7 @@ daemon_runtime_matches_expected="$(json_optional_bool "$diagnose_json" daemonRun
 [ "$recommended_action" = "null" ] && recommended_action=""
 [ "$recommended_recovery_action" = "null" ] && recommended_recovery_action=""
 [ "$recovery_steps" = "null" ] && recovery_steps=""
+[ "$operator_recovery_commands" = "null" ] && operator_recovery_commands=""
 [ "$safe_to_request" = "null" ] && safe_to_request=""
 [ "$daemon_control_path_ready" = "null" ] && daemon_control_path_ready=""
 [ "$manual_control_active" = "null" ] && manual_control_active=""
@@ -1255,6 +1343,7 @@ daemon_runtime_matches_expected="$(json_optional_bool "$diagnose_json" daemonRun
 failed_check_ids_compact="$(printf '%s' "$failed_check_ids" | /usr/bin/tr -d '[:space:]')"
 cooling_blocker_ids_compact="$(printf '%s' "$cooling_blocker_ids" | /usr/bin/tr -d '[:space:]')"
 recovery_steps_compact="$recovery_steps"
+operator_recovery_commands_compact="$operator_recovery_commands"
 daemon_runtime_compact="$(printf '%s' "$daemon_runtime" | /usr/bin/tr -d '[:space:]')"
 cooling_blockers_present=0
 
@@ -1317,6 +1406,20 @@ case "$recovery_steps_compact" in
     ;;
   *)
     echo "guarded-run: Vifty diagnose is missing agent decision fields; refusing to request cooling." >&2
+    print_diagnose_json_evidence
+    exit 75
+    ;;
+esac
+
+if [ -z "$operator_recovery_commands_compact" ]; then
+  operator_recovery_commands_compact="[]"
+fi
+
+case "$operator_recovery_commands_compact" in
+  \[*\])
+    ;;
+  *)
+    echo "guarded-run: Vifty diagnose operatorRecoveryCommands is malformed; refusing to request cooling." >&2
     print_diagnose_json_evidence
     exit 75
     ;;

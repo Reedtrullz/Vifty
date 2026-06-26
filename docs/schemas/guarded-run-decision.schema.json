@@ -111,6 +111,56 @@
       },
       "uniqueItems": true
     },
+    "operatorRecoveryCommands": {
+      "type": "array",
+      "description": "Display-only local operator commands copied from viftyctl diagnose --json. Agents may show these to a human, but safeForAgentsToRunAutomatically must remain false and the wrapper must not execute them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "command",
+          "workingDirectoryHint",
+          "requiresUserApproval",
+          "safeForAgentsToRunAutomatically",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workingDirectoryHint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiresUserApproval": {
+            "const": true
+          },
+          "safeForAgentsToRunAutomatically": {
+            "const": false
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "uniqueItems": true
+    },
     "diagnoseState": {
       "type": ["string", "null"],
       "enum": ["ready", "degraded", "blocked", null]

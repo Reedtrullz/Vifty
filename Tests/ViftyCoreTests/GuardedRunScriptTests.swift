@@ -48,6 +48,7 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertEqual(decision["recommendedAgentAction"] as? String, "requestCooling")
         XCTAssertEqual(decision["recommendedRecoveryAction"] as? String, "none")
         XCTAssertEqual(decision["recoverySteps"] as? [String], [])
+        XCTAssertEqual((decision["operatorRecoveryCommands"] as? [[String: Any]])?.count, 0)
         XCTAssertEqual(decision["diagnoseState"] as? String, "ready")
         XCTAssertEqual(decision["safeToRequestCooling"] as? Bool, true)
         XCTAssertEqual(decision["daemonControlPathReady"] as? Bool, true)
@@ -793,6 +794,68 @@ final class GuardedRunScriptTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
     }
 
+    func testGuardedRunDisplaysOperatorRecoveryCommandsWithoutRunningThem() throws {
+        let operatorRecoveryCommands = #"""
+        [{
+          "id": "repair-helper-current-app",
+          "title": "Repair helper from this Vifty app bundle",
+          "command": "REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper",
+          "workingDirectoryHint": "Run from the Vifty source checkout.",
+          "requiresUserApproval": true,
+          "safeForAgentsToRunAutomatically": false,
+          "notes": [
+            "Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.",
+            "Does not request cooling or write fan state directly."
+          ]
+        }]
+        """#
+        let harness = try ScriptHarness(
+            state: "blocked",
+            recommendedRecoveryAction: "repairHelper",
+            daemonControlPathReady: false,
+            failedCheckIDs: ["daemonControlPathReady"],
+            coolingBlockerIDs: ["daemonControlPathReady"],
+            recoverySteps: ["Repair or reinstall the Vifty fan helper, then rerun diagnose --json."],
+            operatorRecoveryCommandsJSON: operatorRecoveryCommands
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("operator recovery command repair-helper-current-app"))
+        XCTAssertTrue(result.stderr.contains("REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper"))
+        XCTAssertTrue(result.stderr.contains("requires user approval; agents must not run it automatically"))
+        let decision = try guardedRunDecisionJSON(from: result.stderr)
+        let commands = try XCTUnwrap(decision["operatorRecoveryCommands"] as? [[String: Any]])
+        XCTAssertEqual(commands.count, 1)
+        XCTAssertEqual(commands.first?["id"] as? String, "repair-helper-current-app")
+        XCTAssertEqual(
+            commands.first?["command"] as? String,
+            "REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper"
+        )
+        XCTAssertEqual(commands.first?["requiresUserApproval"] as? Bool, true)
+        XCTAssertEqual(commands.first?["safeForAgentsToRunAutomatically"] as? Bool, false)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
+    func testGuardedRunRejectsMalformedOperatorRecoveryCommandsBeforeCooling() throws {
+        let harness = try ScriptHarness(
+            state: "ready",
+            operatorRecoveryCommandsJSON: #"[{"id":"repair-helper-current-app","title":"Unsafe","command":"make repair-helper","workingDirectoryHint":"Run from source.","requiresUserApproval":true,"safeForAgentsToRunAutomatically":true,"notes":["unsafe"]}]"#
+        )
+
+        let result = try harness.runGuardedRun([
+            "test", "20m", "70", "swift test", "--", "swift", "test"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(result.stderr.contains("operatorRecoveryCommands is malformed"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("BEGIN_VIFTY_DIAGNOSE_JSON"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.logURL.path))
+    }
+
     func testGuardedRunEmitsStructuredDecisionWhenReadinessBlocksCooling() throws {
         let harness = try ScriptHarness(
             state: "degraded",
@@ -1501,6 +1564,7 @@ private final class ScriptHarness {
         coolingBlockerIDs: [String] = [],
         includeRecoverySteps: Bool = true,
         recoverySteps: [String]? = nil,
+        operatorRecoveryCommandsJSON: String? = nil,
         diagnoseExitCode: Int = 0,
         diagnoseSchemaVersion: Int = 1,
         emitReadinessOnDiagnoseFailure: Bool = false,
@@ -1552,6 +1616,7 @@ private final class ScriptHarness {
                 coolingBlockerIDs: coolingBlockerIDs,
                 includeRecoverySteps: includeRecoverySteps,
                 recoverySteps: recoverySteps,
+                operatorRecoveryCommandsJSON: operatorRecoveryCommandsJSON,
                 diagnoseExitCode: diagnoseExitCode,
                 diagnoseSchemaVersion: diagnoseSchemaVersion,
                 emitReadinessOnDiagnoseFailure: emitReadinessOnDiagnoseFailure,
@@ -1680,6 +1745,7 @@ private final class ScriptHarness {
         coolingBlockerIDs: [String],
         includeRecoverySteps: Bool,
         recoverySteps: [String]?,
+        operatorRecoveryCommandsJSON: String?,
         diagnoseExitCode: Int,
         diagnoseSchemaVersion: Int,
         emitReadinessOnDiagnoseFailure: Bool,
@@ -1712,6 +1778,10 @@ private final class ScriptHarness {
         let hasRecoveryStepsOverride = decisionFieldsOverride?.contains(#""recoverySteps""#) == true
         let recoveryStepsField = includeRecoverySteps && !hasRecoveryStepsOverride
             ? #","recoverySteps":\#(Self.jsonStringArray(recoverySteps ?? Self.defaultRecoverySteps(for: recommendedRecoveryAction)))"#
+            : ""
+        let hasOperatorRecoveryCommandsOverride = decisionFieldsOverride?.contains(#""operatorRecoveryCommands""#) == true
+        let operatorRecoveryCommandsField = !hasOperatorRecoveryCommandsOverride
+            ? operatorRecoveryCommandsJSON.map { #","operatorRecoveryCommands":\#($0)"# } ?? ""
             : ""
         let appPreferences = startupMode.map {
             #","appPreferences":{"startupMode":"\#($0)","startupModeSource":"persisted","readError":null}"#
@@ -1758,7 +1828,7 @@ private final class ScriptHarness {
 
         if [ "$#" -ge 2 ] && [ "$1" = "diagnose" ] && [ "$2" = "--json" ]; then
           if [ "\(diagnoseExitCode)" -eq 0 ] || [ "\(emitReadinessOnDiagnoseFailureValue)" -eq 1 ]; then
-            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(recoveryStepsField)\(readinessIDs)\(appPreferences),"checks":[]}\n'
+            printf '{"schemaVersion":\(diagnoseSchemaVersion),"state":"\(state)"\(decisionFields)\(recoveryStepsField)\(operatorRecoveryCommandsField)\(readinessIDs)\(appPreferences),"checks":[]}\n'
           else
             printf '\(commandError)\n'
           fi

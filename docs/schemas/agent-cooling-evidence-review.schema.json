@@ -263,6 +263,7 @@
         "recommendedAgentAction",
         "recommendedRecoveryAction",
         "recoverySteps",
+        "operatorRecoveryCommands",
         "diagnoseState",
         "safeToRequestCooling",
         "daemonControlPathReady",
@@ -398,6 +399,9 @@
         },
         "recoverySteps": {
           "$ref": "#/$defs/stringArray"
+        },
+        "operatorRecoveryCommands": {
+          "$ref": "#/$defs/operatorRecoveryCommands"
         },
         "diagnoseState": {
           "type": [
@@ -646,6 +650,56 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "operatorRecoveryCommands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/operatorRecoveryCommand"
+      }
+    },
+    "operatorRecoveryCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "command",
+        "workingDirectoryHint",
+        "requiresUserApproval",
+        "safeForAgentsToRunAutomatically",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workingDirectoryHint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiresUserApproval": {
+          "const": true
+        },
+        "safeForAgentsToRunAutomatically": {
+          "const": false
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   }
