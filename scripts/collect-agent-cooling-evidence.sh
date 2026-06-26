@@ -320,6 +320,11 @@ run_guarded_run_preflight_capture() {
   GUARDED_RUN_PREFLIGHT_STATUS="${status}"
   printf '%s\n' "${status}" > "${status_path}"
   chmod 600 "${stdout_path}" "${stderr_path}" "${status_path}"
+  printf '%s\t%s\t%s\t%s\n' \
+    "guarded-run-preflight" \
+    "${status}" \
+    "guarded-run-stdout.txt" \
+    "guarded-run-stderr.txt" >> "${MANIFEST_PATH}"
 }
 
 if [[ "${GUARDED_RUN_PREFLIGHT}" -eq 1 ]]; then

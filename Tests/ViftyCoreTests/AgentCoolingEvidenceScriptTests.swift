@@ -450,7 +450,16 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-stderr.txt"))
         XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-preflight.status"))
         XCTAssertTrue(try harness.read("checksums.tsv").contains("\tguarded-run-stdout.txt"))
-        XCTAssertFalse(try harness.read("manifest.tsv").contains("guarded-run-preflight"))
+        XCTAssertTrue(try harness.read("manifest.tsv").contains("guarded-run-preflight\t0\tguarded-run-stdout.txt\tguarded-run-stderr.txt"))
+        let summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
+        XCTAssertTrue(commands.contains { command in
+            command["name"] as? String == "guarded-run-preflight"
+                && command["status"] as? Int == 0
+                && command["stdout"] as? String == "guarded-run-stdout.txt"
+                && command["stderr"] as? String == "guarded-run-stderr.txt"
+                && command["statusFile"] as? String == "guarded-run-preflight.status"
+        })
 
         let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
         let reviewResult = try harness.runReviewer([
