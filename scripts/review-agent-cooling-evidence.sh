@@ -172,6 +172,9 @@ app_info = {
 }
 guarded_run_decision = {
   "present" => false,
+  "captureMode" => "none",
+  "collectorPreflight" => false,
+  "preflightExitStatus" => nil,
   "sourceFile" => nil,
   "schemaVersion" => nil,
   "schemaID" => nil,
@@ -540,6 +543,7 @@ guarded_preflight_manifest = manifest_by_name["guarded-run-preflight"]
 guarded_preflight_status_path = File.join(bundle, "guarded-run-preflight.status")
 guarded_preflight_stdout_path = File.join(bundle, "guarded-run-stdout.txt")
 guarded_preflight_stderr_path = File.join(bundle, "guarded-run-stderr.txt")
+guarded_preflight_status = nil
 guarded_preflight_present =
   guarded_preflight_metadata ||
   !guarded_preflight_command.nil? ||
@@ -548,6 +552,8 @@ guarded_preflight_present =
   File.file?(guarded_preflight_stdout_path)
 
 if guarded_preflight_present
+  guarded_run_decision["captureMode"] = "collectorPreflight"
+  guarded_run_decision["collectorPreflight"] = true
   failures << "guarded-run preflight metadata must set guardedRunPreflight=true" unless guarded_preflight_metadata
   failures << "guarded-run preflight summary command is required when preflight evidence is present" unless guarded_preflight_command
   failures << "guarded-run preflight manifest row is required when preflight evidence is present" unless guarded_preflight_manifest
@@ -568,6 +574,7 @@ if guarded_preflight_present
 
   if File.file?(guarded_preflight_status_path)
     guarded_preflight_status = integer_value(File.read(guarded_preflight_status_path).strip)
+    guarded_run_decision["preflightExitStatus"] = guarded_preflight_status if guarded_preflight_status
     failures << "guarded-run preflight status file is not an integer" unless guarded_preflight_status
     if guarded_preflight_status
       command_status = integer_value(guarded_preflight_command["status"]) if guarded_preflight_command
@@ -919,6 +926,7 @@ guarded_run_stderr_path = File.join(bundle, "guarded-run-stderr.txt")
 if File.file?(guarded_run_stderr_path)
   guarded_run_decision["present"] = true
   guarded_run_decision["sourceFile"] = "guarded-run-stderr.txt"
+  guarded_run_decision["captureMode"] = "copiedStderr" if guarded_run_decision["captureMode"] == "none"
   guarded_run_stderr_text = File.read(guarded_run_stderr_path)
   guarded_payload = extract_guarded_run_decision_json(guarded_run_stderr_text, failures)
 

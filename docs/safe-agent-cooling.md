@@ -339,9 +339,12 @@ persisted `Curve` or `Fixed` default, switch Vifty's default startup mode to
 `daemonControlPathReady`, blocker-ID arrays, or `appPreferences` may pass only with a warning;
 `daemonControlPathReady` still has to be inferred from structured
 readiness/recovery fields. If `guarded-run-stderr.txt` is present, the
-`guardedRunDecision` summary records the bracketed wrapper decision, preserves
-`decisionReason` and the privacy-conscious workload envelope when current
-wrappers provide them, and fails review if that decision drifts from the
+`guardedRunDecision` summary records the bracketed wrapper decision, identifies
+the provenance as `captureMode: copiedStderr` or
+`captureMode: collectorPreflight`, records `collectorPreflight: true` plus
+`preflightExitStatus` only for the collector's own `--preflight-only` envelope,
+preserves `decisionReason` and the privacy-conscious workload envelope when
+current wrappers provide them, and fails review if that decision drifts from the
 captured diagnose evidence. The
 `capabilitiesDecision` summary
 records the captured capabilities schema version plus stable

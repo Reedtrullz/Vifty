@@ -295,6 +295,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
         XCTAssertEqual(guardedRunDecision["present"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["captureMode"] as? String, "copiedStderr")
+        XCTAssertEqual(guardedRunDecision["collectorPreflight"] as? Bool, false)
+        XCTAssertNil(guardedRunDecision["preflightExitStatus"] as? Int)
         XCTAssertEqual(guardedRunDecision["sourceFile"] as? String, "guarded-run-stderr.txt")
         XCTAssertEqual(guardedRunDecision["schemaVersion"] as? Int, 1)
         XCTAssertEqual(
@@ -378,6 +381,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["captureMode"] as? String, "copiedStderr")
+        XCTAssertEqual(guardedRunDecision["collectorPreflight"] as? Bool, false)
+        XCTAssertNil(guardedRunDecision["preflightExitStatus"] as? Int)
         XCTAssertEqual(guardedRunDecision["safeToProceed"] as? Bool, true)
         XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
         XCTAssertEqual(guardedRunDecision["uncooledFallbackRequested"] as? Bool, false)
@@ -470,6 +476,11 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
+        XCTAssertEqual(guardedRunDecision["present"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["captureMode"] as? String, "collectorPreflight")
+        XCTAssertEqual(guardedRunDecision["collectorPreflight"] as? Bool, true)
+        XCTAssertEqual(guardedRunDecision["preflightExitStatus"] as? Int, 0)
+        XCTAssertEqual(guardedRunDecision["sourceFile"] as? String, "guarded-run-stderr.txt")
         XCTAssertEqual(guardedRunDecision["safeToProceed"] as? Bool, true)
         XCTAssertEqual(guardedRunDecision["coolingRequested"] as? Bool, false)
         XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "preflightReady")
@@ -1694,6 +1705,9 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         let guardedRunRequired = try XCTUnwrap(guardedRunDecision["required"] as? [String])
         for field in [
             "present",
+            "captureMode",
+            "collectorPreflight",
+            "preflightExitStatus",
             "sourceFile",
             "schemaVersion",
             "schemaID",
@@ -1726,6 +1740,11 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         ] {
             XCTAssertTrue(guardedRunRequired.contains(field), "guardedRunDecision should require \(field)")
         }
+        let guardedRunProperties = try XCTUnwrap(guardedRunDecision["properties"] as? [String: Any])
+        let captureMode = try XCTUnwrap(guardedRunProperties["captureMode"] as? [String: Any])
+        XCTAssertEqual(captureMode["enum"] as? [String], ["none", "copiedStderr", "collectorPreflight"])
+        XCTAssertNotNil(guardedRunProperties["collectorPreflight"] as? [String: Any])
+        XCTAssertNotNil(guardedRunProperties["preflightExitStatus"] as? [String: Any])
 
         let sourceSchemaURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("docs/schemas/guarded-run-decision.schema.json")

@@ -250,6 +250,9 @@
       "additionalProperties": false,
       "required": [
         "present",
+        "captureMode",
+        "collectorPreflight",
+        "preflightExitStatus",
         "sourceFile",
         "schemaVersion",
         "schemaID",
@@ -283,6 +286,25 @@
       "properties": {
         "present": {
           "type": "boolean"
+        },
+        "captureMode": {
+          "description": "How guarded-run decision evidence entered the bundle. collectorPreflight means the collector ran guarded-run.sh --preflight-only and recorded the status/stdout/stderr envelope; copiedStderr means a caller supplied an existing guarded-run stderr transcript; none means no guarded-run decision evidence was present.",
+          "enum": [
+            "none",
+            "copiedStderr",
+            "collectorPreflight"
+          ]
+        },
+        "collectorPreflight": {
+          "type": "boolean",
+          "description": "True only when the reviewed bundle contains the collector's own guarded-run-preflight manifest/summary/status/stdout/stderr envelope."
+        },
+        "preflightExitStatus": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Exit status copied from guarded-run-preflight.status when collectorPreflight is true and the status file is parseable."
         },
         "sourceFile": {
           "type": [
