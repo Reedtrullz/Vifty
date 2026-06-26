@@ -517,6 +517,7 @@
         "recommendedAgentAction",
         "recommendedRecoveryAction",
         "recoverySteps",
+        "operatorRecoveryCommands",
         "safeToRequestCooling",
         "daemonControlPathReady",
         "manualControlActive",
@@ -573,6 +574,9 @@
         },
         "recoverySteps": {
           "$ref": "#/$defs/stringArray"
+        },
+        "operatorRecoveryCommands": {
+          "$ref": "#/$defs/operatorRecoveryCommands"
         },
         "safeToRequestCooling": {
           "type": [

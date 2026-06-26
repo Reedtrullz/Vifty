@@ -671,6 +671,8 @@ if File.file?(diagnose_path)
       failed_check_ids_present = diagnose.key?("failedCheckIDs")
       cooling_blocker_ids = diagnose["coolingBlockerIDs"]
       cooling_blocker_ids_present = diagnose.key?("coolingBlockerIDs")
+      operator_recovery_commands = diagnose["operatorRecoveryCommands"]
+      operator_recovery_commands_present = diagnose.key?("operatorRecoveryCommands")
       app_preferences = diagnose["appPreferences"]
       app_preferences_present = diagnose.key?("appPreferences")
 
@@ -705,6 +707,15 @@ if File.file?(diagnose_path)
         end
       else
         warnings << "viftyctl-diagnose.json is missing coolingBlockerIDs; legacy reports may require checks[] parsing for hard cooling blockers"
+      end
+      if operator_recovery_commands_present
+        if operator_recovery_commands?(operator_recovery_commands)
+          diagnose_decision["operatorRecoveryCommands"] = operator_recovery_commands
+        else
+          failures << "viftyctl-diagnose.json operatorRecoveryCommands must be human-approved and not agent-runnable"
+        end
+      else
+        warnings << "viftyctl-diagnose.json is missing operatorRecoveryCommands; legacy reports may not include display-only recovery commands"
       end
       if [true, false].include?(daemon_ready)
         diagnose_decision["daemonControlPathReady"] = daemon_ready
@@ -1019,7 +1030,7 @@ if File.file?(guarded_run_stderr_path)
     if string_array?(recovery_steps) && diagnose_decision["recoverySteps"].any? && recovery_steps != diagnose_decision["recoverySteps"]
       failures << "guarded-run decision recoverySteps do not match diagnose evidence"
     end
-    diagnose_operator_commands = diagnose["operatorRecoveryCommands"]
+    diagnose_operator_commands = diagnose_decision["operatorRecoveryCommands"]
     if operator_recovery_commands?(operator_recovery_commands) &&
         operator_recovery_commands?(diagnose_operator_commands) &&
         diagnose_operator_commands.any? &&

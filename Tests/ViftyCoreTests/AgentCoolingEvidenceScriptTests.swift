@@ -603,6 +603,14 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(reviewResult.exitCode, 0, reviewResult.stderr)
         let reviewSummary = try AgentCoolingEvidenceHarness.readJSON(reviewSummaryURL)
         XCTAssertEqual(reviewSummary["status"] as? String, "passed")
+        let diagnoseDecision = try XCTUnwrap(reviewSummary["diagnoseDecision"] as? [String: Any])
+        let diagnoseOperatorCommands = try XCTUnwrap(diagnoseDecision["operatorRecoveryCommands"] as? [[String: Any]])
+        XCTAssertEqual(diagnoseOperatorCommands.count, 1)
+        XCTAssertEqual(
+            diagnoseOperatorCommands.first?["command"] as? String,
+            "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper"
+        )
+        XCTAssertEqual(diagnoseOperatorCommands.first?["safeForAgentsToRunAutomatically"] as? Bool, false)
         let guardedRunDecision = try XCTUnwrap(reviewSummary["guardedRunDecision"] as? [String: Any])
         XCTAssertEqual(guardedRunDecision["decisionReason"] as? String, "daemonRuntimeMismatch")
         XCTAssertEqual(guardedRunDecision["recommendedRecoveryAction"] as? String, "repairHelper")
@@ -651,6 +659,60 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             command["name"] as? String == "viftyctl-diagnose"
                 && command["status"] as? Int == 75
         })
+    }
+
+    func testReviewerRejectsAgentRunnableDiagnoseOperatorRecoveryCommands() throws {
+        let harness = try AgentCoolingEvidenceHarness(
+            diagnoseJSON: #"""
+            {
+              "state": "blocked",
+              "recommendedAgentAction": "doNotRequestCooling",
+              "safeToRequestCooling": false,
+              "daemonControlPathReady": true,
+              "manualControlActive": true,
+              "recommendedRecoveryAction": "restoreAutoBeforeRetry",
+              "recoverySteps": [
+                "Ask the user to restore Auto once, then rerun diagnose --json."
+              ],
+              "operatorRecoveryCommands": [
+                {
+                  "id": "restore-auto-current-app",
+                  "title": "Restore Auto",
+                  "command": "/Applications/Vifty.app/Contents/MacOS/viftyctl restore-auto --json",
+                  "workingDirectoryHint": "any shell",
+                  "requiresUserApproval": true,
+                  "safeForAgentsToRunAutomatically": true,
+                  "notes": ["This must stay display-only for local agents."]
+                }
+              ],
+              "failedCheckIDs": ["manualControlClear"],
+              "coolingBlockerIDs": ["manualControlClear"],
+              "appPreferences": {
+                "startupMode": "Curve",
+                "startupModeSource": "persisted",
+                "readError": null
+              },
+              "checks": []
+            }
+            """#,
+            diagnoseExitCode: 75
+        )
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(
+            reviewResult.stderr.contains("viftyctl-diagnose.json operatorRecoveryCommands must be human-approved and not agent-runnable"),
+            reviewResult.stderr
+        )
     }
 
     func testCollectorFlagsLikelyPrivateIdentifiersWithoutRunningCoolingCommands() throws {
@@ -1517,6 +1579,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
             "recommendedAgentAction",
             "recommendedRecoveryAction",
             "recoverySteps",
+            "operatorRecoveryCommands",
             "safeToRequestCooling",
             "daemonControlPathReady",
             "manualControlActive",
@@ -1529,6 +1592,7 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
 
         let diagnoseProperties = try XCTUnwrap(diagnoseDecision["properties"] as? [String: Any])
         XCTAssertEqual(diagnoseProperties["recoverySteps"] as? [String: String], ["$ref": "#/$defs/stringArray"])
+        XCTAssertEqual(diagnoseProperties["operatorRecoveryCommands"] as? [String: String], ["$ref": "#/$defs/operatorRecoveryCommands"])
         XCTAssertEqual(diagnoseProperties["failedCheckIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["coolingBlockerIDs"] as? [String: String], ["$ref": "#/$defs/stringArray"])
         XCTAssertEqual(diagnoseProperties["appPreferences"] as? [String: String], ["$ref": "#/$defs/appPreferencesDiagnostic"])

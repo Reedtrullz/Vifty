@@ -64,9 +64,10 @@ It accepts `viftyctl diagnose` exit `75` as blocked-readiness evidence and
 summarizes the reviewed diagnose contract in `diagnoseDecision`: exit status,
 readiness state, `recommendedAgentAction`, `recommendedRecoveryAction`,
 `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`,
-`failedCheckIDs`, `coolingBlockerIDs`, and `appPreferences.startupMode`. If
-those fields are missing or contradict the diagnose exit code or each other, the
-review fails; malformed blocker-ID arrays fail the same way. A non-empty
+`failedCheckIDs`, `coolingBlockerIDs`, display-only `operatorRecoveryCommands`,
+and `appPreferences.startupMode`. If those fields are missing or contradict the
+diagnose exit code or each other, the review fails; malformed blocker-ID arrays
+or agent-runnable operator recovery commands fail the same way. A non-empty
 `coolingBlockerIDs` list must never be paired with `safeToRequestCooling: true`;
 route those reports as hard blocked readiness instead of agent-safe evidence.
 Legacy `v1.1.x` reports that omit
