@@ -1,0 +1,206 @@
+{
+  "agentControl": {
+    "activeLease": null,
+    "enabled": true,
+    "lastDecision": null,
+    "lastErrorCode": null,
+    "policy": {
+      "enabled": true,
+      "maxDurationSeconds": 1800,
+      "maximumAllowedRPMPercent": 80,
+      "minimumAgentRPMPercent": 45,
+      "prepareCooldownSeconds": 30
+    }
+  },
+  "agentControlStatusError": null,
+  "appPreferences": {
+    "readError": null,
+    "startupMode": "Auto",
+    "startupModeSource": "persisted"
+  },
+  "daemonRuntime": {
+    "installedDaemonPath": "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+    "installedDaemonPresent": true,
+    "installedDaemonSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expectedDaemonPath": "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+    "expectedDaemonPresent": true,
+    "expectedDaemonSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "matchesExpectedDaemon": false,
+    "matchRequired": true
+  },
+  "checks": [
+    {
+      "id": "daemonSnapshotAvailable",
+      "message": "Daemon hardware snapshot is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "agentControlStatusAvailable",
+      "message": "Daemon agent-control status is available.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "daemonControlPathReady",
+      "message": "Daemon-backed control path is ready for bounded agent cooling requests.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "daemonRuntimeMatchesExpected",
+      "message": "Installed privileged fan helper does not match this Vifty build; use Repair/Reinstall Helper before requesting cooling.",
+      "passed": false,
+      "severity": "error"
+    },
+    {
+      "id": "supportedHardware",
+      "message": "Apple Silicon MacBook Pro hardware detected.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "agentControlEnabled",
+      "message": "Agent cooling policy is enabled in the daemon.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "temperatureSensorsPresent",
+      "message": "2 temperature sensor(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "controllableFansPresent",
+      "message": "2 controllable fan(s) available.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsValid",
+      "message": "Controllable fan IDs are valid.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanIDsUnique",
+      "message": "Controllable fan IDs are unique.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "fanRangesValid",
+      "message": "Controllable fan RPM ranges are valid.",
+      "passed": true,
+      "severity": "error"
+    },
+    {
+      "id": "thermalPressureSafe",
+      "message": "Thermal pressure is nominal.",
+      "passed": true,
+      "severity": "info"
+    },
+    {
+      "id": "activeLeaseClear",
+      "message": "No active agent cooling lease.",
+      "passed": true,
+      "severity": "warning"
+    },
+    {
+      "id": "manualControlClear",
+      "message": "No Vifty/manual fan-control marker is active.",
+      "passed": true,
+      "severity": "warning"
+    },
+    {
+      "id": "fanModeTelemetry",
+      "message": "Fan hardware mode telemetry is available.",
+      "passed": true,
+      "severity": "info"
+    }
+  ],
+  "controllableFanCount": 2,
+  "daemonControlPathReady": true,
+  "daemonSnapshotError": null,
+  "fanCount": 2,
+  "fans": [
+    {
+      "controllable": true,
+      "currentRPM": 2200,
+      "hardwareMode": "Auto",
+      "hardwareModeKey": "F0Md",
+      "hardwareModeRawValue": 0,
+      "id": 0,
+      "maximumRPM": 6800,
+      "minimumRPM": 1400,
+      "name": "Left Fan",
+      "targetRPM": null
+    },
+    {
+      "controllable": true,
+      "currentRPM": 2250,
+      "hardwareMode": "Auto",
+      "hardwareModeKey": "F1md",
+      "hardwareModeRawValue": 0,
+      "id": 1,
+      "maximumRPM": 7200,
+      "minimumRPM": 1500,
+      "name": "Right Fan",
+      "targetRPM": null
+    }
+  ],
+  "generatedAt": 700000000,
+  "highestTemperatureCelsius": 58.4,
+  "isAppleSilicon": true,
+  "isMacBookPro": true,
+  "manualControlActive": false,
+  "modelIdentifier": "MacBookPro18,3",
+  "recommendedAgentAction": "doNotRequestCooling",
+  "recommendedRecoveryAction": "repairHelper",
+  "recoverySteps": [
+    "Open Vifty and use Repair/Reinstall Helper, then approve Login Items if macOS asks.",
+    "In a source checkout, run make repair-helper for the same explicit administrator-approved LaunchDaemon repair.",
+    "After repair, rerun diagnose --json and require safe readiness before requesting cooling."
+  ],
+  "operatorRecoveryCommands": [
+    {
+      "id": "repair-helper-current-app",
+      "title": "Repair helper from this Vifty app bundle",
+      "command": "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper",
+      "workingDirectoryHint": "Run from the Vifty source checkout.",
+      "requiresUserApproval": true,
+      "safeForAgentsToRunAutomatically": false,
+      "notes": [
+        "Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.",
+        "Does not request cooling or write fan state directly.",
+        "After repair, rerun viftyctl diagnose --json and require safe readiness before requesting cooling."
+      ]
+    }
+  ],
+  "safeToRequestCooling": false,
+  "schemaVersion": 1,
+  "state": "blocked",
+  "temperatureSensorCount": 2,
+  "temperatureSensors": [
+    {
+      "celsius": 58.4,
+      "id": "Tp09",
+      "name": "CPU Proximity",
+      "source": "SMC"
+    },
+    {
+      "celsius": 51.2,
+      "id": "hid-0",
+      "name": "HID Temperature 0",
+      "source": "HID"
+    }
+  ],
+  "thermalPressure": "nominal",
+  "failedCheckIDs": [
+    "daemonRuntimeMatchesExpected"
+  ],
+  "coolingBlockerIDs": [
+    "daemonRuntimeMatchesExpected"
+  ]
+}

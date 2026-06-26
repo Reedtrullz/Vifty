@@ -213,6 +213,46 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
     }
 
+    func testDiagnoseBlockedDaemonRuntimeMismatchExampleDecodesAgainstCurrentModel() throws {
+        let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-blocked-daemon-runtime-mismatch.json")
+
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.state, .blocked)
+        XCTAssertEqual(report.recommendedAgentAction, .doNotRequestCooling)
+        XCTAssertEqual(report.recommendedRecoveryAction, .repairHelper)
+        XCTAssertEqual(report.recoverySteps, Self.repairHelperRecoverySteps)
+        XCTAssertEqual(report.safeToRequestCooling, false)
+        XCTAssertTrue(report.daemonControlPathReady)
+        XCTAssertFalse(report.manualControlActive)
+        XCTAssertEqual(report.failedCheckIDs, ["daemonRuntimeMatchesExpected"])
+        XCTAssertEqual(report.coolingBlockerIDs, ["daemonRuntimeMatchesExpected"])
+        XCTAssertEqual(report.modelIdentifier, "MacBookPro18,3")
+        XCTAssertEqual(report.thermalPressure, .nominal)
+        XCTAssertNil(report.daemonSnapshotError)
+        XCTAssertNil(report.agentControlStatusError)
+        XCTAssertTrue(report.agentControl.enabled)
+        XCTAssertNil(report.agentControl.activeLease)
+        XCTAssertNil(report.agentControl.lastErrorCode)
+        XCTAssertEqual(report.daemonRuntime.installedDaemonPath, "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon")
+        XCTAssertTrue(report.daemonRuntime.installedDaemonPresent)
+        XCTAssertEqual(report.daemonRuntime.installedDaemonSHA256, String(repeating: "a", count: 64))
+        XCTAssertEqual(report.daemonRuntime.expectedDaemonPath, "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon")
+        XCTAssertTrue(report.daemonRuntime.expectedDaemonPresent)
+        XCTAssertEqual(report.daemonRuntime.expectedDaemonSHA256, String(repeating: "b", count: 64))
+        XCTAssertEqual(report.daemonRuntime.matchesExpectedDaemon, false)
+        XCTAssertTrue(report.daemonRuntime.matchRequired)
+        let repairCommand = try XCTUnwrap(report.operatorRecoveryCommands?.first)
+        XCTAssertEqual(report.operatorRecoveryCommands?.count, 1)
+        XCTAssertEqual(repairCommand.id, "repair-helper-current-app")
+        XCTAssertEqual(repairCommand.command, "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper")
+        XCTAssertTrue(repairCommand.requiresUserApproval)
+        XCTAssertFalse(repairCommand.safeForAgentsToRunAutomatically)
+        try assertCheck("daemonControlPathReady", in: report.checks, passed: true, severity: .error)
+        try assertCheck("daemonRuntimeMatchesExpected", in: report.checks, passed: false, severity: .error)
+        try assertCheck("agentControlEnabled", in: report.checks, passed: true, severity: .error)
+        try assertCheck("fanModeTelemetry", in: report.checks, passed: true, severity: .info)
+    }
+
     func testDiagnoseDegradedActiveLeaseExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-degraded-active-lease.json")
 
@@ -638,6 +678,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             ("viftyctl-command-error.schema.json", "command-error-run-cleanup-failed.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-ready.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-blocked-helper-unreachable.json"),
+            ("viftyctl-diagnose.schema.json", "diagnose-blocked-daemon-runtime-mismatch.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-degraded-active-lease.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-degraded-manual-control.json"),
             ("viftyctl-diagnose.schema.json", "diagnose-degraded-caution.json"),

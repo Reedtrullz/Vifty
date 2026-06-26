@@ -1564,6 +1564,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(jsonExampleReadme.contains("those commands collect evidence, not\ncooling authorization"))
         XCTAssertTrue(jsonExampleReadme.contains("`daemonRuntime.matchRequired: true` with `daemonRuntime.matchesExpectedDaemon` not `true`"))
         XCTAssertTrue(jsonExampleReadme.contains("https://vifty.local/schemas/viftyctl-status.schema.json"))
+        XCTAssertTrue(jsonExampleReadme.contains("diagnose-blocked-daemon-runtime-mismatch.json"))
         XCTAssertTrue(jsonExampleReadme.contains("diagnose-degraded-manual-control.json"))
     }
 
