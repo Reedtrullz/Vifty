@@ -170,6 +170,10 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["viftyctlCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl'")
         XCTAssertEqual(json["capabilitiesCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl' capabilities --json")
         XCTAssertEqual(json["diagnoseCommand"] as? String, "'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json")
+        XCTAssertEqual(
+            json["strictDiagnoseCommand"] as? String,
+            "'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json --require-safe"
+        )
         XCTAssertEqual(json["repairHelperRecoveryActions"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(json["guardedRunDecisionSchemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
         let guardedRunJSONMarkers = try XCTUnwrap(json["guardedRunJSONMarkers"] as? [String: [String: String]])
@@ -226,6 +230,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["viftyctlCommand"] as? String, "'\(viftyCtlURL.path)'")
         XCTAssertEqual(json["capabilitiesCommand"] as? String, "'\(viftyCtlURL.path)' capabilities --json")
         XCTAssertEqual(json["diagnoseCommand"] as? String, "'\(viftyCtlURL.path)' diagnose --json")
+        XCTAssertEqual(json["strictDiagnoseCommand"] as? String, "'\(viftyCtlURL.path)' diagnose --json --require-safe")
         XCTAssertTrue((json["guardedRunCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(swiftTestURL.path)'") == true)
         XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(guardedRunURL.path)' '--preflight-only'") == true)
         XCTAssertFalse((json["guardedRunCommand"] as? String)?.contains("/Applications/Vifty.app") == true)
@@ -870,6 +875,78 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["message"] as? String)?.contains("default startup mode is Curve") == true
                 && (check["message"] as? String)?.contains("switch Vifty/default mode to Auto") == true
         })
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
+    func testDiagnoseRequireSafeExitsBlockedWhenManualControlBlocksCooling() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { true },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true, requireSafe: true))
+
+        XCTAssertEqual(result.exitCode, 75)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "degraded")
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["manualControlClear"])
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
+    func testDiagnoseRequireSafeAllowsWarningOnlyCautionReadiness() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .serious },
+            manualControlActiveReader: { false },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true, requireSafe: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "degraded")
+        XCTAssertEqual(
+            json["recommendedAgentAction"] as? String,
+            ViftyCtlRecommendedAgentAction.requestCoolingWithCaution.rawValue
+        )
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], [])
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount
         XCTAssertEqual(prepareRequestCount, 0)

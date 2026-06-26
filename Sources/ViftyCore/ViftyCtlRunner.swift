@@ -1233,17 +1233,17 @@ public struct ViftyCtlRunner: Sendable {
                     )
                 }
                 return ViftyCtlResult(stdout: ViftyAgentRule.rule(bundleURL: agentRuleBundleURL) + "\n")
-            case .diagnose(let json):
+            case .diagnose(let json, let requireSafe):
                 let report = await diagnoseReport()
                 if json {
                     return ViftyCtlResult(
                         stdout: try encodeJSON(report) + "\n",
-                        exitCode: diagnoseExitCode(for: report)
+                        exitCode: diagnoseExitCode(for: report, requireSafe: requireSafe)
                     )
                 }
                 return ViftyCtlResult(
                     stdout: formatHumanReadable(report) + "\n",
-                    exitCode: diagnoseExitCode(for: report)
+                    exitCode: diagnoseExitCode(for: report, requireSafe: requireSafe)
                 )
             case .audit(let limit, let json):
                 let events = try await client.auditEvents(limit: limit)
@@ -1383,7 +1383,7 @@ public struct ViftyCtlRunner: Sendable {
         case .status(let json),
              .capabilities(let json),
              .agentRule(let json),
-             .diagnose(let json),
+             .diagnose(let json, _),
              .audit(_, let json):
             return json
         case .prepare(_, let json, _),
@@ -1595,8 +1595,23 @@ public struct ViftyCtlRunner: Sendable {
         }
     }
 
-    private func diagnoseExitCode(for report: ViftyCtlReadinessReport) -> Int32 {
-        report.state == .blocked ? 75 : 0
+    private func diagnoseExitCode(for report: ViftyCtlReadinessReport, requireSafe: Bool = false) -> Int32 {
+        guard report.state != .blocked else {
+            return 75
+        }
+
+        guard requireSafe else {
+            return 0
+        }
+
+        guard report.safeToRequestCooling == true,
+              report.daemonControlPathReady == true,
+              report.manualControlActive == false,
+              report.coolingBlockerIDs.isEmpty else {
+            return 75
+        }
+
+        return 0
     }
 
     private func prepareWithOptionalForceRetry(_ request: AgentControlRequest, force: Bool) async throws -> AgentControlStatus {

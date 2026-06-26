@@ -26,7 +26,13 @@ final class ViftyCtlArgumentsTests: XCTestCase {
     func testParsesDiagnoseJSON() throws {
         let command = try ViftyCtlArguments.parse(["diagnose", "--json"])
 
-        XCTAssertEqual(command, .diagnose(json: true))
+        XCTAssertEqual(command, .diagnose(json: true, requireSafe: false))
+    }
+
+    func testParsesDiagnoseRequireSafeJSON() throws {
+        let command = try ViftyCtlArguments.parse(["diagnose", "--json", "--require-safe"])
+
+        XCTAssertEqual(command, .diagnose(json: true, requireSafe: true))
     }
 
     func testParsesAuditJSONWithLimit() throws {

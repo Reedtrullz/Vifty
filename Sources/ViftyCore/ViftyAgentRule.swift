@@ -11,6 +11,7 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
     public var viftyctlCommand: String
     public var capabilitiesCommand: String
     public var diagnoseCommand: String
+    public var strictDiagnoseCommand: String
     public var guardedRunCommand: String
     public var guardedRunPreflightCommand: String
 
@@ -18,12 +19,14 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
         viftyctlCommand: String,
         capabilitiesCommand: String,
         diagnoseCommand: String,
+        strictDiagnoseCommand: String,
         guardedRunCommand: String,
         guardedRunPreflightCommand: String
     ) {
         self.viftyctlCommand = viftyctlCommand
         self.capabilitiesCommand = capabilitiesCommand
         self.diagnoseCommand = diagnoseCommand
+        self.strictDiagnoseCommand = strictDiagnoseCommand
         self.guardedRunCommand = guardedRunCommand
         self.guardedRunPreflightCommand = guardedRunPreflightCommand
     }
@@ -64,6 +67,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
     public var viftyctlCommand: String
     public var capabilitiesCommand: String
     public var diagnoseCommand: String
+    public var strictDiagnoseCommand: String?
     public var repairHelperRecoveryActions: [String]?
     public var guardedRunDecisionSchemaID: String
     public var guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers
@@ -97,6 +101,7 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         self.viftyctlCommand = commands.viftyctlCommand
         self.capabilitiesCommand = commands.capabilitiesCommand
         self.diagnoseCommand = commands.diagnoseCommand
+        self.strictDiagnoseCommand = commands.strictDiagnoseCommand
         self.repairHelperRecoveryActions = repairHelperRecoveryActions
         self.guardedRunDecisionSchemaID = guardedRunDecisionSchemaID
         self.guardedRunJSONMarkers = guardedRunJSONMarkers
@@ -190,6 +195,14 @@ public enum ViftyAgentRule {
 
         If `state` is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, `daemonRuntime.matchRequired` is true while `daemonRuntime.matchesExpectedDaemon` is not true, or `coolingBlockerIDs` is non-empty, do not request cooling. Show the JSON to the user and stop.
 
+        For shell-only gates that need an exit code instead of JSON parsing alone, run:
+
+        ```sh
+        \(commands.strictDiagnoseCommand)
+        ```
+
+        It prints the same diagnose JSON, but exits with blocked-readiness code `75` unless `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `coolingBlockerIDs` all permit a new cooling request.
+
         If `recommendedRecoveryAction` is `repairHelper`, show `repairHelperRecoveryActions` from this report when present: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper` as an explicit administrator-approved repair, then rerun `diagnose --json`. Do not request cooling, use uncooled fallback, or call direct SMC/helper commands while repair is pending.
 
         Prefer the guarded wrapper for one child workload:
@@ -236,6 +249,7 @@ public enum ViftyAgentRule {
             viftyctlCommand: viftyctl,
             capabilitiesCommand: "\(viftyctl) capabilities --json",
             diagnoseCommand: "\(viftyctl) diagnose --json",
+            strictDiagnoseCommand: "\(viftyctl) diagnose --json --require-safe",
             guardedRunCommand: workloadCommand(
                 swiftTestTemplate,
                 mode: .run,

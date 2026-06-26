@@ -4,7 +4,7 @@ public enum ViftyCtlCommand: Equatable, Sendable {
     case status(json: Bool)
     case capabilities(json: Bool)
     case agentRule(json: Bool)
-    case diagnose(json: Bool)
+    case diagnose(json: Bool, requireSafe: Bool = false)
     case audit(limit: Int, json: Bool)
     case prepare(AgentControlRequest, json: Bool, force: Bool)
     case restoreAuto(reason: String, json: Bool)
@@ -32,8 +32,8 @@ public enum ViftyCtlArguments {
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
             return .agentRule(json: rest.contains("--json"))
         case "diagnose":
-            try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
-            return .diagnose(json: rest.contains("--json"))
+            try validateOptions(rest, flagOnly: ["--json", "--require-safe"], valueFlags: [])
+            return .diagnose(json: rest.contains("--json"), requireSafe: rest.contains("--require-safe"))
         case "audit":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--limit"])
             return .audit(limit: try parseAuditLimit(rest), json: rest.contains("--json"))

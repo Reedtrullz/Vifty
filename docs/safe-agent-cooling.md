@@ -155,6 +155,11 @@ First run:
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
 ```
 
+For shell-only gates, use
+`/Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json --require-safe`.
+It is still read-only and prints the same JSON, but exits `75` whenever the
+report does not authorize a new cooling request.
+
 Decision table:
 
 | Diagnose result | Agent action |

@@ -51,6 +51,11 @@
       "type": "string",
       "minLength": 1
     },
+    "strictDiagnoseCommand": {
+      "description": "Optional shell-safe diagnose gate. It prints the same diagnose JSON as diagnoseCommand but exits with blocked-readiness code 75 unless the report authorizes a new cooling request.",
+      "type": "string",
+      "minLength": 1
+    },
     "repairHelperRecoveryActions": {
       "description": "Optional human-safe recovery actions agents can show when diagnose or command-error JSON reports recommendedRecoveryAction: repairHelper. These actions are recovery guidance only, not permission to request cooling.",
       "type": "array",
