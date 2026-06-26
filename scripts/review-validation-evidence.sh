@@ -601,6 +601,22 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
   end
 
+  def operator_recovery_command?(value)
+    value.is_a?(Hash) &&
+      value["id"].is_a?(String) && !value["id"].empty? &&
+      value["title"].is_a?(String) && !value["title"].empty? &&
+      value["command"].is_a?(String) && !value["command"].empty? &&
+      value["workingDirectoryHint"].is_a?(String) && !value["workingDirectoryHint"].empty? &&
+      value["requiresUserApproval"] == true &&
+      value["safeForAgentsToRunAutomatically"] == false &&
+      string_array?(value["notes"]) &&
+      value["notes"].all? { |note| !note.empty? }
+  end
+
+  def operator_recovery_commands?(value)
+    value.is_a?(Array) && value.all? { |entry| operator_recovery_command?(entry) }
+  end
+
   def require_sha256(value, field, failures)
     return if value.to_s.match?(/\A[0-9a-f]{64}\z/)
 
@@ -811,6 +827,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     if string_array?(summary["coolingBlockerIDs"]) && !summary["coolingBlockerIDs"].empty?
       failures << "manual-smoke readiness summary coolingBlockerIDs must be empty before passed manual smoke"
     end
+    unless operator_recovery_commands?(summary["operatorRecoveryCommands"])
+      failures << "manual-smoke readiness summary operatorRecoveryCommands must be human-approved and not agent-runnable"
+    end
     unless summary["parseError"].nil?
       failures << "manual-smoke readiness summary parseError must be null before passed manual smoke"
     end
@@ -830,6 +849,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless summary[field] == diagnose[field]
         failures << "manual-smoke readiness summary #{field} must match viftyctl-diagnose.json"
       end
+    end
+
+    diagnose_operator_commands = diagnose["operatorRecoveryCommands"]
+    if operator_recovery_commands?(summary["operatorRecoveryCommands"]) &&
+        operator_recovery_commands?(diagnose_operator_commands) &&
+        summary["operatorRecoveryCommands"] != diagnose_operator_commands
+      failures << "manual-smoke readiness summary operatorRecoveryCommands must match viftyctl-diagnose.json"
     end
 
     validate_manual_smoke_readiness_daemon_runtime(summary, failures)
@@ -909,6 +935,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     unless string_array?(summary["recoverySteps"])
       failures << "agent-run-smoke readiness summary recoverySteps must be an array of strings"
+    end
+    unless operator_recovery_commands?(summary["operatorRecoveryCommands"])
+      failures << "agent-run-smoke readiness summary operatorRecoveryCommands must be human-approved and not agent-runnable"
     end
     failures << "agent-run-smoke readiness summary failedCheckIDs must be an array of strings" unless string_array?(summary["failedCheckIDs"])
     failures << "agent-run-smoke readiness summary coolingBlockerIDs must be an array of strings" unless string_array?(summary["coolingBlockerIDs"])
@@ -995,6 +1024,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless summary[summary_field] == diagnose[diagnose_field]
         failures << "agent-run-smoke readiness summary #{summary_field} must match viftyctl-diagnose.json"
       end
+    end
+
+    diagnose_operator_commands = diagnose["operatorRecoveryCommands"]
+    if operator_recovery_commands?(summary["operatorRecoveryCommands"]) &&
+        operator_recovery_commands?(diagnose_operator_commands) &&
+        summary["operatorRecoveryCommands"] != diagnose_operator_commands
+      failures << "agent-run-smoke readiness summary operatorRecoveryCommands must match viftyctl-diagnose.json"
     end
 
     validate_agent_run_smoke_readiness_daemon_runtime(summary, failures)

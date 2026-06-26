@@ -585,6 +585,40 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewRejectsManualSmokeReadinessSummaryWithAgentRunnableOperatorCommand() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: String(repeating: "1", count: 40)
+        )
+        let readinessSummaryURL = try harness.writeManualSmokeReadinessSummary(
+            operatorRecoveryCommands: [
+                [
+                    "id": "repair-helper-current-app",
+                    "title": "Repair Helper",
+                    "command": "REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper",
+                    "workingDirectoryHint": "source checkout",
+                    "requiresUserApproval": true,
+                    "safeForAgentsToRunAutomatically": true,
+                    "notes": ["This must never be agent-runnable."]
+                ]
+            ]
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            manualSmokeReadinessSummaryURL: readinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("manual-smoke readiness summary operatorRecoveryCommands must be human-approved and not agent-runnable"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsLocalAdHocManualSmokeWhenReadinessDaemonDoesNotMatchBuild() throws {
         let harness = try ValidationEvidenceReviewHarness(
             installSource: "local-ad-hoc-build",
@@ -647,6 +681,36 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["agentRunSmokeReadinessSource"] as? String, smokeSummarySource(readinessSummaryURL))
         XCTAssertEqual(summary["agentRunSmokeResult"] as? String, "not-recorded")
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewRejectsAgentRunSmokeReadinessSummaryWithAgentRunnableOperatorCommand() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let readinessSummaryURL = try harness.writeAgentRunSmokeReadinessSummary(
+            operatorRecoveryCommands: [
+                [
+                    "id": "restore-auto-current-app",
+                    "title": "Restore Auto",
+                    "command": "/Applications/Vifty.app/Contents/MacOS/viftyctl restore-auto --json",
+                    "workingDirectoryHint": "any shell",
+                    "requiresUserApproval": true,
+                    "safeForAgentsToRunAutomatically": true,
+                    "notes": ["This must never be agent-runnable."]
+                ]
+            ]
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeReadinessSummaryURL: readinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("agent-run-smoke readiness summary operatorRecoveryCommands must be human-approved and not agent-runnable"),
+            result.stderr
+        )
     }
 
     func testReviewRejectsAgentRunSmokeReadinessSummaryWithPrivateReasonPath() throws {
@@ -1745,7 +1809,8 @@ private final class ValidationEvidenceReviewHarness {
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false,
         daemonRuntimeMatchesExpected: Bool? = true,
-        daemonRuntimeMatchRequired: Bool = true
+        daemonRuntimeMatchRequired: Bool = true,
+        operatorRecoveryCommands: [[String: Any]] = []
     ) throws -> URL {
         let readinessBundleURL = rootURL.appendingPathComponent("manual-smoke-readiness-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: readinessBundleURL, withIntermediateDirectories: true)
@@ -1774,6 +1839,7 @@ private final class ValidationEvidenceReviewHarness {
             "thermalPressure": "nominal",
             "failedCheckIDs": [],
             "coolingBlockerIDs": [],
+            "operatorRecoveryCommands": operatorRecoveryCommands,
             "appPreferences": [
                 "startupMode": "Auto",
                 "startupModeSource": "persisted",
@@ -1808,7 +1874,8 @@ private final class ValidationEvidenceReviewHarness {
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false,
         daemonRuntimeMatchesExpected: Bool? = true,
-        daemonRuntimeMatchRequired: Bool = true
+        daemonRuntimeMatchRequired: Bool = true,
+        operatorRecoveryCommands: [[String: Any]] = []
     ) throws -> URL {
         let readinessBundleURL = rootURL.appendingPathComponent("agent-run-smoke-readiness-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: readinessBundleURL, withIntermediateDirectories: true)
@@ -1832,6 +1899,7 @@ private final class ValidationEvidenceReviewHarness {
             "recommendedAgentAction": status == "ready" ? "requestCooling" : "doNotRequestCooling",
             "recommendedRecoveryAction": status == "ready" ? "none" : "repairHelper",
             "recoverySteps": [],
+            "operatorRecoveryCommands": operatorRecoveryCommands,
             "safeToRequestCooling": safeToRequestCooling,
             "daemonControlPathReady": daemonControlPathReady,
             "manualControlActive": manualControlActive,
