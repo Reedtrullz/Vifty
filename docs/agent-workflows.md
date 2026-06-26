@@ -325,6 +325,25 @@ child command starts. A passing preflight-only decision emits
 0`; it proves the guarded path is currently available, not that cooling has
 already been requested.
 
+For support bundles, prefer collector-run preflight evidence when the exact
+workload matters:
+
+```sh
+scripts/collect-agent-cooling-evidence.sh \
+  --guarded-run-preflight test 20m 70 "swift test" -- swift test
+```
+
+The reviewer records the provenance in `guardedRunDecision.captureMode`.
+`captureMode: collectorPreflight` means the collector itself ran
+`guarded-run.sh --preflight-only` and reviewed the matching
+`guarded-run-preflight.status`, stdout, and stderr envelope;
+`captureMode: copiedStderr` means the reporter supplied an existing guarded-run
+stderr transcript. Only collector-run preflight evidence should set
+`guardedRunDecision.collectorPreflight: true` and
+`guardedRunDecision.preflightExitStatus`. These fields make triage evidence
+auditable; agents must still use fresh `capabilities --json`, `diagnose --json`,
+and guarded-run readiness before requesting cooling.
+
 The wrapper:
 
 - runs `capabilities --json` and requires schema version `1`, the stable capabilities, diagnose, command-error, and run schema IDs, current `wrapperResources` discovery metadata, and the safe `runLifecycle` contract,

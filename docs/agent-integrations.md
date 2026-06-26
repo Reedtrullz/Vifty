@@ -173,6 +173,18 @@ the privacy-conscious workload envelope (`requestedWorkload`,
 basename/kind, and argument count). It intentionally omits full child arguments,
 reason text, and local command paths.
 
+For issue triage and maintainer review, do not collapse every guarded-run
+transcript into the same trust level. Read-only support bundles reviewed by
+`scripts/review-agent-cooling-evidence.sh` expose
+`guardedRunDecision.captureMode`: `captureMode: collectorPreflight` means
+Vifty's evidence collector ran `guarded-run.sh --preflight-only` for the exact
+workload and captured the matching status/stdout/stderr envelope, while
+`captureMode: copiedStderr` means a reporter supplied a prior guarded-run stderr
+transcript. Treat `guardedRunDecision.collectorPreflight: true` and
+`guardedRunDecision.preflightExitStatus` as provenance for that reviewed bundle,
+not as permission to request cooling later without a fresh guarded readiness
+check.
+
 ## Codex
 
 For a repository-level `AGENTS.md`, add the shared rule and then use workload-specific commands:
