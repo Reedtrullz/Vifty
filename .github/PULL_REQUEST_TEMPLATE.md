@@ -19,11 +19,15 @@
 
 ```sh
 make verify
+# Optional locally for release-facing/safety-sensitive changes; GitHub Actions
+# runs the full slow suite for every PR.
+make verify-full
 ```
 
 ## Safety Checklist
 
 - [ ] `make verify` passes locally, or each skipped gate is explained
+- [ ] `make verify-full` passed locally or GitHub Actions runs the full slow suite for this PR
 - [ ] New tests added for new functionality or bug fixes
 - [ ] SMC write paths still reject arbitrary keys, invalid fan IDs, invalid RPM ranges, and mismatched fan commands before IOKit access
 - [ ] Agent cooling remains lease-based, bounded, child-command-preflighted, and Auto-restoring; agents still use `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, and `recommendedAgentAction`

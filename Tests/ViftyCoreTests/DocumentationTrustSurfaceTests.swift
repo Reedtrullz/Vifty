@@ -109,9 +109,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("Set `SWIFT_BUILD_PATH` yourself when you want a stable reusable build-product path."))
         XCTAssertTrue(readme.contains("For other trust gates, keep the build reproducible by moving SwiftPM products to a fresh path:"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify"))
+        XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify-full"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make app CONFIGURATION=release"))
         XCTAssertTrue(readme.contains("SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install"))
         XCTAssertTrue(readme.contains("The app bundle is still written to `.build/Vifty.app`; only SwiftPM's package build products move to `SWIFT_BUILD_PATH`."))
+        XCTAssertTrue(readme.contains("GitHub Actions runs `make verify-full`"))
+        XCTAssertTrue(readme.contains("slow evidence/release script test suites"))
     }
 
     func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
@@ -129,7 +132,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     func testAgentInstructionsTrackCurrentHelperInstallAndTestCount() throws {
         let agents = try read("AGENTS.md")
 
-        XCTAssertTrue(agents.contains("`swift test` runs the full `ViftyCoreTests` XCTest suite."))
+        XCTAssertTrue(agents.contains("`swift test` and `make test-full` run the full `ViftyCoreTests` XCTest suite."))
+        XCTAssertTrue(agents.contains("`make test-fast` skips the slow evidence/release script suites for local iteration."))
+        XCTAssertTrue(agents.contains("`make verify-full` is the CI/release-facing gate that includes the full XCTest suite."))
         XCTAssertFalse(agents.contains("862 tests"))
         XCTAssertFalse(agents.contains("904 tests"))
         XCTAssertFalse(agents.contains("905 tests"))
@@ -403,7 +408,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("""
         git fetch origin main --tags
         git checkout v1.1.1
-        make verify
+        make verify-full
         make source-first-release-notes
         make unsigned-dev-artifact
         make source-first-readiness
@@ -913,6 +918,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(contributing.contains("fan/SMC writes"))
         XCTAssertTrue(contributing.contains("agent leases"))
         XCTAssertTrue(contributing.contains("Run `make verify`"))
+        XCTAssertTrue(contributing.contains("GitHub Actions runs `make verify-full`"))
+        XCTAssertTrue(contributing.contains("slow evidence/release script suites"))
         XCTAssertTrue(contributing.contains("Current source-first tags may publish source plus clearly marked unsigned-dev tester artifacts"))
         XCTAssertTrue(contributing.contains("without claiming Developer ID signing, notarization, Homebrew trust, or official trusted binary status"))
         XCTAssertTrue(contributing.contains("Future trusted binary releases follow [docs/release.md](docs/release.md)"))
@@ -925,6 +932,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(template.contains("Local persistence, permissions, telemetry, or audit history"))
         XCTAssertTrue(template.contains("## Verification"))
         XCTAssertTrue(template.contains("make verify"))
+        XCTAssertTrue(template.contains("make verify-full"))
+        XCTAssertTrue(template.contains("GitHub Actions runs the full slow suite"))
         XCTAssertTrue(template.contains("reject arbitrary keys"))
         XCTAssertTrue(template.contains("invalid fan IDs"))
         XCTAssertTrue(template.contains("safeToRequestCooling"))
@@ -1576,7 +1585,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(workplan.contains("Post-release local hardening is on `main` after the published `v1.1.1` source-first hotfix tag"))
         XCTAssertTrue(workplan.contains("`a82f2237ff39c24a6b366dca8f95a17ee54fd972`"))
-        XCTAssertTrue(workplan.contains("current local trust gate verifies the full XCTest suite"))
+        XCTAssertTrue(workplan.contains("current local trust gate is fast by default, while `make verify-full` and GitHub Actions carry the full XCTest suite"))
         XCTAssertTrue(workplan.contains("command-error recovery-action metadata"))
         XCTAssertTrue(workplan.contains("readiness recovery-action metadata"))
         XCTAssertTrue(workplan.contains("daemon control-path readiness evidence"))

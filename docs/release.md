@@ -24,7 +24,7 @@ Source-first checklist:
 1. Run the local verification suite:
 
    ```sh
-   make verify
+   make verify-full
    ```
 
 2. Generate source-first release notes:
@@ -135,7 +135,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 3. Confirm the local tree is clean and tests pass:
 
    ```sh
-   RELEASE_METADATA_MODE=developer-id make verify
+   RELEASE_METADATA_MODE=developer-id make verify-full
    ```
 
 4. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
@@ -153,7 +153,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    - validate tag and bundle versions;
    - validate that release metadata and the cask artifact URL agree;
    - import the Developer ID Application certificate into a temporary keychain;
-   - run `swift test`;
+   - run the full XCTest suite with an isolated SwiftPM build path;
    - build with `SIGNING_IDENTITY` and `VIFTY_XPC_ALLOWED_TEAM_ID`;
    - verify signing identifiers and TeamID;
    - submit the app to Apple notarization;

@@ -116,7 +116,7 @@ For v1.1.1 tester convenience after the source tag is published:
 ```sh
 git fetch origin main --tags
 git checkout v1.1.1
-make verify
+make verify-full
 make source-first-release-notes
 make unsigned-dev-artifact
 make source-first-readiness
@@ -135,12 +135,18 @@ The Homebrew cask is intentionally disabled and parked until Vifty has a Develop
 Requires macOS 15, Xcode 16, and Swift 6.
 
 ```sh
-# Run local trust gates: community/support surface, source-first release metadata, tests,
-# warnings-as-errors, release bundle, plist lint, codesign verification,
-# and viftyctl identifier check
+# Run fast local trust gates: community/support surface, source-first release metadata,
+# fast XCTest suite, warnings-as-errors, release bundle, plist lint, codesign
+# verification, and viftyctl identifier check
 make verify
 
-# Run the XCTest suite
+# Run the full local trust gate, including slow evidence/release script test suites.
+# This is what GitHub Actions runs for pushes and PRs.
+make verify-full
+
+# Run the fast or full XCTest suite directly
+make test-fast
+make test-full
 swift test
 
 # Build an ad-hoc-signed app bundle at .build/Vifty.app
@@ -164,13 +170,14 @@ If SwiftPM's local `.build/build.db` becomes unhealthy, the local installer retr
 
 ```sh
 SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify
+SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make verify-full
 SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make app CONFIGURATION=release
 SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install
 ```
 
 The app bundle is still written to `.build/Vifty.app`; only SwiftPM's package build products move to `SWIFT_BUILD_PATH`.
 
-GitHub Actions runs the same verification on every push to `main`, every pull request targeting `main`, and manual `workflow_dispatch`: Swift tests, release app bundle build, plist validation, ad-hoc code-signature verification, temporary install-script verification, and a zipped `Vifty.app` artifact upload.
+GitHub Actions runs `make verify-full` on every push to `main`, every pull request targeting `main`, and manual `workflow_dispatch`, so the slow evidence/release script test suites are automated remotely instead of being part of the default local `make verify` loop. CI still builds the release app bundle, validates plist files, verifies the ad-hoc code signature, checks a temporary install, and uploads a zipped `Vifty.app` artifact.
 
 The app bundle is signed ad-hoc with `codesign --sign -`. The local `.pkg` is unsigned and intended for local development/test installs; the app inside remains ad-hoc signed.
 

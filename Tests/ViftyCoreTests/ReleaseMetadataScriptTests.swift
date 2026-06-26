@@ -176,6 +176,15 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must isolate SwiftPM products with SWIFT_BUILD_PATH"))
     }
 
+    func testValidatorRejectsCIWorkflowWithoutFullVerificationTarget() throws {
+        let harness = try ReleaseMetadataHarness(includeCIWorkflowFullVerification: false)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains(".github/workflows/ci.yml must run make verify-full so GitHub Actions carries the slow XCTest suites"))
+    }
+
     func testValidatorRejectsCIWorkflowWithRunnerTempInJobEnv() throws {
         let harness = try ReleaseMetadataHarness(includeCIWorkflowRunnerTempJobEnv: true)
 
@@ -1473,6 +1482,7 @@ private final class ReleaseMetadataHarness {
         includeCIWorkflowNode24ActionsRuntime: Bool = true,
         includeCINode24CacheAction: Bool = true,
         includeCIWorkflowSwiftBuildPath: Bool = true,
+        includeCIWorkflowFullVerification: Bool = true,
         includeCIWorkflowRunnerTempJobEnv: Bool = false,
         includeReleaseWorkflowNode24ActionsRuntime: Bool = true,
         includeReleaseWorkflowSwiftBuildPath: Bool = true,
@@ -1507,6 +1517,7 @@ private final class ReleaseMetadataHarness {
             includeNode24ActionsRuntime: includeCIWorkflowNode24ActionsRuntime,
             includeNode24CacheAction: includeCINode24CacheAction,
             includeSwiftBuildPath: includeCIWorkflowSwiftBuildPath,
+            includeFullVerification: includeCIWorkflowFullVerification,
             includeRunnerTempJobEnv: includeCIWorkflowRunnerTempJobEnv
         )
         try writeReleaseWorkflow(
@@ -2146,6 +2157,7 @@ private final class ReleaseMetadataHarness {
         includeNode24ActionsRuntime: Bool,
         includeNode24CacheAction: Bool,
         includeSwiftBuildPath: Bool,
+        includeFullVerification: Bool,
         includeRunnerTempJobEnv: Bool
     ) throws {
         let node24RuntimeLines = includeNode24ActionsRuntime
@@ -2173,9 +2185,11 @@ private final class ReleaseMetadataHarness {
         let cachePath = includeSwiftBuildPath
             ? "                path: ${{ runner.temp }}/vifty-ci-swiftpm-build"
             : "                path: .build"
-        let testCommand = includeSwiftBuildPath
-            ? "swift test --build-path \"${SWIFT_BUILD_PATH}\""
-            : "swift test"
+        let testCommand = includeFullVerification
+            ? "make verify-full"
+            : (includeSwiftBuildPath
+                ? "swift test --build-path \"${SWIFT_BUILD_PATH}\""
+                : "swift test")
         let contents = """
         name: CI
         \(node24RuntimeLines)jobs:
@@ -2186,7 +2200,7 @@ private final class ReleaseMetadataHarness {
                 uses: \(cacheAction)
                 with:
         \(cachePath)
-              - name: Run tests
+              - name: Run verification
                 run: \(testCommand)
               - name: Build release app bundle
                 run: make app CONFIGURATION=release

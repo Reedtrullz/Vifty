@@ -5,7 +5,7 @@ AI coding instructions for working in this repository.
 ## Build System
 
 - Swift Package Manager (`Package.swift`, tools-version 6.0).
-- `swift build` / `swift test` / `make verify` / `make app` / `make validation-evidence` (see Makefile).
+- `swift build` / `swift test` / `make test-fast` / `make test-full` / `make verify` / `make verify-full` / `make app` / `make validation-evidence` (see Makefile).
 - macOS 15 minimum deployment target.
 - `.build/` is gitignored.
 
@@ -119,7 +119,10 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 
 ## Testing
 
-- `swift test` runs the full `ViftyCoreTests` XCTest suite.
+- `swift test` and `make test-full` run the full `ViftyCoreTests` XCTest suite.
+- `make test-fast` skips the slow evidence/release script suites for local iteration.
+- `make verify` is the fast local trust gate: shell syntax checks, community/support surface checks, release metadata validation, fast XCTest suite, warnings-as-errors build, release app bundling including schema resources, plist lint, codesign verification, and `viftyctl` identifier checks.
+- `make verify-full` is the CI/release-facing gate that includes the full XCTest suite.
 - `FanControlCoordinatorTests` uses `FakeHardware` (actor + `HardwareService`). Covers hardware validation, curve-to-fixed-RPM, per-fan override resolution/malformed-profile safety, missing-sensor recovery, auto-restore, and daemon-fallback regression.
 - `FanCurveTests` tests interpolation, clamping, SMC float encode/decode, and SMC known-path coverage.
 - `SMCClientWritePolicyTests` tests low-level SMC write allowlisting, valid fan-ID key scope, and rejected-key messaging.
@@ -156,7 +159,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `GitHubMetadataScriptTests` tests `.github/repo-metadata.json` covers planned discovery topics, issue-template labels, and support-triage labels, and that `scripts/check-github-metadata.sh` accepts matching GitHub fixtures while blocking missing topics, missing labels, and label color/description drift.
 - `CommunityStandardsScriptTests` tests `scripts/check-community-standards.sh` accepts the current community/support surface while blocking missing `SUPPORT.md` or drift that would weaken `safeToRequestCooling` guidance.
 - `AgentCoolingEvidenceScriptTests` tests the read-only lightweight agent/helper evidence collector and reviewer, including schema identity, blocked diagnose exit `75`, privacy findings, checksum coverage, and no cooling-command evidence.
-- `MakefileTrustGateTests` tests `make verify` remains wired to shell syntax checks for project scripts and agent-facing workload wrappers, community/support surface checks, release metadata validation, Swift tests, warnings-as-errors build, release app bundling including schema resources, plist lint, codesign verification, and the `viftyctl` identifier check. It also pins the source-first release notes, unsigned-dev artifact, source-first readiness, read-only release/hardware validation evidence, read-only agent evidence, read-only agent-run smoke readiness, and supervised agent-run smoke Makefile targets.
+- `MakefileTrustGateTests` tests `make verify` remains wired to shell syntax checks for project scripts and agent-facing workload wrappers, community/support surface checks, release metadata validation, fast Swift tests, warnings-as-errors build, release app bundling including schema resources, plist lint, codesign verification, and the `viftyctl` identifier check; it also pins `make verify-full` as the full XCTest gate for CI/release-facing checks. It also pins the source-first release notes, unsigned-dev artifact, source-first readiness, read-only release/hardware validation evidence, read-only agent evidence, read-only agent-run smoke readiness, and supervised agent-run smoke Makefile targets.
 - `AppModelTests` tests duplicate-profile overwrite, append behavior, per-fan override fan-ID normalization and clamping, developer workload presets, profile persistence failure surfacing, curve-defaults sync flag, menu power summaries, menu-bar display modes, injected power-reader polling, timed manual-mode expiry/restores, fan-control ownership summaries, agent-lease summary/warning text, agent-lease clear failure surfacing, telemetry-history append, and helper-health/recovery summaries.
 - Tests must pass before committing. Run from repo root.
 

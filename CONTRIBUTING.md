@@ -17,8 +17,11 @@ Thanks for considering contributing! Vifty is a native macOS utility for Apple S
 git clone https://github.com/Reedtrullz/Vifty.git
 cd Vifty
 
-# Run tests
-swift test
+# Run the fast local trust gate
+make verify
+
+# Run the full test suite locally when needed
+make verify-full
 
 # Build release app bundle
 make app CONFIGURATION=release
@@ -55,7 +58,7 @@ For full conventions, see [AGENTS.md](AGENTS.md).
 
 1. **Open an issue first** for significant changes — discuss the approach before writing code.
 2. **Fill out the PR safety impact section** — call out fan/SMC writes, daemon/helper/XPC changes, agent leases, release trust, hardware validation, UI ownership/restore state, and local persistence changes explicitly.
-3. **Run `make verify`** — it is the standard local trust gate. If you cannot run it, explain every skipped gate and the narrower evidence you did run.
+3. **Run `make verify`** — it is the standard fast local trust gate. GitHub Actions runs `make verify-full`, including the slow evidence/release script suites. Run `make verify-full` locally for release-facing or safety-sensitive changes when practical; otherwise, explain any skipped full gate and let CI carry it.
 4. **Add tests** for new functionality or bug fixes.
 5. **Keep changes focused** — one concern per PR.
 6. **Update documentation** if you change public APIs, CLI flags, architecture rules, JSON contracts, release behavior, compatibility claims, or safety policy.

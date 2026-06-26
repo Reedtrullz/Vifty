@@ -163,9 +163,13 @@ if grep -Fq 'SWIFT_BUILD_PATH: ${{ runner.temp }}/' "${CI_WORKFLOW}"; then
 fi
 
 if ! grep -Fq 'echo "SWIFT_BUILD_PATH=${RUNNER_TEMP}/vifty-ci-swiftpm-build" >> "${GITHUB_ENV}"' "${CI_WORKFLOW}" ||
-   ! grep -Fq 'path: ${{ runner.temp }}/vifty-ci-swiftpm-build' "${CI_WORKFLOW}" ||
-   ! grep -Fq 'swift test --build-path "${SWIFT_BUILD_PATH}"' "${CI_WORKFLOW}"; then
+   ! grep -Fq 'path: ${{ runner.temp }}/vifty-ci-swiftpm-build' "${CI_WORKFLOW}"; then
   echo "error: ${CI_WORKFLOW} must isolate SwiftPM products with SWIFT_BUILD_PATH" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'make verify-full' "${CI_WORKFLOW}"; then
+  echo "error: ${CI_WORKFLOW} must run make verify-full so GitHub Actions carries the slow XCTest suites" >&2
   exit 1
 fi
 

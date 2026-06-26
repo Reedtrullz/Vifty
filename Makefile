@@ -1,4 +1,4 @@
-.PHONY: app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test verify help clean
+.PHONY: app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -6,6 +6,8 @@ VIFTY_XPC_ALLOWED_TEAM_ID ?=
 SWIFT_BUILD_PATH ?=
 SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",)
 SWIFT_PRODUCTS_DIR = $(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION))
+VERIFY_TEST_TARGET ?= test-fast
+SLOW_TEST_SKIP_ARGS := --skip 'ViftyCoreTests\.(AgentCoolingEvidenceScriptTests|AgentRunSmokeEvidenceScriptTests|GuardedRunScriptTests|ReleaseArtifactScriptTests|ReleaseMetadataScriptTests|ValidationEvidenceReviewScriptTests|ValidationEvidenceScriptTests|ValidationReportSummaryScriptTests)'
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
 SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)
@@ -157,14 +159,19 @@ unsigned-dev-artifact: ## Build source-first unsigned tester zip and checksum
 source-first-readiness: ## Check published source-first release readiness
 	./scripts/check-release-readiness.sh --mode source-first --version "$(RELEASE_VERSION)" --repo "$(RELEASE_REPO)" --json
 
-test: ## Run the XCTest suite
+test: test-full ## Run the full XCTest suite
+
+test-fast: ## Run the fast local XCTest suite
+	swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS)
+
+test-full: ## Run the full XCTest suite, including slow evidence/release script tests
 	swift test $(SWIFT_BUILD_ARGS)
 
-verify: ## Run local trust gates without installing
+verify: ## Run fast local trust gates without installing
 	/bin/bash -n scripts/*.sh examples/viftyctl/*.sh
 	scripts/check-community-standards.sh
 	scripts/validate-release-metadata.sh --mode "$(RELEASE_METADATA_MODE)"
-	swift test $(SWIFT_BUILD_ARGS)
+	$(MAKE) $(VERIFY_TEST_TARGET)
 	swift build $(SWIFT_BUILD_ARGS) -Xswiftc -warnings-as-errors
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
 	plutil -lint "$(CONTENTS)/Info.plist"
@@ -195,6 +202,9 @@ verify: ## Run local trust gates without installing
 	codesign -dvvv "$(MACOS)/ViftyHelper" 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
 	codesign -dvvv "$(MACOS)/ViftyDaemon" 2>&1 | grep 'Identifier=tech.reidar.vifty.daemon'
 	codesign -dvvv "$(MACOS)/viftyctl" 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
+
+verify-full: VERIFY_TEST_TARGET = test-full
+verify-full: verify ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

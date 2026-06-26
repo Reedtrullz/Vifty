@@ -45,50 +45,8 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Validate release metadata
-        run: scripts/validate-release-metadata.sh --mode source-first
-
-      - name: Run tests
-        run: swift test --build-path "${SWIFT_BUILD_PATH}"
-
-      - name: Build release app bundle
-        run: make app CONFIGURATION=release
-
-      - name: Verify app bundle
-        run: |
-          test -x .build/Vifty.app/Contents/MacOS/Vifty
-          test -x .build/Vifty.app/Contents/MacOS/ViftyHelper
-          test -x .build/Vifty.app/Contents/MacOS/ViftyDaemon
-          test -x .build/Vifty.app/Contents/MacOS/viftyctl
-          test -x .build/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh
-          test -x .build/Vifty.app/Contents/Resources/collect-agent-run-smoke-evidence.sh
-          for script in \
-            guarded-run.sh \
-            swift-test.sh \
-            swift-release-build.sh \
-            xcode-build.sh \
-            xcode-test.sh \
-            make-build.sh \
-            make-test.sh \
-            make-verify.sh \
-            npm-build.sh \
-            npm-test.sh \
-            cargo-build.sh \
-            cargo-test.sh \
-            pytest.sh \
-            local-model.sh \
-            custom-workload.sh
-          do
-            test -x ".build/Vifty.app/Contents/Resources/viftyctl-wrappers/${script}"
-          done
-          test -f .build/Vifty.app/Contents/Resources/viftyctl-wrappers/README.md
-          test -f .build/Vifty.app/Contents/Info.plist
-          test -f .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
-          plutil -lint .build/Vifty.app/Contents/Info.plist
-          plutil -lint .build/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
-          codesign --verify --deep --strict .build/Vifty.app
-          codesign -dvvv .build/Vifty.app/Contents/MacOS/ViftyHelper 2>&1 | grep 'Identifier=tech.reidar.vifty.helper'
-          codesign -dvvv .build/Vifty.app/Contents/MacOS/viftyctl 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
+      - name: Run full verification
+        run: make verify-full
 
       - name: Verify install script in temporary Applications directory
         env:
