@@ -97,7 +97,7 @@ Agents should run `viftyctl diagnose --json` before long build/test workloads, u
 
 ## Local Data and Privacy
 
-Vifty has no analytics, Vifty-owned accounts, cloud sync, or background network dependency. The optional **Codex usage** menu-bar mode is separate: when selected, it asks the local Codex CLI/app-server for account rate-limit data if available, then falls back to local Codex session logs. Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
+Vifty has no analytics, Vifty-owned accounts, cloud sync, or background network dependency. The optional **Codex usage** menu-bar field is separate: when selected alone or inside a custom menu-bar summary, it asks the local Codex CLI/app-server for account rate-limit data if available, then falls back to local Codex session logs. Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
 
 Local files:
 

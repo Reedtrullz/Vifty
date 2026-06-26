@@ -514,12 +514,33 @@ struct ContentView: View {
                 .controlSize(.small)
                 Spacer()
             }
-            if model.menuBarDisplayMode == .codexUsage {
+            if model.menuBarDisplayMode == .custom {
+                menuBarCustomFieldControls
+            }
+            if model.menuBarDisplaysCodexUsage {
                 codexUsageDisplayControls
             }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var menuBarCustomFieldControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Custom fields", systemImage: "checklist")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 126), alignment: .leading)],
+                alignment: .leading,
+                spacing: 6
+            ) {
+                ForEach(MenuBarField.allCases) { field in
+                    Toggle(field.label, isOn: menuBarCustomFieldBinding(field))
+                        .controlSize(.small)
+                }
+            }
+        }
     }
 
     private var codexUsageDisplayControls: some View {
@@ -557,6 +578,13 @@ struct ContentView: View {
             .controlSize(.small)
             Spacer()
         }
+    }
+
+    private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
+        Binding(
+            get: { model.isMenuBarCustomFieldEnabled(field) },
+            set: { model.setMenuBarCustomField(field, enabled: $0) }
+        )
     }
 
     private var agentWorkflowSettings: some View {

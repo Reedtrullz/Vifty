@@ -1457,6 +1457,48 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
+    func testMenuBarCustomModeCombinesSelectedTemperatureAndCodexUsage() async {
+        let usageSnapshot = CodexUsageSnapshot(
+            usedPercent: 22.6,
+            resetDate: Date(timeIntervalSince1970: 1_800_016_980),
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            planType: "pro"
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [
+                TemperatureSensor(id: "Tp09", name: "CPU Efficiency Core 1", celsius: 68.6, source: .smc),
+                TemperatureSensor(id: "TB0T", name: "Battery", celsius: 73.1, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: { usageSnapshot },
+            now: { Date(timeIntervalSince1970: 1_800_000_000) },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.selectedSensorID = "Tp09"
+        model.menuBarDisplayMode = .custom
+
+        await model.pollOnce()
+        await waitForCodexUsageSnapshot(model)
+
+        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .codexUsage])
+        XCTAssertTrue(model.menuBarDisplaysCodexUsage)
+        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex 77% left · 4h 43m")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex 77% left · 4h 43m")
+        XCTAssertFalse(model.menuBarLabelUsesFanIcon)
+    }
+
     func testCodexUsageDisplayPreferencesAffectMenuBarAndPersist() async throws {
         let resetDate = Date(timeIntervalSince1970: 1_800_003_600)
         let usageSnapshot = CodexUsageSnapshot(
@@ -1528,9 +1570,18 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         XCTAssertEqual(recorder.readCount, 0)
 
-        model.menuBarDisplayMode = .codexUsage
+        model.menuBarDisplayMode = .custom
+        model.menuBarCustomFields = [.temperature, .fanRPM]
+        await model.pollOnce()
+        XCTAssertEqual(recorder.readCount, 0)
+
+        model.setMenuBarCustomField(.codexUsage, enabled: true)
         await model.pollOnce()
         await waitForCodexUsageReadCount(1, recorder: recorder)
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 1528 RPM | Codex 75% left")
+
+        model.menuBarDisplayMode = .codexUsage
+        await model.pollOnce()
         XCTAssertEqual(recorder.readCount, 1)
         XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
 
@@ -1542,6 +1593,46 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageReadCount(2, recorder: recorder)
         XCTAssertEqual(recorder.readCount, 2)
+    }
+
+    func testMenuBarCustomCodexPlaceholderCanShowAfterHardwarePrime() async {
+        let recorder = CodexUsageReadRecorder(
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            delay: 0.35
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            codexUsageRefreshInterval: 300,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.menuBarDisplayMode = .custom
+        await model.pollOnce()
+
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex --")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex --")
+        XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
+
+        await waitForCodexUsageSnapshot(model)
+
+        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex 75% left")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex 75% left")
     }
 
     func testCodexUsageRefreshCadenceCanBeReducedForLiveTopBarTracking() async {
@@ -1693,6 +1784,7 @@ final class AppModelTests: XCTestCase {
             (.averageFanRPM, "-- RPM avg"),
             (.adapterWattage, "-- W"),
             (.codexUsage, "Codex --"),
+            (.custom, "-- C | Codex --"),
             (.temperatureAndRPM, "-- C | -- RPM"),
             (.ownerTemperatureAndRPM, "Mac | -- C | -- RPM")
         ]
@@ -2058,6 +2150,30 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testMenuBarCustomFieldsPersistPrivately() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let model = AppModel(preferencesStore: store)
+
+        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .codexUsage])
+
+        model.menuBarDisplayMode = .custom
+        model.menuBarCustomFields = [.codexUsage, .owner, .temperature, .codexUsage]
+
+        let loaded = store.load()
+        XCTAssertEqual(loaded.menuBarDisplayMode, .custom)
+        XCTAssertEqual(loaded.menuBarCustomFields, [.owner, .temperature, .codexUsage])
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+
+        let relaunched = AppModel(preferencesStore: store)
+        XCTAssertEqual(relaunched.menuBarDisplayMode, .custom)
+        XCTAssertEqual(relaunched.menuBarCustomFields, [.owner, .temperature, .codexUsage])
+
+        relaunched.setMenuBarCustomField(.owner, enabled: false)
+        XCTAssertEqual(store.load().menuBarCustomFields, [.temperature, .codexUsage])
+    }
+
     func testStartupModePreferencePersistsPrivately() throws {
         let preferencesURL = temporaryPreferencesPath()
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
@@ -2226,6 +2342,7 @@ final class AppModelTests: XCTestCase {
         let loaded = store.load()
 
         XCTAssertEqual(loaded.menuBarDisplayMode, .temperature)
+        XCTAssertEqual(loaded.menuBarCustomFields, [.temperature, .codexUsage])
         XCTAssertEqual(loaded.startupMode, .auto)
         XCTAssertTrue(loaded.notificationSettings.helperFailure)
         XCTAssertTrue(loaded.notificationSettings.autoRestoreFailure)

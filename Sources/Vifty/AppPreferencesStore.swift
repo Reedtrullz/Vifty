@@ -2,6 +2,7 @@ import Foundation
 
 struct AppPreferences: Codable, Equatable {
     var menuBarDisplayMode: MenuBarDisplayMode
+    var menuBarCustomFields: [MenuBarField]
     var startupMode: ModeSelection
     var notificationSettings: LocalNotificationSettings
     var usePerFanFixedRPM: Bool
@@ -10,6 +11,7 @@ struct AppPreferences: Codable, Equatable {
 
     static let defaults = AppPreferences(
         menuBarDisplayMode: .fanIcon,
+        menuBarCustomFields: MenuBarField.defaultCustomFields,
         startupMode: .auto,
         notificationSettings: .disabled,
         usePerFanFixedRPM: false,
@@ -19,6 +21,7 @@ struct AppPreferences: Codable, Equatable {
 
     init(
         menuBarDisplayMode: MenuBarDisplayMode,
+        menuBarCustomFields: [MenuBarField] = MenuBarField.defaultCustomFields,
         startupMode: ModeSelection = .auto,
         notificationSettings: LocalNotificationSettings,
         usePerFanFixedRPM: Bool = false,
@@ -26,6 +29,7 @@ struct AppPreferences: Codable, Equatable {
         codexUsageDisplayPreferences: CodexUsageDisplayPreferences = .defaults
     ) {
         self.menuBarDisplayMode = menuBarDisplayMode
+        self.menuBarCustomFields = MenuBarField.normalized(menuBarCustomFields)
         self.startupMode = startupMode
         self.notificationSettings = notificationSettings
         self.usePerFanFixedRPM = usePerFanFixedRPM
@@ -36,6 +40,9 @@ struct AppPreferences: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         menuBarDisplayMode = try container.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .fanIcon
+        menuBarCustomFields = MenuBarField.normalized(
+            try container.decodeIfPresent([MenuBarField].self, forKey: .menuBarCustomFields) ?? MenuBarField.defaultCustomFields
+        )
         startupMode = try container.decodeIfPresent(ModeSelection.self, forKey: .startupMode) ?? .auto
         notificationSettings = try container.decodeIfPresent(LocalNotificationSettings.self, forKey: .notificationSettings) ?? .disabled
         usePerFanFixedRPM = try container.decodeIfPresent(Bool.self, forKey: .usePerFanFixedRPM) ?? false
@@ -97,6 +104,7 @@ final class AppPreferencesStore: @unchecked Sendable {
 
         return AppPreferences(
             menuBarDisplayMode: Self.loadLegacyMenuBarDisplayMode(from: legacyDefaults),
+            menuBarCustomFields: MenuBarField.defaultCustomFields,
             notificationSettings: Self.loadLegacyNotificationSettings(from: legacyDefaults)
         )
     }

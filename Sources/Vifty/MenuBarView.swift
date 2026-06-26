@@ -42,7 +42,7 @@ struct MenuBarView: View {
                     .lineLimit(2)
             }
 
-            if model.menuBarDisplayMode == .codexUsage || model.codexUsageSnapshot != nil {
+            if model.menuBarDisplaysCodexUsage || model.codexUsageSnapshot != nil {
                 Label(model.codexUsageSummary, systemImage: "terminal")
                     .font(.caption)
                     .foregroundStyle(model.codexUsageSnapshot == nil ? .secondary : .primary)
@@ -232,7 +232,16 @@ struct MenuBarView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
 
-            if model.menuBarDisplayMode == .codexUsage {
+            if model.menuBarDisplayMode == .custom {
+                Menu("Custom fields") {
+                    ForEach(MenuBarField.allCases) { field in
+                        Toggle(field.label, isOn: menuBarCustomFieldBinding(field))
+                    }
+                }
+                .controlSize(.small)
+            }
+
+            if model.menuBarDisplaysCodexUsage {
                 Picker("Codex display", selection: $model.codexUsageDisplayStyle) {
                     ForEach(CodexUsageDisplayStyle.allCases) { style in
                         Text(style.label).tag(style)
@@ -388,6 +397,13 @@ struct MenuBarView: View {
         Binding(
             get: { model.launchAtLoginEnabled },
             set: { model.setLaunchAtLoginEnabled($0) }
+        )
+    }
+
+    private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
+        Binding(
+            get: { model.isMenuBarCustomFieldEnabled(field) },
+            set: { model.setMenuBarCustomField(field, enabled: $0) }
         )
     }
 

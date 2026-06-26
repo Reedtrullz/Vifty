@@ -128,6 +128,7 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
     case averageFanRPM
     case adapterWattage
     case codexUsage
+    case custom
     case temperatureAndRPM
     case ownerTemperatureAndRPM
     case compactSummary
@@ -148,6 +149,8 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
             return "Adapter wattage"
         case .codexUsage:
             return "Codex usage"
+        case .custom:
+            return "Custom"
         case .temperatureAndRPM:
             return "Temperature + RPM"
         case .ownerTemperatureAndRPM:
@@ -155,6 +158,49 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
         case .compactSummary:
             return "Compact summary"
         }
+    }
+}
+
+enum MenuBarField: String, Codable, CaseIterable, Identifiable {
+    case owner
+    case temperature
+    case fanRPM
+    case averageFanRPM
+    case adapterWattage
+    case codexUsage
+
+    var id: String { rawValue }
+
+    static let defaultCustomFields: [MenuBarField] = [.temperature, .codexUsage]
+
+    var label: String {
+        switch self {
+        case .owner:
+            return "Owner"
+        case .temperature:
+            return "Temperature"
+        case .fanRPM:
+            return "Fan RPM"
+        case .averageFanRPM:
+            return "Average RPM"
+        case .adapterWattage:
+            return "Adapter"
+        case .codexUsage:
+            return "Codex quota"
+        }
+    }
+
+    var requiresHardwareTelemetry: Bool {
+        self != .codexUsage
+    }
+
+    static func orderedUnique(_ fields: [MenuBarField]) -> [MenuBarField] {
+        allCases.filter { field in fields.contains(field) }
+    }
+
+    static func normalized(_ fields: [MenuBarField]) -> [MenuBarField] {
+        let unique = orderedUnique(fields)
+        return unique.isEmpty ? defaultCustomFields : unique
     }
 }
 
@@ -193,10 +239,32 @@ final class AppModel: ObservableObject {
     @Published var thermalPressure: ThermalPressure = .nominal
     @Published var menuBarDisplayMode: MenuBarDisplayMode {
         didSet {
-            if menuBarDisplayMode == .codexUsage {
+            let wasDisplayingCodexUsage = Self.menuBarModeDisplaysCodexUsage(
+                oldValue,
+                customFields: menuBarCustomFields
+            )
+            if !wasDisplayingCodexUsage && menuBarDisplaysCodexUsage {
                 lastCodexUsageRefreshAt = nil
             }
             persistAppPreferences()
+        }
+    }
+    @Published var menuBarCustomFields: [MenuBarField] = MenuBarField.defaultCustomFields {
+        didSet {
+            let normalized = MenuBarField.normalized(menuBarCustomFields)
+            if normalized != menuBarCustomFields {
+                menuBarCustomFields = normalized
+                return
+            }
+            let wasDisplayingCodexUsage = Self.menuBarModeDisplaysCodexUsage(
+                menuBarDisplayMode,
+                customFields: MenuBarField.normalized(oldValue)
+            )
+            if !wasDisplayingCodexUsage && menuBarDisplaysCodexUsage {
+                lastCodexUsageRefreshAt = nil
+            }
+            persistAppPreferences()
+            menuBarStatusItemRevision &+= 1
         }
     }
     @Published var startupMode: ModeSelection {
@@ -322,6 +390,7 @@ final class AppModel: ObservableObject {
         self.preferencesStore = preferencesStore
         let appPreferences = self.preferencesStore.load()
         menuBarDisplayMode = appPreferences.menuBarDisplayMode
+        menuBarCustomFields = MenuBarField.normalized(appPreferences.menuBarCustomFields)
         startupMode = appPreferences.startupMode
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
@@ -506,7 +575,7 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshCodexUsageIfNeeded() {
-        guard menuBarDisplayMode == .codexUsage else { return }
+        guard menuBarDisplaysCodexUsage else { return }
         guard codexUsageRefreshTask == nil else { return }
 
         let currentTime = now()
@@ -952,6 +1021,8 @@ final class AppModel: ObservableObject {
                 options: codexUsageDisplayPreferences,
                 now: now
             )
+        case .custom:
+            return menuBarLabelWithAttention(menuBarCustomLabelText)
         case .temperatureAndRPM:
             return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
         case .ownerTemperatureAndRPM:
@@ -968,7 +1039,7 @@ final class AppModel: ObservableObject {
     var menuBarStatusItemText: String? {
         guard !menuBarLabelUsesFanIcon else { return nil }
         let label = menuBarLabelText
-        if menuBarDisplayMode == .codexUsage, hasCompletedHardwarePoll {
+        if menuBarAllowsPlaceholderStatusItemText {
             return label
         }
         guard !label.contains("--") else { return nil }
@@ -982,7 +1053,50 @@ final class AppModel: ObservableObject {
         if menuBarDisplayMode == .codexUsage {
             return false
         }
+        if menuBarDisplayMode == .custom {
+            return menuBarCustomFields.contains { field in
+                field.requiresHardwareTelemetry && (menuBarText(for: field)?.contains("--") ?? false)
+            }
+        }
         return menuBarLabelText.contains("--")
+    }
+
+    var menuBarDisplaysCodexUsage: Bool {
+        Self.menuBarModeDisplaysCodexUsage(menuBarDisplayMode, customFields: menuBarCustomFields)
+    }
+
+    private static func menuBarModeDisplaysCodexUsage(
+        _ mode: MenuBarDisplayMode,
+        customFields: [MenuBarField]
+    ) -> Bool {
+        switch mode {
+        case .codexUsage:
+            return true
+        case .custom:
+            return customFields.contains(.codexUsage)
+        case .fanIcon, .temperature, .fanRPM, .averageFanRPM, .adapterWattage, .temperatureAndRPM, .ownerTemperatureAndRPM, .compactSummary:
+            return false
+        }
+    }
+
+    var menuBarAllowsPlaceholderStatusItemText: Bool {
+        menuBarDisplaysCodexUsage && hasCompletedHardwarePoll
+    }
+
+    func isMenuBarCustomFieldEnabled(_ field: MenuBarField) -> Bool {
+        menuBarCustomFields.contains(field)
+    }
+
+    func setMenuBarCustomField(_ field: MenuBarField, enabled: Bool) {
+        var fields = menuBarCustomFields
+        if enabled {
+            guard !fields.contains(field) else { return }
+            fields.append(field)
+        } else {
+            fields.removeAll { $0 == field }
+            guard !fields.isEmpty else { return }
+        }
+        menuBarCustomFields = MenuBarField.normalized(fields)
     }
 
     var codexUsageSummary: String {
@@ -1043,6 +1157,32 @@ final class AppModel: ObservableObject {
         return "\(label) | \(attention)"
     }
 
+    private var menuBarCustomLabelText: String {
+        let parts = menuBarCustomFields.compactMap { menuBarText(for: $0) }
+        return parts.isEmpty ? menuTitle : parts.joined(separator: " | ")
+    }
+
+    private func menuBarText(for field: MenuBarField) -> String? {
+        switch field {
+        case .owner:
+            return menuBarFanOwnerText
+        case .temperature:
+            return menuBarTemperatureText ?? "-- C"
+        case .fanRPM:
+            return menuBarFanText ?? "-- RPM"
+        case .averageFanRPM:
+            return menuBarAverageFanText ?? "-- RPM avg"
+        case .adapterWattage:
+            return menuBarPowerText ?? "-- W"
+        case .codexUsage:
+            return CodexUsageFormatter.menuBarText(
+                for: codexUsageSnapshot,
+                options: codexUsageDisplayPreferences,
+                now: now
+            )
+        }
+    }
+
     private var menuBarMetricAttentionSummary: String? {
         if fanWriteBlockedWhileHotSummary != nil {
             return "Fan writes blocked"
@@ -1086,6 +1226,7 @@ final class AppModel: ObservableObject {
     private func persistAppPreferences() {
         preferencesStore.save(AppPreferences(
             menuBarDisplayMode: menuBarDisplayMode,
+            menuBarCustomFields: menuBarCustomFields,
             startupMode: startupMode,
             notificationSettings: notificationSettings,
             usePerFanFixedRPM: usePerFanFixedRPM,
@@ -1105,7 +1246,7 @@ final class AppModel: ObservableObject {
 
     private func codexUsageDisplayPreferenceDidChange() {
         persistAppPreferences()
-        if menuBarDisplayMode == .codexUsage {
+        if menuBarDisplaysCodexUsage {
             menuBarStatusItemRevision &+= 1
         }
     }

@@ -16,7 +16,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 
 ## Highlights
 
-- **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, and power state at a glance.
+- **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, power state, Codex quota, or a custom combination at a glance.
 - **Three fan modes** — Auto, Fixed RPM with optional percentage-aware per-fan targets, and a 3-point Temperature Curve.
 - **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
 - **Developer presets** — conservative curve presets for tests, builds, and local model runs.
@@ -31,7 +31,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
 - **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry. The main window and menu-bar popover can copy a short AGENTS.md/Codex rule that checks capabilities, readiness, and the guarded wrapper path.
-- **Codex usage tracking** — optional menu-bar mode reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage as text or a compact battery-style gauge, reset countdown or reset time, credits, monthly limits, and source without storing API keys.
+- **Codex usage tracking** — optional menu-bar field reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage as text or a compact battery-style gauge, reset countdown or reset time, credits, monthly limits, and source without storing API keys. Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
@@ -186,7 +186,7 @@ The power panel is inspired by projects like [`MacBook-Charger-Power-Indicator`]
 - `AppleSmartBattery` registry values for voltage, signed amperage, capacity, cycles, condition, and temperature.
 - `IOPSCopyExternalPowerAdapterDetails` adapter wattage, USB-C PD negotiation, manufacturer/model metadata, and advertised PD profiles.
 
-The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.) plus a detailed Power panel next to the temperature sensors. Power telemetry is read locally and does not require the privileged fan helper. When live drain and capacity data are available, Vifty estimates time remaining and warns if the Mac is plugged in but the battery is still draining.
+The UI displays compact menu-bar summaries (`96 W adapter`, `16.9 W drain`, etc.) plus a detailed Power panel next to the temperature sensors. Power telemetry is read locally and does not require the privileged fan helper. When live drain and capacity data are available, Vifty estimates time remaining and warns if the Mac is plugged in but the battery is still draining.
 
 ## Architecture
 
@@ -213,7 +213,7 @@ The UI displays a compact menu-bar summary (`96 W adapter`, `16.9 W drain`, etc.
 | `ViftyCtl` | executable | Agent-friendly JSON CLI for bounded cooling leases |
 | `ViftyPrivateIOKit` | library | C/IOKit bridge for HID temperature sensors |
 
-**Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles and private app preferences, including menu-bar mode, notification toggles, and fixed-mode per-fan targets, are persisted as JSON in `~/Library/Application Support/Vifty/`.
+**Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles and private app preferences, including menu-bar mode, custom menu-bar fields, notification toggles, and fixed-mode per-fan targets, are persisted as JSON in `~/Library/Application Support/Vifty/`.
 
 ## Safety and privacy
 
@@ -228,7 +228,7 @@ For the detailed privileged-helper and agent-control boundaries, see [docs/trust
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
 - Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export.
-- Codex usage mode is optional. When selected, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
+- Codex usage display is optional. When selected as a standalone mode or as one field in a custom menu-bar summary, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
 - Local notifications use macOS UserNotifications only. They are opt-in, rate-limited, and do not add analytics, network calls, or persistent telemetry export.
 
 ### Optional: Harden XPC with your TeamID

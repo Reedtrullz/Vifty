@@ -113,7 +113,7 @@ final class ViftyStatusItemController: NSObject {
             statusItemText: model.menuBarStatusItemText,
             fallbackStatusItemText: model.menuBarDisplayMode == .fanIcon ? nil : model.menuBarLabelText,
             labelNeedsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime,
-            allowsPlaceholderText: model.menuBarDisplayMode == .codexUsage
+            allowsPlaceholderText: model.menuBarAllowsPlaceholderStatusItemText
         )
     }
 
