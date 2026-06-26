@@ -241,9 +241,10 @@ daemon_control_path_ready = boolean_value(diagnose["daemonControlPathReady"])
 is_apple_silicon = boolean_value(diagnose["isAppleSilicon"])
 is_macbook_pro = boolean_value(diagnose["isMacBookPro"])
 operator_commands, operator_commands_malformed = operator_recovery_commands(diagnose["operatorRecoveryCommands"])
+daemon_mismatch = daemon_match_required && daemon_matches_expected_text != "true"
 
 blockers = []
-if daemon_match_required && daemon_matches_expected_text != "true"
+if daemon_mismatch
   blockers << "installed daemon does not match expected build daemon"
 end
 blockers << "diagnose did not produce parseable JSON" if parse_error
@@ -277,7 +278,9 @@ ready = blockers.empty?
 status = ready ? "ready" : "blocked"
 next_action = if ready
   "Capture baseline diagnose/probe evidence, run one human-supervised conservative Fixed smoke, restore Auto, then repeat with one conservative Curve smoke."
-elsif daemon_match_required && daemon_matches_expected_text != "true"
+elsif daemon_mismatch && manual_control_active == true
+  "Install or repair the freshly built app/helper so the LaunchDaemon hash matches, then restore Auto and switch startup mode to Auto before rerunning this preflight before manual smoke."
+elsif daemon_mismatch
   "Install or repair the freshly built app/helper so the LaunchDaemon hash matches, then rerun this preflight before manual smoke."
 elsif recommended_recovery == "restoreAutoBeforeRetry"
   "Restore Auto in Vifty, wait until manualControlActive=false, then rerun this preflight before any smoke test."

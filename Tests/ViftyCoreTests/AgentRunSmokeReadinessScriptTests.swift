@@ -80,6 +80,44 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
+    func testJSONOutputCombinesNextActionWhenDaemonMismatchAndManualControlAreBothBlocking() throws {
+        let harness = try AgentRunSmokeReadinessHarness(
+            diagnoseJSON: AgentRunSmokeReadinessHarness.diagnoseJSON(
+                state: "blocked",
+                recommendedAgentAction: "restoreAutoBeforeRequestingCooling",
+                recommendedRecoveryAction: "restoreAutoBeforeRetry",
+                safeToRequestCooling: false,
+                manualControlActive: true
+            ),
+            diagnoseExitCode: 75,
+            expectedDaemonContents: "different daemon"
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match",
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(summary["blockers"] as? [String], [
+            "installed daemon does not match expected build daemon",
+            "diagnose preflight did not complete successfully",
+            "diagnose reported safeToRequestCooling is not true",
+            "manual control active before smoke run",
+            "diagnose recommended action is not requestCooling or requestCoolingWithCaution"
+        ])
+        let nextAction = try XCTUnwrap(summary["nextAction"] as? String)
+        XCTAssertTrue(nextAction.contains("repair the freshly built app/helper"), nextAction)
+        XCTAssertTrue(nextAction.contains("restore Auto"), nextAction)
+        XCTAssertTrue(nextAction.contains("switch startup mode to Auto"), nextAction)
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
     func testJSONOutputUsesPrivacySafeRequestAndDaemonPathEnvelope() throws {
         let harness = try AgentRunSmokeReadinessHarness()
         let privateReason = "project /Users/reidar/Client Secret swift test"

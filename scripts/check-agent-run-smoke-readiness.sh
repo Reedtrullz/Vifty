@@ -417,6 +417,7 @@ daemon_control_path_ready = boolean_value(diagnose["daemonControlPathReady"])
 is_apple_silicon = boolean_value(diagnose["isAppleSilicon"])
 is_macbook_pro = boolean_value(diagnose["isMacBookPro"])
 operator_commands, operator_commands_malformed = operator_recovery_commands(diagnose["operatorRecoveryCommands"])
+daemon_mismatch = daemon_match_required && daemon_matches_expected_text != "true"
 
 blockers = []
 blockers << "capabilities did not produce parseable JSON" if capabilities_parse_error
@@ -434,7 +435,7 @@ blockers << "capabilities metadataLimits are missing or unusable" unless metadat
 blockers << "requested duration exceeds advertised policy maximum" unless duration_within_policy
 blockers << "requested max RPM percent is outside advertised policy range" unless rpm_within_policy
 blockers << "reason exceeds advertised metadata limit" unless reason_within_metadata_limit
-if daemon_match_required && daemon_matches_expected_text != "true"
+if daemon_mismatch
   blockers << "installed daemon does not match expected build daemon"
 end
 blockers << "diagnose did not produce parseable JSON" if diagnose_parse_error
@@ -461,7 +462,9 @@ ready = blockers.empty?
 status = ready ? "ready" : "blocked"
 next_action = if ready
   "Run make agent-run-smoke-evidence, or make agent-run-smoke-evidence-current-build for clean current-source proof."
-elsif daemon_match_required && daemon_matches_expected_text != "true"
+elsif daemon_mismatch && manual_control_active == true
+  "Install or repair the freshly built app/helper so the LaunchDaemon hash matches, then restore Auto and switch startup mode to Auto before rerunning this preflight before smoke evidence."
+elsif daemon_mismatch
   "Install or repair the freshly built app/helper so the LaunchDaemon hash matches, then rerun this preflight before smoke evidence."
 elsif recommended_recovery == "restoreAutoBeforeRetry"
   "Restore Auto in Vifty, wait until manualControlActive=false, then rerun this preflight before agent-run smoke."

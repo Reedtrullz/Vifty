@@ -192,6 +192,10 @@ final class ManualSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(recoverySteps.map { $0["id"] as? String }, ["restoreAutoBeforeRetry", "installMatchingDaemon"])
         XCTAssertTrue((recoverySteps[0]["text"] as? String)?.contains("Restore Auto in Vifty") == true)
         XCTAssertTrue((recoverySteps[1]["text"] as? String)?.contains("installed LaunchDaemon helper hash matches") == true)
+        let nextAction = try XCTUnwrap(summary["nextAction"] as? String)
+        XCTAssertTrue(nextAction.contains("repair the freshly built app/helper"), nextAction)
+        XCTAssertTrue(nextAction.contains("restore Auto"), nextAction)
+        XCTAssertTrue(nextAction.contains("switch startup mode to Auto"), nextAction)
     }
 
     func testReadinessSchemaIsDocumentedForEvidenceConsumers() throws {
