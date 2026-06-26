@@ -69,6 +69,14 @@
       },
       "uniqueItems": true
     },
+    "operatorRecoveryCommands": {
+      "description": "Optional local operator commands that can be shown to a human for explicit recovery actions such as helper repair. These commands are not cooling authorization and must not be run automatically by agents.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/operatorRecoveryCommand"
+      },
+      "uniqueItems": true
+    },
     "safeToRequestCooling": {
       "type": "boolean"
     },
@@ -260,6 +268,51 @@
         },
         "matchRequired": {
           "type": "boolean"
+        }
+      }
+    },
+    "operatorRecoveryCommand": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "command",
+        "workingDirectoryHint",
+        "requiresUserApproval",
+        "safeForAgentsToRunAutomatically",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "repair-helper-current-app"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workingDirectoryHint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiresUserApproval": {
+          "type": "boolean"
+        },
+        "safeForAgentsToRunAutomatically": {
+          "const": false
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
         }
       }
     },

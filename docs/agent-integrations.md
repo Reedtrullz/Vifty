@@ -252,7 +252,7 @@ Use this pattern for developer machines only. Remote CI machines, unsupported Ma
 - `blocked` readiness: do not request cooling; show the JSON.
 - `restoreAutoBeforeRequestingCooling`: ask the user whether to restore Auto once before retrying, then re-run diagnose.
 - `requestCoolingWithCaution`: use a shorter duration and lower RPM percentage.
-- Diagnose `recommendedRecoveryAction: "repairHelper"`: show payload-local `recoverySteps` when available, falling back to `repairHelperRecoveryActions` from `viftyctl agent-rule --json`; ask the user to open Vifty and use Repair/Reinstall Helper or, from a source checkout, run `make repair-helper`, then approve Login Items if prompted.
+- Diagnose `recommendedRecoveryAction: "repairHelper"`: show payload-local `recoverySteps` and any `operatorRecoveryCommands` when available, falling back to `repairHelperRecoveryActions` from `viftyctl agent-rule --json`; ask the user to open Vifty and use Repair/Reinstall Helper or, from a source checkout, run `make repair-helper`, then approve Login Items if prompted. Treat `operatorRecoveryCommands.safeForAgentsToRunAutomatically: false` as a hard display-only boundary.
 - Diagnose `recommendedRecoveryAction: "backOffWorkload"`: pause or reduce the workload; do not fight critical system thermals.
 - Diagnose `recommendedRecoveryAction: "inspectPolicy"`: inspect local policy/status before retrying; do not use the guarded uncooled fallback.
 - Diagnose `recommendedRecoveryAction: "collectHardwareEvidence"`: collect read-only validation evidence before considering hardware support; do not use the guarded uncooled fallback.

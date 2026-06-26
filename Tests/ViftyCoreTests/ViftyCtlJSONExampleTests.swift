@@ -480,7 +480,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(recoverySteps["type"] as? String, "array")
         let recoveryStepItems = try XCTUnwrap(recoverySteps["items"] as? [String: Any])
         XCTAssertEqual(recoveryStepItems["type"] as? String, "string")
+        let operatorRecoveryCommands = try XCTUnwrap(properties["operatorRecoveryCommands"] as? [String: Any])
+        XCTAssertEqual(operatorRecoveryCommands["type"] as? String, "array")
+        let operatorRecoveryCommandItems = try XCTUnwrap(operatorRecoveryCommands["items"] as? [String: Any])
+        XCTAssertEqual(operatorRecoveryCommandItems["$ref"] as? String, "#/$defs/operatorRecoveryCommand")
         XCTAssertFalse(required.contains("recoverySteps"))
+        XCTAssertFalse(required.contains("operatorRecoveryCommands"))
         XCTAssertEqual(enumValues(named: "state", in: properties), ["ready", "degraded", "blocked"])
         XCTAssertEqual(enumValues(named: "recommendedAgentAction", in: properties), [
             "requestCooling",
@@ -535,6 +540,23 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         let daemonRuntimeProperties = try XCTUnwrap(daemonRuntime["properties"] as? [String: Any])
         XCTAssertEqual((daemonRuntimeProperties["installedDaemonSHA256"] as? [String: Any])?["pattern"] as? String, "^[a-f0-9]{64}$")
         XCTAssertEqual((daemonRuntimeProperties["expectedDaemonSHA256"] as? [String: Any])?["pattern"] as? String, "^[a-f0-9]{64}$")
+        let operatorRecoveryCommand = try XCTUnwrap(definitions["operatorRecoveryCommand"] as? [String: Any])
+        let operatorRecoveryCommandRequired = try XCTUnwrap(operatorRecoveryCommand["required"] as? [String])
+        XCTAssertEqual(operatorRecoveryCommandRequired, [
+            "id",
+            "title",
+            "command",
+            "workingDirectoryHint",
+            "requiresUserApproval",
+            "safeForAgentsToRunAutomatically",
+            "notes"
+        ])
+        let operatorRecoveryCommandProperties = try XCTUnwrap(operatorRecoveryCommand["properties"] as? [String: Any])
+        XCTAssertEqual(enumValues(named: "id", in: operatorRecoveryCommandProperties), ["repair-helper-current-app"])
+        XCTAssertEqual(
+            (operatorRecoveryCommandProperties["safeForAgentsToRunAutomatically"] as? [String: Any])?["const"] as? Bool,
+            false
+        )
         let readinessCheck = try XCTUnwrap(definitions["readinessCheck"] as? [String: Any])
         let checkProperties = try XCTUnwrap(readinessCheck["properties"] as? [String: Any])
         XCTAssertEqual(enumValues(named: "severity", in: checkProperties), ["info", "warning", "error"])

@@ -42,6 +42,34 @@ public struct ViftyCtlReadinessCheck: Codable, Equatable, Sendable {
     }
 }
 
+public struct ViftyCtlOperatorRecoveryCommand: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var command: String
+    public var workingDirectoryHint: String
+    public var requiresUserApproval: Bool
+    public var safeForAgentsToRunAutomatically: Bool
+    public var notes: [String]
+
+    public init(
+        id: String,
+        title: String,
+        command: String,
+        workingDirectoryHint: String,
+        requiresUserApproval: Bool,
+        safeForAgentsToRunAutomatically: Bool,
+        notes: [String]
+    ) {
+        self.id = id
+        self.title = title
+        self.command = command
+        self.workingDirectoryHint = workingDirectoryHint
+        self.requiresUserApproval = requiresUserApproval
+        self.safeForAgentsToRunAutomatically = safeForAgentsToRunAutomatically
+        self.notes = notes
+    }
+}
+
 public struct ViftyCtlFanReport: Codable, Equatable, Sendable {
     public var id: Int
     public var name: String
@@ -135,6 +163,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var recommendedAgentAction: ViftyCtlRecommendedAgentAction?
     public var recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction
     public var recoverySteps: [String]
+    public var operatorRecoveryCommands: [ViftyCtlOperatorRecoveryCommand]?
     public var safeToRequestCooling: Bool?
     public var daemonControlPathReady: Bool
     public var manualControlActive: Bool
@@ -164,6 +193,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case recommendedAgentAction
         case recommendedRecoveryAction
         case recoverySteps
+        case operatorRecoveryCommands
         case safeToRequestCooling
         case daemonControlPathReady
         case manualControlActive
@@ -194,6 +224,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         recommendedAgentAction: ViftyCtlRecommendedAgentAction? = nil,
         recommendedRecoveryAction: ViftyCtlReadinessRecoveryAction? = nil,
         recoverySteps: [String]? = nil,
+        operatorRecoveryCommands: [ViftyCtlOperatorRecoveryCommand]? = nil,
         safeToRequestCooling: Bool? = nil,
         daemonControlPathReady: Bool? = nil,
         manualControlActive: Bool = false,
@@ -223,6 +254,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
         self.recommendedRecoveryAction = resolvedRecoveryAction
         self.recoverySteps = recoverySteps ?? Self.recoverySteps(for: resolvedRecoveryAction, checks: checks)
+        self.operatorRecoveryCommands = operatorRecoveryCommands
+            ?? Self.operatorRecoveryCommands(for: resolvedRecoveryAction, daemonRuntime: daemonRuntime)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
@@ -263,6 +296,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 forKey: .recommendedRecoveryAction
             ),
             recoverySteps: try container.decodeIfPresent([String].self, forKey: .recoverySteps),
+            operatorRecoveryCommands: try container.decodeIfPresent(
+                [ViftyCtlOperatorRecoveryCommand].self,
+                forKey: .operatorRecoveryCommands
+            ),
             safeToRequestCooling: try container.decodeIfPresent(Bool.self, forKey: .safeToRequestCooling),
             daemonControlPathReady: try container.decodeIfPresent(Bool.self, forKey: .daemonControlPathReady),
             manualControlActive: try container.decodeIfPresent(Bool.self, forKey: .manualControlActive) ?? false,
@@ -305,6 +342,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encodeIfPresent(recommendedAgentAction, forKey: .recommendedAgentAction)
         try container.encode(recommendedRecoveryAction, forKey: .recommendedRecoveryAction)
         try container.encode(recoverySteps, forKey: .recoverySteps)
+        try container.encodeIfPresent(operatorRecoveryCommands, forKey: .operatorRecoveryCommands)
         try container.encodeIfPresent(safeToRequestCooling, forKey: .safeToRequestCooling)
         try container.encode(daemonControlPathReady, forKey: .daemonControlPathReady)
         try container.encode(manualControlActive, forKey: .manualControlActive)
@@ -798,6 +836,52 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         }
 
         return actions.flatMap(ViftyCtlRecoverySteps.steps(for:))
+    }
+
+    private static func operatorRecoveryCommands(
+        for action: ViftyCtlReadinessRecoveryAction,
+        daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic
+    ) -> [ViftyCtlOperatorRecoveryCommand]? {
+        guard action == .repairHelper,
+              daemonRuntime.matchRequired,
+              daemonRuntime.expectedDaemonPresent,
+              let appPath = appBundlePath(forExpectedDaemonPath: daemonRuntime.expectedDaemonPath)
+        else {
+            return nil
+        }
+
+        return [
+            ViftyCtlOperatorRecoveryCommand(
+                id: "repair-helper-current-app",
+                title: "Repair helper from this Vifty app bundle",
+                command: "REPAIR_HELPER_APP=\(ViftyAgentRule.shellQuote(appPath)) make repair-helper",
+                workingDirectoryHint: "Run from the Vifty source checkout.",
+                requiresUserApproval: true,
+                safeForAgentsToRunAutomatically: false,
+                notes: [
+                    "Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.",
+                    "Does not request cooling or write fan state directly.",
+                    "After repair, rerun viftyctl diagnose --json and require safe readiness before requesting cooling."
+                ]
+            )
+        ]
+    }
+
+    private static func appBundlePath(forExpectedDaemonPath expectedDaemonPath: String?) -> String? {
+        guard let expectedDaemonPath else {
+            return nil
+        }
+
+        let suffix = "/Contents/MacOS/ViftyDaemon"
+        guard expectedDaemonPath.hasSuffix(suffix) else {
+            return nil
+        }
+
+        let appPath = String(expectedDaemonPath.dropLast(suffix.count))
+        guard appPath.hasSuffix(".app") else {
+            return nil
+        }
+        return appPath
     }
 
     private static func safeToRequestCooling(for action: ViftyCtlRecommendedAgentAction) -> Bool {

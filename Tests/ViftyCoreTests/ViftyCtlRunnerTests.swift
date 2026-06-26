@@ -551,6 +551,25 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
         XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
         XCTAssertEqual(json["recoverySteps"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
+        let operatorRecoveryCommands = try XCTUnwrap(
+            json["operatorRecoveryCommands"] as? [[String: Any]]
+        )
+        XCTAssertEqual(operatorRecoveryCommands.count, 1)
+        let repairCommand = try XCTUnwrap(operatorRecoveryCommands.first)
+        XCTAssertEqual(repairCommand["id"] as? String, "repair-helper-current-app")
+        XCTAssertEqual(repairCommand["title"] as? String, "Repair helper from this Vifty app bundle")
+        XCTAssertEqual(repairCommand["command"] as? String, "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper")
+        XCTAssertEqual(repairCommand["workingDirectoryHint"] as? String, "Run from the Vifty source checkout.")
+        XCTAssertEqual(repairCommand["requiresUserApproval"] as? Bool, true)
+        XCTAssertEqual(repairCommand["safeForAgentsToRunAutomatically"] as? Bool, false)
+        XCTAssertEqual(
+            repairCommand["notes"] as? [String],
+            [
+                "Shows the same explicit administrator-approved LaunchDaemon repair path as the app UI.",
+                "Does not request cooling or write fan state directly.",
+                "After repair, rerun viftyctl diagnose --json and require safe readiness before requesting cooling."
+            ]
+        )
         XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
         XCTAssertEqual(json["failedCheckIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
         XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["daemonRuntimeMatchesExpected"])
@@ -624,6 +643,10 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(
             json["recoverySteps"] as? [String],
             ViftyAgentRule.repairHelperRecoveryActions + Self.restoreAutoRecoverySteps
+        )
+        XCTAssertEqual(
+            (json["operatorRecoveryCommands"] as? [[String: Any]])?.first?["command"] as? String,
+            "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper"
         )
         let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
         XCTAssertTrue(checks.contains { check in
