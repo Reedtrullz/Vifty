@@ -266,6 +266,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck.")
     }
 
+    func testHelperHealthSummaryReportsRuntimeMismatchBeforeHealthyState() {
+        let model = AppModel()
+        model.daemonResponding = true
+        model.daemonReachable = true
+        model.snapshot = agentHardwareSnapshot()
+        model.lastError = "Installed privileged fan helper does not match this Vifty build; use Repair/Reinstall Helper before requesting cooling."
+
+        XCTAssertEqual(model.helperHealthSummary, "Fan helper build mismatch · repair needed")
+        XCTAssertEqual(model.helperHealthMenuSummary, "Helper build mismatch")
+        XCTAssertEqual(model.helperHealthState, .runtimeMismatch)
+        XCTAssertTrue(model.helperHealthNeedsAttention)
+        XCTAssertTrue(model.helperRepairActionAvailable)
+        XCTAssertEqual(model.helperInstallRuntimeContext, "The installed LaunchDaemon does not match this Vifty app; repair the helper before fan writes.")
+        XCTAssertEqual(model.helperRecoverySuggestion, "Use Repair/Reinstall Helper from this Vifty app, approve Login Items if prompted, then rerun diagnose. Fan writes stay blocked until the installed daemon matches this build.")
+        XCTAssertEqual(model.helperMenuRecoverySuggestion, "Repair/Reinstall Helper from this app before fan control.")
+    }
+
     func testHelperHealthSummaryReportsReachableWithNoFanData() {
         let model = AppModel()
         model.daemonResponding = true
@@ -672,6 +689,19 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(model.manualFanControlAvailable)
         XCTAssertNil(model.manualFanControlBlockedReason)
+    }
+
+    func testManualFanControlBlocksWhenHelperRuntimeMismatchIsDetected() {
+        let model = AppModel()
+        model.snapshot = agentHardwareSnapshot()
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.lastError = "daemonRuntimeMatchesExpected failed: installed daemon differs from the installed app bundle."
+
+        XCTAssertEqual(model.helperHealthState, .runtimeMismatch)
+        XCTAssertEqual(model.controlOwnershipSummary, "Fan writes blocked until helper matches this app")
+        XCTAssertFalse(model.manualFanControlAvailable)
+        XCTAssertEqual(model.manualFanControlBlockedReason, "Repair/Reinstall Helper before manual fan control; the installed helper does not match this Vifty app.")
     }
 
     func testHelperOutageSuppressesAgentStatusNoiseWhenTelemetryIsReadOnly() {

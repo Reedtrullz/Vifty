@@ -82,7 +82,7 @@ struct ContentView: View {
             "xmark.shield"
         case .unsupported:
             "slash.circle"
-        case .error, .telemetryOnly, .noFanData, .noControllableFans:
+        case .error, .runtimeMismatch, .telemetryOnly, .noFanData, .noControllableFans:
             "exclamationmark.shield"
         }
     }
@@ -93,7 +93,7 @@ struct ContentView: View {
             return .secondary
         case .healthy:
             return .green
-        case .error, .telemetryOnly, .unreachable, .noFanData, .noControllableFans, .unsupported:
+        case .error, .runtimeMismatch, .telemetryOnly, .unreachable, .noFanData, .noControllableFans, .unsupported:
             return .orange
         }
     }

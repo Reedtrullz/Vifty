@@ -6,6 +6,7 @@ enum HelperHealthState: Equatable {
     case checking
     case healthy(fanCount: Int)
     case error
+    case runtimeMismatch
     case telemetryOnly
     case unreachable
     case noFanData
@@ -24,7 +25,7 @@ enum HelperHealthState: Equatable {
 
     var repairActionAvailable: Bool {
         switch self {
-        case .error, .telemetryOnly, .unreachable:
+        case .error, .runtimeMismatch, .telemetryOnly, .unreachable:
             return true
         case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
             return false
@@ -43,6 +44,8 @@ enum HelperHealthState: Equatable {
             return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
         case .error:
             return "Fan helper error · repair needed"
+        case .runtimeMismatch:
+            return "Fan helper build mismatch · repair needed"
         case .telemetryOnly:
             return "Read-only fan telemetry · repair daemon for writes"
         case .unreachable:
@@ -64,6 +67,8 @@ enum HelperHealthState: Equatable {
             return "Helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
         case .error:
             return "Helper needs repair"
+        case .runtimeMismatch:
+            return "Helper build mismatch"
         case .telemetryOnly:
             return "Fan writes blocked"
         case .unreachable:
@@ -83,6 +88,8 @@ enum HelperHealthState: Equatable {
             return nil
         case .error:
             return "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
+        case .runtimeMismatch:
+            return "Use Repair/Reinstall Helper from this Vifty app, approve Login Items if prompted, then rerun diagnose. Fan writes stay blocked until the installed daemon matches this build."
         case .telemetryOnly:
             return "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds."
         case .unreachable:
@@ -102,6 +109,8 @@ enum HelperHealthState: Equatable {
             return nil
         case .error, .telemetryOnly, .unreachable:
             return "Repair/Reinstall Helper; approve Login Items if prompted."
+        case .runtimeMismatch:
+            return "Repair/Reinstall Helper from this app before fan control."
         case .noFanData:
             return "Keep Auto selected and copy diagnose for read-only evidence."
         case .noControllableFans:
@@ -1105,11 +1114,24 @@ final class AppModel: ObservableObject {
         switch helperHealthState {
         case .error, .unreachable:
             return "Fan writes blocked until helper responds"
+        case .runtimeMismatch:
+            return "Fan writes blocked until helper matches this app"
         case .telemetryOnly:
             return "Read-only fan telemetry; repair helper for fan writes"
         case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
             return nil
         }
+    }
+
+    private var hasHelperRuntimeMismatchError: Bool {
+        guard let lastError else { return false }
+        let normalized = lastError.lowercased()
+        return normalized.contains("daemonruntimematchesexpected")
+            || normalized.contains("daemonruntime")
+            || normalized.contains("does not match this vifty build")
+            || normalized.contains("daemon differs from the installed app")
+            || normalized.contains("helper daemon differs")
+            || normalized.contains("installed privileged fan helper does not match")
     }
 
     private func lastErrorIsCoveredByHelperRecovery(_ error: String) -> Bool {
@@ -1302,6 +1324,9 @@ final class AppModel: ObservableObject {
         if !hasCompletedHardwarePoll, snapshot == nil, !daemonReachable {
             return .checking
         }
+        if hasHelperRuntimeMismatchError {
+            return .runtimeMismatch
+        }
         let fanCount = snapshot?.fans.count ?? 0
         if fanCount > 0 {
             guard daemonReachable else {
@@ -1355,6 +1380,8 @@ final class AppModel: ObservableObject {
             return "Install status and daemon response are separate; approve or repair before fan writes."
         case .error:
             return "The helper may be installed, but the current daemon path still needs repair."
+        case .runtimeMismatch:
+            return "The installed LaunchDaemon does not match this Vifty app; repair the helper before fan writes."
         case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
             return nil
         }
@@ -1432,6 +1459,9 @@ final class AppModel: ObservableObject {
         guard snapshot.isAppleSilicon, snapshot.isMacBookPro else {
             return "Unsupported hardware. Manual fan control stays blocked."
         }
+        if helperHealthState == .runtimeMismatch {
+            return "Repair/Reinstall Helper before manual fan control; the installed helper does not match this Vifty app."
+        }
         guard daemonResponding else {
             return daemonReachable
                 ? "Repair/Reinstall Helper before manual fan control; fan telemetry is available but daemon writes are blocked."
@@ -1504,6 +1534,9 @@ final class AppModel: ObservableObject {
                 : "Auto selected · fan writes blocked until helper responds"
         }
 
+        if let helperWritePathBlockedSummary {
+            return helperWritePathBlockedSummary
+        }
         if !autoSystemModeFans.isEmpty {
             return "macOS System/protected owns fan control · \(fanIDList(autoSystemModeFans))"
         }
@@ -1515,9 +1548,6 @@ final class AppModel: ObservableObject {
         }
         if !autoMissingModeFans.isEmpty {
             return "Auto selected · hardware mode unavailable on \(fanIDList(autoMissingModeFans))"
-        }
-        if let helperWritePathBlockedSummary {
-            return helperWritePathBlockedSummary
         }
         return "macOS Auto owns fan control"
     }
