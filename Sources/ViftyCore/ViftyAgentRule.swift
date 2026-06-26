@@ -12,6 +12,8 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
     public var capabilitiesCommand: String
     public var diagnoseCommand: String
     public var strictDiagnoseCommand: String
+    public var agentCoolingEvidenceCommand: String
+    public var agentCoolingPreflightEvidenceCommand: String
     public var guardedRunCommand: String
     public var guardedRunPreflightCommand: String
 
@@ -20,6 +22,8 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
         capabilitiesCommand: String,
         diagnoseCommand: String,
         strictDiagnoseCommand: String,
+        agentCoolingEvidenceCommand: String = "",
+        agentCoolingPreflightEvidenceCommand: String = "",
         guardedRunCommand: String,
         guardedRunPreflightCommand: String
     ) {
@@ -27,6 +31,8 @@ public struct ViftyAgentRuleCommands: Codable, Equatable, Sendable {
         self.capabilitiesCommand = capabilitiesCommand
         self.diagnoseCommand = diagnoseCommand
         self.strictDiagnoseCommand = strictDiagnoseCommand
+        self.agentCoolingEvidenceCommand = agentCoolingEvidenceCommand
+        self.agentCoolingPreflightEvidenceCommand = agentCoolingPreflightEvidenceCommand
         self.guardedRunCommand = guardedRunCommand
         self.guardedRunPreflightCommand = guardedRunPreflightCommand
     }
@@ -69,6 +75,8 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
     public var diagnoseCommand: String
     public var strictDiagnoseCommand: String?
     public var repairHelperRecoveryActions: [String]?
+    public var agentCoolingEvidenceCommand: String
+    public var agentCoolingPreflightEvidenceCommand: String
     public var guardedRunDecisionSchemaID: String
     public var guardedRunJSONMarkers: ViftyAgentRuleJSONMarkers
     public var guardedRunCommand: String
@@ -103,6 +111,8 @@ public struct ViftyCtlAgentRuleReport: Codable, Equatable, Sendable {
         self.diagnoseCommand = commands.diagnoseCommand
         self.strictDiagnoseCommand = commands.strictDiagnoseCommand
         self.repairHelperRecoveryActions = repairHelperRecoveryActions
+        self.agentCoolingEvidenceCommand = commands.agentCoolingEvidenceCommand
+        self.agentCoolingPreflightEvidenceCommand = commands.agentCoolingPreflightEvidenceCommand
         self.guardedRunDecisionSchemaID = guardedRunDecisionSchemaID
         self.guardedRunJSONMarkers = guardedRunJSONMarkers
         self.guardedRunCommand = commands.guardedRunCommand
@@ -118,6 +128,7 @@ public enum ViftyAgentRule {
     public static let canonicalAppPath = "/Applications/Vifty.app"
     public static let canonicalViftyCtlPath = "/Applications/Vifty.app/Contents/MacOS/viftyctl"
     public static let guardedRunResourcePath = "Contents/Resources/viftyctl-wrappers/guarded-run.sh"
+    public static let agentCoolingEvidenceResourcePath = "Contents/Resources/collect-agent-cooling-evidence.sh"
     public static let guardedRunDecisionSchemaID = "https://vifty.local/schemas/guarded-run-decision.schema.json"
     public static let guardedRunJSONMarkers = ViftyAgentRuleJSONMarkers(
         capabilities: ViftyAgentRuleJSONMarkerPair(
@@ -143,6 +154,8 @@ public enum ViftyAgentRule {
         "schemaIDs.agentRule",
         "guardedRunDecisionSchemaID",
         "guardedRunJSONMarkers",
+        "agentCoolingEvidenceCommand",
+        "agentCoolingPreflightEvidenceCommand",
         "wrapperResources",
         "workloadTemplates",
         "runLifecycle.resolvedChildExecutableReported == true"
@@ -205,6 +218,8 @@ public enum ViftyAgentRule {
 
         If `recommendedRecoveryAction` is `repairHelper`, show `repairHelperRecoveryActions` from this report when present: open Vifty and use Repair/Reinstall Helper, or in a source checkout run `make repair-helper` as an explicit administrator-approved repair, then rerun `diagnose --json`. Do not request cooling, use uncooled fallback, or call direct SMC/helper commands while repair is pending.
 
+        For read-only support evidence after a helper, readiness, or guarded-run failure, show or run `agentCoolingEvidenceCommand`. For exact-workload triage without requesting cooling or launching the child command, use `agentCoolingPreflightEvidenceCommand`. These commands collect capabilities, diagnose, status, audit, launchd/helper evidence, privacy review, and optional guarded-run preflight evidence only; they are not cooling authorization.
+
         Prefer the guarded wrapper for one child workload:
 
         ```sh
@@ -250,6 +265,18 @@ public enum ViftyAgentRule {
             capabilitiesCommand: "\(viftyctl) capabilities --json",
             diagnoseCommand: "\(viftyctl) diagnose --json",
             strictDiagnoseCommand: "\(viftyctl) diagnose --json --require-safe",
+            agentCoolingEvidenceCommand: agentCoolingEvidenceCommand(
+                template: swiftTestTemplate,
+                includeGuardedPreflight: false,
+                bundleURL: bundleURL,
+                fileManager: fileManager
+            ),
+            agentCoolingPreflightEvidenceCommand: agentCoolingEvidenceCommand(
+                template: swiftTestTemplate,
+                includeGuardedPreflight: true,
+                bundleURL: bundleURL,
+                fileManager: fileManager
+            ),
             guardedRunCommand: workloadCommand(
                 swiftTestTemplate,
                 mode: .run,
@@ -295,6 +322,41 @@ public enum ViftyAgentRule {
         }
     }
 
+    public static func agentCoolingEvidenceCommand(
+        template: ViftyCtlWorkloadTemplate,
+        includeGuardedPreflight: Bool,
+        bundleURL: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> String {
+        let paths = agentWorkflowPaths(bundleURL: bundleURL, fileManager: fileManager)
+        let base = [
+            "umask 077;",
+            "out=\"$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)\";",
+            shellQuote(paths.agentCoolingEvidencePath),
+            "--viftyctl",
+            shellQuote(paths.viftyCtlPath),
+            "--output",
+            "\"$out\""
+        ].joined(separator: " ")
+
+        guard includeGuardedPreflight else {
+            return base
+        }
+
+        let preflightArguments = [
+            "--guarded-run-script",
+            shellQuote(paths.guardedRunPath),
+            "--guarded-run-preflight",
+            shellQuote(template.workload),
+            shellQuote(template.duration),
+            shellQuote("\(template.maxRPMPercent)"),
+            shellQuote(template.reason),
+            shellQuote("--")
+        ] + template.childArguments.map(shellQuote)
+
+        return ([base] + preflightArguments).joined(separator: " ")
+    }
+
     public static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
@@ -302,16 +364,19 @@ public enum ViftyAgentRule {
     private static func agentWorkflowPaths(
         bundleURL: URL?,
         fileManager: FileManager
-    ) -> (viftyCtlPath: String, guardedRunPath: String, requiresExplicitViftyCtlEnvironment: Bool) {
+    ) -> (viftyCtlPath: String, guardedRunPath: String, agentCoolingEvidencePath: String, requiresExplicitViftyCtlEnvironment: Bool) {
         if let bundleURL {
             let bundledTool = bundleURL.appendingPathComponent("Contents/MacOS/viftyctl", isDirectory: false)
             let bundledGuardedRun = bundleURL.appendingPathComponent(guardedRunResourcePath, isDirectory: false)
+            let bundledEvidenceCollector = bundleURL.appendingPathComponent(agentCoolingEvidenceResourcePath, isDirectory: false)
             if bundleURL.pathExtension == "app",
                fileManager.isExecutableFile(atPath: bundledTool.path),
-               fileManager.isExecutableFile(atPath: bundledGuardedRun.path) {
+               fileManager.isExecutableFile(atPath: bundledGuardedRun.path),
+               fileManager.isExecutableFile(atPath: bundledEvidenceCollector.path) {
                 return (
                     bundledTool.path,
                     bundledGuardedRun.path,
+                    bundledEvidenceCollector.path,
                     bundledTool.path != canonicalViftyCtlPath
                 )
             }
@@ -325,6 +390,7 @@ public enum ViftyAgentRule {
         return (
             canonicalViftyCtlPath,
             "\(canonicalAppPath)/\(guardedRunResourcePath)",
+            "\(canonicalAppPath)/\(agentCoolingEvidenceResourcePath)",
             false
         )
     }
@@ -332,12 +398,14 @@ public enum ViftyAgentRule {
     private static func sourceCheckoutPaths(
         near bundleURL: URL,
         fileManager: FileManager
-    ) -> (viftyCtlPath: String, guardedRunPath: String, requiresExplicitViftyCtlEnvironment: Bool)? {
+    ) -> (viftyCtlPath: String, guardedRunPath: String, agentCoolingEvidencePath: String, requiresExplicitViftyCtlEnvironment: Bool)? {
         for candidate in ancestorDirectories(startingAt: bundleURL) {
             let packageManifest = candidate.appendingPathComponent("Package.swift", isDirectory: false)
             let guardedRun = candidate.appendingPathComponent("examples/viftyctl/guarded-run.sh", isDirectory: false)
+            let evidenceCollector = candidate.appendingPathComponent("scripts/collect-agent-cooling-evidence.sh", isDirectory: false)
             guard fileManager.fileExists(atPath: packageManifest.path),
-                  fileManager.isExecutableFile(atPath: guardedRun.path)
+                  fileManager.isExecutableFile(atPath: guardedRun.path),
+                  fileManager.isExecutableFile(atPath: evidenceCollector.path)
             else {
                 continue
             }
@@ -351,7 +419,7 @@ public enum ViftyAgentRule {
             guard let viftyCtl = candidateViftyCtlPaths.first(where: { fileManager.isExecutableFile(atPath: $0.path) }) else {
                 continue
             }
-            return (viftyCtl.path, guardedRun.path, true)
+            return (viftyCtl.path, guardedRun.path, evidenceCollector.path, true)
         }
         return nil
     }
@@ -386,7 +454,7 @@ public enum ViftyAgentRule {
 
     private static func commandWithViftyCtlEnvironmentIfNeeded(
         _ command: String,
-        paths: (viftyCtlPath: String, guardedRunPath: String, requiresExplicitViftyCtlEnvironment: Bool)
+        paths: (viftyCtlPath: String, guardedRunPath: String, agentCoolingEvidencePath: String, requiresExplicitViftyCtlEnvironment: Bool)
     ) -> String {
         guard paths.requiresExplicitViftyCtlEnvironment else {
             return command

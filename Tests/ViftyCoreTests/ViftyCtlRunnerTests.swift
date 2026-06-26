@@ -174,6 +174,14 @@ final class ViftyCtlRunnerTests: XCTestCase {
             json["strictDiagnoseCommand"] as? String,
             "'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json --require-safe"
         )
+        XCTAssertEqual(
+            json["agentCoolingEvidenceCommand"] as? String,
+            "umask 077; out=\"$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)\"; '/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh' --viftyctl '/Applications/Vifty.app/Contents/MacOS/viftyctl' --output \"$out\""
+        )
+        XCTAssertEqual(
+            json["agentCoolingPreflightEvidenceCommand"] as? String,
+            "umask 077; out=\"$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)\"; '/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh' --viftyctl '/Applications/Vifty.app/Contents/MacOS/viftyctl' --output \"$out\" --guarded-run-script '/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' --guarded-run-preflight 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
+        )
         XCTAssertEqual(json["repairHelperRecoveryActions"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         XCTAssertEqual(json["guardedRunDecisionSchemaID"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
         let guardedRunJSONMarkers = try XCTUnwrap(json["guardedRunJSONMarkers"] as? [String: [String: String]])
@@ -187,6 +195,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("--preflight-only") == true)
         XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
         XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)
+        XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("agentCoolingEvidenceCommand") == true)
+        XCTAssertTrue((json["schemaRequirements"] as? [String])?.contains("agentCoolingPreflightEvidenceCommand") == true)
         XCTAssertTrue((json["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
         XCTAssertTrue((json["safetyRequirements"] as? [String])?.contains("daemonRuntime.matchRequired != true || daemonRuntime.matchesExpectedDaemon == true") == true)
         XCTAssertTrue((json["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
@@ -205,7 +215,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let viftyCtlURL = buildURL.appendingPathComponent("ViftyCtl", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
         let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
-        for executableURL in [viftyCtlURL, guardedRunURL, swiftTestURL] {
+        let evidenceCollectorURL = root.appendingPathComponent("scripts/collect-agent-cooling-evidence.sh", isDirectory: false)
+        try FileManager.default.createDirectory(at: evidenceCollectorURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        for executableURL in [viftyCtlURL, guardedRunURL, swiftTestURL, evidenceCollectorURL] {
             try Data("#!/bin/sh\n".utf8).write(to: executableURL)
             try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: executableURL.path)
         }
@@ -231,6 +243,8 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["capabilitiesCommand"] as? String, "'\(viftyCtlURL.path)' capabilities --json")
         XCTAssertEqual(json["diagnoseCommand"] as? String, "'\(viftyCtlURL.path)' diagnose --json")
         XCTAssertEqual(json["strictDiagnoseCommand"] as? String, "'\(viftyCtlURL.path)' diagnose --json --require-safe")
+        XCTAssertTrue((json["agentCoolingEvidenceCommand"] as? String)?.contains("'\(evidenceCollectorURL.path)' --viftyctl '\(viftyCtlURL.path)' --output \"$out\"") == true)
+        XCTAssertTrue((json["agentCoolingPreflightEvidenceCommand"] as? String)?.contains("'\(evidenceCollectorURL.path)' --viftyctl '\(viftyCtlURL.path)' --output \"$out\" --guarded-run-script '\(guardedRunURL.path)' --guarded-run-preflight") == true)
         XCTAssertTrue((json["guardedRunCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(swiftTestURL.path)'") == true)
         XCTAssertTrue((json["guardedRunPreflightCommand"] as? String)?.contains("VIFTYCTL='\(viftyCtlURL.path)' '\(guardedRunURL.path)' '--preflight-only'") == true)
         XCTAssertFalse((json["guardedRunCommand"] as? String)?.contains("/Applications/Vifty.app") == true)

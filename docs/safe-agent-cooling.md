@@ -65,6 +65,10 @@ For a pasteable starter rule, `viftyctl agent-rule --json` emits
 text, default guarded commands, safety requirements, forbidden actions, and
 audited workload template IDs. It also includes `guardedRunJSONMarkers` for the
 capabilities, diagnose, and decision marker pairs printed by guarded wrappers.
+`agentCoolingEvidenceCommand` and `agentCoolingPreflightEvidenceCommand` are
+read-only support bundle commands for helper/readiness/guarded-run failures;
+they collect evidence and optional guarded-run preflight provenance, not cooling
+authorization.
 Treat it as read-only guidance, not cooling
 authorization: compare the schema ID with `capabilities.schemaIDs.agentRule`,
 then still require safe `capabilities --json` and `diagnose --json` output before

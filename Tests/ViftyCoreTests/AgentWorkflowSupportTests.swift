@@ -72,6 +72,10 @@ final class AgentWorkflowSupportTests: XCTestCase {
         XCTAssertTrue(rule.contains("decisionReason"))
         XCTAssertTrue(rule.contains("coolingRequested: false"))
         XCTAssertTrue(rule.contains("Do not parse surrounding recovery prose"))
+        XCTAssertTrue(rule.contains("agentCoolingEvidenceCommand"))
+        XCTAssertTrue(rule.contains("agentCoolingPreflightEvidenceCommand"))
+        XCTAssertTrue(rule.contains("collect capabilities, diagnose, status, audit, launchd/helper evidence, privacy review, and optional guarded-run preflight evidence only"))
+        XCTAssertTrue(rule.contains("they are not cooling authorization"))
         XCTAssertTrue(rule.contains("Leave `VIFTY_GUARDED_RUN_FORCE_RETRY` and `VIFTY_GUARDED_RUN_ALLOW_UNCOOLED` unset"))
         XCTAssertTrue(rule.contains("Do not catch a guarded-run failure and rerun the same workload without Vifty"))
         XCTAssertTrue(rule.contains("Never call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, direct fan RPM writes, or unguarded `viftyctl prepare` from an agent."))
@@ -85,12 +89,15 @@ final class AgentWorkflowSupportTests: XCTestCase {
         try FileManager.default.createDirectory(at: macOSURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
         let viftyCtlURL = macOSURL.appendingPathComponent("viftyctl", isDirectory: false)
+        let evidenceCollectorURL = appURL.appendingPathComponent("Contents/Resources/collect-agent-cooling-evidence.sh", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
         let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
+        try Data("#!/bin/sh\n".utf8).write(to: evidenceCollectorURL)
         try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
         try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: evidenceCollectorURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
 
@@ -110,12 +117,15 @@ final class AgentWorkflowSupportTests: XCTestCase {
         try FileManager.default.createDirectory(at: macOSURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
         let viftyCtlURL = macOSURL.appendingPathComponent("viftyctl", isDirectory: false)
+        let evidenceCollectorURL = appURL.appendingPathComponent("Contents/Resources/collect-agent-cooling-evidence.sh", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
         let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
+        try Data("#!/bin/sh\n".utf8).write(to: evidenceCollectorURL)
         try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
         try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: evidenceCollectorURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
 
@@ -133,18 +143,23 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         let buildURL = root.appendingPathComponent(".build/debug", isDirectory: true)
         let wrappersURL = root.appendingPathComponent("examples/viftyctl", isDirectory: true)
+        let scriptsURL = root.appendingPathComponent("scripts", isDirectory: true)
         try FileManager.default.createDirectory(at: buildURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
 
         let viftyCtlURL = buildURL.appendingPathComponent("ViftyCtl", isDirectory: false)
         let guardedRunURL = wrappersURL.appendingPathComponent("guarded-run.sh", isDirectory: false)
         let swiftTestURL = wrappersURL.appendingPathComponent("swift-test.sh", isDirectory: false)
+        let evidenceCollectorURL = scriptsURL.appendingPathComponent("collect-agent-cooling-evidence.sh", isDirectory: false)
         try Data("#!/bin/sh\n".utf8).write(to: viftyCtlURL)
         try Data("#!/bin/sh\n".utf8).write(to: guardedRunURL)
         try Data("#!/bin/sh\n".utf8).write(to: swiftTestURL)
+        try Data("#!/bin/sh\n".utf8).write(to: evidenceCollectorURL)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: viftyCtlURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: guardedRunURL.path)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: swiftTestURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o755)], ofItemAtPath: evidenceCollectorURL.path)
 
         let rule = ViftyAgentRule.rule(bundleURL: buildURL)
 
@@ -178,6 +193,7 @@ final class AgentWorkflowSupportTests: XCTestCase {
 
         let relativeExecutablePaths = [
             "Contents/MacOS/viftyctl",
+            "Contents/Resources/collect-agent-cooling-evidence.sh",
             "Contents/Resources/viftyctl-wrappers/guarded-run.sh"
         ] + AgentWorkflowSupport.safeWorkloadCommandTemplates.map { template in
             "Contents/Resources/viftyctl-wrappers/\(template.shortcutScript)"

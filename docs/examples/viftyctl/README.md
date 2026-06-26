@@ -14,7 +14,11 @@ actions. They also expose `guardedRunDecisionSchemaID:
 https://vifty.local/schemas/guarded-run-decision.schema.json` so agents can
 validate guarded-run no-cooling/preflight decision JSON without scraping rule
 text, plus `guardedRunJSONMarkers` so agents can extract wrapper capabilities,
-diagnose, and decision JSON blocks without hardcoding marker strings.
+diagnose, and decision JSON blocks without hardcoding marker strings. They also
+include `agentCoolingEvidenceCommand` and
+`agentCoolingPreflightEvidenceCommand` as read-only support bundle commands for
+helper/readiness/guarded-run failures; those commands collect evidence, not
+cooling authorization.
 
 Command-error examples include the stable command-error schema ID,
 `https://vifty.local/schemas/viftyctl-command-error.schema.json`, matching

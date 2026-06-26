@@ -784,6 +784,12 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual((agentRuleProperties["guardedRunDecisionSchemaID"] as? [String: Any])?["const"] as? String, "https://vifty.local/schemas/guarded-run-decision.schema.json")
         let strictDiagnoseCommandSchema = try XCTUnwrap(agentRuleProperties["strictDiagnoseCommand"] as? [String: Any])
         XCTAssertEqual(strictDiagnoseCommandSchema["type"] as? String, "string")
+        let agentCoolingEvidenceCommandSchema = try XCTUnwrap(agentRuleProperties["agentCoolingEvidenceCommand"] as? [String: Any])
+        XCTAssertEqual(agentCoolingEvidenceCommandSchema["type"] as? String, "string")
+        XCTAssertTrue((agentCoolingEvidenceCommandSchema["description"] as? String)?.contains("Read-only support bundle command") == true)
+        let agentCoolingPreflightEvidenceCommandSchema = try XCTUnwrap(agentRuleProperties["agentCoolingPreflightEvidenceCommand"] as? [String: Any])
+        XCTAssertEqual(agentCoolingPreflightEvidenceCommandSchema["type"] as? String, "string")
+        XCTAssertTrue((agentCoolingPreflightEvidenceCommandSchema["description"] as? String)?.contains("guarded-run --preflight-only") == true)
         let repairHelperRecoveryActionsSchema = try XCTUnwrap(agentRuleProperties["repairHelperRecoveryActions"] as? [String: Any])
         let repairHelperRecoveryConstraints = try XCTUnwrap(repairHelperRecoveryActionsSchema["allOf"] as? [[String: Any]])
         for action in ViftyAgentRule.repairHelperRecoveryActions {
@@ -796,6 +802,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("schemaIDs.agentRule"))
         XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("guardedRunDecisionSchemaID"))
         XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("guardedRunJSONMarkers"))
+        XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("agentCoolingEvidenceCommand"))
+        XCTAssertTrue(schemaRequirementConstraints.containsRequiredString("agentCoolingPreflightEvidenceCommand"))
         let safetyRequirementsSchema = try XCTUnwrap(agentRuleProperties["safetyRequirements"] as? [String: Any])
         let safetyRequirementConstraints = try XCTUnwrap(safetyRequirementsSchema["allOf"] as? [[String: Any]])
         XCTAssertTrue(safetyRequirementConstraints.containsRequiredString("policyStatusAvailable == true"))
@@ -828,6 +836,14 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             agentRuleExample["strictDiagnoseCommand"] as? String,
             "'/Applications/Vifty.app/Contents/MacOS/viftyctl' diagnose --json --require-safe"
         )
+        XCTAssertEqual(
+            agentRuleExample["agentCoolingEvidenceCommand"] as? String,
+            "umask 077; out=\"$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)\"; '/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh' --viftyctl '/Applications/Vifty.app/Contents/MacOS/viftyctl' --output \"$out\""
+        )
+        XCTAssertEqual(
+            agentRuleExample["agentCoolingPreflightEvidenceCommand"] as? String,
+            "umask 077; out=\"$HOME/Library/Application Support/Vifty/Support Evidence/vifty-agent-cooling-$(date -u +%Y%m%dT%H%M%SZ)\"; '/Applications/Vifty.app/Contents/Resources/collect-agent-cooling-evidence.sh' --viftyctl '/Applications/Vifty.app/Contents/MacOS/viftyctl' --output \"$out\" --guarded-run-script '/Applications/Vifty.app/Contents/Resources/viftyctl-wrappers/guarded-run.sh' --guarded-run-preflight 'test' '20m' '70' 'swift test' '--' 'swift' 'test'"
+        )
         XCTAssertEqual(agentRuleExample["repairHelperRecoveryActions"] as? [String], ViftyAgentRule.repairHelperRecoveryActions)
         let markerExample = try XCTUnwrap(agentRuleExample["guardedRunJSONMarkers"] as? [String: Any])
         let capabilitiesMarker = try XCTUnwrap(markerExample["capabilities"] as? [String: Any])
@@ -845,9 +861,13 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("exits with blocked-readiness code `75`") == true)
         XCTAssertTrue((agentRuleExample["safetyRequirements"] as? [String])?.contains("daemonRuntime.matchRequired != true || daemonRuntime.matchesExpectedDaemon == true") == true)
         XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("include `decisionReason` and `recoverySteps`") == true)
+        XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("agentCoolingEvidenceCommand") == true)
+        XCTAssertTrue((agentRuleExample["rule"] as? String)?.contains("they are not cooling authorization") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("schemaIDs.agentRule") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunDecisionSchemaID") == true)
         XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("guardedRunJSONMarkers") == true)
+        XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("agentCoolingEvidenceCommand") == true)
+        XCTAssertTrue((agentRuleExample["schemaRequirements"] as? [String])?.contains("agentCoolingPreflightEvidenceCommand") == true)
         XCTAssertTrue((agentRuleExample["safetyRequirements"] as? [String])?.contains("daemonControlPathReady == true") == true)
         XCTAssertTrue((agentRuleExample["forbiddenActions"] as? [String])?.contains("ViftyHelper setFixed") == true)
         XCTAssertEqual(agentRuleExample["workloadTemplateIDs"] as? [String], auditedWorkloadTemplateIDs)
