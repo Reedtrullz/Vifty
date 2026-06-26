@@ -32,6 +32,7 @@
     "appPreferences",
     "daemonRuntime",
     "blockers",
+    "operatorRecoveryCommands",
     "nextAction",
     "parseError"
   ],
@@ -305,6 +306,55 @@
           }
         }
       }
+    },
+    "operatorRecoveryCommands": {
+      "description": "Display-only local operator commands copied from viftyctl diagnose --json. They are evidence/guidance for a human and must never be run automatically by scripts or agents.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "command",
+          "workingDirectoryHint",
+          "requiresUserApproval",
+          "safeForAgentsToRunAutomatically",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workingDirectoryHint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiresUserApproval": {
+            "const": true
+          },
+          "safeForAgentsToRunAutomatically": {
+            "const": false
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "uniqueItems": true
     },
     "nextAction": {
       "type": "string",

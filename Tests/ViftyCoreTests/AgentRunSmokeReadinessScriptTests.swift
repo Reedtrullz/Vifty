@@ -140,12 +140,16 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
             "Approve Login Items if macOS prompts.",
             "Rerun viftyctl diagnose --json before smoke evidence."
         ]
+        let operatorRecoveryCommands = #"""
+        [{"id":"repair-helper-current-app","title":"Repair helper from this Vifty app bundle","command":"REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper","workingDirectoryHint":"Run from the Vifty source checkout.","requiresUserApproval":true,"safeForAgentsToRunAutomatically":false,"notes":["Requires explicit administrator approval.","Does not request cooling."]}]
+        """#
         let harness = try AgentRunSmokeReadinessHarness(
             diagnoseJSON: AgentRunSmokeReadinessHarness.diagnoseJSON(
                 state: "blocked",
                 recommendedAgentAction: "doNotRequestCooling",
                 recommendedRecoveryAction: "repairHelper",
                 recoverySteps: recoverySteps,
+                operatorRecoveryCommandsJSON: operatorRecoveryCommands,
                 safeToRequestCooling: false,
                 daemonControlPathReady: false
             ),
@@ -162,7 +166,37 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "blocked")
         XCTAssertEqual(summary["recommendedRecoveryAction"] as? String, "repairHelper")
         XCTAssertEqual(summary["recoverySteps"] as? [String], recoverySteps)
+        let commands = try XCTUnwrap(summary["operatorRecoveryCommands"] as? [[String: Any]])
+        XCTAssertEqual(commands.count, 1)
+        XCTAssertEqual(commands.first?["id"] as? String, "repair-helper-current-app")
+        XCTAssertEqual(commands.first?["command"] as? String, "REPAIR_HELPER_APP='/Applications/Vifty.app' make repair-helper")
+        XCTAssertEqual(commands.first?["requiresUserApproval"] as? Bool, true)
+        XCTAssertEqual(commands.first?["safeForAgentsToRunAutomatically"] as? Bool, false)
         XCTAssertEqual(summary["agentRunSmokeReady"] as? Bool, false)
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
+    func testJSONOutputBlocksMalformedDiagnoseOperatorRecoveryCommandsBeforeSmokeEvidence() throws {
+        let unsafeOperatorRecoveryCommands = #"""
+        [{"id":"repair-helper-current-app","title":"Unsafe helper repair","command":"make repair-helper","workingDirectoryHint":"Run from source.","requiresUserApproval":true,"safeForAgentsToRunAutomatically":true,"notes":["unsafe"]}]
+        """#
+        let harness = try AgentRunSmokeReadinessHarness(
+            diagnoseJSON: AgentRunSmokeReadinessHarness.diagnoseJSON(
+                operatorRecoveryCommandsJSON: unsafeOperatorRecoveryCommands
+            )
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        let summary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        XCTAssertEqual(summary["status"] as? String, "blocked")
+        XCTAssertEqual(summary["agentRunSmokeReady"] as? Bool, false)
+        XCTAssertEqual(summary["operatorRecoveryCommands"] as? [[String: AnyHashable]], [])
+        XCTAssertTrue((summary["blockers"] as? [String])?.contains("diagnose operatorRecoveryCommands are malformed") == true)
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
@@ -235,6 +269,7 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertNotNil(properties["capabilities"] as? [String: Any])
         XCTAssertNotNil(properties["daemonRuntime"] as? [String: Any])
         XCTAssertNotNil(properties["recoverySteps"] as? [String: Any])
+        XCTAssertNotNil(properties["operatorRecoveryCommands"] as? [String: Any])
         XCTAssertNotNil(properties["reasonCharacterCount"] as? [String: Any])
         XCTAssertNotNil(properties["reasonPrivacy"] as? [String: Any])
         XCTAssertNotNil(properties["failedCheckIDs"] as? [String: Any])
@@ -243,6 +278,7 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
 
         let required = try XCTUnwrap(schema["required"] as? [String])
         XCTAssertTrue(required.contains("recoverySteps"))
+        XCTAssertTrue(required.contains("operatorRecoveryCommands"))
         XCTAssertTrue(required.contains("reasonCharacterCount"))
         XCTAssertTrue(required.contains("reasonPrivacy"))
 
@@ -367,6 +403,7 @@ private final class AgentRunSmokeReadinessHarness {
         recommendedAgentAction: String = "requestCooling",
         recommendedRecoveryAction: String = "none",
         recoverySteps: [String] = [],
+        operatorRecoveryCommandsJSON: String? = nil,
         safeToRequestCooling: Bool = true,
         daemonControlPathReady: Bool = true,
         manualControlActive: Bool = false
@@ -375,8 +412,11 @@ private final class AgentRunSmokeReadinessHarness {
             data: try! JSONSerialization.data(withJSONObject: recoverySteps),
             encoding: .utf8
         )!
+        let operatorRecoveryCommandsField = operatorRecoveryCommandsJSON.map {
+            #","operatorRecoveryCommands":\#($0)"#
+        } ?? ""
         return """
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"\(state)","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"\(recommendedAgentAction)","recommendedRecoveryAction":"\(recommendedRecoveryAction)","recoverySteps":\(recoveryStepsJSON),"safeToRequestCooling":\(safeToRequestCooling),"daemonControlPathReady":\(daemonControlPathReady),"manualControlActive":\(manualControlActive),"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"\(state)","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"\(recommendedAgentAction)","recommendedRecoveryAction":"\(recommendedRecoveryAction)","recoverySteps":\(recoveryStepsJSON)\(operatorRecoveryCommandsField),"safeToRequestCooling":\(safeToRequestCooling),"daemonControlPathReady":\(daemonControlPathReady),"manualControlActive":\(manualControlActive),"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null}}
         """
     }
 

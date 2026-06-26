@@ -277,6 +277,40 @@ def string_array(value)
   value.is_a?(Array) && value.all? { |item| item.is_a?(String) } ? value : []
 end
 
+def operator_recovery_commands(value)
+  return [[], false] if value.nil?
+  return [[], true] unless value.is_a?(Array)
+
+  commands = []
+  value.each do |item|
+    return [[], true] unless item.is_a?(Hash)
+
+    id = item["id"]
+    title = item["title"]
+    command = item["command"]
+    working_directory_hint = item["workingDirectoryHint"]
+    notes = item["notes"]
+    valid = [id, title, command, working_directory_hint].all? { |field| field.is_a?(String) && !field.empty? } &&
+      item["requiresUserApproval"] == true &&
+      item["safeForAgentsToRunAutomatically"] == false &&
+      notes.is_a?(Array) &&
+      notes.all? { |note| note.is_a?(String) && !note.empty? }
+    return [[], true] unless valid
+
+    commands << {
+      "id" => id,
+      "title" => title,
+      "command" => command,
+      "workingDirectoryHint" => working_directory_hint,
+      "requiresUserApproval" => true,
+      "safeForAgentsToRunAutomatically" => false,
+      "notes" => notes
+    }
+  end
+
+  [commands, false]
+end
+
 def share_safe_path(path)
   value = path.to_s
   return [nil, "notProvided"] if value.empty?
@@ -382,6 +416,7 @@ safe_to_request_cooling = boolean_value(diagnose["safeToRequestCooling"])
 daemon_control_path_ready = boolean_value(diagnose["daemonControlPathReady"])
 is_apple_silicon = boolean_value(diagnose["isAppleSilicon"])
 is_macbook_pro = boolean_value(diagnose["isMacBookPro"])
+operator_commands, operator_commands_malformed = operator_recovery_commands(diagnose["operatorRecoveryCommands"])
 
 blockers = []
 blockers << "capabilities did not produce parseable JSON" if capabilities_parse_error
@@ -404,6 +439,7 @@ if daemon_match_required && daemon_matches_expected_text != "true"
 end
 blockers << "diagnose did not produce parseable JSON" if diagnose_parse_error
 blockers << "diagnose preflight did not complete successfully" if diagnose_status != 0
+blockers << "diagnose operatorRecoveryCommands are malformed" if operator_commands_malformed
 if is_apple_silicon != true || is_macbook_pro != true
   blockers << "hardware is not a supported Apple Silicon MacBook Pro"
 end
@@ -464,6 +500,7 @@ summary = {
   "recommendedAgentAction" => recommended_action.empty? ? nil : recommended_action,
   "recommendedRecoveryAction" => recommended_recovery.empty? ? nil : recommended_recovery,
   "recoverySteps" => recovery_steps,
+  "operatorRecoveryCommands" => operator_commands,
   "safeToRequestCooling" => safe_to_request_cooling,
   "daemonControlPathReady" => daemon_control_path_ready,
   "manualControlActive" => manual_control_active,
@@ -544,6 +581,12 @@ else
     unless recovery_steps.empty?
       puts "Recovery steps:"
       recovery_steps.each { |step| puts "- #{step}" }
+    end
+    unless operator_commands.empty?
+      puts "Operator recovery commands (display-only):"
+      operator_commands.each do |command|
+        puts "- #{command["title"]}: #{command["command"]}"
+      end
     end
   end
 
