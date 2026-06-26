@@ -571,6 +571,68 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasonCount, 0)
     }
 
+    func testDiagnoseJSONIncludesAllRecoveryStepsWhenHelperAndManualControlBothBlockCooling() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot
+            )
+        )
+        let runtime = ViftyCtlDaemonRuntimeDiagnostic(
+            installedDaemonPath: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
+            installedDaemonPresent: true,
+            installedDaemonSHA256: String(repeating: "a", count: 64),
+            expectedDaemonPath: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
+            expectedDaemonPresent: true,
+            expectedDaemonSHA256: String(repeating: "b", count: 64),
+            matchesExpectedDaemon: false,
+            matchRequired: true
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { true },
+            appPreferencesReader: {
+                ViftyAppPreferencesDiagnostic(startupMode: .fixed, startupModeSource: .persisted)
+            },
+            daemonRuntimeReader: { runtime },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 75)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["state"] as? String, "blocked")
+        XCTAssertEqual(json["recommendedAgentAction"] as? String, ViftyCtlRecommendedAgentAction.doNotRequestCooling.rawValue)
+        XCTAssertEqual(json["recommendedRecoveryAction"] as? String, ViftyCtlReadinessRecoveryAction.repairHelper.rawValue)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, true)
+        XCTAssertEqual(json["failedCheckIDs"] as? [String], ["daemonRuntimeMatchesExpected", "manualControlClear"])
+        XCTAssertEqual(json["coolingBlockerIDs"] as? [String], ["daemonRuntimeMatchesExpected", "manualControlClear"])
+        XCTAssertEqual(
+            json["recoverySteps"] as? [String],
+            ViftyAgentRule.repairHelperRecoveryActions + Self.restoreAutoRecoverySteps
+        )
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "manualControlClear"
+                && (check["passed"] as? Bool) == false
+                && (check["severity"] as? String) == "warning"
+                && ((check["message"] as? String)?.contains("default startup mode is Fixed") == true)
+        })
+        let prepareRequestCount = await client.prepareRequestCount
+        let restoreReasonCount = await client.restoreReasonCount
+        XCTAssertEqual(prepareRequestCount, 0)
+        XCTAssertEqual(restoreReasonCount, 0)
+    }
+
     func testDiagnoseJSONReturnsBlockedReportWhenDaemonSnapshotFails() async throws {
         let client = FakeAgentControlClient(
             status: AgentControlStatus(

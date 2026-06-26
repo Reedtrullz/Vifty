@@ -222,7 +222,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         let resolvedRecoveryAction = recommendedRecoveryAction
             ?? Self.recommendedRecoveryAction(for: state, agentAction: resolvedAction, checks: checks)
         self.recommendedRecoveryAction = resolvedRecoveryAction
-        self.recoverySteps = recoverySteps ?? ViftyCtlRecoverySteps.steps(for: resolvedRecoveryAction)
+        self.recoverySteps = recoverySteps ?? Self.recoverySteps(for: resolvedRecoveryAction, checks: checks)
         self.safeToRequestCooling = safeToRequestCooling ?? Self.safeToRequestCooling(for: resolvedAction)
         self.daemonControlPathReady = daemonControlPathReady ?? Self.daemonControlPathReady(from: checks)
         self.manualControlActive = manualControlActive
@@ -769,6 +769,35 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         }
 
         return .none
+    }
+
+    private static func recoverySteps(
+        for action: ViftyCtlReadinessRecoveryAction,
+        checks: [ViftyCtlReadinessCheck]
+    ) -> [String] {
+        var actions: [ViftyCtlReadinessRecoveryAction] = []
+
+        func appendAction(_ action: ViftyCtlReadinessRecoveryAction) {
+            guard action != .none, !actions.contains(action) else { return }
+            actions.append(action)
+        }
+
+        appendAction(action)
+
+        if failedCheck("activeLeaseClear", in: checks) || failedCheck("manualControlClear", in: checks) {
+            appendAction(.restoreAutoBeforeRetry)
+        }
+
+        if failedErrorCheck("thermalPressureSafe", in: checks) {
+            appendAction(.backOffWorkload)
+        }
+
+        if failedCheck("agentControlEnabled", in: checks)
+            && !failedCheck("agentControlStatusAvailable", in: checks) {
+            appendAction(.inspectPolicy)
+        }
+
+        return actions.flatMap(ViftyCtlRecoverySteps.steps(for:))
     }
 
     private static func safeToRequestCooling(for action: ViftyCtlRecommendedAgentAction) -> Bool {
