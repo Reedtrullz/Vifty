@@ -484,6 +484,52 @@ final class AgentCoolingEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(guardedRunDecision["childArgumentCount"] as? Int, 0)
     }
 
+    func testReviewerRejectsGuardedRunPreflightEvidenceMissingSummaryCommand() throws {
+        let harness = try AgentCoolingEvidenceHarness()
+        let childURL = harness.rootURL.appendingPathComponent("fake-child-command.sh")
+        try """
+        #!/bin/sh
+        exit 0
+        """.write(to: childURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: childURL.path)
+
+        let collectResult = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path,
+            "--guarded-run-script", harness.repositoryRoot
+                .appendingPathComponent("examples/viftyctl/guarded-run.sh")
+                .path,
+            "--guarded-run-preflight",
+            "test", "20m", "70", "swift test preflight",
+            "--", childURL.path
+        ])
+        XCTAssertEqual(collectResult.exitCode, 0, collectResult.stderr)
+
+        var summary = try harness.readJSON("agent-cooling-evidence-summary.json")
+        let commands = try XCTUnwrap(summary["commands"] as? [[String: Any]])
+        summary["commands"] = commands.filter { command in
+            command["name"] as? String != "guarded-run-preflight"
+        }
+        let driftedSummary = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+        try driftedSummary.write(to: harness.outputURL.appendingPathComponent("agent-cooling-evidence-summary.json"))
+
+        let reviewSummaryURL = harness.outputURL.appendingPathComponent("agent-cooling-evidence-review.json")
+        let reviewResult = try harness.runReviewer([
+            "--bundle", harness.outputURL.path,
+            "--summary", reviewSummaryURL.path
+        ])
+
+        XCTAssertEqual(reviewResult.exitCode, 65)
+        XCTAssertTrue(
+            reviewResult.stderr.contains("summary is missing manifest command: guarded-run-preflight"),
+            reviewResult.stderr
+        )
+        XCTAssertTrue(
+            reviewResult.stderr.contains("guarded-run preflight summary command is required when preflight evidence is present"),
+            reviewResult.stderr
+        )
+    }
+
     func testReviewerRejectsUnsupportedGuardedRunDecisionReason() throws {
         let harness = try AgentCoolingEvidenceHarness(
             diagnoseJSON: #"""

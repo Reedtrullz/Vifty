@@ -487,6 +487,14 @@ REQUIRED_COMMANDS.each do |name|
   failures << "manifest is missing required command: #{name}" unless manifest_by_name.key?(name)
 end
 
+commands_by_name.each_key do |name|
+  failures << "manifest is missing summary command: #{name}" unless manifest_by_name.key?(name)
+end
+
+manifest_by_name.each_key do |name|
+  failures << "summary is missing manifest command: #{name}" unless commands_by_name.key?(name)
+end
+
 commands_by_name.each do |name, command|
   status = integer_value(command["status"])
   stdout_name = command["stdout"]
@@ -520,6 +528,52 @@ commands_by_name.each do |name, command|
       failures << "status-file/summary drift for #{name}" unless status_file_value == status
     else
       failures << "status file for #{name} is not an integer"
+    end
+  end
+end
+
+metadata_path = File.join(bundle, "metadata.txt")
+metadata_text = File.file?(metadata_path) ? File.read(metadata_path) : ""
+guarded_preflight_metadata = metadata_text.match?(/^guardedRunPreflight=true$/)
+guarded_preflight_command = commands_by_name["guarded-run-preflight"]
+guarded_preflight_manifest = manifest_by_name["guarded-run-preflight"]
+guarded_preflight_status_path = File.join(bundle, "guarded-run-preflight.status")
+guarded_preflight_stdout_path = File.join(bundle, "guarded-run-stdout.txt")
+guarded_preflight_stderr_path = File.join(bundle, "guarded-run-stderr.txt")
+guarded_preflight_present =
+  guarded_preflight_metadata ||
+  !guarded_preflight_command.nil? ||
+  !guarded_preflight_manifest.nil? ||
+  File.file?(guarded_preflight_status_path) ||
+  File.file?(guarded_preflight_stdout_path)
+
+if guarded_preflight_present
+  failures << "guarded-run preflight metadata must set guardedRunPreflight=true" unless guarded_preflight_metadata
+  failures << "guarded-run preflight summary command is required when preflight evidence is present" unless guarded_preflight_command
+  failures << "guarded-run preflight manifest row is required when preflight evidence is present" unless guarded_preflight_manifest
+  failures << "guarded-run preflight status file is required" unless File.file?(guarded_preflight_status_path)
+  failures << "guarded-run preflight stdout file is required" unless File.file?(guarded_preflight_stdout_path)
+  failures << "guarded-run preflight stderr transcript is required" unless File.file?(guarded_preflight_stderr_path)
+
+  if guarded_preflight_command
+    failures << "guarded-run preflight stdout must be guarded-run-stdout.txt" unless guarded_preflight_command["stdout"] == "guarded-run-stdout.txt"
+    failures << "guarded-run preflight stderr must be guarded-run-stderr.txt" unless guarded_preflight_command["stderr"] == "guarded-run-stderr.txt"
+    failures << "guarded-run preflight statusFile must be guarded-run-preflight.status" unless guarded_preflight_command["statusFile"] == "guarded-run-preflight.status"
+  end
+
+  if guarded_preflight_manifest
+    failures << "guarded-run preflight manifest stdout must be guarded-run-stdout.txt" unless guarded_preflight_manifest["stdout"] == "guarded-run-stdout.txt"
+    failures << "guarded-run preflight manifest stderr must be guarded-run-stderr.txt" unless guarded_preflight_manifest["stderr"] == "guarded-run-stderr.txt"
+  end
+
+  if File.file?(guarded_preflight_status_path)
+    guarded_preflight_status = integer_value(File.read(guarded_preflight_status_path).strip)
+    failures << "guarded-run preflight status file is not an integer" unless guarded_preflight_status
+    if guarded_preflight_status
+      command_status = integer_value(guarded_preflight_command["status"]) if guarded_preflight_command
+      manifest_status = integer_value(guarded_preflight_manifest["status"]) if guarded_preflight_manifest
+      failures << "guarded-run preflight status-file/summary drift" if command_status && command_status != guarded_preflight_status
+      failures << "guarded-run preflight status-file/manifest drift" if manifest_status && manifest_status != guarded_preflight_status
     end
   end
 end
