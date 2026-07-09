@@ -12,8 +12,8 @@ final class ViftyStatusItemController: NSObject {
     private let model: AppModel
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
+    private let primeScheduler = MenuBarTelemetryPrimeScheduler()
     private var cancellables: Set<AnyCancellable> = []
-    private var primeTask: Task<Void, Never>?
     private var lastAppliedPresentation: MenuBarStatusItemPresentation?
 
     init(model: AppModel, openMainWindow: @escaping () -> Void) {
@@ -84,12 +84,14 @@ final class ViftyStatusItemController: NSObject {
     }
 
     private func scheduleTelemetryPrimeIfNeeded() {
+        scheduleTelemetryPrimeIfNeeded(policy: Self.launchPrimePolicy)
+    }
+
+    private func scheduleTelemetryPrimeIfNeeded(policy: MenuBarTelemetryPrimePolicy) {
         guard model.menuBarStatusItemPresentation.needsTelemetryPrime else { return }
-        guard primeTask == nil else { return }
-        primeTask = Task { @MainActor [weak self] in
+        primeScheduler.schedule { [weak self] in
             guard let self else { return }
-            defer { self.primeTask = nil }
-            await self.primeStatusItemUntilTelemetryResolved(policy: Self.launchPrimePolicy)
+            await self.primeStatusItemUntilTelemetryResolved(policy: policy)
         }
     }
 
@@ -104,10 +106,7 @@ final class ViftyStatusItemController: NSObject {
     private func showPopover() {
         guard let button = statusItem.button else { return }
         model.start()
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await primeStatusItemUntilTelemetryResolved(policy: Self.popoverPrimePolicy)
-        }
+        scheduleTelemetryPrimeIfNeeded(policy: Self.popoverPrimePolicy)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }

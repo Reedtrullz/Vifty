@@ -86,7 +86,9 @@ Source-first checklist:
 
 ## Developer ID Release Mode
 
-## Pending Developer ID Account Setup
+Use this mode only after the intended personal Apple Developer team is active and Vifty is ready to cross from source-first distribution into trusted-binary release claims.
+
+### Pending Developer ID Account Setup
 
 While the intended personal Apple Developer team is pending, keep Vifty in source-first mode. Do not use a different organization's Developer ID certificate unless that organization is intentionally meant to own Vifty's public signing identity, release trust, Homebrew trust, support burden, and revocation risk.
 

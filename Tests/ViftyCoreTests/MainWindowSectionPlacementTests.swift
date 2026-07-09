@@ -2,6 +2,39 @@ import XCTest
 @testable import Vifty
 
 final class MainWindowSectionPlacementTests: XCTestCase {
+    func testPlacementExposesOrderedSectionsPerPaneForStackedLayout() {
+        let layout = MainWindowLayout.resolve(width: 780, height: 480)
+        let placement = MainWindowSectionPlacement.resolve(layout: layout)
+
+        XCTAssertEqual(
+            placement.sections(in: .stackedFlow),
+            [.safetyMode, .fanControl, .settingsAndTools, .telemetryEvidence]
+        )
+    }
+
+    func testPlacementExposesOrderedSectionsPerPaneForSplitLayout() {
+        let layout = MainWindowLayout.resolve(width: 1180, height: 820)
+        let placement = MainWindowSectionPlacement.resolve(layout: layout)
+
+        XCTAssertEqual(
+            placement.sections(in: .splitControl),
+            [.safetyMode, .fanControl, .settingsAndTools]
+        )
+        XCTAssertEqual(placement.sections(in: .splitTelemetry), [.telemetryEvidence])
+    }
+
+    func testPlacementExposesOrderedSectionsPerPaneForWorkbenchLayout() {
+        let layout = MainWindowLayout.resolve(width: 1500, height: 820)
+        let placement = MainWindowSectionPlacement.resolve(layout: layout)
+
+        XCTAssertEqual(
+            placement.sections(in: .workbenchControlRail),
+            [.safetyMode, .settingsAndTools]
+        )
+        XCTAssertEqual(placement.sections(in: .workbenchEditor), [.fanControl])
+        XCTAssertEqual(placement.sections(in: .workbenchTelemetry), [.telemetryEvidence])
+    }
+
     func testWorkbenchPlacesSettingsInControlRailAndFanControlInEditor() {
         let layout = MainWindowLayout.resolve(width: 1500, height: 820)
         let placement = MainWindowSectionPlacement.resolve(layout: layout)

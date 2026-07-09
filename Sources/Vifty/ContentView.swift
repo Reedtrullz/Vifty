@@ -28,29 +28,39 @@ struct ContentView: View {
         GeometryReader { proxy in
             let layout = MainWindowLayout.resolve(width: proxy.size.width, height: proxy.size.height)
             let placement = MainWindowSectionPlacement.resolve(layout: layout)
-            let _ = placement
 
             Group {
                 switch layout.mode {
                 case .stacked:
+                    let stackedSections = placement.sections(in: .stackedFlow)
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: 0) {
-                            fanControlPane
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                            paneSectionsView(
+                                stackedSections.filter { $0 != .telemetryEvidence },
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: nil
+                            )
+                            if stackedSections.contains(.telemetryEvidence) {
+                                Divider()
 
-                            Divider()
-
-                            sensorsPane(compact: layout.compactTelemetry)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
-                                .background(Color.secondary.opacity(0.035))
+                                sectionView(.telemetryEvidence, compactTelemetry: layout.compactTelemetry)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    .background(Color.secondary.opacity(0.035))
+                            }
                         }
                         .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                     }
                     .scrollIndicators(.visible)
                 case .split:
+                    let controlSections = placement.sections(in: .splitControl)
+                    let telemetrySections = placement.sections(in: .splitTelemetry)
                     HStack(alignment: .top, spacing: 0) {
                         ScrollView(.vertical) {
-                            fanControlPane
+                            paneSectionsView(
+                                controlSections,
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: proxy.size.height
+                            )
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
@@ -61,7 +71,12 @@ struct ContentView: View {
                             .frame(height: proxy.size.height)
 
                         ScrollView(.vertical) {
-                            sensorsPane(compact: layout.compactTelemetry)
+                            paneSectionsView(
+                                telemetrySections,
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: proxy.size.height,
+                                outerPadding: 0
+                            )
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
@@ -69,9 +84,16 @@ struct ContentView: View {
                         .background(Color.secondary.opacity(0.035))
                     }
                 case .workbench:
+                    let controlSections = placement.sections(in: .workbenchControlRail)
+                    let editorSections = placement.sections(in: .workbenchEditor)
+                    let telemetrySections = placement.sections(in: .workbenchTelemetry)
                     HStack(alignment: .top, spacing: 0) {
                         ScrollView(.vertical) {
-                            controlRailPane
+                            workbenchControlRailSectionsView(
+                                controlSections,
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: proxy.size.height
+                            )
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
@@ -82,7 +104,11 @@ struct ContentView: View {
                             .frame(height: proxy.size.height)
 
                         ScrollView(.vertical) {
-                            primaryEditorPane
+                            paneSectionsView(
+                                editorSections,
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: proxy.size.height
+                            )
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
@@ -92,7 +118,12 @@ struct ContentView: View {
                             .frame(height: proxy.size.height)
 
                         ScrollView(.vertical) {
-                            sensorsPane(compact: layout.compactTelemetry)
+                            paneSectionsView(
+                                telemetrySections,
+                                compactTelemetry: layout.compactTelemetry,
+                                minHeight: proxy.size.height,
+                                outerPadding: 0
+                            )
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
@@ -110,6 +141,69 @@ struct ContentView: View {
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func paneSectionsView(
+        _ sections: [MainWindowSection],
+        compactTelemetry: Bool,
+        minHeight: CGFloat?,
+        outerPadding: CGFloat = 16
+    ) -> some View {
+        let needsHelperLifecycle = sections.contains(.safetyMode) || sections.contains(.settingsAndTools)
+
+        return VStack(alignment: .leading, spacing: 18) {
+            ForEach(Array(sections.enumerated()), id: \.element) { index, section in
+                if index > 0 {
+                    Divider()
+                }
+                sectionView(section, compactTelemetry: compactTelemetry)
+            }
+        }
+        .padding(outerPadding)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .onAppear {
+            guard needsHelperLifecycle else { return }
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            guard needsHelperLifecycle else { return }
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
+    }
+
+    private func workbenchControlRailSectionsView(
+        _ sections: [MainWindowSection],
+        compactTelemetry: Bool,
+        minHeight: CGFloat
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if let firstSection = sections.first {
+                sectionView(firstSection, compactTelemetry: compactTelemetry)
+            }
+
+            if sections.count > 1 {
+                Spacer(minLength: 24)
+
+                Divider()
+
+                ForEach(Array(sections.dropFirst().enumerated()), id: \.element) { index, section in
+                    if index > 0 {
+                        Divider()
+                    }
+                    sectionView(section, compactTelemetry: compactTelemetry)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .onAppear {
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
     }
 
     private var helperHealthSystemImage: String {
@@ -190,61 +284,29 @@ struct ContentView: View {
         .padding(16)
     }
 
-    private var fanControlPane: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            safetyModeSection
-
-            Divider()
-
-            fanControlWorkspace
-
-            Divider()
-
-            settingsAndToolsPanel
-        }
-        .padding(16)
-        .onAppear {
-            daemonInstaller.refresh()
-        }
-        .onDisappear {
-            helperRefreshTask?.cancel()
-            helperRefreshTask = nil
-        }
-    }
-
-    private var controlRailPane: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            safetyModeSection
-
-            Spacer(minLength: 24)
-
-            Divider()
-
-            settingsAndToolsPanel
-        }
-        .padding(16)
-        .onAppear {
-            daemonInstaller.refresh()
-        }
-        .onDisappear {
-            helperRefreshTask?.cancel()
-            helperRefreshTask = nil
-        }
-    }
-
-    private var primaryEditorPane: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            fanControlWorkspace
-        }
-        .padding(16)
-    }
-
     private var safetyModeSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Safety & Mode", systemImage: "shield.lefthalf.filled")
                 .font(.headline)
             readinessStatusGroup
             modePicker
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(
+        _ section: MainWindowSection,
+        compactTelemetry: Bool
+    ) -> some View {
+        switch section {
+        case .safetyMode:
+            safetyModeSection
+        case .fanControl:
+            fanControlWorkspace
+        case .settingsAndTools:
+            settingsAndToolsPanel
+        case .telemetryEvidence:
+            sensorsPane(compact: compactTelemetry)
         }
     }
 

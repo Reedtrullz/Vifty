@@ -451,7 +451,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("scripts/check-release-readiness.sh \\"))
         XCTAssertTrue(release.contains("--mode source-first"))
         XCTAssertTrue(release.contains("Keep `Casks/vifty.rb` disabled for the source-first release. Do not update its checksum, re-enable it, or point the cask at the unsigned-dev artifact."))
-        XCTAssertTrue(release.contains("## Pending Developer ID Account Setup"))
+        XCTAssertTrue(release.contains("### Pending Developer ID Account Setup"))
         XCTAssertTrue(release.contains("While the intended personal Apple Developer team is pending, keep Vifty in source-first mode."))
         XCTAssertTrue(release.contains("Do not use a different organization's Developer ID certificate unless that organization is intentionally meant to own Vifty's public signing identity"))
         XCTAssertTrue(release.contains("Prepare GitHub secret names only; do not commit certificate material, `.p12` files, app-specific passwords, or exported secret values."))
