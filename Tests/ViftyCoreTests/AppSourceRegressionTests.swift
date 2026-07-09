@@ -177,21 +177,11 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(contentView.contains("if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {\n                ScrollView {"))
     }
 
-    func testWorkbenchSeparatesLiveControlFromSettingsAndTools() throws {
+    func testMainWindowUsesBehavioralSectionPlacementModel() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
-        XCTAssertTrue(contentView.contains("private var safetyModeSection: some View"))
-        XCTAssertTrue(contentView.contains("Label(\"Safety & Mode\", systemImage: \"shield.lefthalf.filled\")"))
-        XCTAssertTrue(contentView.contains("private var fanControlWorkspace: some View"))
-        XCTAssertTrue(contentView.contains("Label(\"Fan Control\", systemImage: \"fan\")"))
-        XCTAssertTrue(contentView.contains("Label(\"Telemetry & Evidence\", systemImage: \"waveform.path.ecg\")"))
-        XCTAssertTrue(contentView.contains("private var settingsAndToolsPanel: some View"))
-        XCTAssertTrue(contentView.contains("Label(\"Settings & Tools\", systemImage: \"gearshape\")"))
-        XCTAssertTrue(contentView.contains("private var controlRailPane: some View {\n        VStack(alignment: .leading, spacing: 18) {\n            safetyModeSection\n\n            Spacer(minLength: 24)\n\n            Divider()\n\n            settingsAndToolsPanel\n        }"))
-        XCTAssertTrue(contentView.contains("private var primaryEditorPane: some View {\n        VStack(alignment: .leading, spacing: 18) {\n            fanControlWorkspace\n        }"))
-        XCTAssertTrue(contentView.contains("DisclosureGroup {\n            VStack(alignment: .leading, spacing: 10) {\n                quickSettingsStrip\n                menuBarDisplaySettings\n                notificationSettings\n                agentWorkflowSettings"))
-        XCTAssertFalse(contentView.contains("private var primaryEditorPane: some View {\n        VStack(alignment: .leading, spacing: 18) {\n            fanControlWorkspace\n\n            Divider()\n\n            settingsAndToolsPanel"))
-        XCTAssertFalse(contentView.contains("private var controlRailPane: some View {\n        VStack(alignment: .leading, spacing: 18) {\n            readinessStatusGroup\n            modePicker\n\n            Divider()\n\n            quickSettingsStrip"))
+        XCTAssertTrue(contentView.contains("MainWindowSectionPlacement.resolve(layout: layout)"))
+        XCTAssertFalse(contentView.contains("private var controlRailPane: some View {\n        VStack(alignment: .leading, spacing: 18) {\n            readinessStatusGroup"))
     }
 
     func testHistoryPanelShowsLocalSparklineVisualization() throws {

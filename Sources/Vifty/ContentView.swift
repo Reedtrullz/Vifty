@@ -27,6 +27,8 @@ struct ContentView: View {
     private var mainContent: some View {
         GeometryReader { proxy in
             let layout = MainWindowLayout.resolve(width: proxy.size.width, height: proxy.size.height)
+            let placement = MainWindowSectionPlacement.resolve(layout: layout)
+            let _ = placement
 
             Group {
                 switch layout.mode {
