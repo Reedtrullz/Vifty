@@ -22,8 +22,8 @@ enum ViftyStatusItemPresentation {
 
 @MainActor
 final class ViftyStatusItemController: NSObject {
-    private static let launchPrimeAttempts = 120
-    private static let launchPrimeRetryDelay: Duration = .milliseconds(750)
+    private static let launchPrimePolicy = MenuBarTelemetryPrimePolicy.launch
+    private static let popoverPrimePolicy = MenuBarTelemetryPrimePolicy.popover
 
     var openMainWindow: () -> Void
 
@@ -107,10 +107,7 @@ final class ViftyStatusItemController: NSObject {
         primeTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.primeTask = nil }
-            await self.primeStatusItemUntilTelemetryResolved(
-                maxAttempts: Self.launchPrimeAttempts,
-                retryDelay: Self.launchPrimeRetryDelay
-            )
+            await self.primeStatusItemUntilTelemetryResolved(policy: Self.launchPrimePolicy)
         }
     }
 
@@ -127,25 +124,33 @@ final class ViftyStatusItemController: NSObject {
         model.start()
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await primeStatusItemUntilTelemetryResolved(maxAttempts: 3, retryDelay: .milliseconds(250))
+            await primeStatusItemUntilTelemetryResolved(policy: Self.popoverPrimePolicy)
         }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     private func primeStatusItemUntilTelemetryResolved(
-        maxAttempts: Int,
-        retryDelay: Duration
+        policy: MenuBarTelemetryPrimePolicy
     ) async {
         model.start()
-        let attempts = max(1, maxAttempts)
-        for attempt in 1...attempts {
+        for attempt in 1...policy.maxAttempts {
+            guard policy.shouldAttempt(
+                attempt,
+                needsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime,
+                hasCompletedHardwarePoll: model.hasCompletedHardwarePoll
+            ) else { return }
+
             await model.primeMenuBarStatusItemTelemetry(maxAttempts: 1)
             updateStatusItem()
-            guard model.menuBarLabelNeedsTelemetryPrime else { return }
-            if attempt < attempts {
-                try? await Task.sleep(for: retryDelay)
-            }
+
+            guard policy.shouldAttempt(
+                attempt + 1,
+                needsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime,
+                hasCompletedHardwarePoll: model.hasCompletedHardwarePoll
+            ) else { return }
+
+            try? await Task.sleep(for: policy.retryDelay(after: attempt))
         }
     }
 

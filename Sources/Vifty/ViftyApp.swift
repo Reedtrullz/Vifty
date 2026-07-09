@@ -13,9 +13,6 @@ struct ViftyApp: App {
         _model = StateObject(wrappedValue: model)
         appDelegate.model = model
         model.start()
-        Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
-        }
     }
 
     var body: some Scene {
@@ -56,9 +53,6 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
             self?.openMainWindow()
         }
         model.start()
-        Task { @MainActor in
-            await model.primeMenuBarStatusItemTelemetry(maxAttempts: 5)
-        }
     }
 
     private func openMainWindow() {
