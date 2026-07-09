@@ -2,24 +2,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-enum ViftyStatusItemPresentation {
-    static func resolvedText(
-        statusItemText: String?,
-        fallbackStatusItemText: String? = nil,
-        labelNeedsTelemetryPrime: Bool,
-        allowsPlaceholderText: Bool
-    ) -> String? {
-        guard !labelNeedsTelemetryPrime else {
-            return fallbackStatusItemText
-        }
-        guard let statusItemText else {
-            return fallbackStatusItemText
-        }
-        guard allowsPlaceholderText || !statusItemText.contains("--") else { return fallbackStatusItemText }
-        return statusItemText
-    }
-}
-
 @MainActor
 final class ViftyStatusItemController: NSObject {
     private static let launchPrimePolicy = MenuBarTelemetryPrimePolicy.launch

@@ -1871,6 +1871,12 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testExtractedMenuBarPresentationTypesPreserveDefaults() {
+        XCTAssertEqual(MenuBarField.defaultCustomFields, [.temperature, .fanStrength, .codexUsage])
+        XCTAssertEqual(MenuBarStatusItemPresentation.placeholder.tooltip, "Vifty")
+        XCTAssertTrue(MenuBarStatusItemPresentation.placeholder.needsTelemetryPrime)
+    }
+
     func testStatusItemPresentationSuppressesStartupPlaceholders() {
         XCTAssertNil(ViftyStatusItemPresentation.resolvedText(
             statusItemText: "Mac | -- C | -- RPM",
