@@ -152,7 +152,7 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".scrollIndicators(.visible)"))
         XCTAssertTrue(contentView.contains(".frame(width: layout.controlPaneWidth)\n                        .frame(minHeight: proxy.size.height, maxHeight: proxy.size.height)"))
         XCTAssertTrue(contentView.contains(".frame(minWidth: layout.editorPaneMinWidth, idealWidth: layout.editorPaneIdealWidth, maxWidth: layout.editorPaneMaxWidth, minHeight: proxy.size.height, maxHeight: proxy.size.height)"))
-        XCTAssertTrue(contentView.contains(".frame(maxWidth: layout.telemetryPaneMaxWidth, minHeight: proxy.size.height, maxHeight: proxy.size.height)"))
+        XCTAssertTrue(contentView.contains(".frame(\n                            minWidth: layout.telemetryPaneMinWidth,\n                            idealWidth: layout.telemetryPaneIdealWidth,\n                            maxWidth: layout.telemetryPaneMaxWidth,\n                            minHeight: proxy.size.height,\n                            maxHeight: proxy.size.height\n                        )"))
         XCTAssertFalse(contentView.contains(".frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)"))
         XCTAssertTrue(contentView.contains("Divider()\n                            .frame(height: proxy.size.height)"))
         XCTAssertTrue(contentView.contains(".background(Color.secondary.opacity(0.035))"))

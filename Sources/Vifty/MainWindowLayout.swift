@@ -13,18 +13,24 @@ struct MainWindowLayout: Equatable {
     let editorPaneMinWidth: CGFloat
     let editorPaneIdealWidth: CGFloat
     let editorPaneMaxWidth: CGFloat
+    let telemetryPaneMinWidth: CGFloat
+    let telemetryPaneIdealWidth: CGFloat
     let telemetryPaneMaxWidth: CGFloat
 
     static func resolve(width: CGFloat, height: CGFloat) -> MainWindowLayout {
         if width >= 1280, height >= 640 {
+            let editorIdealWidth = min(max((width * 0.30).rounded(), 620), 860)
+            let telemetryIdealWidth = max(520, (width - 320 - editorIdealWidth).rounded(.down))
             return MainWindowLayout(
                 mode: .workbench,
                 compactTelemetry: false,
                 controlPaneWidth: 320,
                 editorPaneMinWidth: 460,
-                editorPaneIdealWidth: 600,
-                editorPaneMaxWidth: 760,
-                telemetryPaneMaxWidth: 1000
+                editorPaneIdealWidth: editorIdealWidth,
+                editorPaneMaxWidth: 900,
+                telemetryPaneMinWidth: 420,
+                telemetryPaneIdealWidth: telemetryIdealWidth,
+                telemetryPaneMaxWidth: .infinity
             )
         }
 
@@ -36,6 +42,8 @@ struct MainWindowLayout: Equatable {
                 editorPaneMinWidth: 360,
                 editorPaneIdealWidth: 420,
                 editorPaneMaxWidth: 560,
+                telemetryPaneMinWidth: 360,
+                telemetryPaneIdealWidth: min(max(width, 360), 560),
                 telemetryPaneMaxWidth: .infinity
             )
         }
@@ -47,6 +55,8 @@ struct MainWindowLayout: Equatable {
             editorPaneMinWidth: 420,
             editorPaneIdealWidth: 560,
             editorPaneMaxWidth: 640,
+            telemetryPaneMinWidth: 420,
+            telemetryPaneIdealWidth: max(520, (width * 0.52).rounded()),
             telemetryPaneMaxWidth: .infinity
         )
     }

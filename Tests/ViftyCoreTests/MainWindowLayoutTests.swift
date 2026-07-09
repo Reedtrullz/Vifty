@@ -25,9 +25,11 @@ final class MainWindowLayoutTests: XCTestCase {
         XCTAssertFalse(layout.compactTelemetry)
         XCTAssertEqual(layout.controlPaneWidth, 320)
         XCTAssertEqual(layout.editorPaneMinWidth, 460)
-        XCTAssertEqual(layout.editorPaneIdealWidth, 600)
-        XCTAssertEqual(layout.editorPaneMaxWidth, 760)
-        XCTAssertEqual(layout.telemetryPaneMaxWidth, 1000)
+        XCTAssertGreaterThanOrEqual(layout.editorPaneIdealWidth, 620)
+        XCTAssertEqual(layout.editorPaneMaxWidth, 900)
+        XCTAssertEqual(layout.telemetryPaneMinWidth, 420)
+        XCTAssertGreaterThanOrEqual(layout.telemetryPaneIdealWidth, 520)
+        XCTAssertEqual(layout.telemetryPaneMaxWidth, .infinity)
     }
 
     func testNarrowWindowStacksBeforePanesCompeteForWidth() {
@@ -42,5 +44,24 @@ final class MainWindowLayoutTests: XCTestCase {
 
         XCTAssertEqual(layout.mode, .stacked)
         XCTAssertTrue(layout.compactTelemetry)
+    }
+
+    func testUltraWideWorkbenchDoesNotCapTelemetryToNarrowColumn() {
+        let layout = MainWindowLayout.resolve(width: 3024, height: 1600)
+
+        XCTAssertEqual(layout.mode, .workbench)
+        XCTAssertEqual(layout.controlPaneWidth, 320)
+        XCTAssertGreaterThanOrEqual(layout.editorPaneIdealWidth, 760)
+        XCTAssertGreaterThanOrEqual(layout.telemetryPaneIdealWidth, 1600)
+        XCTAssertEqual(layout.telemetryPaneMaxWidth, .infinity)
+    }
+
+    func testWorkbenchKeepsTelemetryUsableAtEntryWidth() {
+        let layout = MainWindowLayout.resolve(width: 1280, height: 720)
+
+        XCTAssertEqual(layout.mode, .workbench)
+        XCTAssertEqual(layout.controlPaneWidth, 320)
+        XCTAssertGreaterThanOrEqual(layout.editorPaneMinWidth, 460)
+        XCTAssertGreaterThanOrEqual(layout.telemetryPaneMinWidth, 420)
     }
 }

@@ -94,7 +94,13 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
-                        .frame(maxWidth: layout.telemetryPaneMaxWidth, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                        .frame(
+                            minWidth: layout.telemetryPaneMinWidth,
+                            idealWidth: layout.telemetryPaneIdealWidth,
+                            maxWidth: layout.telemetryPaneMaxWidth,
+                            minHeight: proxy.size.height,
+                            maxHeight: proxy.size.height
+                        )
                         .background(Color.secondary.opacity(0.035))
                     }
                 }
