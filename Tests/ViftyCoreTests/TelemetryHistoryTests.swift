@@ -9,8 +9,27 @@ final class TelemetryHistoryTests: XCTestCase {
         }
 
         XCTAssertEqual(history.samples.count, 3)
+        XCTAssertEqual(history.sampleCount, 3)
         XCTAssertEqual(history.samples.first?.firstFanRPM, 2002)
         XCTAssertEqual(history.samples.last?.firstFanRPM, 2004)
+        XCTAssertEqual(history.latestSample?.firstFanRPM, 2004)
+        XCTAssertEqual(history.recentSamples(limit: 2).map(\.firstFanRPM), [2003, 2004])
+    }
+
+    func testRingHistoryPreservesOrderAfterWraparoundAndLimitGrowth() {
+        var history = TelemetryHistory(limit: 3)
+        for index in 0..<4 {
+            history.append(sample(index: index))
+        }
+
+        XCTAssertEqual(history.samples.map(\.firstFanRPM), [2001, 2002, 2003])
+
+        history.limit = 5
+        history.append(sample(index: 4))
+        history.append(sample(index: 5))
+
+        XCTAssertEqual(history.samples.map(\.firstFanRPM), [2001, 2002, 2003, 2004, 2005])
+        XCTAssertEqual(history.recentSamples(limit: 3).map(\.firstFanRPM), [2003, 2004, 2005])
     }
 
     func testInitialLimitClampsToOneAndKeepsNewestSample() {
@@ -74,6 +93,7 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertEqual(summary.fanRPMSparklineTitle, "Fan")
         XCTAssertEqual(summary.latestBatteryPowerLabel, "Battery charge")
         XCTAssertEqual(summary.latestBatteryPowerText, "8.2 W")
+        XCTAssertEqual(summary.latestBatteryPowerWatts, 8.25)
         XCTAssertEqual(summary.latestThermalPressureText, "Serious")
         XCTAssertEqual(summary.temperatureRangeText, "64.2 C-72.6 C")
         XCTAssertEqual(summary.temperatureChangeText, "+8.4 C")

@@ -86,6 +86,19 @@ Source-first checklist:
 
 ## Developer ID Release Mode
 
+## Pending Developer ID Account Setup
+
+While the intended personal Apple Developer team is pending, keep Vifty in source-first mode. Do not use a different organization's Developer ID certificate unless that organization is intentionally meant to own Vifty's public signing identity, release trust, Homebrew trust, support burden, and revocation risk.
+
+Preparation that is safe before Apple activates the team:
+
+1. Keep the Developer ID workflow strict and unrun for public trust claims.
+2. Keep `Casks/vifty.rb` disabled.
+3. Keep source-first and unsigned-dev release wording intact.
+4. Keep Sparkle updater keys out of `Resources/Info.plist`.
+5. Prepare GitHub secret names only; do not commit certificate material, `.p12` files, app-specific passwords, or exported secret values.
+6. After the team becomes active, create the Developer ID Application certificate under the intended personal team, configure the secrets below, run the manual local signing smoke test, then use the normal Developer ID release checklist.
+
 ## Required GitHub Secrets
 
 Configure these repository secrets before running the `Release` workflow:

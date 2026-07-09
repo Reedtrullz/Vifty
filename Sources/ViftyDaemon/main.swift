@@ -1,8 +1,11 @@
 import Foundation
 import ViftyCore
 
-private final class DaemonService: NSObject, ViftyDaemonProtocol {
+private final class DaemonService: NSObject, ViftyDaemonProtocol, @unchecked Sendable {
     private let hardware = RealMacHardwareService(preferDaemon: false)
+    private let snapshotCacheTTL: TimeInterval = 1
+    private let snapshotCacheLock = NSLock()
+    private var cachedSnapshot: (capturedAt: Date, snapshot: HardwareSnapshot)?
     private lazy var agentControl = AgentControlService(
         hardware: hardware,
         policy: AgentControlPolicy(enabled: true)
@@ -48,6 +51,7 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         }
         let agentControl = self.agentControl
         Task {
+            defer { clearSnapshotCache() }
             do {
                 let status = try await agentControl.prepare(decoded)
                 reply(XPCAgentControlCoding.encode(status), nil)
@@ -60,6 +64,7 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
     func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
         let agentControl = self.agentControl
         Task {
+            defer { clearSnapshotCache() }
             do {
                 let status = try await agentControl.restoreAuto(reason: reason)
                 reply(XPCAgentControlCoding.encode(status), nil)
@@ -72,12 +77,13 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
     func setFixedRPM(
         _ fanID: Int,
         rpm: Int,
-        minimumRPM: Int,
-        maximumRPM: Int,
+        minimumRPM _: Int,
+        maximumRPM _: Int,
         reply: @escaping @Sendable (Bool, String?) -> Void
     ) {
         let agentControl = self.agentControl
         Task {
+            defer { clearSnapshotCache() }
             let status = await agentControl.status()
             if let lease = status.activeLease {
                 if lease.isActive(at: Date()) {
@@ -89,14 +95,7 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
             }
 
             do {
-                let fan = Fan(
-                    id: fanID,
-                    name: fanID == 0 ? "Left Fan" : "Right Fan",
-                    currentRPM: rpm,
-                    minimumRPM: minimumRPM,
-                    maximumRPM: maximumRPM,
-                    controllable: true
-                )
+                let fan = try resolveWritableFan(fanID: fanID)
                 try LocalFanHelperClient().apply(FanCommand(fanID: fanID, mode: .fixedRPM(rpm)), fan: fan)
                 reply(true, nil)
             } catch {
@@ -107,19 +106,13 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
 
     func restoreAuto(
         _ fanID: Int,
-        minimumRPM: Int,
-        maximumRPM: Int,
+        minimumRPM _: Int,
+        maximumRPM _: Int,
         reply: @escaping @Sendable (Bool, String?) -> Void
     ) {
+        defer { clearSnapshotCache() }
         do {
-            let fan = Fan(
-                id: fanID,
-                name: fanID == 0 ? "Left Fan" : "Right Fan",
-                currentRPM: minimumRPM,
-                minimumRPM: minimumRPM,
-                maximumRPM: maximumRPM,
-                controllable: true
-            )
+            let fan = try resolveWritableFan(fanID: fanID)
             try LocalFanHelperClient().restoreAuto(fan: fan)
             let agentControl = self.agentControl
             Task {
@@ -135,8 +128,47 @@ private final class DaemonService: NSObject, ViftyDaemonProtocol {
         }
     }
 
+    private func resolveWritableFan(fanID: Int) throws -> Fan {
+        let snapshot = try hardware.localSnapshot()
+        guard let fan = snapshot.fans.first(where: { $0.id == fanID }) else {
+            throw ViftyError.helperRejected("Fan \(fanID) is not present in daemon hardware telemetry; refusing privileged fan write.")
+        }
+        guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
+            throw ViftyError.noControllableFans
+        }
+        return fan
+    }
+
     private func awaitSnapshot() throws -> HardwareSnapshot {
-        try hardware.localSnapshot()
+        let now = Date()
+        if let cached = cachedSnapshotIfFresh(now: now) {
+            return cached
+        }
+        let snapshot = try hardware.localSnapshot()
+        storeSnapshotCache(snapshot, capturedAt: now)
+        return snapshot
+    }
+
+    private func cachedSnapshotIfFresh(now: Date) -> HardwareSnapshot? {
+        snapshotCacheLock.lock()
+        defer { snapshotCacheLock.unlock() }
+        guard let cachedSnapshot,
+              now.timeIntervalSince(cachedSnapshot.capturedAt) < snapshotCacheTTL else {
+            return nil
+        }
+        return cachedSnapshot.snapshot
+    }
+
+    private func storeSnapshotCache(_ snapshot: HardwareSnapshot, capturedAt: Date) {
+        snapshotCacheLock.lock()
+        cachedSnapshot = (capturedAt, snapshot)
+        snapshotCacheLock.unlock()
+    }
+
+    private func clearSnapshotCache() {
+        snapshotCacheLock.lock()
+        cachedSnapshot = nil
+        snapshotCacheLock.unlock()
     }
 }
 

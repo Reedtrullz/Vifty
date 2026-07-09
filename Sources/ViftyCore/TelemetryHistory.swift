@@ -39,7 +39,9 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
 }
 
 public struct TelemetryHistory: Equatable, Sendable {
-    public private(set) var samples: [TelemetrySample] = []
+    private var storage: [TelemetrySample] = []
+    private var startIndex = 0
+    public private(set) var sampleCount = 0
     public var limit: Int {
         didSet {
             limit = max(1, limit)
@@ -51,15 +53,63 @@ public struct TelemetryHistory: Equatable, Sendable {
         self.limit = max(1, limit)
     }
 
+    public var samples: [TelemetrySample] {
+        recentSamples(limit: sampleCount)
+    }
+
+    public var latestSample: TelemetrySample? {
+        guard sampleCount > 0, !storage.isEmpty else { return nil }
+        return storage[logicalIndex(sampleCount - 1)]
+    }
+
     public mutating func append(_ sample: TelemetrySample) {
-        samples.append(sample)
-        trimToLimit()
+        if sampleCount < limit {
+            if storage.count < limit {
+                normalizeStorageIfNeeded()
+                storage.append(sample)
+            } else {
+                storage[logicalIndex(sampleCount)] = sample
+            }
+            sampleCount += 1
+            return
+        }
+
+        if storage.count < limit {
+            trimToLimit()
+        }
+        storage[startIndex] = sample
+        startIndex = (startIndex + 1) % storage.count
+        sampleCount = limit
+    }
+
+    public func recentSamples(limit requestedLimit: Int) -> [TelemetrySample] {
+        guard sampleCount > 0 else { return [] }
+        let boundedLimit = max(0, min(requestedLimit, sampleCount))
+        guard boundedLimit > 0 else { return [] }
+        let start = sampleCount - boundedLimit
+        return (start..<sampleCount).map { storage[logicalIndex($0)] }
     }
 
     private mutating func trimToLimit() {
-        if samples.count > limit {
-            samples.removeFirst(samples.count - limit)
-        }
+        guard sampleCount > limit else { return }
+        let retained = recentSamples(limit: limit)
+        storage = retained
+        startIndex = 0
+        sampleCount = retained.count
+    }
+
+    private mutating func normalizeStorageIfNeeded() {
+        guard startIndex != 0 else { return }
+        storage = samples
+        startIndex = 0
+    }
+
+    private func logicalIndex(_ offset: Int) -> Int {
+        (startIndex + offset) % storage.count
+    }
+
+    public static func == (lhs: TelemetryHistory, rhs: TelemetryHistory) -> Bool {
+        lhs.limit == rhs.limit && lhs.samples == rhs.samples
     }
 }
 
@@ -75,6 +125,7 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
     public var fanRPMSparklineTitle: String
     public var latestBatteryPowerLabel: String?
     public var latestBatteryPowerText: String?
+    public var latestBatteryPowerWatts: Double?
     public var latestThermalPressureText: String
     public var temperatureValues: [Double]
     public var fanRPMValues: [Double]
@@ -95,11 +146,11 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
     ) {
         let boundedSampleLimit = max(1, sampleLimit)
         let boundedThermalLimit = max(1, thermalPressureLimit)
-        let recentSamples = Array(history.samples.suffix(boundedSampleLimit))
-        let latest = history.samples.last
+        let recentSamples = history.recentSamples(limit: boundedSampleLimit)
+        let latest = history.latestSample
 
-        sampleCount = history.samples.count
-        sampleCountText = history.samples.count == 1 ? "1 sample" : "\(history.samples.count) samples"
+        sampleCount = history.sampleCount
+        sampleCountText = history.sampleCount == 1 ? "1 sample" : "\(history.sampleCount) samples"
         sampleWindowText = Self.sampleWindowText(for: recentSamples)
         latestTemperatureLabel = Self.temperatureLabel(for: latest)
         latestTemperatureText = latest.flatMap(Self.sampleTemperature).map(Self.temperatureText)
@@ -108,7 +159,8 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         fanRPMTrendLabel = usesAverageFanRPM ? "Avg fan" : "Fan"
         fanRPMSparklineTitle = usesAverageFanRPM ? "Avg fan" : "Fan"
         latestFanRPMText = latest.flatMap(Self.sampleFanRPM).map(Self.fanRPMText)
-        if let batteryPowerWatts = latest?.batteryPowerWatts {
+        latestBatteryPowerWatts = latest?.batteryPowerWatts
+        if let batteryPowerWatts = latestBatteryPowerWatts {
             if abs(batteryPowerWatts) < 0.1 {
                 latestBatteryPowerLabel = "Battery power"
             } else {
@@ -129,7 +181,7 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         fanRPMChangeText = Self.changeText(fanRPMValues, unit: "RPM", decimals: 0)
         batteryPowerRangeText = Self.signedWattRangeText(batteryPowerValues)
         batteryPowerChangeText = Self.changeText(batteryPowerValues, unit: "W", decimals: 1)
-        thermalPressureSamples = history.samples.suffix(boundedThermalLimit).map(\.thermalPressure)
+        thermalPressureSamples = history.recentSamples(limit: boundedThermalLimit).map(\.thermalPressure)
         thermalPressureSummaryText = Self.thermalPressureSummaryText(thermalPressureSamples)
     }
 

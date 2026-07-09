@@ -29,7 +29,7 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertEqual(snapshot.sourceFileName, "newer.jsonl")
         XCTAssertEqual(
             CodexUsageFormatter.menuBarText(for: snapshot, now: { Date(timeIntervalSince1970: 1_800_000_000) }),
-            "Codex 63% left · 1h"
+            "Ai 63% left · 1h"
         )
         XCTAssertEqual(
             CodexUsageFormatter.summaryText(for: snapshot, now: { Date(timeIntervalSince1970: 1_800_000_000) }),
@@ -44,6 +44,67 @@ final class CodexUsageTests: XCTestCase {
                 "Source: Local JSONL: newer.jsonl"
             ]
         )
+    }
+
+    func testReaderFindsLatestUsageEventFromBoundedTailOfLargeSessionFile() throws {
+        let root = try temporaryDirectory()
+        let sessions = root.appendingPathComponent("sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        let event = """
+        {"timestamp":"2026-06-21T11:00:00Z","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":21,"resets_at":1800003600,"window_minutes":300},"plan_type":"pro"}}}
+        """
+        let filler = String(repeating: "{\"payload\":{\"type\":\"noise\"}}\n", count: 30_000)
+        try (filler + event + "\n").write(
+            to: sessions.appendingPathComponent("large.jsonl"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let snapshot = try XCTUnwrap(CodexUsageReader(codexHome: root).read())
+
+        XCTAssertEqual(snapshot.usedPercent, 21, accuracy: 0.001)
+        XCTAssertEqual(snapshot.sourceFileName, "large.jsonl")
+    }
+
+    func testReaderDoesNotScanEntireLargeSessionFileWhenTailHasNoUsageEvent() throws {
+        let root = try temporaryDirectory()
+        let sessions = root.appendingPathComponent("sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        let event = """
+        {"timestamp":"2026-06-21T11:00:00Z","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":21,"resets_at":1800003600,"window_minutes":300},"plan_type":"pro"}}}
+        """
+        let filler = String(repeating: "{\"payload\":{\"type\":\"noise\"}}\n", count: 30_000)
+        try (event + "\n" + filler).write(
+            to: sessions.appendingPathComponent("large.jsonl"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        XCTAssertNil(CodexUsageReader(codexHome: root).read())
+    }
+
+    func testReaderKeepsScanningBoundedTailPastMalformedUsageCandidates() throws {
+        let root = try temporaryDirectory()
+        let sessions = root.appendingPathComponent("sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        let validEvent = """
+        {"timestamp":"2026-06-21T11:00:00Z","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":21,"resets_at":1800003600,"window_minutes":300},"plan_type":"pro"}}}
+        """
+        let malformedEvents = (0..<30).map { index in
+            """
+            {"timestamp":"2026-06-21T11:01:\(String(format: "%02d", index))Z","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":"invalid-\(index)"}}}}
+            """
+        }
+        try ([validEvent] + malformedEvents).joined(separator: "\n").write(
+            to: sessions.appendingPathComponent("malformed-tail.jsonl"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let snapshot = try XCTUnwrap(CodexUsageReader(codexHome: root).read())
+
+        XCTAssertEqual(snapshot.usedPercent, 21, accuracy: 0.001)
+        XCTAssertEqual(snapshot.sourceFileName, "malformed-tail.jsonl")
     }
 
     func testReaderParsesAppServerRateLimitSnapshotShape() throws {
@@ -101,7 +162,7 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertEqual(snapshot.monthlySummary, "Monthly: 12 of 100, 88% left")
         XCTAssertEqual(
             CodexUsageFormatter.menuBarText(for: snapshot, now: { Date(timeIntervalSince1970: 1_800_000_000) }),
-            "Codex 56% left · 1h"
+            "Ai 56% left · 1h"
         )
         XCTAssertEqual(
             CodexUsageFormatter.summaryText(for: snapshot, now: { Date(timeIntervalSince1970: 1_800_000_000) }),
@@ -146,7 +207,7 @@ final class CodexUsageTests: XCTestCase {
                 options: options,
                 now: { Date(timeIntervalSince1970: 1_800_000_000) }
             ),
-            "Codex 42% used · \(resetTime)"
+            "Ai 42% used · \(resetTime)"
         )
         XCTAssertEqual(
             CodexUsageFormatter.summaryText(
@@ -185,7 +246,7 @@ final class CodexUsageTests: XCTestCase {
                 options: leftOptions,
                 now: { Date(timeIntervalSince1970: 1_800_000_000) }
             ),
-            "Codex [###--] 58% left · 1h"
+            "Ai [###--] 58% left · 1h"
         )
         XCTAssertEqual(
             CodexUsageFormatter.menuBarText(
@@ -193,7 +254,7 @@ final class CodexUsageTests: XCTestCase {
                 options: usedOptions,
                 now: { Date(timeIntervalSince1970: 1_800_000_000) }
             ),
-            "Codex [##---] 42% used · 1h"
+            "Ai [##---] 42% used · 1h"
         )
     }
 
@@ -259,7 +320,7 @@ final class CodexUsageTests: XCTestCase {
         let reader = CodexUsageReader(codexHome: root)
 
         XCTAssertNil(reader.read())
-        XCTAssertEqual(CodexUsageFormatter.menuBarText(for: nil), "Codex --")
+        XCTAssertEqual(CodexUsageFormatter.menuBarText(for: nil), "Ai --")
         XCTAssertEqual(CodexUsageFormatter.summaryText(for: nil), "Codex usage unavailable")
     }
 

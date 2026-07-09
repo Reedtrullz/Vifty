@@ -9,9 +9,6 @@ struct MenuBarView: View {
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
-    @State private var agentRuleCopied = false
-    @State private var agentCommandCopied = false
-    @State private var selectedMenuCurveProfileID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -28,12 +25,10 @@ struct MenuBarView: View {
                     .lineLimit(3)
             }
 
-            if let sensor = model.selectedSensor {
-                Label("\(sensor.name): \(sensor.celsius, specifier: "%.1f") C", systemImage: "thermometer.medium")
+            if let thermalSummary = model.thermalPressure.menuSummary {
+                Label(thermalSummary, systemImage: "speedometer")
+                    .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
             }
-
-            Label("Thermal pressure: \(model.thermalPressure.displayName)", systemImage: "speedometer")
-                .foregroundStyle(model.thermalPressure == .serious || model.thermalPressure == .critical ? .orange : .secondary)
 
             if let recentTelemetryTrendSummary = model.recentTelemetryTrendSummary {
                 Label(recentTelemetryTrendSummary, systemImage: "chart.xyaxis.line")
@@ -42,21 +37,11 @@ struct MenuBarView: View {
                     .lineLimit(2)
             }
 
-            if model.menuBarDisplaysCodexUsage || model.codexUsageSnapshot != nil {
+            if model.menuBarDisplaysCodexUsage {
                 Label(model.codexUsageSummary, systemImage: "terminal")
                     .font(.caption)
                     .foregroundStyle(model.codexUsageSnapshot == nil ? .secondary : .primary)
                     .lineLimit(2)
-                if !model.codexUsageDetailLines.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(model.codexUsageDetailLines, id: \.self) { line in
-                            Text(line)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-                }
             }
 
             if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
@@ -74,21 +59,13 @@ struct MenuBarView: View {
                     .foregroundStyle(.orange)
             }
 
-            Label(model.controlOwnershipSummary, systemImage: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
-                .font(.caption)
-                .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .secondary)
-                .lineLimit(2)
+            menuReadinessSection
 
             if let power = model.powerSnapshot {
                 if let adapter = power.adapter, let adapterDetail = PowerDisplayFormatter.adapterDetail(for: adapter) {
                     Label(adapterDetail, systemImage: "bolt.fill")
                 } else {
                     Label(PowerDisplayFormatter.summary(for: power), systemImage: power.isPluggedIn ? "bolt.fill" : "battery.50")
-                }
-                if let flow = PowerDisplayFormatter.batteryFlow(for: power) {
-                    Label(flow, systemImage: power.batteryIsActivelyCharging ? "arrow.down.circle" : "arrow.up.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 if let warning = PowerInsights(snapshot: power).chargerWarning {
                     Label(warning, systemImage: "exclamationmark.triangle")
@@ -98,7 +75,11 @@ struct MenuBarView: View {
             }
 
             ForEach(model.snapshot?.fans ?? []) { fan in
-                Label("\(fan.name): \(fan.currentRPM) RPM (\(fan.percentage)%)", systemImage: "gauge.with.dots.needle.67percent")
+                Label {
+                    Text(verbatim: "\(fan.name) \(fan.currentRPM) RPM · \(fan.percentage)%")
+                } icon: {
+                    Image(systemName: "gauge.with.dots.needle.67percent")
+                }
             }
 
             if let expiresAt = model.manualSessionExpiresAt {
@@ -107,33 +88,62 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let agentCoolingSummary = model.agentCoolingSummary {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(model.agentCoolingPanelTitle, systemImage: "cpu")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
-                    Text(agentCoolingSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
-                        Label(agentCoolingRecoverySuggestion, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .lineLimit(3)
-                    }
-                    if model.agentCoolingNeedsAttention, model.agentCoolingRestoreActionAvailable {
-                        Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
-                        .controlSize(.small)
-                        .help(model.agentCoolingRestoreActionHelp)
+            Divider()
+
+            HStack {
+                Button("Open Vifty") {
+                    if let openMainWindow {
+                        openMainWindow()
+                    } else {
+                        openWindow(id: "main")
                     }
                 }
+                Button(model.autoRestoreActionTitle) {
+                    model.restoreAuto()
+                }
+                .keyboardShortcut("a")
+                .help(model.autoRestoreActionHelp)
+                Button("Quit") {
+                    Task { @MainActor in
+                        await model.stopAndRestore()
+                        NSApplication.shared.terminate(nil)
+                    }
+                }
+                .keyboardShortcut("q")
             }
+        }
+        .padding(14)
+        .frame(width: 320)
+        .onAppear {
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
+            .task {
+                model.start()
+            }
+    }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Label(model.helperHealthMenuSummary, systemImage: helperHealthSystemImage)
-                    .font(.caption.weight(model.helperHealthNeedsAttention ? .semibold : .regular))
-                    .foregroundStyle(helperHealthMenuColor)
+    private var menuReadinessSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(model.compactControlOwnershipSummary, systemImage: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
+                .font(.caption)
+                .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .secondary)
+                .lineLimit(2)
+            menuHelperHealthSection
+            menuAgentCoolingSection
+        }
+    }
+
+    private var menuHelperHealthSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(model.helperHealthMenuSummary, systemImage: helperHealthSystemImage)
+                .font(.caption.weight(model.helperHealthNeedsAttention ? .semibold : .regular))
+                .foregroundStyle(helperHealthMenuColor)
+
+            if model.helperHealthNeedsAttention {
                 Text(daemonInstaller.helperStatusSummary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -178,186 +188,32 @@ struct MenuBarView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
 
-            if !model.savedProfiles.isEmpty {
-                Picker("Curve profile", selection: $selectedMenuCurveProfileID) {
-                    Text("Choose profile").tag(Optional<UUID>.none)
-                    ForEach(model.savedProfiles) { profile in
-                        Text(profile.name).tag(Optional(profile.id))
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .onChange(of: selectedMenuCurveProfileID) { _, newID in
-                    _ = model.selectCurveProfile(id: newID)
-                }
-            }
-
-            Picker("Default mode", selection: $model.startupMode) {
-                ForEach(ModeSelection.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.menu)
-            .controlSize(.small)
-            .help("Mode Vifty selects when the app starts")
-
-            Toggle("Start Vifty at startup", isOn: launchAtLoginBinding)
-                .controlSize(.small)
-                .help("Open Vifty automatically at macOS login")
-
-            if let launchAtLoginStatusMessage = model.launchAtLoginStatusMessage {
-                HStack(alignment: .top, spacing: 6) {
-                    Label(
-                        launchAtLoginStatusMessage,
-                        systemImage: model.launchAtLoginStatus == .requiresApproval ? "exclamationmark.triangle" : "info.circle"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(model.launchAtLoginStatus == .requiresApproval ? .orange : .secondary)
-                    .lineLimit(2)
-                    if model.launchAtLoginStatus == .requiresApproval {
-                        Button("Open Login Items") {
-                            model.openLaunchAtLoginSettings()
-                        }
-                        .controlSize(.small)
-                    }
-                }
-            }
-
-            Picker("Menu bar", selection: $model.menuBarDisplayMode) {
-                ForEach(MenuBarDisplayMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            .pickerStyle(.menu)
-            .controlSize(.small)
-
-            if model.menuBarDisplayMode == .custom {
-                Menu("Custom fields") {
-                    ForEach(MenuBarField.allCases) { field in
-                        Toggle(field.label, isOn: menuBarCustomFieldBinding(field))
-                    }
-                }
-                .controlSize(.small)
-            }
-
-            if model.menuBarDisplaysCodexUsage {
-                Picker("Codex display", selection: $model.codexUsageDisplayStyle) {
-                    ForEach(CodexUsageDisplayStyle.allCases) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-
-                Picker("Codex metric", selection: $model.codexUsageMetricMode) {
-                    ForEach(CodexUsageMetricMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-
-                Picker("Reset", selection: $model.codexUsageResetMode) {
-                    ForEach(CodexUsageResetMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-
-                Picker("Refresh", selection: $model.codexUsageRefreshCadence) {
-                    ForEach(CodexUsageRefreshCadence.allCases) { cadence in
-                        Text(cadence.label).tag(cadence)
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-            }
-
-            Menu {
-                ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
-                    Section(mode.menuTitle) {
-                        ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
-                            Button(template.title) {
-                                copyAgentWorkflowCommand(template, mode: mode)
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Label("Copy Safe Command", systemImage: "terminal")
-            }
-            .controlSize(.small)
-            .help(AgentWorkflowSupport.copyCommandHelp)
-
-            Button {
-                copyAgentWorkflowRule()
-            } label: {
-                Label("Copy Agent Rule", systemImage: "terminal")
-            }
-            .controlSize(.small)
-            .help(AgentWorkflowSupport.copyHelp)
-
-            if agentRuleCopied {
-                Text(AgentWorkflowSupport.copiedMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            if agentCommandCopied {
-                Text(AgentWorkflowSupport.copiedCommandMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            DisclosureGroup {
-                Toggle("Helper failure", isOn: $model.notificationSettings.helperFailure)
-                Toggle("High thermal pressure", isOn: $model.notificationSettings.elevatedThermalPressure)
-                Toggle("Auto restore failure", isOn: $model.notificationSettings.autoRestoreFailure)
-                Toggle("Plugged-in battery drain", isOn: $model.notificationSettings.pluggedInBatteryDrain)
-                Toggle("Agent cooling attention", isOn: $model.notificationSettings.agentCoolingAttention)
-            } label: {
-                Label("Notifications", systemImage: "bell")
+    @ViewBuilder
+    private var menuAgentCoolingSection: some View {
+        if let agentCoolingSummary = model.agentCoolingSummary {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(model.agentCoolingPanelTitle, systemImage: "cpu")
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
+                Text(agentCoolingSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
+                    Label(agentCoolingRecoverySuggestion, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                }
+                if model.agentCoolingNeedsAttention, model.agentCoolingRestoreActionAvailable {
+                    Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
+                        .controlSize(.small)
+                        .help(model.agentCoolingRestoreActionHelp)
+                }
             }
-            .font(.caption)
-
-            Divider()
-
-            HStack {
-                Button("Open Vifty") {
-                    if let openMainWindow {
-                        openMainWindow()
-                    } else {
-                        openWindow(id: "main")
-                    }
-                }
-                Button(model.autoRestoreActionTitle) {
-                    model.restoreAuto()
-                }
-                .keyboardShortcut("a")
-                .help(model.autoRestoreActionHelp)
-                Button("Quit") {
-                    Task { @MainActor in
-                        await model.stopAndRestore()
-                        NSApplication.shared.terminate(nil)
-                    }
-                }
-                .keyboardShortcut("q")
-            }
-        }
-        .padding(14)
-        .frame(width: 320)
-        .onAppear {
-            daemonInstaller.refresh()
-            model.refreshLaunchAtLoginStatus()
-        }
-        .onDisappear {
-            helperRefreshTask?.cancel()
-            helperRefreshTask = nil
-        }
-        .task {
-            model.start()
         }
     }
 
@@ -376,35 +232,6 @@ struct MenuBarView: View {
     private func copyHelperDiagnosticsCommand() {
         HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
-    }
-
-    private func copyAgentWorkflowRule() {
-        AgentWorkflowSupport.copyAgentRule()
-        agentRuleCopied = true
-        agentCommandCopied = false
-    }
-
-    private func copyAgentWorkflowCommand(
-        _ template: AgentWorkflowSupport.WorkloadCommandTemplate,
-        mode: AgentWorkflowSupport.WorkloadCommandMode
-    ) {
-        AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
-        agentRuleCopied = false
-        agentCommandCopied = true
-    }
-
-    private var launchAtLoginBinding: Binding<Bool> {
-        Binding(
-            get: { model.launchAtLoginEnabled },
-            set: { model.setLaunchAtLoginEnabled($0) }
-        )
-    }
-
-    private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
-        Binding(
-            get: { model.isMenuBarCustomFieldEnabled(field) },
-            set: { model.setMenuBarCustomField(field, enabled: $0) }
-        )
     }
 
     private var helperHealthSystemImage: String {

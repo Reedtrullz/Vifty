@@ -833,6 +833,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.controlOwnershipSummary, "macOS Auto owns fan control")
+        XCTAssertEqual(model.compactControlOwnershipSummary, "Owner: Mac")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
     }
 
@@ -851,6 +852,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.controlOwnershipSummary, "Auto selected · fan writes blocked until helper responds")
+        XCTAssertEqual(model.compactControlOwnershipSummary, "Owner: Mac?")
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
@@ -890,6 +892,7 @@ final class AppModelTests: XCTestCase {
         model.agentControlStatusError = ViftyError.helperRejected("Daemon request timed out.").localizedDescription
 
         XCTAssertEqual(model.controlOwnershipSummary, "Agent control status unavailable; fan ownership uncertain")
+        XCTAssertEqual(model.compactControlOwnershipSummary, "Owner: uncertain")
         XCTAssertTrue(model.controlOwnershipNeedsAttention)
     }
 
@@ -912,10 +915,12 @@ final class AppModelTests: XCTestCase {
 
         model.controlState = ControlState(mode: .fixedRPM(3200), manualControlActive: true)
         XCTAssertEqual(model.controlOwnershipSummary, "Vifty Fixed owns fan targets · 3200 RPM · until changed; reasserts if macOS drifts")
+        XCTAssertEqual(model.compactControlOwnershipSummary, "Owner: Vifty Fixed")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
 
         model.controlState = ControlState(mode: .temperatureCurve(FanCurve.defaultCurve(sensorID: "Tp09")), manualControlActive: true)
         XCTAssertEqual(model.controlOwnershipSummary, "Vifty Curve owns fan targets · CPU Proximity · until changed; reasserts if macOS drifts")
+        XCTAssertEqual(model.compactControlOwnershipSummary, "Owner: Vifty Curve")
         XCTAssertFalse(model.controlOwnershipNeedsAttention)
 
         model.manualSessionExpiresAt = Date(timeIntervalSince1970: 1600)
@@ -1451,13 +1456,13 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageSnapshot(model)
 
-        XCTAssertEqual(model.menuBarLabelText, "Codex 58% left · 1h")
-        XCTAssertEqual(model.menuBarStatusItemText, "Codex 58% left · 1h")
+        XCTAssertEqual(model.menuBarLabelText, "Ai 58% left · 1h")
+        XCTAssertEqual(model.menuBarStatusItemText, "Ai 58% left · 1h")
         XCTAssertEqual(model.codexUsageSummary, "Codex: 58% left, 42% used · resets in 1:00:00")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
-    func testMenuBarCustomModeCombinesSelectedTemperatureAndCodexUsage() async {
+    func testMenuBarCustomModeCombinesSelectedTemperatureFanStrengthAndCodexUsage() async {
         let usageSnapshot = CodexUsageSnapshot(
             usedPercent: 22.6,
             resetDate: Date(timeIntervalSince1970: 1_800_016_980),
@@ -1492,10 +1497,10 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageSnapshot(model)
 
-        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .codexUsage])
+        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
         XCTAssertTrue(model.menuBarDisplaysCodexUsage)
-        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex 77% left · 4h 43m")
-        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex 77% left · 4h 43m")
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 3% fan | Ai 77% left · 4h 43m")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | 3% fan | Ai 77% left · 4h 43m")
         XCTAssertFalse(model.menuBarLabelUsesFanIcon)
     }
 
@@ -1529,7 +1534,7 @@ final class AppModelTests: XCTestCase {
         await waitForCodexUsageSnapshot(model)
 
         let resetTime = DateFormatter.localizedString(from: resetDate, dateStyle: .none, timeStyle: .short)
-        XCTAssertEqual(model.menuBarLabelText, "Codex [##---] 42% used · \(resetTime)")
+        XCTAssertEqual(model.menuBarLabelText, "Ai [##---] 42% used · \(resetTime)")
         XCTAssertEqual(model.codexUsageSummary, "Codex: 42% used, 58% left · resets at \(resetTime)")
 
         let relaunched = AppModel(
@@ -1578,12 +1583,12 @@ final class AppModelTests: XCTestCase {
         model.setMenuBarCustomField(.codexUsage, enabled: true)
         await model.pollOnce()
         await waitForCodexUsageReadCount(1, recorder: recorder)
-        XCTAssertEqual(model.menuBarLabelText, "69 C | 1528 RPM | Codex 75% left")
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 1528 RPM | Ai 75% left")
 
         model.menuBarDisplayMode = .codexUsage
         await model.pollOnce()
         XCTAssertEqual(recorder.readCount, 1)
-        XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
+        XCTAssertEqual(model.menuBarLabelText, "Ai 75% left")
 
         recorder.advance(by: 120)
         await model.pollOnce()
@@ -1593,6 +1598,75 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         await waitForCodexUsageReadCount(2, recorder: recorder)
         XCTAssertEqual(recorder.readCount, 2)
+    }
+
+    func testCodexUsageClearsWhenMenuBarNoLongerDisplaysCodex() async {
+        let recorder = CodexUsageReadRecorder(now: Date(timeIntervalSince1970: 1_800_000_000))
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .codexUsage
+
+        await model.pollOnce()
+        await waitForCodexUsageSnapshot(model)
+        XCTAssertEqual(model.menuBarLabelText, "Ai 75% left")
+
+        model.menuBarDisplayMode = .temperature
+
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertFalse(model.menuBarDisplaysCodexUsage)
+        XCTAssertEqual(model.menuBarLabelText, "69 C")
+    }
+
+    func testInFlightCodexUsageRefreshIsIgnoredAfterDisplayIsDisabled() async {
+        let recorder = CodexUsageReadRecorder(
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            delay: 0.2
+        )
+        let hardwareSnapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 1528, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 68.6, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: hardwareSnapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            codexUsageReader: recorder.read,
+            now: recorder.currentTime,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.menuBarDisplayMode = .codexUsage
+
+        await model.pollOnce()
+        model.menuBarDisplayMode = .temperature
+        await waitForCodexUsageReadCount(1, recorder: recorder)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertNil(model.codexUsageSnapshot)
+        XCTAssertEqual(model.menuBarLabelText, "69 C")
     }
 
     func testMenuBarCustomCodexPlaceholderCanShowAfterHardwarePrime() async {
@@ -1625,14 +1699,14 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
 
         XCTAssertNil(model.codexUsageSnapshot)
-        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex --")
-        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex --")
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 3% fan | Ai --")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | 3% fan | Ai --")
         XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
 
         await waitForCodexUsageSnapshot(model)
 
-        XCTAssertEqual(model.menuBarLabelText, "69 C | Codex 75% left")
-        XCTAssertEqual(model.menuBarStatusItemText, "69 C | Codex 75% left")
+        XCTAssertEqual(model.menuBarLabelText, "69 C | 3% fan | Ai 75% left")
+        XCTAssertEqual(model.menuBarStatusItemText, "69 C | 3% fan | Ai 75% left")
     }
 
     func testCodexUsageRefreshCadenceCanBeReducedForLiveTopBarTracking() async {
@@ -1693,14 +1767,14 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertLessThan(elapsed, 0.25)
         XCTAssertNil(model.codexUsageSnapshot)
-        XCTAssertEqual(model.menuBarLabelText, "Codex --")
+        XCTAssertEqual(model.menuBarLabelText, "Ai --")
 
         await waitForCodexUsageSnapshot(model)
 
         XCTAssertEqual(recorder.readCount, 1)
-        XCTAssertEqual(model.menuBarLabelText, "Codex 75% left")
-        XCTAssertEqual(model.menuBarStatusItemText, "Codex 75% left")
-        XCTAssertEqual(model.menuBarStatusItemRevision, 1)
+        XCTAssertEqual(model.menuBarLabelText, "Ai 75% left")
+        XCTAssertEqual(model.menuBarStatusItemText, "Ai 75% left")
+        XCTAssertEqual(model.menuBarStatusItemPresentation.content, .text("Ai 75% left"))
     }
 
     func testCodexUsageModeShowsStatusItemPlaceholderAfterPrimeWhileRefreshIsPending() async {
@@ -1732,8 +1806,8 @@ final class AppModelTests: XCTestCase {
         await model.primeMenuBarStatusItemTelemetry(maxAttempts: 1)
 
         XCTAssertNil(model.codexUsageSnapshot)
-        XCTAssertEqual(model.menuBarLabelText, "Codex --")
-        XCTAssertEqual(model.menuBarStatusItemText, "Codex --")
+        XCTAssertEqual(model.menuBarLabelText, "Ai --")
+        XCTAssertEqual(model.menuBarStatusItemText, "Ai --")
         XCTAssertFalse(model.menuBarLabelNeedsTelemetryPrime)
     }
 
@@ -1772,7 +1846,7 @@ final class AppModelTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(20))
 
         XCTAssertNil(model.codexUsageSnapshot)
-        XCTAssertEqual(model.menuBarLabelText, "Codex --")
+        XCTAssertEqual(model.menuBarLabelText, "Ai --")
     }
 
     func testMenuBarDisplayModesUseSelectedModePlaceholdersWhenTelemetryIsMissing() {
@@ -1783,8 +1857,8 @@ final class AppModelTests: XCTestCase {
             (.fanRPM, "-- RPM"),
             (.averageFanRPM, "-- RPM avg"),
             (.adapterWattage, "-- W"),
-            (.codexUsage, "Codex --"),
-            (.custom, "-- C | Codex --"),
+            (.codexUsage, "Ai --"),
+            (.custom, "-- C | --% fan | Ai --"),
             (.temperatureAndRPM, "-- C | -- RPM"),
             (.ownerTemperatureAndRPM, "Mac | -- C | -- RPM")
         ]
@@ -1821,12 +1895,12 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(
             ViftyStatusItemPresentation.resolvedText(
-                statusItemText: "Codex --",
+                statusItemText: "Ai --",
                 fallbackStatusItemText: nil,
                 labelNeedsTelemetryPrime: false,
                 allowsPlaceholderText: true
             ),
-            "Codex --"
+            "Ai --"
         )
     }
 
@@ -2011,17 +2085,19 @@ final class AppModelTests: XCTestCase {
         )
         model.menuBarDisplayMode = .ownerTemperatureAndRPM
 
-        XCTAssertEqual(model.menuBarStatusItemRevision, 0)
+        XCTAssertEqual(model.menuBarStatusItemRevision, 1)
         XCTAssertEqual(model.menuBarLabelText, "Mac | -- C | -- RPM")
+        XCTAssertEqual(model.menuBarStatusItemPresentation.content, .text("Mac | -- C | -- RPM"))
 
         await model.pollOnce()
 
-        XCTAssertEqual(model.menuBarStatusItemRevision, 1)
+        XCTAssertEqual(model.menuBarStatusItemRevision, 2)
         XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
+        XCTAssertEqual(model.menuBarStatusItemPresentation.content, .text("Mac | 67 C | 3352 RPM"))
 
         await model.pollOnce()
 
-        XCTAssertEqual(model.menuBarStatusItemRevision, 1)
+        XCTAssertEqual(model.menuBarStatusItemRevision, 2)
     }
 
     func testOverlappingStartupMenuBarPrimesShareOneHardwarePoll() async {
@@ -2155,23 +2231,23 @@ final class AppModelTests: XCTestCase {
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
         let model = AppModel(preferencesStore: store)
 
-        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .codexUsage])
+        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
 
         model.menuBarDisplayMode = .custom
-        model.menuBarCustomFields = [.codexUsage, .owner, .temperature, .codexUsage]
+        model.menuBarCustomFields = [.codexUsage, .fanStrength, .owner, .temperature, .codexUsage]
 
         let loaded = store.load()
         XCTAssertEqual(loaded.menuBarDisplayMode, .custom)
-        XCTAssertEqual(loaded.menuBarCustomFields, [.owner, .temperature, .codexUsage])
+        XCTAssertEqual(loaded.menuBarCustomFields, [.owner, .temperature, .fanStrength, .codexUsage])
         XCTAssertEqual(try posixPermissions(at: preferencesURL.deletingLastPathComponent()), 0o700)
         XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
 
         let relaunched = AppModel(preferencesStore: store)
         XCTAssertEqual(relaunched.menuBarDisplayMode, .custom)
-        XCTAssertEqual(relaunched.menuBarCustomFields, [.owner, .temperature, .codexUsage])
+        XCTAssertEqual(relaunched.menuBarCustomFields, [.owner, .temperature, .fanStrength, .codexUsage])
 
         relaunched.setMenuBarCustomField(.owner, enabled: false)
-        XCTAssertEqual(store.load().menuBarCustomFields, [.temperature, .codexUsage])
+        XCTAssertEqual(store.load().menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
     }
 
     func testStartupModePreferencePersistsPrivately() throws {
@@ -2342,7 +2418,7 @@ final class AppModelTests: XCTestCase {
         let loaded = store.load()
 
         XCTAssertEqual(loaded.menuBarDisplayMode, .temperature)
-        XCTAssertEqual(loaded.menuBarCustomFields, [.temperature, .codexUsage])
+        XCTAssertEqual(loaded.menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
         XCTAssertEqual(loaded.startupMode, .auto)
         XCTAssertTrue(loaded.notificationSettings.helperFailure)
         XCTAssertTrue(loaded.notificationSettings.autoRestoreFailure)
@@ -2501,7 +2577,12 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure])
 
-        clock.now = Date(timeIntervalSince1970: 1662)
+        clock.now = Date(timeIntervalSince1970: 2860)
+        await model.pollOnce()
+
+        XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure])
+
+        clock.now = Date(timeIntervalSince1970: 2862)
         await model.pollOnce()
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.elevatedThermalPressure, .elevatedThermalPressure])
@@ -2669,6 +2750,59 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.helperHealthNeedsAttention)
         XCTAssertNil(model.helperRecoverySuggestion)
         XCTAssertNil(model.manualFanControlBlockedReason)
+    }
+
+    func testPollOnceUsesSlowerCadencesForPowerDaemonPingAndAgentStatus() async {
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let powerReads = AppModelReadCounter()
+        let thermalReads = AppModelReadCounter()
+        let daemonPings = AppModelReadCounter()
+        let agentReads = AppModelReadCounter()
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: {
+                powerReads.increment()
+                return PowerSnapshot(percent: 50)
+            },
+            thermalReader: {
+                thermalReads.increment()
+                return .nominal
+            },
+            now: { clock.now },
+            daemonPing: {
+                daemonPings.increment()
+                return true
+            },
+            agentStatusReader: {
+                agentReads.increment()
+                return nil
+            }
+        )
+
+        await model.pollOnce()
+        await model.pollOnce()
+
+        XCTAssertEqual(powerReads.value, 1)
+        XCTAssertEqual(thermalReads.value, 1)
+        XCTAssertEqual(daemonPings.value, 1)
+        XCTAssertEqual(agentReads.value, 1)
+
+        clock.now = Date(timeIntervalSince1970: 1_016)
+        await model.pollOnce()
+
+        XCTAssertEqual(powerReads.value, 2)
+        XCTAssertEqual(thermalReads.value, 2)
+        XCTAssertEqual(daemonPings.value, 1)
+        XCTAssertEqual(agentReads.value, 2)
+
+        clock.now = Date(timeIntervalSince1970: 1_031)
+        await model.pollOnce()
+
+        XCTAssertEqual(powerReads.value, 3)
+        XCTAssertEqual(thermalReads.value, 3)
+        XCTAssertEqual(daemonPings.value, 2)
+        XCTAssertEqual(agentReads.value, 3)
     }
 
     func testPollOnceRefreshesHelperStatusAfterSnapshotFailure() async {
@@ -3182,6 +3316,50 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.fixedFanTargetPercent(for: snapshot.fans[1]), 61)
         XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[0]), 3200)
         XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[1]), 3472)
+    }
+
+    func testFixedPerFanDraftSliderChangesApplyOnceWhenCommitted() async {
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+                Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil },
+            preferencesStore: AppPreferencesStore(url: temporaryPreferencesPath())
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3200
+        model.usePerFanFixedRPM = true
+        model.ensureFixedFanTargets(for: snapshot.fans)
+
+        model.setFixedFanRPM(3600, for: snapshot.fans[0], persist: false)
+        model.setFixedFanRPM(3900, for: snapshot.fans[0], persist: false)
+        model.setFixedFanRPM(4700, for: snapshot.fans[1], persist: false)
+
+        let appliedBeforeCommit = await hardware.appliedCommands
+        XCTAssertTrue(appliedBeforeCommit.isEmpty)
+
+        await model.commitFixedFanTargetsAndApplyNow()
+
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(appliedCommands, [
+            FanCommand(fanID: 0, mode: .fixedRPM(3900)),
+            FanCommand(fanID: 1, mode: .fixedRPM(4700))
+        ])
     }
 
     func testFixedPerFanModeAppliesDistinctTargetsThroughCoordinator() async {
@@ -4152,6 +4330,23 @@ private final class AppModelPingSequence: @unchecked Sendable {
         defer { lock.unlock() }
         guard !values.isEmpty else { return false }
         return values.removeFirst()
+    }
+}
+
+private final class AppModelReadCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
     }
 }
 

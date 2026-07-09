@@ -163,7 +163,7 @@ struct CodexUsageDisplayPreferences: Codable, Equatable, Sendable {
 
 struct CodexUsageReader {
     static let maxRecentFiles = 150
-    static let tailBytes: UInt64 = 4 * 1024 * 1024
+    static let tailBytes: UInt64 = 512 * 1024
 
     private let codexHome: URL
     private let fileManager: FileManager
@@ -198,12 +198,7 @@ struct CodexUsageReader {
     }
 
     private func latestUsageEvent(in url: URL) -> (timestamp: String, snapshot: CodexUsageSnapshot)? {
-        var lines = candidateLines(fromTailOf: url)
-        if lines.isEmpty {
-            lines = candidateLines(fromFullFile: url)
-        }
-
-        for line in lines {
+        for line in candidateLines(fromTailOf: url) {
             guard let event = parseEvent(line, sourceURL: url) else { continue }
             return event
         }
@@ -250,17 +245,16 @@ struct CodexUsageReader {
         return candidateLines(in: data)
     }
 
-    private func candidateLines(fromFullFile url: URL) -> [String] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return candidateLines(in: data)
-    }
-
     private func candidateLines(in data: Data) -> [String] {
-        String(decoding: data, as: UTF8.self)
+        var matches: [String] = []
+        for line in String(decoding: data, as: UTF8.self)
             .split(separator: "\n", omittingEmptySubsequences: true)
             .reversed()
-            .map(String.init)
-            .filter { $0.contains("token_count") && $0.contains("rate_limits") }
+        {
+            guard line.contains("token_count"), line.contains("rate_limits") else { continue }
+            matches.append(String(line))
+        }
+        return matches
     }
 
     private func parseEvent(_ line: String, sourceURL: URL) -> (timestamp: String, snapshot: CodexUsageSnapshot)? {
@@ -729,18 +723,20 @@ struct CodexUsageAppServerClient {
     }
 
     private final class LockedOutput: @unchecked Sendable {
+        private static let maxBufferedBytes = 512 * 1024
+
         private let lock = NSLock()
         private var data = Data()
 
         func append(_ chunk: Data) {
             lock.lock()
-            data.append(chunk)
+            appendLocked(chunk)
             lock.unlock()
         }
 
         func appendAndContainsResult(_ chunk: Data, requestID: String) -> Bool {
             lock.lock()
-            data.append(chunk)
+            appendLocked(chunk)
             let hasResult = CodexUsageAppServerClient.resultPayload(from: data, requestID: requestID) != nil
             lock.unlock()
             return hasResult
@@ -752,21 +748,29 @@ struct CodexUsageAppServerClient {
             lock.unlock()
             return snapshot
         }
+
+        private func appendLocked(_ chunk: Data) {
+            data.append(chunk)
+            guard data.count > Self.maxBufferedBytes else { return }
+            data = Data(data.suffix(Self.maxBufferedBytes))
+        }
     }
 }
 
 enum CodexUsageFormatter {
+    private static let menuBarLabel = "Ai"
+
     static func menuBarText(
         for snapshot: CodexUsageSnapshot?,
         options: CodexUsageDisplayPreferences = .defaults,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> String {
-        guard let snapshot else { return "Codex --" }
+        guard let snapshot else { return "\(menuBarLabel) --" }
         var text = switch options.displayStyle {
         case .text:
-            "Codex \(metricText(for: snapshot, mode: options.metricMode))"
+            "\(menuBarLabel) \(metricText(for: snapshot, mode: options.metricMode))"
         case .battery:
-            "Codex \(batteryMetricText(for: snapshot, mode: options.metricMode))"
+            "\(menuBarLabel) \(batteryMetricText(for: snapshot, mode: options.metricMode))"
         }
         if let resetDate = snapshot.resetDate {
             text += " · \(menuResetText(until: resetDate, mode: options.resetMode, now: now()))"

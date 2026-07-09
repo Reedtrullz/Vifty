@@ -4,11 +4,13 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-06-12, the latest published public release is `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials. The immutable `v1.1.1` source tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972` and supersedes `v1.1.0` for users who hit the helper-unreachable update issue.
+As of 2026-06-12, the latest published public release is `v1.1.1`, a source-first hotfix release because the project did not have active Apple Developer Program credentials at publication time. The immutable `v1.1.1` source tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972` and supersedes `v1.1.0` for users who hit the helper-unreachable update issue.
+
+Developer ID account setup status as of 2026-07-07: the intended personal Apple Developer team is visible but still pending. Pending Apple Developer Program access is not release evidence. Do not use another organization's team or certificate for Vifty unless that organization is intentionally meant to own Vifty's public signing identity, GitHub Release trust, Homebrew trust, support burden, and revocation risk.
 
 Release lanes:
 
-1. **Trusted notarized Developer ID release:** unavailable until the project has Apple Developer Program credentials. Do not claim that `v1.1.1` or any source-first unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
+1. **Trusted notarized Developer ID release:** unavailable until the intended Developer ID account is active, the release secrets are configured for that team, and the signed/notarized artifact verifier passes. Do not claim that `v1.1.1` or any source-first unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 2. **Source release:** canonical and recommended path while Apple credentials are unavailable. `v1.1.1` is the recommended source tag.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
@@ -88,6 +90,14 @@ If the GitHub Release is not created yet, source-first readiness should block on
 For the `v1.1.0` helper issue, use these checks only to reproduce and audit the release boundary. Do not use the `v1.1.0` unsigned-dev target to refresh public assets from `main`; prepare a new source-first hotfix release and make its release notes repeat the unsigned/not-notarized warning.
 
 ## Future Developer ID Release Checks
+
+Before Apple activates the intended personal team, the only allowed Developer ID prep work is non-secret and non-promotional:
+
+1. Keep source-first and unsigned-dev wording intact.
+2. Keep `Casks/vifty.rb` disabled and pointed only at the future canonical `Vifty-v<version>.zip` shape.
+3. Keep Sparkle/update metadata out of `Resources/Info.plist`.
+4. Keep `.github/workflows/release.yml` strict about Developer ID signing, `VIFTY_XPC_ALLOWED_TEAM_ID`, notarization, stapling, Gatekeeper, artifact verification, and release checklist publication.
+5. Prepare the secret names and local commands, but do not store certificate material in the repo or Obsidian.
 
 All of these must be true before calling a future public binary release trusted:
 

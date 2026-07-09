@@ -164,6 +164,7 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
 enum MenuBarField: String, Codable, CaseIterable, Identifiable {
     case owner
     case temperature
+    case fanStrength
     case fanRPM
     case averageFanRPM
     case adapterWattage
@@ -171,7 +172,7 @@ enum MenuBarField: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    static let defaultCustomFields: [MenuBarField] = [.temperature, .codexUsage]
+    static let defaultCustomFields: [MenuBarField] = [.temperature, .fanStrength, .codexUsage]
 
     var label: String {
         switch self {
@@ -179,6 +180,8 @@ enum MenuBarField: String, Codable, CaseIterable, Identifiable {
             return "Owner"
         case .temperature:
             return "Temperature"
+        case .fanStrength:
+            return "Fan %"
         case .fanRPM:
             return "Fan RPM"
         case .averageFanRPM:
@@ -202,6 +205,25 @@ enum MenuBarField: String, Codable, CaseIterable, Identifiable {
         let unique = orderedUnique(fields)
         return unique.isEmpty ? defaultCustomFields : unique
     }
+}
+
+struct MenuBarStatusItemPresentation: Equatable {
+    enum Content: Equatable {
+        case fanIcon(accessibilityDescription: String)
+        case text(String)
+    }
+
+    var content: Content
+    var tooltip: String
+    var accessibilityLabel: String
+    var needsTelemetryPrime: Bool
+
+    static let placeholder = MenuBarStatusItemPresentation(
+        content: .fanIcon(accessibilityDescription: "Vifty"),
+        tooltip: "Vifty",
+        accessibilityLabel: "Vifty",
+        needsTelemetryPrime: true
+    )
 }
 
 @MainActor
@@ -246,7 +268,11 @@ final class AppModel: ObservableObject {
             if !wasDisplayingCodexUsage && menuBarDisplaysCodexUsage {
                 lastCodexUsageRefreshAt = nil
             }
+            if wasDisplayingCodexUsage && !menuBarDisplaysCodexUsage {
+                cancelCodexUsageRefresh(clearSnapshot: true)
+            }
             persistAppPreferences()
+            refreshMenuBarStatusItemIfNeeded()
         }
     }
     @Published var menuBarCustomFields: [MenuBarField] = MenuBarField.defaultCustomFields {
@@ -263,8 +289,11 @@ final class AppModel: ObservableObject {
             if !wasDisplayingCodexUsage && menuBarDisplaysCodexUsage {
                 lastCodexUsageRefreshAt = nil
             }
+            if wasDisplayingCodexUsage && !menuBarDisplaysCodexUsage {
+                cancelCodexUsageRefresh(clearSnapshot: true)
+            }
             persistAppPreferences()
-            menuBarStatusItemRevision &+= 1
+            refreshMenuBarStatusItemIfNeeded()
         }
     }
     @Published var startupMode: ModeSelection {
@@ -301,7 +330,11 @@ final class AppModel: ObservableObject {
     }
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
     @Published private(set) var launchAtLoginError: String?
-    @Published var telemetryHistory = TelemetryHistory()
+    var telemetryHistory = TelemetryHistory() {
+        didSet {
+            refreshTelemetrySummaries()
+        }
+    }
     @Published var manualRunLimit: ManualRunLimit = .indefinitely {
         didSet {
             updateManualDeadlineForActiveManualMode()
@@ -311,7 +344,15 @@ final class AppModel: ObservableObject {
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
     @Published var hasCompletedHardwarePoll = false
+    @Published private(set) var menuBarStatusItemPresentation = MenuBarStatusItemPresentation.placeholder
     @Published private(set) var menuBarStatusItemRevision = 0
+    @Published private(set) var telemetryOverviewSummary = TelemetryHistorySummary(history: TelemetryHistory())
+    @Published private(set) var compactTelemetryOverviewSummary = TelemetryHistorySummary(
+        history: TelemetryHistory(),
+        sampleLimit: 90,
+        thermalPressureLimit: 24
+    )
+    @Published private(set) var recentTelemetryTrendSummary: String?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
     private var isSettingSelectedSensorProgrammatically = false
@@ -353,9 +394,16 @@ final class AppModel: ObservableObject {
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var elevatedThermalPressureStartedAt: Date?
     private var lastCodexUsageRefreshAt: Date?
-    private var didPublishFirstMenuBarTelemetryRefresh = false
-    private let notificationMinimumInterval: TimeInterval = 10 * 60
+    private var lastPowerTelemetryRefreshAt: Date?
+    private var lastDaemonPingAt: Date?
+    private var lastAgentStatusRefreshAt: Date?
+    private let notificationMinimumInterval: TimeInterval = 30 * 60
     private let sustainedThermalPressureInterval: TimeInterval = 60
+    private let powerTelemetryRefreshInterval: TimeInterval = 15
+    private let daemonPingRefreshInterval: TimeInterval = 30
+    private let agentStatusRefreshInterval: TimeInterval = 15
+    private let idleBackgroundPollInterval: Duration = .seconds(10)
+    private let activeBackgroundPollInterval: Duration = .seconds(5)
 
     init(
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
@@ -406,6 +454,7 @@ final class AppModel: ObservableObject {
         }
         launchAtLoginStatus = launchAtLoginManager.status
         savedProfiles = profileStore.load()
+        menuBarStatusItemPresentation = currentMenuBarStatusItemPresentation
     }
 
     func start() {
@@ -419,7 +468,7 @@ final class AppModel: ObservableObject {
 
             while !Task.isCancelled {
                 await pollOnce()
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: backgroundPollInterval())
             }
         }
     }
@@ -523,26 +572,40 @@ final class AppModel: ObservableObject {
     }
 
     private func performPollOnce() async {
-        let previousMenuBarLabel = menuBarLabelText
+        let pollStartedAt = now()
+        let shouldRefreshPowerTelemetry = shouldRefresh(
+            lastRefreshAt: lastPowerTelemetryRefreshAt,
+            interval: powerTelemetryRefreshInterval,
+            at: pollStartedAt
+        )
+        let currentPower: PowerSnapshot
+        let currentThermalPressure: ThermalPressure
+        if shouldRefreshPowerTelemetry {
+            currentPower = powerReader()
+            currentThermalPressure = thermalReader()
+            lastPowerTelemetryRefreshAt = pollStartedAt
+            assignIfChanged(\.powerSnapshot, currentPower)
+            assignIfChanged(\.thermalPressure, currentThermalPressure)
+        } else {
+            currentPower = powerSnapshot ?? PowerSnapshot()
+            currentThermalPressure = thermalPressure
+        }
+
         defer {
             hasCompletedHardwarePoll = true
-            refreshMenuBarStatusItemIfNeeded(previousLabel: previousMenuBarLabel)
+            refreshMenuBarStatusItemIfNeeded()
         }
-        let currentPower = powerReader()
-        let currentThermalPressure = thermalReader()
         refreshCodexUsageIfNeeded()
-        powerSnapshot = currentPower
-        thermalPressure = currentThermalPressure
         _ = await restoreAutoIfManualSessionExpired()
         let stateBeforeTick = await coordinator.state
         do {
             let nextSnapshot = try await coordinator.tick()
             recordHardwareSnapshot(nextSnapshot, power: currentPower, thermalPressure: currentThermalPressure)
-            lastError = nil
-            daemonResponding = await daemonPing()
-            daemonReachable = daemonResponding || !nextSnapshot.fans.isEmpty
-            await refreshAgentControlStatus()
-            fanAccessMessage = fanAccessMessage(for: nextSnapshot)
+            assignIfChanged(\.lastError, nil)
+            await refreshDaemonPingIfNeeded(at: pollStartedAt, force: false)
+            assignIfChanged(\.daemonReachable, daemonResponding || !nextSnapshot.fans.isEmpty)
+            await refreshAgentControlStatusIfNeeded(at: pollStartedAt)
+            assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: nextSnapshot))
             await syncState()
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         } catch {
@@ -553,19 +616,19 @@ final class AppModel: ObservableObject {
             if preservesManualIntent, let observedSnapshot = await coordinator.lastObservedSnapshot {
                 recordHardwareSnapshot(observedSnapshot, power: currentPower, thermalPressure: currentThermalPressure)
             }
-            lastError = error.localizedDescription
-            daemonResponding = await daemonPing()
-            daemonReachable = daemonResponding || (preservesManualIntent && snapshot?.fans.isEmpty == false)
-            await refreshAgentControlStatus()
+            assignIfChanged(\.lastError, error.localizedDescription)
+            await refreshDaemonPingIfNeeded(at: pollStartedAt, force: true)
+            assignIfChanged(\.daemonReachable, daemonResponding || (preservesManualIntent && snapshot?.fans.isEmpty == false))
+            await refreshAgentControlStatusIfNeeded(at: pollStartedAt, force: true)
             if preservesManualIntent, let snapshot {
-                fanAccessMessage = fanAccessMessage(for: snapshot)
+                assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: snapshot))
             }
             if preservesManualIntent {
                 if selectedMode != .auto {
                     let intendedMode: FanMode = stateBeforeTick.mode == .auto ? selectedFanMode() : stateBeforeTick.mode
                     await coordinator.setMode(intendedMode)
                 }
-                controlState = await coordinator.state
+                assignIfChanged(\.controlState, await coordinator.state)
             } else {
                 await coordinator.forceAuto()
                 await syncState()
@@ -575,7 +638,12 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshCodexUsageIfNeeded() {
-        guard menuBarDisplaysCodexUsage else { return }
+        guard menuBarDisplaysCodexUsage else {
+            if codexUsageRefreshTask != nil || codexUsageSnapshot != nil {
+                cancelCodexUsageRefresh(clearSnapshot: true)
+            }
+            return
+        }
         guard codexUsageRefreshTask == nil else { return }
 
         let currentTime = now()
@@ -598,19 +666,106 @@ final class AppModel: ObservableObject {
             guard self.codexUsageRefreshGeneration == generation else { return }
             self.codexUsageRefreshTask = nil
             guard !wasCancelled else { return }
+            guard self.menuBarDisplaysCodexUsage else {
+                self.cancelCodexUsageRefresh(clearSnapshot: true)
+                return
+            }
 
-            let previousLabel = self.menuBarLabelText
-            self.codexUsageSnapshot = snapshot
-            self.refreshMenuBarStatusItemIfNeeded(previousLabel: previousLabel)
+            self.assignIfChanged(\.codexUsageSnapshot, snapshot)
+            self.refreshMenuBarStatusItemIfNeeded()
         }
     }
 
-    private func refreshMenuBarStatusItemIfNeeded(previousLabel: String) {
-        let nextLabel = menuBarLabelText
-        guard previousLabel != nextLabel else { return }
-        guard !didPublishFirstMenuBarTelemetryRefresh || previousLabel.contains("--") || nextLabel.contains("--") else { return }
-        didPublishFirstMenuBarTelemetryRefresh = true
+    private func cancelCodexUsageRefresh(clearSnapshot: Bool) {
+        codexUsageRefreshGeneration &+= 1
+        codexUsageRefreshTask?.cancel()
+        codexUsageRefreshTask = nil
+        lastCodexUsageRefreshAt = nil
+        if clearSnapshot {
+            assignIfChanged(\.codexUsageSnapshot, nil)
+        }
+        refreshMenuBarStatusItemIfNeeded()
+    }
+
+    @discardableResult
+    private func refreshMenuBarStatusItemIfNeeded() -> Bool {
+        let nextPresentation = currentMenuBarStatusItemPresentation
+        guard nextPresentation != menuBarStatusItemPresentation else { return false }
+        menuBarStatusItemPresentation = nextPresentation
         menuBarStatusItemRevision &+= 1
+        return true
+    }
+
+    private var currentMenuBarStatusItemPresentation: MenuBarStatusItemPresentation {
+        let statusItemText = ViftyStatusItemPresentation.resolvedText(
+            statusItemText: menuBarStatusItemText,
+            fallbackStatusItemText: menuBarDisplayMode == .fanIcon ? nil : menuBarLabelText,
+            labelNeedsTelemetryPrime: menuBarLabelNeedsTelemetryPrime,
+            allowsPlaceholderText: menuBarAllowsPlaceholderStatusItemText
+        )
+        let content: MenuBarStatusItemPresentation.Content = if let statusItemText {
+            .text(statusItemText)
+        } else {
+            .fanIcon(accessibilityDescription: menuBarLabelText)
+        }
+        return MenuBarStatusItemPresentation(
+            content: content,
+            tooltip: menuTitle,
+            accessibilityLabel: menuBarLabelText,
+            needsTelemetryPrime: menuBarLabelNeedsTelemetryPrime
+        )
+    }
+
+    private func shouldRefresh(lastRefreshAt: Date?, interval: TimeInterval, at date: Date) -> Bool {
+        guard let lastRefreshAt else { return true }
+        return date.timeIntervalSince(lastRefreshAt) >= interval
+    }
+
+    private func backgroundPollInterval() -> Duration {
+        if selectedMode != .auto || controlState.mode != .auto {
+            return activeBackgroundPollInterval
+        }
+        if agentControlStatus?.activeLease?.isActive(at: now()) == true {
+            return activeBackgroundPollInterval
+        }
+        return idleBackgroundPollInterval
+    }
+
+    private func refreshDaemonPingIfNeeded(at date: Date, force: Bool) async {
+        guard force || !daemonResponding || shouldRefresh(
+            lastRefreshAt: lastDaemonPingAt,
+            interval: daemonPingRefreshInterval,
+            at: date
+        ) else {
+            return
+        }
+        let responding = await daemonPing()
+        lastDaemonPingAt = date
+        assignIfChanged(\.daemonResponding, responding)
+    }
+
+    private func refreshAgentControlStatusIfNeeded(at date: Date, force: Bool = false) async {
+        let activeLease = agentControlStatus?.activeLease
+        let activeAgentWork = activeLease?.isActive(at: date) == true || agentControlStatusError != nil
+        guard force || activeAgentWork || shouldRefresh(
+            lastRefreshAt: lastAgentStatusRefreshAt,
+            interval: agentStatusRefreshInterval,
+            at: date
+        ) else {
+            return
+        }
+        await refreshAgentControlStatus()
+        lastAgentStatusRefreshAt = date
+    }
+
+    @discardableResult
+    private func assignIfChanged<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<AppModel, Value>,
+        _ value: Value
+    ) -> Bool {
+        guard self[keyPath: keyPath] != value else { return false }
+        self[keyPath: keyPath] = value
+        return true
     }
 
     private func recordHardwareSnapshot(
@@ -620,7 +775,7 @@ final class AppModel: ObservableObject {
     ) {
         let selectedTelemetrySensor = telemetryTemperatureSensor(in: nextSnapshot)
         let temperatureWasUserSelected = userSelectedSensorID != nil && selectedTelemetrySensor?.id == userSelectedSensorID
-        snapshot = nextSnapshot
+        assignIfChanged(\.snapshot, nextSnapshot)
         telemetryHistory.append(TelemetrySample(
             capturedAt: now(),
             selectedTemperatureID: selectedTelemetrySensor?.id,
@@ -820,12 +975,23 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var recentTelemetryTrendSummary: String? {
-        let summary = TelemetryHistorySummary(
+    private func refreshTelemetrySummaries() {
+        let overview = TelemetryHistorySummary(
+            history: telemetryHistory,
+            sampleLimit: 180,
+            thermalPressureLimit: 36
+        )
+        let compact = TelemetryHistorySummary(
             history: telemetryHistory,
             sampleLimit: 90,
             thermalPressureLimit: 24
         )
+        assignIfChanged(\.telemetryOverviewSummary, overview)
+        assignIfChanged(\.compactTelemetryOverviewSummary, compact)
+        assignIfChanged(\.recentTelemetryTrendSummary, trendSummary(from: compact))
+    }
+
+    private func trendSummary(from summary: TelemetryHistorySummary) -> String? {
         guard summary.sampleCount >= 2 else { return nil }
 
         var parts: [String] = []
@@ -881,11 +1047,22 @@ final class AppModel: ObservableObject {
         rpmPercent(fixedFanTargetRPM(for: fan), for: fan)
     }
 
-    func setFixedFanRPM(_ rpm: Int, for fan: Fan) {
+    func setFixedFanRPM(_ rpm: Int, for fan: Fan, persist: Bool = true) {
         updateFixedFanTarget(for: fan) { target in
             target.rpm = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         }
+        if persist {
+            persistAppPreferences()
+        }
+    }
+
+    func commitFixedFanTargetsAndApply() {
+        Task { await commitFixedFanTargetsAndApplyNow() }
+    }
+
+    func commitFixedFanTargetsAndApplyNow() async {
         persistAppPreferences()
+        await applyCurrentModeSelection()
     }
 
     func ensureFanOverrides(for fans: [Fan]) {
@@ -1168,6 +1345,8 @@ final class AppModel: ObservableObject {
             return menuBarFanOwnerText
         case .temperature:
             return menuBarTemperatureText ?? "-- C"
+        case .fanStrength:
+            return menuBarFanStrengthText ?? "--% fan"
         case .fanRPM:
             return menuBarFanText ?? "-- RPM"
         case .averageFanRPM:
@@ -1210,6 +1389,14 @@ final class AppModel: ObservableObject {
         snapshot?.fans.first.map { "\($0.currentRPM) RPM" }
     }
 
+    private var menuBarFanStrengthText: String? {
+        guard let fans = snapshot?.fans, !fans.isEmpty else { return nil }
+        let averagePercentage = Double(fans.reduce(0) { total, fan in
+            total + fan.percentage
+        }) / Double(fans.count)
+        return "\(Int(averagePercentage.rounded()))% fan"
+    }
+
     private var menuBarAverageFanText: String? {
         guard let fans = snapshot?.fans, !fans.isEmpty else { return nil }
         let totalRPM = fans.reduce(0) { total, fan in
@@ -1247,7 +1434,7 @@ final class AppModel: ObservableObject {
     private func codexUsageDisplayPreferenceDidChange() {
         persistAppPreferences()
         if menuBarDisplaysCodexUsage {
-            menuBarStatusItemRevision &+= 1
+            refreshMenuBarStatusItemIfNeeded()
         }
     }
 
@@ -1434,6 +1621,36 @@ final class AppModel: ObservableObject {
                 return "Vifty Curve owns fan targets · \(sensor.name) · \(manualRunOwnershipSummary)"
             }
             return "Vifty Curve owns fan targets · \(manualRunOwnershipSummary)"
+        }
+    }
+
+    var compactControlOwnershipSummary: String {
+        if let lease = agentControlStatus?.activeLease {
+            if lease.isActive(at: now()) {
+                return "Owner: Agent until \(lease.expiresAt.formatted(date: .omitted, time: .shortened))"
+            }
+            return "Owner: Agent restore pending"
+        }
+
+        if let manualHelperWriteBlockedSummary {
+            return manualHelperWriteBlockedSummary
+        }
+
+        if controlState.mode == .auto, helperWritePathBlockedSummary != nil {
+            return "Owner: Mac?"
+        }
+
+        if agentControlStatusError != nil {
+            return "Owner: uncertain"
+        }
+
+        switch controlState.mode {
+        case .auto:
+            return "Owner: \(menuBarFanOwnerText)"
+        case .fixedRPM:
+            return "Owner: Vifty Fixed"
+        case .temperatureCurve:
+            return "Owner: Vifty Curve"
         }
     }
 
@@ -2113,7 +2330,7 @@ final class AppModel: ObservableObject {
     }
 
     private func syncState() async {
-        controlState = await coordinator.state
+        assignIfChanged(\.controlState, await coordinator.state)
         updateManualTargetDriftStability()
     }
 

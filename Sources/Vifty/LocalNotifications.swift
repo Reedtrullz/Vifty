@@ -77,7 +77,6 @@ final class UserNotificationDeliverer: LocalNotificationDelivering {
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
-        content.sound = .default
 
         let request = UNNotificationRequest(
             identifier: "tech.reidar.vifty.\(notification.kind.rawValue).\(UUID().uuidString)",

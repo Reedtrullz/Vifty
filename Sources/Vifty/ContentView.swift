@@ -52,7 +52,8 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                         }
                         .scrollIndicators(.visible)
-                        .frame(minWidth: 360, idealWidth: 400, maxWidth: 420, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                        .frame(width: layout.controlPaneWidth)
+                        .frame(minHeight: proxy.size.height, maxHeight: proxy.size.height)
 
                         Divider()
                             .frame(height: proxy.size.height)
@@ -63,6 +64,37 @@ struct ContentView: View {
                         }
                         .scrollIndicators(.visible)
                         .frame(maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+                        .background(Color.secondary.opacity(0.035))
+                    }
+                case .workbench:
+                    HStack(alignment: .top, spacing: 0) {
+                        ScrollView(.vertical) {
+                            controlRailPane
+                                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(width: layout.controlPaneWidth)
+                        .frame(minHeight: proxy.size.height, maxHeight: proxy.size.height)
+
+                        Divider()
+                            .frame(height: proxy.size.height)
+
+                        ScrollView(.vertical) {
+                            primaryEditorPane
+                                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(minWidth: layout.editorPaneMinWidth, idealWidth: layout.editorPaneIdealWidth, maxWidth: layout.editorPaneMaxWidth, minHeight: proxy.size.height, maxHeight: proxy.size.height)
+
+                        Divider()
+                            .frame(height: proxy.size.height)
+
+                        ScrollView(.vertical) {
+                            sensorsPane(compact: layout.compactTelemetry)
+                                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(maxWidth: layout.telemetryPaneMaxWidth, minHeight: proxy.size.height, maxHeight: proxy.size.height)
                         .background(Color.secondary.opacity(0.035))
                     }
                 }
@@ -152,144 +184,97 @@ struct ContentView: View {
 
     private var fanControlPane: some View {
         VStack(alignment: .leading, spacing: 18) {
-            modePicker
-            startupModeSettings
-            launchAtLoginSettings
-            menuBarDisplaySettings
-            agentWorkflowSettings
-
-            if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
-                HStack(spacing: 8) {
-                    Image(systemName: "thermometer.high")
-                        .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(fanWriteBlockedWhileHotSummary)
-                            .font(.caption.weight(.semibold))
-                        if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion {
-                            Text(recovery)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(10)
-                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
-                    .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .green)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Fan Control Owner")
-                        .font(.caption.weight(.semibold))
-                    Text(model.controlOwnershipSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer()
-            }
-            .padding(10)
-            .background((model.controlOwnershipNeedsAttention ? Color.orange : Color.green).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: helperHealthSystemImage)
-                        .foregroundStyle(helperHealthColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Fan Helper")
-                            .font(.caption.weight(.semibold))
-                        Text(model.helperHealthSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(daemonInstaller.helperStatusSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        if let context = model.helperInstallRuntimeContext {
-                            Text(context)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if let suggestion = model.helperRecoverySuggestion {
-                            Text(suggestion)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(4)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Spacer()
-                }
-                if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {
-                    HStack(spacing: 8) {
-                        if model.helperRepairActionAvailable {
-                            Button(daemonInstaller.actionTitle) {
-                                performHelperAction()
-                            }
-                            .controlSize(.small)
-                            .disabled(!daemonInstaller.canInstall)
-                            .help(daemonInstaller.actionDescription)
-                        }
-                        Button {
-                            copyHelperDiagnosticsCommand()
-                        } label: {
-                            Label("Copy Support Evidence", systemImage: "doc.on.doc")
-                        }
-                        .controlSize(.small)
-                        .help(HelperDiagnosticsSupport.copyHelp)
-                        if helperDiagnosticsCopied {
-                            Text(HelperDiagnosticsSupport.copiedMessage)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .padding(10)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-
-            if let agentCoolingSummary = model.agentCoolingSummary {
-                HStack(spacing: 8) {
-                    Image(systemName: "cpu")
-                        .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.agentCoolingPanelTitle)
-                            .font(.caption.weight(.semibold))
-                        Text(agentCoolingSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
-                            Text(agentCoolingRecoverySuggestion)
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .lineLimit(3)
-                        }
-                    }
-                    Spacer()
-                    if model.agentCoolingRestoreActionAvailable {
-                        Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
-                            .controlSize(.small)
-                            .help(model.agentCoolingRestoreActionHelp)
-                    }
-                }
-                .padding(10)
-                .background((model.agentCoolingNeedsAttention ? Color.orange : Color.blue).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-            }
-
-            if model.selectedMode == .curve {
-                curveEditor
-            } else if model.selectedMode == .fixed {
-                fixedEditor
-            }
+            safetyModeSection
 
             Divider()
 
+            fanControlWorkspace
+
+            Divider()
+
+            settingsAndToolsPanel
+        }
+        .padding(16)
+        .onAppear {
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
+    }
+
+    private var controlRailPane: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            safetyModeSection
+
+            Spacer(minLength: 24)
+
+            Divider()
+
+            settingsAndToolsPanel
+        }
+        .padding(16)
+        .onAppear {
+            daemonInstaller.refresh()
+        }
+        .onDisappear {
+            helperRefreshTask?.cancel()
+            helperRefreshTask = nil
+        }
+    }
+
+    private var primaryEditorPane: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            fanControlWorkspace
+        }
+        .padding(16)
+    }
+
+    private var safetyModeSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Safety & Mode", systemImage: "shield.lefthalf.filled")
+                .font(.headline)
+            readinessStatusGroup
+            modePicker
+        }
+    }
+
+    private var fanControlWorkspace: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Label("Fan Control", systemImage: "fan")
+                .font(.headline)
+
+            if model.selectedMode == .curve {
+                curveEditor
+                Divider()
+            } else if model.selectedMode == .fixed {
+                fixedEditor
+                Divider()
+            }
+
+            fansSection
+        }
+    }
+
+    private var settingsAndToolsPanel: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                quickSettingsStrip
+                menuBarDisplaySettings
+                notificationSettings
+                agentWorkflowSettings
+            }
+            .padding(.top, 8)
+        } label: {
+            Label("Settings & Tools", systemImage: "gearshape")
+                .font(.headline)
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private var fansSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Fans")
                 .font(.headline)
 
@@ -336,13 +321,150 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, minHeight: 240)
             }
         }
-        .padding(16)
-        .onAppear {
-            daemonInstaller.refresh()
+    }
+
+    private var readinessStatusGroup: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Readiness")
+                .font(.headline)
+            fanWriteBlockedWhileHotCard
+            helperHealthCard
+            controlOwnerCard
+            agentCoolingCard
         }
-        .onDisappear {
-            helperRefreshTask?.cancel()
-            helperRefreshTask = nil
+    }
+
+    @ViewBuilder
+    private var fanWriteBlockedWhileHotCard: some View {
+        if let fanWriteBlockedWhileHotSummary = model.fanWriteBlockedWhileHotSummary {
+            HStack(spacing: 8) {
+                Image(systemName: "thermometer.high")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(fanWriteBlockedWhileHotSummary)
+                        .font(.caption.weight(.semibold))
+                    if let recovery = model.fanWriteBlockedWhileHotRecoverySuggestion {
+                        Text(recovery)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private var helperHealthCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: helperHealthSystemImage)
+                    .foregroundStyle(helperHealthColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fan Helper")
+                        .font(.caption.weight(.semibold))
+                    Text(model.helperHealthSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(daemonInstaller.helperStatusSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let context = model.helperInstallRuntimeContext {
+                        Text(context)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let suggestion = model.helperRecoverySuggestion {
+                        Text(suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer()
+            }
+            if model.helperRepairActionAvailable || model.helperHealthNeedsAttention {
+                HStack(spacing: 8) {
+                    if model.helperRepairActionAvailable {
+                        Button(daemonInstaller.actionTitle) {
+                            performHelperAction()
+                        }
+                        .controlSize(.small)
+                        .disabled(!daemonInstaller.canInstall)
+                        .help(daemonInstaller.actionDescription)
+                    }
+                    Button {
+                        copyHelperDiagnosticsCommand()
+                    } label: {
+                        Label("Copy Support Evidence", systemImage: "doc.on.doc")
+                    }
+                    .controlSize(.small)
+                    .help(HelperDiagnosticsSupport.copyHelp)
+                    if helperDiagnosticsCopied {
+                        Text(HelperDiagnosticsSupport.copiedMessage)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var controlOwnerCard: some View {
+        HStack(spacing: 8) {
+            Image(systemName: model.controlOwnershipNeedsAttention ? "exclamationmark.triangle" : "person.crop.circle.badge.checkmark")
+                .foregroundStyle(model.controlOwnershipNeedsAttention ? .orange : .green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Fan Control Owner")
+                    .font(.caption.weight(.semibold))
+                Text(model.controlOwnershipSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background((model.controlOwnershipNeedsAttention ? Color.orange : Color.green).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var agentCoolingCard: some View {
+        if let agentCoolingSummary = model.agentCoolingSummary {
+            HStack(spacing: 8) {
+                Image(systemName: "cpu")
+                    .foregroundStyle(model.agentCoolingNeedsAttention ? .orange : .blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.agentCoolingPanelTitle)
+                        .font(.caption.weight(.semibold))
+                    Text(agentCoolingSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let agentCoolingRecoverySuggestion = model.agentCoolingRecoverySuggestion {
+                        Text(agentCoolingRecoverySuggestion)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .lineLimit(3)
+                    }
+                }
+                Spacer()
+                if model.agentCoolingRestoreActionAvailable {
+                    Button(model.agentCoolingRestoreActionTitle) { model.restoreAuto() }
+                        .controlSize(.small)
+                        .help(model.agentCoolingRestoreActionHelp)
+                }
+            }
+            .padding(10)
+            .background((model.agentCoolingNeedsAttention ? Color.orange : Color.blue).opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -448,10 +570,7 @@ struct ContentView: View {
             .pickerStyle(.menu)
             .controlSize(.small)
             .help("Mode Vifty selects when the app starts")
-            Spacer()
         }
-        .padding(10)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var launchAtLoginBinding: Binding<Bool> {
@@ -462,39 +581,97 @@ struct ContentView: View {
     }
 
     private var launchAtLoginSettings: some View {
+        Toggle(isOn: launchAtLoginBinding) {
+            Label("Start Vifty at startup", systemImage: "power")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .help("Open Vifty automatically at macOS login")
+    }
+
+    private var quickSettingsStrip: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Toggle(isOn: launchAtLoginBinding) {
-                    Label("Start Vifty at startup", systemImage: "power")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    curveProfileSettings
+                    Divider()
+                        .frame(height: 22)
+                    startupModeSettings
+                    Divider()
+                        .frame(height: 22)
+                    launchAtLoginSettings
+                    Spacer(minLength: 0)
                 }
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("Open Vifty automatically at macOS login")
-                Spacer()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    curveProfileSettings
+                    startupModeSettings
+                    launchAtLoginSettings
+                }
             }
 
-            if let message = model.launchAtLoginStatusMessage {
-                HStack(spacing: 8) {
-                    Label(message, systemImage: model.launchAtLoginStatus == .requiresApproval ? "exclamationmark.triangle" : "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(model.launchAtLoginStatus == .requiresApproval ? .orange : .secondary)
-                        .lineLimit(2)
-                    Spacer()
-                    if model.launchAtLoginStatus == .requiresApproval {
-                        Button("Open Login Items") {
-                            model.openLaunchAtLoginSettings()
-                        }
-                        .controlSize(.small)
-                    }
-                }
-            }
+            launchAtLoginStatusMessage
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
         .onAppear {
             model.refreshLaunchAtLoginStatus()
+        }
+    }
+
+    @ViewBuilder
+    private var launchAtLoginStatusMessage: some View {
+        if let message = model.launchAtLoginStatusMessage {
+            HStack(spacing: 8) {
+                Label(message, systemImage: model.launchAtLoginStatus == .requiresApproval ? "exclamationmark.triangle" : "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(model.launchAtLoginStatus == .requiresApproval ? .orange : .secondary)
+                    .lineLimit(2)
+                Spacer()
+                if model.launchAtLoginStatus == .requiresApproval {
+                    Button("Open Login Items") {
+                        model.openLaunchAtLoginSettings()
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private var curveProfileSettings: some View {
+        HStack(spacing: 8) {
+            Label("Curve profile", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Curve profile", selection: $selectedProfileID) {
+                Text("Unsaved").tag(Optional<UUID>.none)
+                ForEach(model.savedProfiles) { profile in
+                    Text(profile.name).tag(Optional(profile.id))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .onChange(of: selectedProfileID) { _, newID in
+                _ = model.selectCurveProfile(id: newID)
+            }
+
+            if selectedProfileID != nil {
+                Button {
+                    if let id = selectedProfileID,
+                       let profile = model.savedProfiles.first(where: { $0.id == id }) {
+                        model.deleteProfile(profile)
+                        selectedProfileID = nil
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.red)
+                .help("Delete selected curve profile")
+            }
         }
     }
 
@@ -544,7 +721,7 @@ struct ContentView: View {
     }
 
     private var codexUsageDisplayControls: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Picker("Codex display", selection: $model.codexUsageDisplayStyle) {
                 ForEach(CodexUsageDisplayStyle.allCases) { style in
                     Text(style.label).tag(style)
@@ -576,8 +753,32 @@ struct ContentView: View {
             }
             .pickerStyle(.menu)
             .controlSize(.small)
-            Spacer()
         }
+    }
+
+    private var notificationSettings: some View {
+        DisclosureGroup {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 172), alignment: .leading)],
+                alignment: .leading,
+                spacing: 6
+            ) {
+                Toggle("Helper failure", isOn: $model.notificationSettings.helperFailure)
+                Toggle("High thermal pressure", isOn: $model.notificationSettings.elevatedThermalPressure)
+                Toggle("Auto restore failure", isOn: $model.notificationSettings.autoRestoreFailure)
+                Toggle("Plugged-in battery drain", isOn: $model.notificationSettings.pluggedInBatteryDrain)
+                Toggle("Agent cooling attention", isOn: $model.notificationSettings.agentCoolingAttention)
+            }
+            .controlSize(.small)
+            .padding(.top, 4)
+        } label: {
+            Label("Notifications", systemImage: "bell")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
@@ -673,12 +874,16 @@ struct ContentView: View {
                             value: Binding(
                                 get: { Double(model.fixedFanSliderRPM(for: fan)) },
                                 set: { value in
-                                    model.setFixedFanRPM(Int(value.rounded()), for: fan)
-                                    model.applyModeSelection()
+                                    model.setFixedFanRPM(Int(value.rounded()), for: fan, persist: false)
                                 }
                             ),
                             in: Double(fan.minimumRPM)...Double(fan.maximumRPM),
-                            step: 50
+                            step: 50,
+                            onEditingChanged: { isEditing in
+                                if !isEditing {
+                                    model.commitFixedFanTargetsAndApply()
+                                }
+                            }
                         )
                         .help("\(fan.name) fixed target. Range \(fan.minimumRPM)-\(fan.maximumRPM) RPM; currently \(targetPercent)% of that fan's range.")
                         .accessibilityLabel("\(fan.name) fixed RPM target")
@@ -691,13 +896,18 @@ struct ContentView: View {
                     model.ensureFixedFanTargets(for: controllableFans)
                 }
             } else {
-                Slider(value: $model.fixedRPM, in: model.fanRange, step: 50)
-                    .onChange(of: model.fixedRPM) {
+                Slider(
+                    value: $model.fixedRPM,
+                    in: model.fanRange,
+                    step: 50,
+                    onEditingChanged: { isEditing in
+                        guard !isEditing else { return }
                         model.applyModeSelection()
                     }
-                    .accessibilityLabel("Fixed RPM target")
-                    .accessibilityValue("\(Int(model.fixedRPM.rounded())) RPM")
-                    .accessibilityHint("Sets one fixed target for every controllable fan.")
+                )
+                .accessibilityLabel("Fixed RPM target")
+                .accessibilityValue("\(Int(model.fixedRPM.rounded())) RPM")
+                .accessibilityHint("Sets one fixed target for every controllable fan.")
                 Text("\(Int(model.fixedRPM.rounded())) RPM")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -727,36 +937,6 @@ struct ContentView: View {
                 }
                 .controlSize(.small)
                 .help("Apply a conservative fan curve for common developer workloads")
-            }
-
-            if !model.savedProfiles.isEmpty {
-                HStack {
-                    Picker("Profile", selection: $selectedProfileID) {
-                        Text("Unsaved").tag(Optional<UUID>.none)
-                        ForEach(model.savedProfiles) { profile in
-                            Text(profile.name).tag(Optional(profile.id))
-                        }
-                    }
-                    .onChange(of: selectedProfileID) { _, newID in
-                        guard let id = newID,
-                              let profile = model.savedProfiles.first(where: { $0.id == id }) else { return }
-                        model.loadProfile(profile)
-                    }
-
-                    if selectedProfileID != nil {
-                        Button {
-                            if let id = selectedProfileID,
-                               let profile = model.savedProfiles.first(where: { $0.id == id }) {
-                                model.deleteProfile(profile)
-                                selectedProfileID = nil
-                            }
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.red)
-                    }
-                }
             }
 
             if let sensors = model.snapshot?.temperatureSensors, !sensors.isEmpty {
@@ -833,12 +1013,6 @@ struct ContentView: View {
                 }
             }
 
-            if let sensor = model.selectedSensor {
-                Text("Live: \(sensor.celsius, specifier: "%.1f") C from \(sensor.name)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             HStack {
                 if showSaveDialog {
                     TextField("Profile name", text: $newProfileName)
@@ -876,7 +1050,14 @@ struct ContentView: View {
 
     private func sensorsPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            TelemetryOverviewPanel(power: model.powerSnapshot, history: model.telemetryHistory, compact: compact)
+            Label("Telemetry & Evidence", systemImage: "waveform.path.ecg")
+                .font(.headline)
+
+            TelemetryOverviewPanel(
+                power: model.powerSnapshot,
+                summary: compact ? model.compactTelemetryOverviewSummary : model.telemetryOverviewSummary,
+                compact: compact
+            )
 
             HStack {
                 Text("Temperatures")
@@ -912,16 +1093,8 @@ struct ContentView: View {
 
 private struct TelemetryOverviewPanel: View {
     let power: PowerSnapshot?
-    let history: TelemetryHistory
+    let summary: TelemetryHistorySummary
     let compact: Bool
-
-    private var summary: TelemetryHistorySummary {
-        TelemetryHistorySummary(
-            history: history,
-            sampleLimit: compact ? 90 : 180,
-            thermalPressureLimit: compact ? 24 : 36
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
@@ -945,15 +1118,15 @@ private struct TelemetryOverviewPanel: View {
                         PowerMetric(label: "Health", value: "\(health)%", systemImage: "heart")
                     }
                 }
-                if let latest = history.samples.last {
-                    if let fanRPMText = summary.latestFanRPMText {
-                        PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
-                    }
-                    if let batteryPowerLabel = summary.latestBatteryPowerLabel,
-                       let batteryPowerText = summary.latestBatteryPowerText,
-                       let watts = latest.batteryPowerWatts {
-                        PowerMetric(label: batteryPowerLabel, value: batteryPowerText, systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
-                    }
+                if summary.sampleCount > 0, let fanRPMText = summary.latestFanRPMText {
+                    PowerMetric(label: summary.latestFanRPMLabel, value: fanRPMText, systemImage: "fan")
+                }
+                if let batteryPowerLabel = summary.latestBatteryPowerLabel,
+                   let batteryPowerText = summary.latestBatteryPowerText,
+                   let watts = summary.latestBatteryPowerWatts {
+                    PowerMetric(label: batteryPowerLabel, value: batteryPowerText, systemImage: watts < 0 ? "arrow.up.circle" : "arrow.down.circle")
+                }
+                if summary.sampleCount > 0 {
                     PowerMetric(label: "Thermal", value: summary.latestThermalPressureText, systemImage: "speedometer")
                 }
             }
@@ -966,7 +1139,7 @@ private struct TelemetryOverviewPanel: View {
                     .lineLimit(2)
             }
 
-            if history.samples.count > 1 {
+            if summary.sampleCount > 1 {
                 TelemetryHistoryChart(summary: summary, compact: compact)
             } else {
                 Text("History appears after the first successful poll.")
@@ -1442,8 +1615,11 @@ private struct FanCurveChartEditor: View {
     let fanOverrides: [FanCurveOverride]
     let usePerFanOverrides: Bool
 
+    @State private var activeChartPoint: CurveChartPointKind?
+
     private let tempRange = 35.0...105.0
     private let fanColors: [Color] = [.cyan, .purple, .mint, .pink]
+    private let chartHeight: CGFloat = 272
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1457,6 +1633,14 @@ private struct FanCurveChartEditor: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let liveCurveTargetText {
+                Text(liveCurveTargetText)
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
             GeometryReader { geometry in
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
@@ -1464,22 +1648,21 @@ private struct FanCurveChartEditor: View {
                     chartGrid(in: plotRect(in: geometry.size))
                     chartAxisLabels(in: geometry.size)
                     chartAxisUnitLabels(in: geometry.size)
-                    curvePointAxisGuides(for: basePoints, color: .accentColor, in: geometry.size)
+                    if let activePoint = activeBasePoint {
+                        curvePointAxisGuides(for: [activePoint], color: .accentColor, in: geometry.size)
+                    }
 
                     ForEach(fanCurveSeries) { series in
                         drawCurve(series.points, in: geometry.size)
-                            .stroke(series.color.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4]))
+                            .stroke(series.color.opacity(0.42), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 5]))
                     }
 
                     drawCurve(basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                    curvePointAxisValueLabels(for: basePoints, color: .accentColor, in: geometry.size)
-
-                    ForEach(fanCurveSeries) { series in
-                        curvePointValueLabels(for: series, in: geometry.size)
+                    if let activePoint = activeBasePoint {
+                        curvePointAxisValueLabels(for: [activePoint], color: .accentColor, in: geometry.size)
                     }
-                    curvePointValueLabels(for: baseCurveValueLabelSeries, in: geometry.size)
 
                     if let liveTemperature {
                         liveTemperatureMarker(liveTemperature, in: geometry.size)
@@ -1490,32 +1673,42 @@ private struct FanCurveChartEditor: View {
                         ChartHandle(
                             label: point.label,
                             valueText: value.chartValueText,
-                            valueLabelOffsetY: valueLabelOffsetY(for: value),
+                            showsValueLabel: activeChartPoint == point,
+                            valueLabelOffsetY: activeHandleLabelOffsetY(for: value),
                             temperature: value.temperature,
                             rpm: value.rpm,
-                            accessibilityValueText: value.accessibilityValueText
+                            accessibilityValueText: value.accessibilityValueText,
+                            onHoverChanged: { isHovering in
+                                activeChartPoint = isHovering ? point : nil
+                            }
                         )
                             .position(position(for: value, in: geometry.size))
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
+                                        activeChartPoint = point
                                         setCurvePoint(point, from: value.location, in: geometry.size)
                                     }
+                                    .onEnded { _ in activeChartPoint = nil }
                             )
                     }
 
                 }
             }
-            .frame(height: 184)
+            .frame(height: chartHeight)
 
-            HStack(spacing: 10) {
-                chartLegendSwatch(.accentColor, label: "Base")
-                ForEach(fanCurveSeries) { series in
-                    chartLegendSwatch(series.color, label: series.name)
+            curvePointSummaryStrip
+
+            if !fanCurveSeries.isEmpty {
+                HStack(spacing: 10) {
+                    chartLegendSwatch(.accentColor, label: "Base")
+                    ForEach(fanCurveSeries) { series in
+                        chartLegendSwatch(series.color, label: series.name)
+                    }
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             }
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
@@ -1538,14 +1731,25 @@ private struct FanCurveChartEditor: View {
         ]
     }
 
-    private var baseCurveValueLabelSeries: FanCurveChartSeries {
-        FanCurveChartSeries(
-            name: "Base",
-            label: "Base",
-            labelOffsetIndex: fanCurveSeries.count,
-            color: .accentColor,
-            points: basePoints
-        )
+    private var activeBasePoint: FanCurveChartPoint? {
+        guard let activeChartPoint else { return nil }
+        return chartValue(for: activeChartPoint)
+    }
+
+    private var curvePointSummaryStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(basePoints) { point in
+                CurveChartPointSummaryChip(point: point)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
+    }
+
+    private var liveCurveTargetText: String? {
+        guard let liveTemperature else { return nil }
+        let targetRPM = targetRPM(at: liveTemperature, points: basePoints)
+        return "Live \(Int(liveTemperature.rounded())) C -> Base \(formattedRPM(targetRPM))"
     }
 
     private var fanCurveSeries: [FanCurveChartSeries] {
@@ -1555,12 +1759,32 @@ private struct FanCurveChartEditor: View {
             let start = override?.startRPM ?? FanCurve.clamp(Int(startRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
             let mid = override?.midRPM ?? FanCurve.clamp(Int(midRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
             let max = override?.maxRPM ?? FanCurve.clamp(Int(maxRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
-            return FanCurveChartSeries(name: fan.name, label: fanCurveLabel(for: fan), labelOffsetIndex: offset, color: fanColors[offset % fanColors.count], points: [
+            return FanCurveChartSeries(name: fan.name, color: fanColors[offset % fanColors.count], points: [
                 FanCurveChartPoint(id: "\(fan.id)-start", label: "Start", temperature: startTemp, rpm: Double(start)),
                 FanCurveChartPoint(id: "\(fan.id)-ramp", label: "Ramp", temperature: midTemp, rpm: Double(mid)),
                 FanCurveChartPoint(id: "\(fan.id)-high", label: "High", temperature: maxTemp, rpm: Double(max))
             ])
         }
+    }
+
+    private func targetRPM(at temperature: Double, points: [FanCurveChartPoint]) -> Int {
+        FanCurve(
+            points: points.map {
+                CurvePoint(
+                    temperatureCelsius: $0.temperature,
+                    rpm: Int($0.rpm.rounded())
+                )
+            }
+        )
+        .targetRPM(
+            for: temperature,
+            minimumRPM: Int(rpmLower.rounded()),
+            maximumRPM: Int(rpmUpper.rounded())
+        )
+    }
+
+    private func formattedRPM(_ rpm: Int) -> String {
+        "\(rpm.formatted(.number.grouping(.automatic))) RPM"
     }
 
     private func chartValue(for point: CurveChartPointKind) -> FanCurveChartPoint {
@@ -1640,35 +1864,6 @@ private struct FanCurveChartEditor: View {
             path.addLine(to: position(for: point, in: size))
         }
         return path
-    }
-
-    private func curvePointValueLabels(for series: FanCurveChartSeries, in size: CGSize) -> some View {
-        ZStack {
-            ForEach(Array(series.points.enumerated()), id: \.element.id) { pointIndex, point in
-                CurveChartSeriesPointLabel(seriesLabel: series.label, point: point, color: series.color)
-                    .position(labelPosition(for: point, pointIndex: pointIndex, seriesIndex: series.labelOffsetIndex, in: size))
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func labelPosition(for point: FanCurveChartPoint, pointIndex: Int, seriesIndex: Int, in size: CGSize) -> CGPoint {
-        let rect = plotRect(in: size)
-        let pointPosition = position(for: point, in: size)
-        let horizontalOffset: CGFloat
-        switch pointIndex {
-        case 0:
-            horizontalOffset = 52
-        case 2:
-            horizontalOffset = -52
-        default:
-            horizontalOffset = 0
-        }
-        let verticalDirection: CGFloat = seriesIndex.isMultiple(of: 2) ? -1 : 1
-        let verticalOffset = verticalDirection * (24 + CGFloat(seriesIndex / 2) * 18)
-        let x = min(max(pointPosition.x + horizontalOffset, rect.minX + 62), rect.maxX - 62)
-        let y = min(max(pointPosition.y + verticalOffset, rect.minY + 22), rect.maxY - 22)
-        return CGPoint(x: x, y: y)
     }
 
     private func chartGrid(in rect: CGRect) -> some View {
@@ -1768,9 +1963,9 @@ private struct FanCurveChartEditor: View {
         return CGPoint(x: x, y: y)
     }
 
-    private func valueLabelOffsetY(for point: FanCurveChartPoint) -> CGFloat {
+    private func activeHandleLabelOffsetY(for point: FanCurveChartPoint) -> CGFloat {
         let midpoint = (rpmLower + rpmUpper) / 2
-        return point.rpm >= midpoint ? 24 : -24
+        return point.rpm >= midpoint ? 28 : -28
     }
 
     private func rpmTickLabel(_ rpm: Int) -> String {
@@ -1779,16 +1974,6 @@ private struct FanCurveChartEditor: View {
 
     private func temperatureTickLabel(_ temperature: Int) -> String {
         "\(temperature) C"
-    }
-
-    private func fanCurveLabel(for fan: Fan) -> String {
-        if fan.name.localizedCaseInsensitiveContains("left") {
-            return "L"
-        }
-        if fan.name.localizedCaseInsensitiveContains("right") {
-            return "R"
-        }
-        return "F\(fan.id)"
     }
 
     private func liveTemperatureMarker(_ temperature: Double, in size: CGSize) -> some View {
@@ -1925,61 +2110,55 @@ private struct FanCurveChartPoint: Identifiable {
 private struct FanCurveChartSeries: Identifiable {
     var id: String { name }
     let name: String
-    let label: String
-    let labelOffsetIndex: Int
     let color: Color
     let points: [FanCurveChartPoint]
 }
 
-private struct CurveChartSeriesPointLabel: View {
-    let seriesLabel: String
+private struct CurveChartPointSummaryChip: View {
     let point: FanCurveChartPoint
-    let color: Color
 
     var body: some View {
-        HStack(alignment: .top, spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 5, height: 5)
-                .padding(.top, 5)
+        HStack(spacing: 6) {
+            Text(point.label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text(point.chartValueText)
+                Text(point.temperatureText)
                     .font(.caption2.weight(.semibold).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Text("\(seriesLabel) \(point.label)")
-                    .font(.caption2)
+                Text(point.rpmText)
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
-            .frame(width: 122, alignment: .leading)
         }
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 3)
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
         .background(.regularMaterial, in: Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(seriesLabel) \(point.label) curve point")
-        .accessibilityValue(valueText)
-    }
-
-    private var valueText: String {
-        point.chartValueText
+        .accessibilityLabel("\(point.label) curve point")
+        .accessibilityValue(point.accessibilityValueText)
     }
 }
 
 private struct ChartHandle: View {
     let label: String
     let valueText: String
+    let showsValueLabel: Bool
     let valueLabelOffsetY: CGFloat
     let temperature: Double
     let rpm: Double
     let accessibilityValueText: String
+    let onHoverChanged: (Bool) -> Void
 
     var body: some View {
         ZStack {
-            CurveChartHandleValueLabel(label: label, valueText: valueText)
-                .offset(y: valueLabelOffsetY)
+            if showsValueLabel {
+                CurveChartHandleValueLabel(label: label, valueText: valueText)
+                    .offset(y: valueLabelOffsetY)
+                    .transition(.opacity)
+            }
 
             Circle()
                 .fill(Color.accentColor)
@@ -1987,7 +2166,8 @@ private struct ChartHandle: View {
                 .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
                 .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
         }
-        .frame(width: 130, height: 58)
+        .frame(width: 118, height: 58)
+        .onHover(perform: onHoverChanged)
         .help("\(label): \(Int(temperature.rounded())) C · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
         .accessibilityLabel("\(label) curve point")
         .accessibilityValue(accessibilityValueText)

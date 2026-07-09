@@ -12,3 +12,6 @@ Package.resolved
 # IDE
 .idea/
 .vscode/
+
+# Local agent workflow scratch
+.superpowers/

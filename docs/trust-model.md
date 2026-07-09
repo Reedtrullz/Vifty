@@ -24,10 +24,12 @@ When private telemetry is absent, contradictory, or outside known fan ranges, Vi
 | --- | --- | --- |
 | `Vifty.app` | User | SwiftUI menu bar app, polling, profile selection, power telemetry, and user controls |
 | `viftyctl` | User | Agent/build/test CLI for status, diagnostics, bounded cooling leases, and restore requests |
-| `ViftyDaemon` | Root LaunchDaemon | XPC endpoint that reads snapshots and applies validated fan commands |
+| `ViftyDaemon` | Root LaunchDaemon | XPC endpoint that reads snapshots, may briefly cache read-only snapshots, and applies validated fan commands |
 | `ViftyHelper` | User or root depending on caller | Local SMC probe and emergency fan restore tool; fan writes require a privileged/root path |
 
 The normal app path is daemon-first. If the daemon is unavailable, the unprivileged app fails closed for fan writes instead of attempting direct AppleSMC writes.
+
+The daemon may reuse a read-only hardware snapshot for a very short TTL to reduce polling overhead. That cache is cleared after manual fan writes and agent prepare/restore operations, and cached telemetry must never authorize a privileged write: write paths resolve the target fan from fresh local daemon telemetry before touching SMC state.
 
 ## XPC Boundary
 

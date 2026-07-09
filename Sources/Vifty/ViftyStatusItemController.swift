@@ -32,6 +32,7 @@ final class ViftyStatusItemController: NSObject {
     private let popover = NSPopover()
     private var cancellables: Set<AnyCancellable> = []
     private var primeTask: Task<Void, Never>?
+    private var lastAppliedPresentation: MenuBarStatusItemPresentation?
 
     init(model: AppModel, openMainWindow: @escaping () -> Void) {
         self.model = model
@@ -63,17 +64,8 @@ final class ViftyStatusItemController: NSObject {
     }
 
     private func observeModel() {
-        model.objectWillChange
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    await Task.yield()
-                    self?.updateStatusItem()
-                    self?.scheduleTelemetryPrimeIfNeeded()
-                }
-            }
-            .store(in: &cancellables)
-
-        model.$menuBarStatusItemRevision
+        model.$menuBarStatusItemPresentation
+            .removeDuplicates()
             .sink { [weak self] _ in
                 Task { @MainActor in
                     await Task.yield()
@@ -86,39 +78,31 @@ final class ViftyStatusItemController: NSObject {
 
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
-        let statusItemText = resolvedStatusItemText
-        if statusItemText == nil {
-            let image = NSImage(systemSymbolName: "fan", accessibilityDescription: model.menuBarLabelText)
+        let presentation = model.menuBarStatusItemPresentation
+        guard presentation != lastAppliedPresentation else { return }
+        lastAppliedPresentation = presentation
+
+        switch presentation.content {
+        case .fanIcon(let accessibilityDescription):
+            let image = NSImage(systemSymbolName: "fan", accessibilityDescription: accessibilityDescription)
             image?.isTemplate = true
             button.image = image
             button.title = ""
-        } else {
+        case .text(let text):
             button.image = nil
             button.font = NSFont.monospacedDigitSystemFont(
                 ofSize: NSFont.systemFontSize,
                 weight: .regular
             )
-            button.title = statusItemText ?? ""
+            button.title = text
         }
         statusItem.length = NSStatusItem.variableLength
-        button.toolTip = model.menuTitle
-        button.setAccessibilityLabel(model.menuBarLabelText)
-        button.needsLayout = true
-        button.needsDisplay = true
-        button.window?.displayIfNeeded()
-    }
-
-    private var resolvedStatusItemText: String? {
-        ViftyStatusItemPresentation.resolvedText(
-            statusItemText: model.menuBarStatusItemText,
-            fallbackStatusItemText: model.menuBarDisplayMode == .fanIcon ? nil : model.menuBarLabelText,
-            labelNeedsTelemetryPrime: model.menuBarLabelNeedsTelemetryPrime,
-            allowsPlaceholderText: model.menuBarAllowsPlaceholderStatusItemText
-        )
+        button.toolTip = presentation.tooltip
+        button.setAccessibilityLabel(presentation.accessibilityLabel)
     }
 
     private func scheduleTelemetryPrimeIfNeeded() {
-        guard model.menuBarLabelNeedsTelemetryPrime else { return }
+        guard model.menuBarStatusItemPresentation.needsTelemetryPrime else { return }
         guard primeTask == nil else { return }
         primeTask = Task { @MainActor [weak self] in
             guard let self else { return }

@@ -20,7 +20,7 @@ Plain-name comparison set: Macs Fan Control, TG Pro, iStat Menus, Stats, Hot and
 
 - Auditable SMC write boundaries: allowlisted fan mode and target keys, RPM clamping, daemon-first writes, and fail-closed behavior when the helper, hardware shape, or telemetry is uncertain.
 - Developer workload cooling: `viftyctl diagnose --json`, bounded leases, guarded `run`, explicit restore behavior, and local audit evidence that agents can consume without parsing UI copy.
-- Source-first honesty while Apple Developer Program credentials are unavailable, with Homebrew stays parked until a Developer ID signed, notarized release exists.
+- Source-first honesty while Apple Developer Program credentials are unavailable, with Homebrew parked until a Developer ID signed, notarized release exists and unsigned-dev builds labeled as tester convenience only.
 - Report-backed compatibility: generated validation indexes and compatibility tables, not handwritten support claims.
 - Helper repair clarity: every blocked write path should tell the user the next safe action and explain why fan writes remain blocked.
 - Subtle in-memory trend sparklines are in scope when they help users judge build, test, or agent workload impact; full historical monitoring, cloud sync, analytics, and persistent telemetry remain out of scope without a separate privacy plan.
@@ -34,14 +34,14 @@ Plain-name comparison set: Macs Fan Control, TG Pro, iStat Menus, Stats, Hot and
 
 ## Near-Term Roadmap
 
-Priority order: trusted release story, hardware validation evidence, helper repair clarity, human UI polish, local observability, and developer/agent workflow proof.
+Priority order: trusted release story, hardware validation evidence, daemon safety, helper repair clarity, human UI polish, local observability, and developer/agent workflow proof.
 
 The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
 
 1. **Trusted release story:** keep `v1.1.1` source-first, unsigned-dev tester wording explicit, and prepare the future Developer ID lane without weakening its checks.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
-4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, menu-bar display modes, compact power/history/temperature surfaces, and a better screenshot/demo.
+4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, main-window settings, a compact/readiness-oriented menu-bar popover, compact power/history/temperature surfaces, and a better screenshot/demo.
 5. **Local observability:** keep optional local notifications for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; defaults should remain conservative and local-only.
 6. **Trusted updater:** add Sparkle auto-update only in the future trusted binary lane, after Developer ID signing, notarization, EdDSA appcast signing, and canonical artifact verification exist.
 7. **Developer and agent workflow:** make Swift, Xcode, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom guarded-run examples easy to find; defer MCP and Shortcuts until real users prove the CLI contract.

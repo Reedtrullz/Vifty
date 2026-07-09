@@ -30,7 +30,7 @@ Apple can change private SMC/HID behavior in macOS or new hardware revisions wit
 - **Optional local notifications** — alerts for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; all are off by default.
 - **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
 - **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
-- **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry. The main window and menu-bar popover can copy a short AGENTS.md/Codex rule that checks capabilities, readiness, and the guarded wrapper path.
+- **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry. The main window can copy a short AGENTS.md/Codex rule and guarded command templates that check capabilities, readiness, and the guarded wrapper path.
 - **Codex usage tracking** — optional menu-bar field reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage as text or a compact battery-style gauge, reset countdown or reset time, credits, monthly limits, and source without storing API keys. Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
@@ -107,7 +107,7 @@ open /Applications/Vifty.app
 
 `make install` installs to `/Applications/Vifty.app` when writable and falls back to `~/Applications/Vifty.app` otherwise. If Vifty is already running, the installer quits and relaunches it from the newly installed bundle so the menu bar item reflects the current build. The root LaunchDaemon helper is repaired only after an explicit user-approved action, not silently replaced by the app installer; after copying the app, `make install` performs a read-only helper-daemon hash check and warns when the installed helper differs from the bundled `ViftyDaemon`. Use **Reinstall Helper** or **Repair Helper** in the app, or run `REPAIR_HELPER_APP=/Applications/Vifty.app make repair-helper` from the source checkout to get the same administrator-approved LaunchDaemon repair from the installed app bundle. If the installer falls back to `~/Applications`, use the exact `REPAIR_HELPER_APP=... make repair-helper` command printed by the installer so the helper is repaired from that copied app bundle. Then rerun `AGENT_RUN_SMOKE_READINESS_JSON=1 make agent-run-smoke-readiness-current-build` before treating current-build manual or agent smoke evidence as valid. If you want a reusable installer file, run `make pkg` and open the generated `.build/Vifty-<version>.pkg`.
 
-In Vifty, enable **Start Vifty at startup** from the main window or menu-bar popover to register the app with macOS Login Items. If macOS shows a pending approval state, approve Vifty in System Settings > General > Login Items.
+In Vifty, enable **Start Vifty at startup** from the main window quick settings strip to register the app with macOS Login Items. If macOS shows a pending approval state, approve Vifty in System Settings > General > Login Items.
 
 ### Unsigned tester zip
 
@@ -193,7 +193,7 @@ The power panel is inspired by projects like [`MacBook-Charger-Power-Indicator`]
 - `AppleSmartBattery` registry values for voltage, signed amperage, capacity, cycles, condition, and temperature.
 - `IOPSCopyExternalPowerAdapterDetails` adapter wattage, USB-C PD negotiation, manufacturer/model metadata, and advertised PD profiles.
 
-The UI displays compact menu-bar summaries (`96 W adapter`, `16.9 W drain`, etc.) plus a detailed Power panel next to the temperature sensors. Power telemetry is read locally and does not require the privileged fan helper. When live drain and capacity data are available, Vifty estimates time remaining and warns if the Mac is plugged in but the battery is still draining.
+The UI displays compact menu-bar summaries (`96 W adapter`, `16.9 W drain`, etc.) plus a unified Power & History panel next to the temperature sensor drawer. Power telemetry is read locally and does not require the privileged fan helper. When live drain and capacity data are available, Vifty estimates time remaining and warns if the Mac is plugged in but the battery is still draining.
 
 ## Architecture
 
@@ -220,7 +220,7 @@ The UI displays compact menu-bar summaries (`96 W adapter`, `16.9 W drain`, etc.
 | `ViftyCtl` | executable | Agent-friendly JSON CLI for bounded cooling leases |
 | `ViftyPrivateIOKit` | library | C/IOKit bridge for HID temperature sensors |
 
-**Data flow:** the app polls every 2 seconds. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles and private app preferences, including menu-bar mode, custom menu-bar fields, notification toggles, and fixed-mode per-fan targets, are persisted as JSON in `~/Library/Application Support/Vifty/`.
+**Data flow:** the app keeps a 2-second fan/hardware loop for live control state, while slower read-only work runs on bounded cadences: power and thermal details about every 15 seconds, daemon reachability about every 30 seconds unless a snapshot fails, agent status about every 15 seconds or while a lease/error is active, and Codex usage only at the selected refresh cadence when a menu-bar field needs it. Fan control resolves the selected mode into per-fan RPM targets, then writes through the daemon when available. Power telemetry is read directly from local macOS IOKit dictionaries. Curve profiles and private app preferences, including menu-bar mode, custom menu-bar fields, notification toggles, startup/default mode, and fixed-mode per-fan targets, are persisted as JSON in `~/Library/Application Support/Vifty/`.
 
 ## Safety and privacy
 
@@ -325,7 +325,7 @@ Successful `status --json`, `prepare --json`, and `restore-auto --json` payloads
 
 `audit --json` is a read-only local audit export for recent agent lease events. It returns `readOnly: true`, `coolingCommandsRun: false`, the requested `limit`, `eventCount`, and timestamped events with action, optional lease ID, and message. Use it after blocked readiness or restore failures to show what Vifty actually did without requesting cooling.
 
-For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). The main window and menu-bar popover can copy both a short safe agent rule and guarded command/preflight templates for the same audited Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workload families. For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
+For the short runbook, see [docs/safe-agent-cooling.md](docs/safe-agent-cooling.md). For a fuller contract, decision rules, canonical JSON examples, and ready-to-run wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workloads, see [docs/agent-workflows.md](docs/agent-workflows.md) and [examples/viftyctl](examples/viftyctl/README.md). The main window can copy both a short safe agent rule and guarded command/preflight templates for the same audited Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workload families; the menu-bar popover stays focused on quick status, recovery, and Auto restore. For Codex, Claude Code, Cursor, and shell-runner snippets, see [docs/agent-integrations.md](docs/agent-integrations.md).
 
 ### Agent readiness checklist
 
