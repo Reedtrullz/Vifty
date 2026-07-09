@@ -3,6 +3,38 @@ import XCTest
 @testable import Vifty
 
 final class FanCurveChartGeometryTests: XCTestCase {
+    func testPlotRectUsesWideInsetsAtDesktopWidth() {
+        let geometry = FanCurveChartGeometry(
+            temperatureRange: 35...105,
+            rpmRange: 1499...4296
+        )
+
+        let rect = geometry.plotRect(
+            in: CGSize(width: 700, height: 272)
+        )
+
+        XCTAssertEqual(rect.minX, 56, accuracy: 0.1)
+        XCTAssertEqual(rect.minY, 18, accuracy: 0.1)
+        XCTAssertEqual(rect.width, 632, accuracy: 0.1)
+        XCTAssertEqual(rect.height, 224, accuracy: 0.1)
+    }
+
+    func testPlotRectUsesCompactInsetsBelowWidthThreshold() {
+        let geometry = FanCurveChartGeometry(
+            temperatureRange: 35...105,
+            rpmRange: 1499...4296
+        )
+
+        let rect = geometry.plotRect(
+            in: CGSize(width: 400, height: 272)
+        )
+
+        XCTAssertEqual(rect.minX, 48, accuracy: 0.1)
+        XCTAssertEqual(rect.minY, 18, accuracy: 0.1)
+        XCTAssertEqual(rect.width, 340, accuracy: 0.1)
+        XCTAssertEqual(rect.height, 224, accuracy: 0.1)
+    }
+
     func testPositionMapsLowTemperatureAndLowRPMToPlotBottomLeft() {
         let geometry = FanCurveChartGeometry(
             temperatureRange: 35...105,
@@ -14,8 +46,8 @@ final class FanCurveChartGeometryTests: XCTestCase {
             in: CGSize(width: 700, height: 272)
         )
 
-        XCTAssertEqual(point.x, 44, accuracy: 0.1)
-        XCTAssertEqual(point.y, 232, accuracy: 0.1)
+        XCTAssertEqual(point.x, 56, accuracy: 0.1)
+        XCTAssertEqual(point.y, 242, accuracy: 0.1)
     }
 
     func testValueFromDragClampsInsidePlotRange() {
@@ -30,7 +62,22 @@ final class FanCurveChartGeometryTests: XCTestCase {
         )
 
         XCTAssertEqual(value.temperature, 35, accuracy: 0.1)
-        XCTAssertEqual(value.rpm, 1499, accuracy: 0.1)
+        XCTAssertEqual(value.rpm, 1500, accuracy: 0.1)
+    }
+
+    func testValueFromDragRoundsToWholeDegreesAndFiftyRPM() {
+        let geometry = FanCurveChartGeometry(
+            temperatureRange: 35...105,
+            rpmRange: 1499...4296
+        )
+
+        let value = geometry.value(
+            from: CGPoint(x: 191.4286, y: 121.8012),
+            in: CGSize(width: 700, height: 272)
+        )
+
+        XCTAssertEqual(value.temperature, 50, accuracy: 0.1)
+        XCTAssertEqual(value.rpm, 3000, accuracy: 0.1)
     }
 
     func testTargetRPMInterpolatesThroughCurvePoints() {

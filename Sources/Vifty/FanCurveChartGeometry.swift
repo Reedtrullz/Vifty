@@ -11,13 +11,12 @@ struct FanCurveChartGeometry: Equatable {
     let temperatureRange: ClosedRange<Double>
     let rpmRange: ClosedRange<Double>
 
-    private let leftInset: CGFloat = 44
-    private let rightInset: CGFloat = 18
-    private let topInset: CGFloat = 20
-    private let bottomInset: CGFloat = 40
-
     func plotRect(in size: CGSize) -> CGRect {
-        CGRect(
+        let leftInset: CGFloat = size.width < 420 ? 48 : 56
+        let topInset: CGFloat = 18
+        let rightInset: CGFloat = 12
+        let bottomInset: CGFloat = 30
+        return CGRect(
             x: leftInset,
             y: topInset,
             width: max(1, size.width - leftInset - rightInset),
@@ -43,9 +42,11 @@ struct FanCurveChartGeometry: Equatable {
         let y = min(max(location.y, rect.minY), rect.maxY)
         let xRatio = Double((x - rect.minX) / rect.width)
         let yRatio = Double((rect.maxY - y) / rect.height)
+        let temperature = temperatureRange.lowerBound + xRatio * (temperatureRange.upperBound - temperatureRange.lowerBound)
+        let rpm = rpmRange.lowerBound + yRatio * (rpmRange.upperBound - rpmRange.lowerBound)
         return FanCurveChartValue(
-            temperature: temperatureRange.lowerBound + xRatio * (temperatureRange.upperBound - temperatureRange.lowerBound),
-            rpm: rpmRange.lowerBound + yRatio * (rpmRange.upperBound - rpmRange.lowerBound)
+            temperature: quantizedTemperature(temperature),
+            rpm: quantizedRPM(rpm)
         )
     }
 
@@ -62,5 +63,13 @@ struct FanCurveChartGeometry: Equatable {
             minimumRPM: Int(rpmRange.lowerBound.rounded()),
             maximumRPM: Int(rpmRange.upperBound.rounded())
         )
+    }
+
+    private func quantizedTemperature(_ temperature: Double) -> Double {
+        min(max(temperature.rounded(), temperatureRange.lowerBound), temperatureRange.upperBound)
+    }
+
+    private func quantizedRPM(_ rpm: Double) -> Double {
+        min(max((rpm / 50).rounded() * 50, rpmRange.lowerBound), rpmRange.upperBound)
     }
 }
