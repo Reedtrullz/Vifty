@@ -1731,6 +1731,13 @@ private struct FanCurveChartEditor: View {
         max(rpmRange.upperBound, rpmRange.lowerBound + 100)
     }
 
+    private var chartGeometry: FanCurveChartGeometry {
+        FanCurveChartGeometry(
+            temperatureRange: tempRange,
+            rpmRange: rpmLower...rpmUpper
+        )
+    }
+
     private var basePoints: [FanCurveChartPoint] {
         [
             FanCurveChartPoint(id: "start", label: "Start", temperature: startTemp, rpm: startRPM),
@@ -1776,18 +1783,9 @@ private struct FanCurveChartEditor: View {
     }
 
     private func targetRPM(at temperature: Double, points: [FanCurveChartPoint]) -> Int {
-        FanCurve(
-            points: points.map {
-                CurvePoint(
-                    temperatureCelsius: $0.temperature,
-                    rpm: Int($0.rpm.rounded())
-                )
-            }
-        )
-        .targetRPM(
-            for: temperature,
-            minimumRPM: Int(rpmLower.rounded()),
-            maximumRPM: Int(rpmUpper.rounded())
+        chartGeometry.targetRPM(
+            at: temperature,
+            points: points.map { FanCurveChartValue(temperature: $0.temperature, rpm: $0.rpm) }
         )
     }
 
@@ -1807,23 +1805,18 @@ private struct FanCurveChartEditor: View {
     }
 
     private func setCurvePoint(_ point: CurveChartPointKind, from location: CGPoint, in size: CGSize) {
-        let rect = plotRect(in: size)
-        guard rect.width > 0, rect.height > 0 else { return }
-        let x = clamped(Double(location.x - rect.minX), tempRange.lowerBound, tempRange.upperBound, over: Double(rect.width))
-        let y = clamped(Double(rect.maxY - location.y), rpmLower, rpmUpper, over: Double(rect.height))
-        let temperature = x.rounded()
-        let rpm = (y / 50).rounded() * 50
+        let value = chartGeometry.value(from: location, in: size)
 
         switch point {
         case .start:
-            startTemp = temperature
-            startRPM = clampRPM(rpm)
+            startTemp = value.temperature
+            startRPM = value.rpm
         case .ramp:
-            midTemp = temperature
-            midRPM = clampRPM(rpm)
+            midTemp = value.temperature
+            midRPM = value.rpm
         case .high:
-            maxTemp = temperature
-            maxRPM = clampRPM(rpm)
+            maxTemp = value.temperature
+            maxRPM = value.rpm
         }
     }
 
@@ -1838,23 +1831,14 @@ private struct FanCurveChartEditor: View {
     }
 
     private func position(for point: FanCurveChartPoint, in size: CGSize) -> CGPoint {
-        let rect = plotRect(in: size)
-        let temperatureRatio = ratio(point.temperature, in: tempRange.lowerBound...tempRange.upperBound)
-        let rpmRatio = ratio(point.rpm, in: rpmLower...rpmUpper)
-        return CGPoint(
-            x: rect.minX + rect.width * CGFloat(temperatureRatio),
-            y: rect.maxY - rect.height * CGFloat(rpmRatio)
+        chartGeometry.position(
+            for: FanCurveChartValue(temperature: point.temperature, rpm: point.rpm),
+            in: size
         )
     }
 
     private func plotRect(in size: CGSize) -> CGRect {
-        let leftInset = size.width < 420 ? 48.0 : 56.0
-        let topInset = 18.0
-        let rightInset = 12.0
-        let bottomInset = 30.0
-        let width = max(size.width - leftInset - rightInset, 1)
-        let height = max(size.height - topInset - bottomInset, 1)
-        return CGRect(x: leftInset, y: topInset, width: width, height: height)
+        chartGeometry.plotRect(in: size)
     }
 
     private func ratio(_ value: Double, in range: ClosedRange<Double>) -> Double {
