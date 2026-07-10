@@ -40,6 +40,7 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var statusItemController: ViftyStatusItemController?
+    private let terminationCoordinator = AppTerminationCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let model else { return }
@@ -53,6 +54,23 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
             self?.openMainWindow()
         }
         model.start()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+
+        _ = terminationCoordinator.beginTermination(
+            restore: {
+                await model.stopAndRestore()
+            },
+            completion: { [weak self, weak sender] result in
+                if !result.canTerminate {
+                    self?.openMainWindow()
+                }
+                sender?.reply(toApplicationShouldTerminate: result.canTerminate)
+            }
+        )
+        return .terminateLater
     }
 
     private func openMainWindow() {

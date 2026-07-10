@@ -1841,7 +1841,7 @@ final class AppModelTests: XCTestCase {
         await model.pollOnce()
         XCTAssertNil(model.codexUsageSnapshot)
 
-        await model.stopAndRestore()
+        _ = await model.stopAndRestore()
         await waitForCodexUsageReadCount(1, recorder: recorder)
         try? await Task.sleep(for: .milliseconds(20))
 
@@ -2037,7 +2037,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menuBarStatusItemText, "Mac | 67 C | 3352 RPM")
         XCTAssertEqual(model.menuBarLabelText, "Mac | 67 C | 3352 RPM")
         XCTAssertTrue(model.hasCompletedHardwarePoll)
-        await model.stopAndRestore()
+        _ = await model.stopAndRestore()
     }
 
     func testPrimeMenuBarStatusItemTelemetryRetriesUntilSelectedDisplayHasData() async {
@@ -3179,7 +3179,7 @@ final class AppModelTests: XCTestCase {
         await model.applyCurrentModeSelection()
         XCTAssertNotNil(model.manualSessionExpiresAt)
 
-        await model.stopAndRestore()
+        _ = await model.stopAndRestore()
 
         XCTAssertFalse(model.isRunning)
         XCTAssertEqual(model.selectedMode, .auto)
@@ -3208,12 +3208,81 @@ final class AppModelTests: XCTestCase {
         model.daemonResponding = true
         model.agentControlStatus = AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
 
-        await model.stopAndRestore()
+        _ = await model.stopAndRestore()
 
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0])
         XCTAssertTrue(model.lastError?.contains("Failed to clear agent cooling lease") == true)
         XCTAssertTrue(model.lastError?.contains("Daemon connection invalidated") == true)
+    }
+
+    func testStopAndRestoreReturnsFailureWhenHardwareAutoCannotBeConfirmed() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        await hardware.failNextRestore(ViftyError.helperRejected("restore refused"))
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+        )
+        let model = AppModel(
+            coordinator: coordinator,
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = agentHardwareSnapshot()
+        model.selectedMode = .fixed
+        await coordinator.setMode(.fixedRPM(3200))
+
+        let result = await model.stopAndRestore()
+
+        XCTAssertEqual(result, .failed(message: "The fan helper rejected the command: restore refused"))
+        XCTAssertTrue(model.lastError?.contains("restore refused") == true)
+    }
+
+    func testStopAndRestoreDoesNotRequireHardwareWriteWhenAlreadyAuto() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot(hardwareMode: .automatic))
+        await hardware.failNextRestore(ViftyError.helperRejected("daemon unavailable"))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { false },
+            agentStatusReader: { nil }
+        )
+
+        let result = await model.stopAndRestore()
+
+        XCTAssertEqual(result, .restored)
+        let restoreAttempts = await hardware.restoreAttemptCount()
+        XCTAssertEqual(restoreAttempts, 0)
+    }
+
+    func testFailedTerminationRestoreResumesPreviouslyRunningModel() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+        )
+        let model = AppModel(
+            coordinator: coordinator,
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.start()
+        await model.pollOnce()
+        model.selectedMode = .fixed
+        await coordinator.setMode(.fixedRPM(3200))
+        await hardware.failNextRestore(ViftyError.helperRejected("restore refused"))
+
+        let result = await model.stopAndRestore()
+
+        XCTAssertEqual(result, .failed(message: "The fan helper rejected the command: restore refused"))
+        XCTAssertTrue(model.isRunning)
+        XCTAssertEqual(model.selectedMode, .fixed)
+        _ = await model.stopAndRestore()
     }
 
     func testManualModeSelectionFailsClosedWhenDaemonDoesNotRespond() async {
@@ -4435,9 +4504,11 @@ private actor AppModelFakeHardware: HardwareService {
     var restoredFanIDs: [Int] = []
     private var snapshotFailures: [Error] = []
     private var applyFailures: [Error] = []
+    private var restoreFailures: [Error] = []
     private var snapshotDelayNanoseconds: UInt64?
     private var restoreAutoDelayNanoseconds: UInt64?
     private var snapshotReads = 0
+    private var restoreAttempts = 0
 
     init(snapshot: HardwareSnapshot) {
         self.snapshotValue = snapshot
@@ -4470,12 +4541,20 @@ private actor AppModelFakeHardware: HardwareService {
         snapshotReads
     }
 
+    func restoreAttemptCount() -> Int {
+        restoreAttempts
+    }
+
     func failNextSnapshot(_ error: Error) {
         snapshotFailures.append(error)
     }
 
     func failNextApply(_ error: Error) {
         applyFailures.append(error)
+    }
+
+    func failNextRestore(_ error: Error) {
+        restoreFailures.append(error)
     }
 
     func apply(_ command: FanCommand, fan: Fan) async throws {
@@ -4486,6 +4565,10 @@ private actor AppModelFakeHardware: HardwareService {
     }
 
     func restoreAuto(fan: Fan) async throws {
+        restoreAttempts += 1
+        if !restoreFailures.isEmpty {
+            throw restoreFailures.removeFirst()
+        }
         if let restoreAutoDelayNanoseconds {
             try? await Task.sleep(nanoseconds: restoreAutoDelayNanoseconds)
         }

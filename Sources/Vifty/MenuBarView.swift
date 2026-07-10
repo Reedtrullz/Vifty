@@ -104,10 +104,7 @@ struct MenuBarView: View {
                 .keyboardShortcut("a")
                 .help(model.autoRestoreActionHelp)
                 Button("Quit") {
-                    Task { @MainActor in
-                        await model.stopAndRestore()
-                        NSApplication.shared.terminate(nil)
-                    }
+                    NSApplication.shared.terminate(nil)
                 }
                 .keyboardShortcut("q")
             }

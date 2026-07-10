@@ -278,6 +278,47 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testForceAutoReturnsRestoredAfterHardwareConfirmation() async {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan()],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+
+        let result = await coordinator.forceAuto()
+
+        XCTAssertEqual(result, .restored)
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredFanIDs, [0])
+    }
+
+    func testForceAutoReturnsFailureWithoutClearingManualState() async {
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan()],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            )
+        )
+        await hardware.setRestoreError(ViftyError.helperRejected("restore refused"))
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.fixedRPM(3200))
+
+        let result = await coordinator.forceAuto()
+
+        XCTAssertEqual(result, .failed(message: "The fan helper rejected the command: restore refused"))
+        let state = await coordinator.state
+        XCTAssertTrue(state.manualControlActive)
+        XCTAssertEqual(state.mode, .fixedRPM(3200))
+    }
+
     func testFixedRPMAppliesEvenWhenDaemonUnreachable() async throws {
         // When the daemon is down, writes should fall back to local SMC.
         // FakeHardware simulates the local path — if the coordinator calls
@@ -480,6 +521,7 @@ private actor FakeHardware: HardwareService {
     var snapshotValue: HardwareSnapshot
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
+    var restoreError: Error?
 
     init(snapshot: HardwareSnapshot) {
         self.snapshotValue = snapshot
@@ -497,11 +539,18 @@ private actor FakeHardware: HardwareService {
         appliedCommands.removeAll()
     }
 
+    func setRestoreError(_ error: Error?) {
+        restoreError = error
+    }
+
     func apply(_ command: FanCommand, fan: Fan) async throws {
         appliedCommands.append(command)
     }
 
     func restoreAuto(fan: Fan) async throws {
+        if let restoreError {
+            throw restoreError
+        }
         restoredFanIDs.append(fan.id)
     }
 }

@@ -431,10 +431,16 @@ final class AppModel: ObservableObject {
     }
 
     func stop() {
-        Task { await stopAndRestore() }
+        Task { _ = await stopAndRestore() }
     }
 
-    func stopAndRestore() async {
+    func stopAndRestore() async -> AppTerminationRestoreResult {
+        let wasRunning = isRunning
+        let stateBeforeStop = await coordinator.state
+        let hasAgentLeaseRequiringRestore = agentControlStatus?.activeLease != nil
+        let requiresHardwareRestore = stateBeforeStop.manualControlActive
+            || stateBeforeStop.mode != .auto
+            || hasAgentLeaseRequiringRestore
         pollingTask?.cancel()
         pollingTask = nil
         codexUsageRefreshGeneration &+= 1
@@ -443,12 +449,53 @@ final class AppModel: ObservableObject {
         isRunning = false
         selectedMode = .auto
         manualSessionExpiresAt = nil
-        await coordinator.forceAuto()
+        let hardwareRestoreResult: AutoRestoreResult = if requiresHardwareRestore {
+            await coordinator.forceAuto()
+        } else {
+            .restored
+        }
         let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
         await syncState()
+
+        var failures: [String] = []
+        if case .failed(let message) = hardwareRestoreResult {
+            failures.append(message)
+        }
         if let agentRestoreError {
-            lastError = agentRestoreError
-            await notifyAutoRestoreFailure(agentRestoreError)
+            failures.append(agentRestoreError)
+        }
+        guard !failures.isEmpty else {
+            return .restored
+        }
+
+        let message = failures.joined(separator: "\n")
+        lastError = message
+        await notifyAutoRestoreFailure(message)
+        selectedMode = modeSelection(for: controlState.mode)
+        resumePollingAfterTerminationFailure(wasRunning: wasRunning)
+        return .failed(message: message)
+    }
+
+    private func modeSelection(for mode: FanMode) -> ModeSelection {
+        switch mode {
+        case .auto:
+            .auto
+        case .fixedRPM:
+            .fixed
+        case .temperatureCurve:
+            .curve
+        }
+    }
+
+    private func resumePollingAfterTerminationFailure(wasRunning: Bool) {
+        guard wasRunning, pollingTask == nil else { return }
+        isRunning = true
+        pollingTask = Task { [self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: backgroundPollInterval())
+                guard !Task.isCancelled else { return }
+                await pollOnce()
+            }
         }
     }
 
@@ -525,7 +572,7 @@ final class AppModel: ObservableObject {
                 }
                 assignIfChanged(\.controlState, await coordinator.state)
             } else {
-                await coordinator.forceAuto()
+                _ = await coordinator.forceAuto()
                 await syncState()
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)

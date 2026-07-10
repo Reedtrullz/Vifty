@@ -6,6 +6,11 @@ public protocol HardwareService: Sendable {
     func restoreAuto(fan: Fan) async throws
 }
 
+public enum AutoRestoreResult: Sendable, Equatable {
+    case restored
+    case failed(message: String)
+}
+
 public actor FanControlCoordinator {
     private let hardware: HardwareService
     private let uncleanMarker: ManualControlMarker
@@ -113,7 +118,7 @@ public actor FanControlCoordinator {
         return snapshot
     }
 
-    public func forceAuto() async {
+    public func forceAuto() async -> AutoRestoreResult {
         do {
             let snapshot = try await hardware.snapshot()
             try await restoreAuto(for: snapshot.fans)
@@ -124,8 +129,11 @@ public actor FanControlCoordinator {
             lastManualWriteAtByFanID = [:]
             state.statusMessage = "Auto"
             uncleanMarker.clear()
+            return .restored
         } catch {
-            state.statusMessage = "Auto restore failed: \(error.localizedDescription)"
+            let message = error.localizedDescription
+            state.statusMessage = "Auto restore failed: \(message)"
+            return .failed(message: message)
         }
     }
 
