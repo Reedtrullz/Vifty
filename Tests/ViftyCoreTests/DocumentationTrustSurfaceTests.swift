@@ -117,6 +117,14 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("slow evidence/release script test suites"))
     }
 
+    func testReadmeDocumentsBundleSafeDeveloperLaunch() throws {
+        let readme = try read("README.md")
+
+        XCTAssertTrue(readme.contains("make run-app"))
+        XCTAssertTrue(readme.contains("Do not launch `.build/debug/Vifty` directly"))
+        XCTAssertTrue(readme.contains("UserNotifications requires Vifty to run from an app bundle"))
+    }
+
     func testReadmeDescribesFallbackHelperInstallPathAccurately() throws {
         let readme = try read("README.md")
 

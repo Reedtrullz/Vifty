@@ -138,6 +138,23 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(contentView.contains("Label(\"Copy Support Evidence\", systemImage: \"doc.on.doc\")\n                                .frame(maxWidth: 260)"))
     }
 
+    func testEmptyTemperatureStateAndDeveloperLauncherAreBundleSafe() throws {
+        let contentView = try read("Sources/Vifty/ContentView.swift")
+        let launcher = try read("scripts/build-and-run-vifty.sh")
+        let makefile = try read("Makefile")
+
+        XCTAssertFalse(contentView.contains("thermometer.slash"))
+        XCTAssertTrue(contentView.contains("thermometer.medium"))
+        XCTAssertTrue(launcher.contains("make app"))
+        XCTAssertTrue(launcher.contains("open \"${app_path}\""))
+        XCTAssertTrue(launcher.contains(".build/Vifty.app"))
+        XCTAssertFalse(launcher.contains(".build/debug/Vifty"))
+        XCTAssertFalse(launcher.contains("repair-helper"))
+        XCTAssertFalse(launcher.contains("make install"))
+        XCTAssertTrue(makefile.contains("run-app: ## Build and open the local app bundle"))
+        XCTAssertTrue(makefile.contains("./scripts/build-and-run-vifty.sh"))
+    }
+
     func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 

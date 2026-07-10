@@ -880,7 +880,7 @@ struct ContentView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             } else {
-                ContentUnavailableView("No Temperature Sensors", systemImage: "thermometer.slash", description: Text("Vifty needs at least one temperature sensor before fan curves can run."))
+                ContentUnavailableView("No Temperature Sensors", systemImage: "thermometer.medium", description: Text("Vifty needs at least one temperature sensor before fan curves can run."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

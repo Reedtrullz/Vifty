@@ -152,6 +152,9 @@ swift test
 # Build an ad-hoc-signed app bundle at .build/Vifty.app
 make app CONFIGURATION=release
 
+# Build and open the local app bundle safely
+make run-app
+
 # Build the optional source-first unsigned tester zip and checksum
 make unsigned-dev-artifact
 
@@ -176,6 +179,8 @@ SWIFT_BUILD_PATH=/tmp/vifty-swiftpm-build make install
 ```
 
 The app bundle is still written to `.build/Vifty.app`; only SwiftPM's package build products move to `SWIFT_BUILD_PATH`.
+
+Do not launch `.build/debug/Vifty` directly. UserNotifications requires Vifty to run from an app bundle, and the raw SwiftPM executable does not provide the bundle metadata macOS expects. Use `make run-app` for local development; it builds and opens `.build/Vifty.app` without installing the app or changing the privileged helper.
 
 GitHub Actions runs `make verify-full` on every push to `main`, every pull request targeting `main`, and manual `workflow_dispatch`, so the slow evidence/release script test suites are automated remotely instead of being part of the default local `make verify` loop. CI still builds the release app bundle, validates plist files, verifies the ad-hoc code signature, checks a temporary install, and uploads a zipped `Vifty.app` artifact.
 
