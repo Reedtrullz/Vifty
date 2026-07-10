@@ -132,7 +132,8 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean"))
+        XCTAssertTrue(makefile.contains(".PHONY: app run-app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean"))
+        XCTAssertTrue(makefile.contains("run-app: ## Build and open the local app bundle"))
         XCTAssertTrue(makefile.contains("verify: ## Run fast local trust gates without installing"))
         XCTAssertTrue(makefile.contains("verify-full: verify ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
         XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))
