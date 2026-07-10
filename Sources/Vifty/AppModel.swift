@@ -295,8 +295,7 @@ final class AppModel: ObservableObject {
     private let powerTelemetryRefreshInterval: TimeInterval = 15
     private let daemonPingRefreshInterval: TimeInterval = 30
     private let agentStatusRefreshInterval: TimeInterval = 15
-    private let idleBackgroundPollInterval: Duration = .seconds(10)
-    private let activeBackgroundPollInterval: Duration = .seconds(5)
+    private let pollSchedulePolicy = PollSchedulePolicy.standard
 
     init(
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
@@ -355,6 +354,7 @@ final class AppModel: ObservableObject {
     func start() {
         guard pollingTask == nil else { return }
         isRunning = true
+        ViftyLog.lifecycle.info("Polling started")
 
         pollingTask = Task { [self] in
             await pollOnce()
@@ -362,8 +362,9 @@ final class AppModel: ObservableObject {
             await applyStartupModePreferenceIfNeeded()
 
             while !Task.isCancelled {
-                await pollOnce()
                 try? await Task.sleep(for: backgroundPollInterval())
+                guard !Task.isCancelled else { return }
+                await pollOnce()
             }
         }
     }
@@ -435,6 +436,7 @@ final class AppModel: ObservableObject {
     }
 
     func stopAndRestore() async -> AppTerminationRestoreResult {
+        ViftyLog.fanControl.notice("Termination restore started")
         let wasRunning = isRunning
         let stateBeforeStop = await coordinator.state
         let hasAgentLeaseRequiringRestore = agentControlStatus?.activeLease != nil
@@ -465,6 +467,7 @@ final class AppModel: ObservableObject {
             failures.append(agentRestoreError)
         }
         guard !failures.isEmpty else {
+            ViftyLog.fanControl.notice("Termination restore confirmed")
             return .restored
         }
 
@@ -473,6 +476,7 @@ final class AppModel: ObservableObject {
         await notifyAutoRestoreFailure(message)
         selectedMode = modeSelection(for: controlState.mode)
         resumePollingAfterTerminationFailure(wasRunning: wasRunning)
+        ViftyLog.fanControl.error("Termination restore failed")
         return .failed(message: message)
     }
 
@@ -514,6 +518,10 @@ final class AppModel: ObservableObject {
     }
 
     private func performPollOnce() async {
+        let pollingIntervalState = ViftyLog.pollingSignposter.beginInterval("Hardware poll")
+        defer {
+            ViftyLog.pollingSignposter.endInterval("Hardware poll", pollingIntervalState)
+        }
         let pollStartedAt = now()
         let shouldRefreshPowerTelemetry = shouldRefresh(
             lastRefreshAt: lastPowerTelemetryRefreshAt,
@@ -550,7 +558,9 @@ final class AppModel: ObservableObject {
             assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: nextSnapshot))
             await syncState()
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
+            ViftyLog.polling.debug("Hardware poll completed")
         } catch {
+            ViftyLog.polling.warning("Hardware poll failed")
             let preservesManualIntent = shouldPreserveManualIntent(
                 afterTickFailure: error,
                 attemptedMode: stateBeforeTick.mode
@@ -664,13 +674,11 @@ final class AppModel: ObservableObject {
     }
 
     private func backgroundPollInterval() -> Duration {
-        if selectedMode != .auto || controlState.mode != .auto {
-            return activeBackgroundPollInterval
-        }
-        if agentControlStatus?.activeLease?.isActive(at: now()) == true {
-            return activeBackgroundPollInterval
-        }
-        return idleBackgroundPollInterval
+        pollSchedulePolicy.interval(
+            selectedMode: selectedMode,
+            controlMode: controlState.mode,
+            hasAgentLease: agentControlStatus?.activeLease?.isActive(at: now()) == true
+        )
     }
 
     private func refreshDaemonPingIfNeeded(at date: Date, force: Bool) async {

@@ -24,8 +24,14 @@ final class AppTerminationCoordinator {
     ) -> Bool {
         guard terminationTask == nil else { return false }
 
+        ViftyLog.lifecycle.notice("Application termination requested")
         terminationTask = Task { @MainActor [weak self] in
             let result = await restore()
+            if result.canTerminate {
+                ViftyLog.lifecycle.notice("Application termination approved")
+            } else {
+                ViftyLog.lifecycle.error("Application termination canceled after restore failure")
+            }
             completion(result)
             self?.terminationTask = nil
         }

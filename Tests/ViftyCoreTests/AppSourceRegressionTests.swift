@@ -155,6 +155,28 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(makefile.contains("./scripts/build-and-run-vifty.sh"))
     }
 
+    func testRuntimeInstrumentationUsesPrivacySafeCategories() throws {
+        let appModel = try read("Sources/Vifty/AppModel.swift")
+        let appLog = try read("Sources/Vifty/ViftyLog.swift")
+        let daemonClient = try read("Sources/ViftyCore/ViftyDaemonClient.swift")
+        let notifications = try read("Sources/Vifty/LocalNotifications.swift")
+        let codexUsage = try read("Sources/Vifty/CodexUsage.swift")
+
+        XCTAssertTrue(appModel.contains("pollingSignposter.beginInterval"))
+        XCTAssertTrue(appModel.contains("pollingSignposter.endInterval"))
+        XCTAssertTrue(appLog.contains("static let lifecycle"))
+        XCTAssertTrue(appLog.contains("static let polling"))
+        XCTAssertTrue(appLog.contains("static let notifications"))
+        XCTAssertTrue(appLog.contains("static let fanControl"))
+        XCTAssertTrue(appLog.contains("static let codexUsage"))
+        XCTAssertTrue(daemonClient.contains("ViftyCoreLog.xpc"))
+        XCTAssertTrue(notifications.contains("ViftyLog.notifications"))
+        XCTAssertTrue(codexUsage.contains("ViftyLog.codexUsage"))
+        XCTAssertFalse(appLog.contains("sensorID"))
+        XCTAssertFalse(appLog.contains("profile"))
+        XCTAssertFalse(appLog.contains("command"))
+    }
+
     func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 

@@ -2040,6 +2040,31 @@ final class AppModelTests: XCTestCase {
         _ = await model.stopAndRestore()
     }
 
+    func testStartDoesNotImmediatelyPollTwice() async {
+        let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot(hardwareMode: .automatic))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot() },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+
+        model.start()
+        for _ in 0..<100 {
+            if await hardware.snapshotReadCount() >= 1 { break }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let snapshotReads = await hardware.snapshotReadCount()
+        XCTAssertEqual(snapshotReads, 1)
+        _ = await model.stopAndRestore()
+    }
+
     func testPrimeMenuBarStatusItemTelemetryRetriesUntilSelectedDisplayHasData() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 3352, minimumRPM: 1400, maximumRPM: 6000, controllable: true, hardwareMode: .automatic)],

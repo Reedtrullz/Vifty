@@ -177,14 +177,25 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         ) -> Void
     ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
+            ViftyCoreLog.xpc.debug("Daemon request started")
             let state = CallbackState<T>()
             let connection = connectionFactory()
 
             connection.setInvalidationHandler {
-                state.finish(.failure(ViftyError.helperRejected("Daemon connection invalidated.")), continuation: continuation)
+                if state.finish(
+                    .failure(ViftyError.helperRejected("Daemon connection invalidated.")),
+                    continuation: continuation
+                ) {
+                    ViftyCoreLog.xpc.warning("Daemon request connection invalidated unexpectedly")
+                }
             }
             connection.setInterruptionHandler {
-                state.finish(.failure(ViftyError.helperRejected("Daemon connection interrupted.")), continuation: continuation)
+                if state.finish(
+                    .failure(ViftyError.helperRejected("Daemon connection interrupted.")),
+                    continuation: continuation
+                ) {
+                    ViftyCoreLog.xpc.warning("Daemon request connection interrupted")
+                }
             }
             connection.resume()
 
@@ -193,6 +204,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
             timer.setEventHandler {
                 if state.finish(.failure(ViftyError.helperRejected("Daemon request timed out.")), continuation: continuation) {
                     connection.invalidate()
+                    ViftyCoreLog.xpc.warning("Daemon request timed out")
                 }
             }
             timer.resume()
@@ -214,6 +226,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
                 timer.cancel()
                 if state.finish(result, continuation: continuation) {
                     connection.invalidate()
+                    ViftyCoreLog.xpc.debug("Daemon request completed")
                 }
             }
         }

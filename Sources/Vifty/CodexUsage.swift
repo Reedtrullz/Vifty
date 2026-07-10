@@ -580,10 +580,18 @@ struct CodexUsageAppServerClient {
 
     func read() -> CodexUsageSnapshot? {
         guard let executableURL else { return nil }
+        ViftyLog.codexUsage.debug("Codex usage refresh started")
         if let snapshot = readUsingStdioAppServer(executableURL) {
+            ViftyLog.codexUsage.debug("Codex usage refresh completed source=stdio")
             return snapshot
         }
-        return readUsingProxy(executableURL)
+        let snapshot = readUsingProxy(executableURL)
+        if snapshot == nil {
+            ViftyLog.codexUsage.debug("Codex usage refresh unavailable")
+        } else {
+            ViftyLog.codexUsage.debug("Codex usage refresh completed source=proxy")
+        }
+        return snapshot
     }
 
     private func readUsingStdioAppServer(_ executableURL: URL) -> CodexUsageSnapshot? {
@@ -672,7 +680,10 @@ struct CodexUsageAppServerClient {
             return nil
         }
 
-        _ = responseReady.wait(timeout: .now() + timeout)
+        let responseWaitResult = responseReady.wait(timeout: .now() + timeout)
+        if responseWaitResult == .timedOut {
+            ViftyLog.codexUsage.debug("Codex usage child reached response timeout")
+        }
         stdout.fileHandleForReading.readabilityHandler = nil
         stderr.fileHandleForReading.readabilityHandler = nil
         try? stdin.fileHandleForWriting.close()
@@ -681,6 +692,7 @@ struct CodexUsageAppServerClient {
             if processExited.wait(timeout: .now() + terminationGracePeriod) == .timedOut,
                process.isRunning {
                 _ = Darwin.kill(process.processIdentifier, SIGKILL)
+                ViftyLog.codexUsage.warning("Codex usage child required forced termination")
                 _ = processExited.wait(timeout: .now() + terminationGracePeriod)
             }
         }

@@ -94,7 +94,10 @@ final class UserNotificationDeliverer: LocalNotificationDelivering {
     func deliver(_ notification: LocalNotification) async -> Bool {
         guard !Self.isRunningUnderXCTest else { return false }
         let center = UNUserNotificationCenter.current()
-        guard await ensureAuthorization(center: center) else { return false }
+        guard await ensureAuthorization(center: center) else {
+            ViftyLog.notifications.debug("Notification suppressed because authorization is unavailable")
+            return false
+        }
 
         let content = UNMutableNotificationContent()
         content.title = notification.title
@@ -113,8 +116,10 @@ final class UserNotificationDeliverer: LocalNotificationDelivering {
         )
         do {
             try await center.add(request)
+            ViftyLog.notifications.info("Notification delivered kind=\(notification.kind.rawValue, privacy: .public)")
             return true
         } catch {
+            ViftyLog.notifications.error("Notification delivery failed kind=\(notification.kind.rawValue, privacy: .public)")
             return false
         }
     }
