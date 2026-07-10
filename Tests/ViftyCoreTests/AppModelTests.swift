@@ -172,6 +172,43 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.curveStartTemp, 55)
     }
 
+    func testCurveProfileSelectionIsSharedAndClearsForUnsavedCurves() {
+        let model = AppModel()
+        let profile = CurveProfile(
+            name: "Build",
+            sensorID: "Tp09",
+            startTemp: 54,
+            startRPM: 2_600,
+            midTemp: 70,
+            midRPM: 3_800,
+            maxTemp: 86,
+            maxRPM: 5_200
+        )
+        model.savedProfiles = [profile]
+
+        XCTAssertTrue(model.selectCurveProfile(id: profile.id))
+        XCTAssertEqual(model.selectedCurveProfileID, profile.id)
+
+        model.loadDeveloperPreset(.build)
+        XCTAssertNil(model.selectedCurveProfileID)
+
+        XCTAssertTrue(model.selectCurveProfile(id: nil))
+        XCTAssertNil(model.selectedCurveProfileID)
+    }
+
+    func testSavingAndDeletingProfileKeepsSharedSelectionValid() throws {
+        let model = AppModel()
+        model.savedProfiles = []
+
+        model.saveCurrentProfile(name: "Quiet")
+
+        let savedProfile = try XCTUnwrap(model.savedProfiles.first)
+        XCTAssertEqual(model.selectedCurveProfileID, savedProfile.id)
+
+        model.deleteProfile(savedProfile)
+        XCTAssertNil(model.selectedCurveProfileID)
+    }
+
     func testDeveloperPresetRPMCapsStayWithinDefaultAgentPolicyCeiling() {
         let policy = AgentControlPolicy()
 

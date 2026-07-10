@@ -3,26 +3,15 @@ import ViftyCore
 
 struct SettingsToolsPanel: View {
     @ObservedObject var model: AppModel
-    @Binding var selectedProfileID: UUID?
-    @Binding var agentRuleCopied: Bool
-    @Binding var agentCommandCopied: Bool
-
-    let menuBarCustomFieldBinding: (MenuBarField) -> Binding<Bool>
-    let copyAgentWorkflowCommand: (AgentWorkflowSupport.WorkloadCommandTemplate, AgentWorkflowSupport.WorkloadCommandMode) -> Void
-    let copyAgentWorkflowRule: () -> Void
+    @State private var agentRuleCopied = false
+    @State private var agentCommandCopied = false
 
     var body: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                quickSettingsStrip
-                menuBarDisplaySettings
-                notificationSettings
-                agentWorkflowSettings
-            }
-            .padding(.top, 6)
-        } label: {
-            Label("Settings & Tools", systemImage: "gearshape")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            quickSettingsStrip
+            menuBarDisplaySettings
+            notificationSettings
+            agentWorkflowSettings
         }
     }
 
@@ -68,7 +57,7 @@ struct SettingsToolsPanel: View {
             Label("Curve profile", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Picker("Curve profile", selection: $selectedProfileID) {
+            Picker("Curve profile", selection: $model.selectedCurveProfileID) {
                 Text("Unsaved").tag(Optional<UUID>.none)
                 ForEach(model.savedProfiles) { profile in
                     Text(profile.name).tag(Optional(profile.id))
@@ -77,16 +66,15 @@ struct SettingsToolsPanel: View {
             .labelsHidden()
             .pickerStyle(.menu)
             .controlSize(.small)
-            .onChange(of: selectedProfileID) { _, newID in
+            .onChange(of: model.selectedCurveProfileID) { _, newID in
                 _ = model.selectCurveProfile(id: newID)
             }
 
-            if selectedProfileID != nil {
+            if model.selectedCurveProfileID != nil {
                 Button {
-                    if let id = selectedProfileID,
+                    if let id = model.selectedCurveProfileID,
                        let profile = model.savedProfiles.first(where: { $0.id == id }) {
                         model.deleteProfile(profile)
-                        selectedProfileID = nil
                     }
                 } label: {
                     Image(systemName: "trash")
@@ -292,5 +280,27 @@ struct SettingsToolsPanel: View {
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
+        Binding(
+            get: { model.isMenuBarCustomFieldEnabled(field) },
+            set: { model.setMenuBarCustomField(field, enabled: $0) }
+        )
+    }
+
+    private func copyAgentWorkflowRule() {
+        AgentWorkflowSupport.copyAgentRule()
+        agentRuleCopied = true
+        agentCommandCopied = false
+    }
+
+    private func copyAgentWorkflowCommand(
+        _ template: AgentWorkflowSupport.WorkloadCommandTemplate,
+        _ mode: AgentWorkflowSupport.WorkloadCommandMode
+    ) {
+        AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
+        agentRuleCopied = false
+        agentCommandCopied = true
     }
 }

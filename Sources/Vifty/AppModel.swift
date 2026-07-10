@@ -250,6 +250,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var recentTelemetryTrendSummary: String?
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
+    @Published var selectedCurveProfileID: CurveProfile.ID?
     private var isSettingSelectedSensorProgrammatically = false
     private var userSelectedSensorID: String?
 
@@ -847,6 +848,7 @@ final class AppModel: ObservableObject {
         } else {
             savedProfiles.append(profile)
         }
+        selectedCurveProfileID = profile.id
         persistProfiles()
     }
 
@@ -868,16 +870,21 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     func selectCurveProfile(id profileID: CurveProfile.ID?) -> Bool {
-        guard let profileID,
-              let profile = savedProfiles.first(where: { $0.id == profileID }) else {
+        guard let profileID else {
+            selectedCurveProfileID = nil
+            return true
+        }
+        guard let profile = savedProfiles.first(where: { $0.id == profileID }) else {
             return false
         }
+        selectedCurveProfileID = profileID
         selectedMode = .curve
         loadProfile(profile)
         return true
     }
 
     func loadDeveloperPreset(_ preset: DeveloperFanPreset) {
+        selectedCurveProfileID = nil
         selectedMode = .curve
         curveStartTemp = preset.startTemperatureCelsius
         curveMidTemp = preset.midTemperatureCelsius
@@ -895,6 +902,9 @@ final class AppModel: ObservableObject {
 
     func deleteProfile(_ profile: CurveProfile) {
         savedProfiles.removeAll { $0.id == profile.id }
+        if selectedCurveProfileID == profile.id {
+            selectedCurveProfileID = nil
+        }
         persistProfiles()
     }
 

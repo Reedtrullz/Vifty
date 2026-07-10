@@ -25,6 +25,10 @@ struct ViftyApp: App {
                 }
         }
         .windowResizability(.contentMinSize)
+
+        Settings {
+            ViftySettingsView(model: model)
+        }
     }
 }
 

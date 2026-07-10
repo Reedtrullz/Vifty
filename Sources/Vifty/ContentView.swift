@@ -6,11 +6,8 @@ struct ContentView: View {
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var newProfileName = ""
     @State private var showSaveDialog = false
-    @State private var selectedProfileID: UUID?
     @State private var helperRefreshTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
-    @State private var agentRuleCopied = false
-    @State private var agentCommandCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,7 +86,7 @@ struct ContentView: View {
                     let telemetrySections = placement.sections(in: .workbenchTelemetry)
                     HStack(alignment: .top, spacing: 0) {
                         ScrollView(.vertical) {
-                            workbenchControlRailSectionsView(
+                            paneSectionsView(
                                 controlSections,
                                 compactTelemetry: layout.compactTelemetry,
                                 minHeight: proxy.size.height
@@ -167,40 +164,6 @@ struct ContentView: View {
         }
         .onDisappear {
             guard needsHelperLifecycle else { return }
-            helperRefreshTask?.cancel()
-            helperRefreshTask = nil
-        }
-    }
-
-    private func workbenchControlRailSectionsView(
-        _ sections: [MainWindowSection],
-        compactTelemetry: Bool,
-        minHeight: CGFloat
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if let firstSection = sections.first {
-                sectionView(firstSection, compactTelemetry: compactTelemetry)
-            }
-
-            if sections.count > 1 {
-                Spacer(minLength: 24)
-
-                Divider()
-
-                ForEach(Array(sections.dropFirst().enumerated()), id: \.element) { index, section in
-                    if index > 0 {
-                        Divider()
-                    }
-                    sectionView(section, compactTelemetry: compactTelemetry)
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
-        .onAppear {
-            daemonInstaller.refresh()
-        }
-        .onDisappear {
             helperRefreshTask?.cancel()
             helperRefreshTask = nil
         }
@@ -304,7 +267,7 @@ struct ContentView: View {
         case .fanControl:
             fanControlWorkspace
         case .settingsAndTools:
-            settingsAndToolsPanel
+            settingsAndToolsLauncher
         case .telemetryEvidence:
             sensorsPane(compact: compactTelemetry)
         }
@@ -327,16 +290,20 @@ struct ContentView: View {
         }
     }
 
-    private var settingsAndToolsPanel: some View {
-        SettingsToolsPanel(
-            model: model,
-            selectedProfileID: $selectedProfileID,
-            agentRuleCopied: $agentRuleCopied,
-            agentCommandCopied: $agentCommandCopied,
-            menuBarCustomFieldBinding: menuBarCustomFieldBinding(_:),
-            copyAgentWorkflowCommand: copyAgentWorkflowCommand(_:mode:),
-            copyAgentWorkflowRule: copyAgentWorkflowRule
-        )
+    private var settingsAndToolsLauncher: some View {
+        SettingsLink {
+            HStack(spacing: 8) {
+                Label("Settings & Tools", systemImage: "gearshape")
+                    .font(.headline)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open Vifty settings")
     }
 
     private var fansSection: some View {
@@ -551,21 +518,6 @@ struct ContentView: View {
         helperDiagnosticsCopied = true
     }
 
-    private func copyAgentWorkflowRule() {
-        AgentWorkflowSupport.copyAgentRule()
-        agentRuleCopied = true
-        agentCommandCopied = false
-    }
-
-    private func copyAgentWorkflowCommand(
-        _ template: AgentWorkflowSupport.WorkloadCommandTemplate,
-        mode: AgentWorkflowSupport.WorkloadCommandMode
-    ) {
-        AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
-        agentRuleCopied = false
-        agentCommandCopied = true
-    }
-
     private var modePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Mode", selection: $model.selectedMode) {
@@ -620,13 +572,6 @@ struct ContentView: View {
             .disabled(model.modeSelectionActionDisabled)
             .help(model.modeSelectionActionHelp)
         }
-    }
-
-    private func menuBarCustomFieldBinding(_ field: MenuBarField) -> Binding<Bool> {
-        Binding(
-            get: { model.isMenuBarCustomFieldEnabled(field) },
-            set: { model.setMenuBarCustomField(field, enabled: $0) }
-        )
     }
 
     private var fixedEditor: some View {
@@ -724,7 +669,6 @@ struct ContentView: View {
                     ForEach(DeveloperFanPreset.allCases) { preset in
                         Button {
                             model.loadDeveloperPreset(preset)
-                            selectedProfileID = nil
                             model.applyModeSelection()
                         } label: {
                             Label(preset.displayName, systemImage: preset.systemImage)
@@ -820,7 +764,6 @@ struct ContentView: View {
                         let name = newProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !name.isEmpty else { return }
                         model.saveCurrentProfile(name: name)
-                        selectedProfileID = model.savedProfiles.last?.id
                         newProfileName = ""
                         showSaveDialog = false
                     }
@@ -893,6 +836,7 @@ private struct TelemetryOverviewPanel: View {
     let power: PowerSnapshot?
     let summary: TelemetryHistorySummary
     let compact: Bool
+    @State private var metricContainerWidth: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
@@ -906,7 +850,7 @@ private struct TelemetryOverviewPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 104 : 118), spacing: compact ? 8 : 10)], spacing: compact ? 8 : 10) {
+            LazyVGrid(columns: metricColumns, spacing: metricSpacing) {
                 if let power {
                     PowerMetric(label: "Battery", value: batteryPercentText(for: power), systemImage: "battery.75")
                     if let adapter = power.adapter, adapter.powerWatts >= 0.5 {
@@ -927,6 +871,11 @@ private struct TelemetryOverviewPanel: View {
                 if summary.sampleCount > 0 {
                     PowerMetric(label: "Thermal", value: summary.latestThermalPressureText, systemImage: "speedometer")
                 }
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width.rounded(.down)
+            } action: { width in
+                metricContainerWidth = width
             }
 
             if let power,
@@ -951,6 +900,18 @@ private struct TelemetryOverviewPanel: View {
         }
         .padding(compact ? 10 : 12)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var metricSpacing: CGFloat {
+        compact ? 8 : 10
+    }
+
+    private var metricColumns: [GridItem] {
+        let count = TelemetryLayoutPolicy.metricColumnCount(for: metricContainerWidth)
+        return Array(
+            repeating: GridItem(.flexible(minimum: compact ? 104 : 118), spacing: metricSpacing, alignment: .topLeading),
+            count: count
+        )
     }
 
     private var summaryHeaderText: String {
