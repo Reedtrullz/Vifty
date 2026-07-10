@@ -313,6 +313,34 @@ final class CodexUsageTests: XCTestCase {
         XCTAssertTrue(stdin.contains("read"))
     }
 
+    func testAppServerClientBoundsShutdownWhenChildIgnoresTerminate() throws {
+        let root = try temporaryDirectory()
+        let executable = root.appendingPathComponent("stubborn-codex")
+        let script = """
+        #!/bin/sh
+        trap '' TERM
+        sleep 0.6
+        exit 0
+        """
+        try script.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: executable.path
+        )
+        let client = CodexUsageAppServerClient(
+            executableURL: executable,
+            timeout: 0.05,
+            terminationGracePeriod: 0.05
+        )
+
+        let startedAt = Date()
+        let snapshot = client.read()
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertNil(snapshot)
+        XCTAssertLessThan(elapsed, 0.7)
+    }
+
     func testReaderReturnsNilWithoutLocalTokenCountEvents() throws {
         let root = try temporaryDirectory()
         try FileManager.default.createDirectory(at: root.appendingPathComponent("sessions", isDirectory: true), withIntermediateDirectories: true)

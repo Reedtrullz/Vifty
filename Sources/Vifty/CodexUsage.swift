@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct CodexUsageLimitWindow: Equatable, Sendable {
     var name: String
@@ -565,10 +566,16 @@ struct CodexUsageAppServerClient {
     private static let requestID = "vifty-codex-usage"
     private let executableURL: URL?
     private let timeout: TimeInterval
+    private let terminationGracePeriod: TimeInterval
 
-    init(executableURL: URL? = nil, timeout: TimeInterval = 2.5) {
+    init(
+        executableURL: URL? = nil,
+        timeout: TimeInterval = 2.5,
+        terminationGracePeriod: TimeInterval = 0.25
+    ) {
         self.executableURL = executableURL ?? Self.defaultExecutableURL()
-        self.timeout = timeout
+        self.timeout = max(0, timeout)
+        self.terminationGracePeriod = max(0, terminationGracePeriod)
     }
 
     func read() -> CodexUsageSnapshot? {
@@ -629,6 +636,7 @@ struct CodexUsageAppServerClient {
         process.standardError = stderr
 
         let responseReady = DispatchSemaphore(value: 0)
+        let processExited = DispatchSemaphore(value: 0)
         let output = LockedOutput()
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
@@ -642,6 +650,7 @@ struct CodexUsageAppServerClient {
         }
         process.terminationHandler = { _ in
             responseReady.signal()
+            processExited.signal()
         }
 
         do {
@@ -669,7 +678,16 @@ struct CodexUsageAppServerClient {
         try? stdin.fileHandleForWriting.close()
         if process.isRunning {
             process.terminate()
-            process.waitUntilExit()
+            if processExited.wait(timeout: .now() + terminationGracePeriod) == .timedOut,
+               process.isRunning {
+                _ = Darwin.kill(process.processIdentifier, SIGKILL)
+                _ = processExited.wait(timeout: .now() + terminationGracePeriod)
+            }
+        }
+        guard !process.isRunning else {
+            try? stdout.fileHandleForReading.close()
+            try? stderr.fileHandleForReading.close()
+            return nil
         }
         let remainingData = stdout.fileHandleForReading.readDataToEndOfFile()
         if !remainingData.isEmpty {
