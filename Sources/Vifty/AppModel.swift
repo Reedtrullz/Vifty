@@ -271,6 +271,7 @@ final class AppModel: ObservableObject {
     private let codexUsageReader: @Sendable () -> CodexUsageSnapshot?
     private let now: @Sendable () -> Date
     private let notificationDeliverer: LocalNotificationDelivering
+    private let notificationHistoryStore: LocalNotificationHistoryStore
     private let launchAtLoginManager: LaunchAtLoginManaging
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
@@ -282,10 +283,7 @@ final class AppModel: ObservableObject {
     private var codexUsageRefreshTask: Task<Void, Never>?
     private var codexUsageRefreshGeneration = 0
     private var startupModeApplied = false
-    private var lastNotificationAt: [LocalNotificationKind: Date] = [:]
-    private var previousHelperNeedsAttention = false
-    private var previousPluggedInDrain = false
-    private var previousAgentCoolingNeedsAttention = false
+    private var notificationTransitionState = LocalNotificationTransitionState()
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var elevatedThermalPressureStartedAt: Date?
     private var lastCodexUsageRefreshAt: Date?
@@ -308,6 +306,7 @@ final class AppModel: ObservableObject {
         codexUsageRefreshInterval: TimeInterval = AppModel.defaultCodexUsageRefreshInterval,
         now: @escaping @Sendable () -> Date = { Date() },
         notificationDeliverer: LocalNotificationDelivering = UserNotificationDeliverer(),
+        notificationHistoryStore: LocalNotificationHistoryStore = LocalNotificationHistoryStore(),
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
         agentStatusReader: @escaping @Sendable () async throws -> AgentControlStatus? = {
             try await ViftyDaemonClient().agentControlStatus()
@@ -325,6 +324,7 @@ final class AppModel: ObservableObject {
         self.codexUsageReader = codexUsageReader
         self.now = now
         self.notificationDeliverer = notificationDeliverer
+        self.notificationHistoryStore = notificationHistoryStore
         self.launchAtLoginManager = launchAtLoginManager
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
@@ -2278,17 +2278,16 @@ final class AppModel: ObservableObject {
 
     private func evaluateLocalNotifications(power: PowerSnapshot, thermalPressure: ThermalPressure) async {
         let helperNeedsAttention = helperHealthState.notifiesAsHelperFailure
-        if helperNeedsAttention, !previousHelperNeedsAttention {
+        if notificationTransitionState.shouldNotify(kind: .helperFailure, isAttention: helperNeedsAttention) {
             await postNotification(
                 kind: .helperFailure,
                 title: helperFailureNotificationTitle,
                 body: helperFailureNotificationBody
             )
         }
-        previousHelperNeedsAttention = helperNeedsAttention
 
         let agentNeedsAttention = agentCoolingNeedsAttention
-        if agentNeedsAttention, !previousAgentCoolingNeedsAttention {
+        if notificationTransitionState.shouldNotify(kind: .agentCoolingAttention, isAttention: agentNeedsAttention) {
             await postNotification(
                 kind: .agentCoolingAttention,
                 title: "Vifty agent cooling needs attention",
@@ -2297,7 +2296,6 @@ final class AppModel: ObservableObject {
                     ?? "Check Vifty before starting another developer workload."
             )
         }
-        previousAgentCoolingNeedsAttention = agentNeedsAttention
 
         await evaluateThermalPressureNotification(thermalPressure)
         await evaluatePluggedInDrainNotification(power)
@@ -2330,7 +2328,7 @@ final class AppModel: ObservableObject {
 
     private func evaluatePluggedInDrainNotification(_ power: PowerSnapshot) async {
         let isPluggedInDrain = power.isPluggedIn && power.batteryIsActivelyDraining
-        if isPluggedInDrain, !previousPluggedInDrain {
+        if notificationTransitionState.shouldNotify(kind: .pluggedInBatteryDrain, isAttention: isPluggedInDrain) {
             let watts = power.batteryPowerWatts.map { PowerDisplayFormatter.watts(abs($0)) } ?? "battery power"
             await postNotification(
                 kind: .pluggedInBatteryDrain,
@@ -2338,7 +2336,6 @@ final class AppModel: ObservableObject {
                 body: "Battery is draining at \(watts) even though external power is connected."
             )
         }
-        previousPluggedInDrain = isPluggedInDrain
     }
 
     private func notifyAutoRestoreFailure(_ message: String) async {
@@ -2353,13 +2350,20 @@ final class AppModel: ObservableObject {
         guard notificationSettings.isEnabled(kind) else { return }
 
         let currentDate = now()
-        if let previous = lastNotificationAt[kind],
-           currentDate.timeIntervalSince(previous) < notificationMinimumInterval {
+        if notificationHistoryStore.isCoolingDown(
+            kind,
+            at: currentDate,
+            minimumInterval: notificationMinimumInterval
+        ) {
             return
         }
 
-        lastNotificationAt[kind] = currentDate
-        await notificationDeliverer.deliver(LocalNotification(kind: kind, title: title, body: body))
+        let delivered = await notificationDeliverer.deliver(
+            LocalNotification(kind: kind, title: title, body: body)
+        )
+        if delivered {
+            try? notificationHistoryStore.recordDelivery(of: kind, at: currentDate)
+        }
     }
 }
 

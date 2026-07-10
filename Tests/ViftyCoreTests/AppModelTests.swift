@@ -2496,6 +2496,8 @@ final class AppModelTests: XCTestCase {
 
     func testHelperFailureNotificationUsesHotBlockedFanWritesRecoveryWhenAvailable() async throws {
         let recorder = AppModelNotificationRecorder()
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let pingSequence = AppModelPingSequence(values: [true, false])
         let model = AppModel(
             coordinator: FanControlCoordinator(
                 hardware: AppModelFakeHardware(snapshot: HardwareSnapshot(
@@ -2511,13 +2513,16 @@ final class AppModelTests: XCTestCase {
             ),
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
-            now: { Date(timeIntervalSince1970: 1000) },
+            now: { clock.now },
             notificationDeliverer: recorder,
-            daemonPing: { false },
+            daemonPing: { pingSequence.next() },
             agentStatusReader: { nil }
         )
         model.notificationSettings.helperFailure = true
 
+        await model.pollOnce()
+        XCTAssertTrue(recorder.delivered.isEmpty)
+        clock.now = Date(timeIntervalSince1970: 1031)
         await model.pollOnce()
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.helperFailure])
@@ -2596,20 +2601,19 @@ final class AppModelTests: XCTestCase {
 
     func testPluggedInBatteryDrainNotificationFiresOnDrainTransition() async throws {
         let recorder = AppModelNotificationRecorder()
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let powerSequence = AppModelPowerSequence(values: [
+            PowerSnapshot(percent: 50, isPluggedIn: true, batteryPowerWatts: 0),
+            PowerSnapshot(percent: 50, isPluggedIn: true, batteryPowerWatts: -11.25)
+        ])
         let model = AppModel(
             coordinator: FanControlCoordinator(
                 hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
                 uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
             ),
-            powerReader: {
-                PowerSnapshot(
-                    percent: 50,
-                    isPluggedIn: true,
-                    batteryPowerWatts: -11.25
-                )
-            },
+            powerReader: { powerSequence.next() },
             thermalReader: { .nominal },
-            now: { Date(timeIntervalSince1970: 1000) },
+            now: { clock.now },
             notificationDeliverer: recorder,
             daemonPing: { true },
             agentStatusReader: { nil }
@@ -2617,6 +2621,8 @@ final class AppModelTests: XCTestCase {
         model.notificationSettings.pluggedInBatteryDrain = true
 
         await model.pollOnce()
+        XCTAssertTrue(recorder.delivered.isEmpty)
+        clock.now = Date(timeIntervalSince1970: 1016)
         await model.pollOnce()
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.pluggedInBatteryDrain])
@@ -2655,27 +2661,82 @@ final class AppModelTests: XCTestCase {
     func testAgentCoolingAttentionNotificationFiresWhenLeaseNeedsRestore() async throws {
         let recorder = AppModelNotificationRecorder()
         let hardware = AppModelFakeHardware(snapshot: agentHardwareSnapshot())
-        let lease = agentLease()
+        let lease = agentLease(expiresAt: Date(timeIntervalSince1970: 1005))
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let statusSequence = AgentStatusSequence(results: [
+            .success(AgentControlStatus(enabled: true, activeLease: nil, lastDecision: nil, lastErrorCode: nil)),
+            .success(AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil))
+        ])
         let model = AppModel(
             coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
             powerReader: { PowerSnapshot(percent: 50) },
             thermalReader: { .nominal },
-            now: { Date(timeIntervalSince1970: 1700) },
+            now: { clock.now },
             notificationDeliverer: recorder,
             daemonPing: { true },
             agentStatusReader: {
-                AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+                try await statusSequence.next()
             }
         )
         model.notificationSettings.agentCoolingAttention = true
 
         await model.pollOnce()
+        XCTAssertTrue(recorder.delivered.isEmpty)
+        clock.now = Date(timeIntervalSince1970: 1016)
         await model.pollOnce()
 
         XCTAssertEqual(recorder.delivered.map(\.kind), [.agentCoolingAttention])
         let notification = try XCTUnwrap(recorder.delivered.first)
         XCTAssertEqual(notification.title, "Vifty agent cooling needs attention")
         XCTAssertTrue(notification.body.contains("Use Auto to restore daemon control"))
+    }
+
+    func testNotificationCooldownPersistsAcrossModelInstances() async {
+        let historyURL = temporaryPreferencesPath()
+            .deletingLastPathComponent()
+            .appendingPathComponent("notification-history.json")
+        let firstRecorder = AppModelNotificationRecorder()
+        let lease = agentLease()
+        let firstModel = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1000) },
+            notificationDeliverer: firstRecorder,
+            notificationHistoryStore: LocalNotificationHistoryStore(url: historyURL),
+            daemonPing: { true },
+            agentStatusReader: { nil },
+            agentRestore: { _ in throw ViftyError.helperRejected("restore refused") }
+        )
+        firstModel.notificationSettings.autoRestoreFailure = true
+        firstModel.agentControlStatus = AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+
+        await firstModel.restoreAutoNow()
+        XCTAssertEqual(firstRecorder.delivered.map(\.kind), [.autoRestoreFailure])
+
+        let secondRecorder = AppModelNotificationRecorder()
+        let secondModel = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1100) },
+            notificationDeliverer: secondRecorder,
+            notificationHistoryStore: LocalNotificationHistoryStore(url: historyURL),
+            daemonPing: { true },
+            agentStatusReader: { nil },
+            agentRestore: { _ in throw ViftyError.helperRejected("restore refused") }
+        )
+        secondModel.notificationSettings.autoRestoreFailure = true
+        secondModel.agentControlStatus = AgentControlStatus(enabled: true, activeLease: lease, lastDecision: nil, lastErrorCode: nil)
+
+        await secondModel.restoreAutoNow()
+        XCTAssertTrue(secondRecorder.delivered.isEmpty)
     }
 
     func testPollOnceRefreshesPowerSnapshotFromInjectedReader() async {
@@ -4408,6 +4469,22 @@ private final class AppModelPingSequence: @unchecked Sendable {
     }
 }
 
+private final class AppModelPowerSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [PowerSnapshot]
+
+    init(values: [PowerSnapshot]) {
+        self.values = values
+    }
+
+    func next() -> PowerSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        guard values.count > 1 else { return values.first ?? PowerSnapshot() }
+        return values.removeFirst()
+    }
+}
+
 private final class AppModelReadCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
@@ -4632,7 +4709,8 @@ private actor AgentStatusSequence {
 private final class AppModelNotificationRecorder: LocalNotificationDelivering {
     private(set) var delivered: [LocalNotification] = []
 
-    func deliver(_ notification: LocalNotification) async {
+    func deliver(_ notification: LocalNotification) async -> Bool {
         delivered.append(notification)
+        return true
     }
 }

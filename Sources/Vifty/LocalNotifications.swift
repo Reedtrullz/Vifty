@@ -2,7 +2,7 @@ import Foundation
 @preconcurrency import UserNotifications
 import ViftyCore
 
-enum LocalNotificationKind: String, CaseIterable, Identifiable {
+enum LocalNotificationKind: String, Codable, CaseIterable, Identifiable {
     case helperFailure
     case elevatedThermalPressure
     case autoRestoreFailure
@@ -56,11 +56,33 @@ struct LocalNotification: Equatable {
     let kind: LocalNotificationKind
     let title: String
     let body: String
+
+    var requestIdentifier: String {
+        "tech.reidar.vifty.\(kind.rawValue)"
+    }
+
+    func matchesRequestIdentifier(_ identifier: String) -> Bool {
+        identifier == requestIdentifier || identifier.hasPrefix("\(requestIdentifier).")
+    }
+}
+
+struct LocalNotificationTransitionState {
+    private var previousAttentionByKind: [LocalNotificationKind: Bool] = [:]
+
+    mutating func shouldNotify(kind: LocalNotificationKind, isAttention: Bool) -> Bool {
+        guard let previous = previousAttentionByKind[kind] else {
+            previousAttentionByKind[kind] = isAttention
+            return false
+        }
+
+        previousAttentionByKind[kind] = isAttention
+        return isAttention && !previous
+    }
 }
 
 @MainActor
 protocol LocalNotificationDelivering: AnyObject {
-    func deliver(_ notification: LocalNotification) async
+    func deliver(_ notification: LocalNotification) async -> Bool
 }
 
 @MainActor
@@ -69,21 +91,32 @@ final class UserNotificationDeliverer: LocalNotificationDelivering {
 
     init() {}
 
-    func deliver(_ notification: LocalNotification) async {
-        guard !Self.isRunningUnderXCTest else { return }
+    func deliver(_ notification: LocalNotification) async -> Bool {
+        guard !Self.isRunningUnderXCTest else { return false }
         let center = UNUserNotificationCenter.current()
-        guard await ensureAuthorization(center: center) else { return }
+        guard await ensureAuthorization(center: center) else { return false }
 
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
 
+        let deliveredIdentifiers = await center.deliveredNotifications()
+            .map(\.request.identifier)
+            .filter(notification.matchesRequestIdentifier)
+        center.removeDeliveredNotifications(withIdentifiers: deliveredIdentifiers)
+        center.removePendingNotificationRequests(withIdentifiers: [notification.requestIdentifier])
+
         let request = UNNotificationRequest(
-            identifier: "tech.reidar.vifty.\(notification.kind.rawValue).\(UUID().uuidString)",
+            identifier: notification.requestIdentifier,
             content: content,
             trigger: nil
         )
-        try? await center.add(request)
+        do {
+            try await center.add(request)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func ensureAuthorization(center: UNUserNotificationCenter) async -> Bool {
