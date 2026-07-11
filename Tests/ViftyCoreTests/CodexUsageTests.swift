@@ -361,14 +361,14 @@ final class CodexUsageTests: XCTestCase {
         )
     }
 
-    func testAppServerClientBoundsShutdownWhenChildIgnoresTerminate() throws {
+    func testAppServerClientBoundsShutdownWhenDescendantKeepsPipeOpen() throws {
         let root = try temporaryDirectory()
         let executable = root.appendingPathComponent("stubborn-codex")
         let script = """
         #!/bin/sh
         trap '' TERM
-        sleep 0.6
-        exit 0
+        sleep 0.6 &
+        wait
         """
         try script.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes(

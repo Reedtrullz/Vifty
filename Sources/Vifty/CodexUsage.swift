@@ -715,10 +715,11 @@ struct CodexUsageAppServerClient {
             try? stderr.fileHandleForReading.close()
             return nil
         }
-        let remainingData = stdout.fileHandleForReading.readDataToEndOfFile()
-        if !remainingData.isEmpty {
-            output.append(remainingData)
-        }
+
+        // Descendants may inherit the pipe after Process exits. The streaming
+        // handler already captured any signaled result, so never drain to EOF.
+        try? stdout.fileHandleForReading.close()
+        try? stderr.fileHandleForReading.close()
 
         let responseData = output.snapshot()
         guard let result = Self.resultPayload(from: responseData, requestID: Self.requestID) else {
