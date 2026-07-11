@@ -10,7 +10,7 @@ body:
 
         Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
 
-        Vifty v1.2.0 is the current Developer ID release candidate. Treat it as trusted only when the signed/notarized GitHub Release assets, matching Homebrew cask checksum, and release verifier/readiness evidence all pass as described in docs/release-status.md. A source tag, passing CI run, unsigned-dev convenience build, local signing smoke build, or CI artifact alone is not a trusted public binary release.
+        Vifty v1.2.0 is the current published Developer ID release. Its signed/notarized GitHub Release assets, matching Homebrew cask checksum, and public verifier/readiness evidence pass as described in docs/release-status.md. Report any local mismatch with those checks here. A source tag, passing CI run, unsigned-dev convenience build, local signing smoke build, or CI artifact alone is not a trusted public binary release.
 
         The published v1.1.0 source/unsigned-dev release has a known helper-unreachable issue that was fixed by v1.1.1. Do not retag v1.1.0 or replace its unsigned-dev assets with a main build; report it here and use the v1.1.1 source-first hotfix path.
 

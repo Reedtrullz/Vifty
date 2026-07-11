@@ -4,23 +4,31 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-07-11, `v1.2.0` is the first Developer ID release candidate. It is not a trusted public release until the tagged Release workflow and post-publication checks below pass. The latest already-published release remains `v1.1.1`, a source-first hotfix whose immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
+As of 2026-07-11, `v1.2.0` is the first published Developer ID release. Its immutable tag resolves to `9bf45f9afc56a36580bede696c479bff0df0cf6a`, source CI run `29160869645` passed, signed/notarized Release run `29161176933` passed, and the four canonical trust assets are public at the [v1.2.0 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.2.0). `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
-Developer ID candidate preflight: the intended personal TeamID `X88J3853S2` is active, all required GitHub release secret names are configured, and a local Vifty artifact signed by that team was accepted by Apple notarization, stapled, and accepted by Gatekeeper. These checks validate the release path but do not substitute for verifying the exact public zip. Do not use another organization's team or certificate for Vifty.
+Developer ID publication evidence: the intended personal TeamID `X88J3853S2` is active, all required GitHub release secret names are configured, and both workflow and independent local verification accepted the signed public artifact's TeamID, Apple notarization ticket, stapling, LaunchDaemon allowlist, and Gatekeeper assessment. The exact public zip and cask now pass those checks independently. Do not use another organization's team or certificate for Vifty.
+
+The public `Vifty-v1.2.0.zip` and checked-in cask both resolve to SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. The published artifact summary declares `status: "passed"`, uses schema ID `https://vifty.local/schemas/release-artifact-summary.schema.json`, and records that signature and notarization checks were not skipped. Developer ID readiness reports `status: "ready"` with release source ref, source CI, Release workflow, secret names, and all four public assets passed.
+
+Local installed release-mode validation remains pending on this workstation. `/Applications/Vifty.app` is still `v1.1.1`, and read-only diagnostics found the two fans in intentional Forced mode. Replacing it requires an explicit human decision to restore Auto first, followed by installation of the exact public zip, helper repair, read-only evidence collection, and release-mode review. This pending local evidence blocks an installed-hardware validation claim; it does not change the verified identity or checksum of the published artifact.
 
 Release lanes:
 
-1. **Developer ID candidate:** `v1.2.0` may become the trusted notarized release only after its tagged workflow, canonical assets, cask checksum handoff, public verifier, and release-readiness checks pass. Candidate metadata or local smoke tests alone are not public release evidence.
+1. **Published Developer ID release:** `v1.2.0` public artifact and cask trust checks passed for the tagged workflow, canonical assets, checksum handoff, public verifier, release readiness, TeamID, notarization, stapling, and Gatekeeper. Local installed release-mode evidence is still pending and must not be implied by those distribution checks.
 2. **Source release:** `v1.1.1` remains the published source-first fallback. Do not claim it or any unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
 Auto-update status: unavailable in `v1.2.0`, source-first, and unsigned-dev builds. Vifty should use Sparkle only in a separately reviewed Developer ID signed/notarized release with signed appcast metadata; see [auto-update.md](auto-update.md).
 
-Candidate facts:
+Public release facts:
 
-- `Resources/Info.plist` and `Casks/vifty.rb` are aligned at `1.2.0`; the cask is enabled for the final candidate but must not be recommended until its SHA-256 is replaced from the published workflow checksum and the public verifier passes.
+- `Resources/Info.plist` and `Casks/vifty.rb` are aligned at `1.2.0`; the cask uses the published SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`.
+- Source CI run `29160869645` passed on release commit `9bf45f9afc56a36580bede696c479bff0df0cf6a`, and Release run `29161176933` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
+- The GitHub Release publishes `Vifty-v1.2.0.zip`, `Vifty-v1.2.0.zip.sha256`, `Vifty-v1.2.0-artifact-summary.json`, and `Vifty-v1.2.0-release-checklist.md`.
+- The published workflow summary and an independent downloaded-artifact verification both passed with TeamID `X88J3853S2`, no signature skips, and no notarization skips.
+- `scripts/check-release-readiness.sh --mode developer-id --version 1.2.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json` reported `ready` before the cask follow-up moved `main`.
 - `scripts/check-release-secrets.sh --repo Reedtrullz/Vifty` reports every required secret name. It does not read or print secret values.
-- Local TeamID, hardened-runtime, notarization, stapling, LaunchDaemon allowlist, and Gatekeeper smoke checks passed for a locally built candidate. The GitHub Release artifact must repeat those checks independently.
+- Earlier local TeamID, hardened-runtime, notarization, stapling, LaunchDaemon allowlist, and Gatekeeper smoke checks passed for a locally built candidate. The published GitHub Release artifact has now repeated those checks independently; the local smoke remains corroborating preflight, not public artifact proof.
 
 Historical source-first facts:
 
@@ -118,4 +126,4 @@ All of these must be true before calling a future public binary release trusted:
 6. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
 7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release`.
 
-Until those checks pass, prefer source builds and do not describe the staged Homebrew path as a trusted public binary install.
+Until the installed release-mode evidence is collected and reviewed, do not describe this workstation or its hardware as validated by `v1.2.0`. The public artifact and cask checks above establish distribution identity and integrity; they do not substitute for hardware smoke evidence.

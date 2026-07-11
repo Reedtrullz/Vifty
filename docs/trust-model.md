@@ -126,7 +126,7 @@ Public releases should be:
 
 Ad-hoc CI artifacts, local builds, and source-first unsigned-dev convenience zips are useful for development and tester convenience, but they are not a substitute for signed, notarized public releases.
 
-Vifty `v1.2.0` is the current Developer ID candidate. Local signing and notarization smoke evidence does not make it a trusted public binary; the exact public artifact, cask checksum, release evidence, and Gatekeeper path must pass first. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
+Vifty `v1.2.0` is the current published Developer ID release. Its exact public artifact and matching cask checksum pass release evidence, TeamID, notarization, stapling, and Gatekeeper checks without skips. Installed release-mode evidence and hardware compatibility remain separate follow-up claims. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 
