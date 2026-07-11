@@ -2380,7 +2380,13 @@ final class AppModel: ObservableObject {
             LocalNotification(kind: kind, title: title, body: body)
         )
         if delivered {
-            try? notificationHistoryStore.recordDelivery(of: kind, at: currentDate)
+            do {
+                try notificationHistoryStore.recordDelivery(of: kind, at: currentDate)
+            } catch {
+                ViftyLog.notifications.error(
+                    "Notification cooldown persistence failed kind=\(kind.rawValue, privacy: .public)"
+                )
+            }
         }
     }
 }

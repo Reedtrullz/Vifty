@@ -16,6 +16,7 @@ final class LocalNotificationHistoryStoreTests: XCTestCase {
 
     func testHistoryRoundTripsAcrossStoreInstances() throws {
         let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let deliveredAt = Date(timeIntervalSince1970: 1_000)
         let first = LocalNotificationHistoryStore(url: url)
 
@@ -29,12 +30,38 @@ final class LocalNotificationHistoryStoreTests: XCTestCase {
 
     func testHistoryUsesPrivatePermissions() throws {
         let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let store = LocalNotificationHistoryStore(url: url)
 
         try store.recordDelivery(of: .pluggedInBatteryDrain, at: Date(timeIntervalSince1970: 1_000))
 
         XCTAssertEqual(try permissions(at: url.deletingLastPathComponent()), 0o700)
         XCTAssertEqual(try permissions(at: url), 0o600)
+    }
+
+    func testFailedPersistenceStillKeepsInMemoryCooldown() throws {
+        let blockingParent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-notification-history-tests")
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: blockingParent.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("not a directory".utf8).write(to: blockingParent)
+        defer { try? FileManager.default.removeItem(at: blockingParent) }
+
+        let deliveredAt = Date(timeIntervalSince1970: 1_000)
+        let store = LocalNotificationHistoryStore(
+            url: blockingParent.appendingPathComponent("notification-history.json")
+        )
+
+        XCTAssertThrowsError(try store.recordDelivery(of: .helperFailure, at: deliveredAt))
+        XCTAssertEqual(store.lastDeliveredAt(for: .helperFailure), deliveredAt)
+        XCTAssertTrue(store.isCoolingDown(
+            .helperFailure,
+            at: Date(timeIntervalSince1970: 1_100),
+            minimumInterval: 1_800
+        ))
     }
 
     func testTransitionStateSuppressesInitialAttentionAndNotifiesAfterRecovery() {

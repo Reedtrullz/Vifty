@@ -61,7 +61,7 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model else { return .terminateNow }
+        guard let model else { return .terminateCancel }
 
         _ = terminationCoordinator.beginTermination(
             restore: {

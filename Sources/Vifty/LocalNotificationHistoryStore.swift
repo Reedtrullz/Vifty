@@ -40,6 +40,7 @@ final class LocalNotificationHistoryStore: @unchecked Sendable {
 
         var updatedHistory = history
         updatedHistory.deliveredAtByKind[kind.rawValue] = date
+        history = updatedHistory
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes(
@@ -52,7 +53,6 @@ final class LocalNotificationHistoryStore: @unchecked Sendable {
             [.posixPermissions: NSNumber(value: 0o600)],
             ofItemAtPath: url.path
         )
-        history = updatedHistory
     }
 
     private static func defaultURL() -> URL {

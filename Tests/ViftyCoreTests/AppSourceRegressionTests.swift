@@ -72,6 +72,13 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(contentView.contains("if let error = model.lastError"))
     }
 
+    func testTerminationFailsClosedWhenAppModelIsUnavailable() throws {
+        let app = try read("Sources/Vifty/ViftyApp.swift")
+
+        XCTAssertTrue(app.contains("guard let model else { return .terminateCancel }"))
+        XCTAssertFalse(app.contains("guard let model else { return .terminateNow }"))
+    }
+
     func testMainWindowHelperHealthShowsRepairAndReadOnlyDiagnosticsActions() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 

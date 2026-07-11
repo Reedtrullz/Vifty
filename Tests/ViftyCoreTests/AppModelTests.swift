@@ -2757,6 +2757,7 @@ final class AppModelTests: XCTestCase {
         let historyURL = temporaryPreferencesPath()
             .deletingLastPathComponent()
             .appendingPathComponent("notification-history.json")
+        defer { try? FileManager.default.removeItem(at: historyURL.deletingLastPathComponent()) }
         let firstRecorder = AppModelNotificationRecorder()
         let lease = agentLease()
         let firstModel = AppModel(
@@ -2799,6 +2800,35 @@ final class AppModelTests: XCTestCase {
 
         await secondModel.restoreAutoNow()
         XCTAssertTrue(secondRecorder.delivered.isEmpty)
+    }
+
+    func testFailedNotificationDeliveryDoesNotConsumeCooldown() async {
+        let recorder = AppModelNotificationRecorder(deliveryResults: [false, true])
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: AppModelFakeHardware(snapshot: agentHardwareSnapshot()),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .serious },
+            now: { clock.now },
+            notificationDeliverer: recorder,
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.notificationSettings.elevatedThermalPressure = true
+
+        await model.pollOnce()
+        clock.now = Date(timeIntervalSince1970: 1_060)
+        await model.pollOnce()
+        clock.now = Date(timeIntervalSince1970: 1_061)
+        await model.pollOnce()
+
+        XCTAssertEqual(
+            recorder.delivered.map(\.kind),
+            [.elevatedThermalPressure, .elevatedThermalPressure]
+        )
     }
 
     func testPollOnceRefreshesPowerSnapshotFromInjectedReader() async {
@@ -4770,9 +4800,15 @@ private actor AgentStatusSequence {
 @MainActor
 private final class AppModelNotificationRecorder: LocalNotificationDelivering {
     private(set) var delivered: [LocalNotification] = []
+    private var deliveryResults: [Bool]
+
+    init(deliveryResults: [Bool] = []) {
+        self.deliveryResults = deliveryResults
+    }
 
     func deliver(_ notification: LocalNotification) async -> Bool {
         delivered.append(notification)
-        return true
+        guard !deliveryResults.isEmpty else { return true }
+        return deliveryResults.removeFirst()
     }
 }
