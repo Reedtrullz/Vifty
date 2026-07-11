@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 1.2.0 | Supported Developer ID signed/notarized public artifact; installed validation tracked separately |
+| 1.2.0 | Supported Developer ID signed/notarized release; installed release review passed |
 | 1.1.x source/tag | Supported source-first fallback; unsigned assets are not trust-complete |
 | 1.0.x public asset | Not trust-complete; use source or a corrected 1.1.x release path |
 

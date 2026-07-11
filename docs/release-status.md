@@ -10,11 +10,13 @@ Developer ID publication evidence: the intended personal TeamID `X88J3853S2` is 
 
 The public `Vifty-v1.2.0.zip` and checked-in cask both resolve to SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. The published artifact summary declares `status: "passed"`, uses schema ID `https://vifty.local/schemas/release-artifact-summary.schema.json`, and records that signature and notarization checks were not skipped. Developer ID readiness reports `status: "ready"` with release source ref, source CI, Release workflow, secret names, and all four public assets passed.
 
-Local installed release-mode validation remains pending on this workstation. `/Applications/Vifty.app` is still `v1.1.1`, and read-only diagnostics found the two fans in intentional Forced mode. Replacing it requires an explicit human decision to restore Auto first, followed by installation of the exact public zip, helper repair, read-only evidence collection, and release-mode review. This pending local evidence blocks an installed-hardware validation claim; it does not change the verified identity or checksum of the published artifact.
+Installed release-mode validation passed on the exact public artifact. After explicit human approval, Vifty restored both fans from Forced control to macOS Auto, cleared the manual-control marker, quit cleanly, and installed the public `v1.2.0` build `4` in `/Applications`. The installed app and privileged helper are Developer ID signed by TeamID `X88J3853S2`, their daemon hashes match, the LaunchDaemon carries the same TeamID allowlist, and read-only diagnose reports `state: "ready"`, `manualControlActive: false`, no cooling blockers, and nominal thermal pressure.
+
+The privacy-safe release bundle at `.build/public-release-v1.2.0/installed-release-evidence-public-safe` passed `scripts/review-validation-evidence.sh --mode release`. Its schema-backed `review-result.json` records `status: "passed"`, `readOnly: true`, and `coolingCommandsRun: false`, exact source tag/commit/artifact SHA, `installSource: "notarized-github-release"`, helper parity, and no failures or warnings. Manual Fixed/Curve compatibility smoke remains `not-recorded`; this release-install proof must not be promoted into a hardware compatibility claim.
 
 Release lanes:
 
-1. **Published Developer ID release:** `v1.2.0` public artifact and cask trust checks passed for the tagged workflow, canonical assets, checksum handoff, public verifier, release readiness, TeamID, notarization, stapling, and Gatekeeper. Local installed release-mode evidence is still pending and must not be implied by those distribution checks.
+1. **Published Developer ID release:** `v1.2.0` public artifact, cask, and installed release-mode trust checks passed for the tagged workflow, canonical assets, checksum handoff, public verifier, release readiness, TeamID, notarization, stapling, Gatekeeper, helper parity, Auto restoration, and read-only release review. Manual hardware compatibility evidence remains separate.
 2. **Source release:** `v1.1.1` remains the published source-first fallback. Do not claim it or any unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
@@ -27,6 +29,7 @@ Public release facts:
 - The GitHub Release publishes `Vifty-v1.2.0.zip`, `Vifty-v1.2.0.zip.sha256`, `Vifty-v1.2.0-artifact-summary.json`, and `Vifty-v1.2.0-release-checklist.md`.
 - The published workflow summary and an independent downloaded-artifact verification both passed with TeamID `X88J3853S2`, no signature skips, and no notarization skips.
 - `scripts/check-release-readiness.sh --mode developer-id --version 1.2.0 --repo Reedtrullz/Vifty --require-source-ref origin/main --json` reported `ready` before the cask follow-up moved `main`.
+- The exact public app is installed in `/Applications`, its signed helper hash matches, Auto owns fan control, and the privacy-safe release-mode evidence reviewer reports `passed` with no cooling commands, failures, or warnings.
 - `scripts/check-release-secrets.sh --repo Reedtrullz/Vifty` reports every required secret name. It does not read or print secret values.
 - Earlier local TeamID, hardened-runtime, notarization, stapling, LaunchDaemon allowlist, and Gatekeeper smoke checks passed for a locally built candidate. The published GitHub Release artifact has now repeated those checks independently; the local smoke remains corroborating preflight, not public artifact proof.
 
@@ -126,4 +129,4 @@ All of these must be true before calling a future public binary release trusted:
 6. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
 7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release`.
 
-Until the installed release-mode evidence is collected and reviewed, do not describe this workstation or its hardware as validated by `v1.2.0`. The public artifact and cask checks above establish distribution identity and integrity; they do not substitute for hardware smoke evidence.
+The public artifact, cask, and installed release-mode checks now establish release identity, integrity, and a safe Auto-restored installation on this workstation. They do not substitute for manual Fixed/Curve hardware smoke evidence, and MacBookPro18 compatibility must remain unpromoted until that separate procedure is explicitly approved and reviewed.

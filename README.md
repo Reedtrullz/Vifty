@@ -68,7 +68,7 @@ The current checked-in developer-workload evidence includes `docs/validation-rep
 
 Vifty `v1.2.0` is the current published Developer ID release. Its immutable tag resolves to `9bf45f9afc56a36580bede696c479bff0df0cf6a`, the signed/notarized Release workflow passed, and the canonical zip, checksum, verifier summary, and release checklist are published at the [v1.2.0 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.2.0).
 
-The exact public zip and the checked-in cask both resolve to SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. Independent `scripts/verify-release-artifact.sh --team-id X88J3853S2` checks pass for bundle version, required executables and schemas, Developer ID TeamID, LaunchDaemon allowlisting, stapling, and Gatekeeper without skip flags. `v1.1.1` remains the published source-first fallback. Installed release-mode validation is tracked separately in [docs/release-status.md](docs/release-status.md) and must pass before making hardware compatibility claims.
+The exact public zip and the checked-in cask both resolve to SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. Independent `scripts/verify-release-artifact.sh --team-id X88J3853S2` checks pass for bundle version, required executables and schemas, Developer ID TeamID, LaunchDaemon allowlisting, stapling, and Gatekeeper without skip flags. Installed release-mode validation also passes for the exact public app with a matching signed helper, Auto restored, privacy review clear, and no cooling commands. `v1.1.1` remains the published source-first fallback. Manual Fixed/Curve hardware compatibility remains a separate reviewed claim; see [docs/release-status.md](docs/release-status.md).
 
 The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
@@ -130,7 +130,7 @@ To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RE
 
 ### Homebrew
 
-The Homebrew cask now points at the published `v1.2.0` notarized zip with SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against that exact public artifact using the cask checksum. This proves cask-to-artifact trust alignment; it is not a hardware compatibility claim. Keep installed validation and compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
+The Homebrew cask now points at the published `v1.2.0` notarized zip with SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against that exact public artifact using the cask checksum, and installed release-mode review passes after Auto restoration and signed helper alignment. This proves release and cask trust alignment; it is not a manual hardware compatibility claim. Keep compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
 
 ## Build and verify
 
