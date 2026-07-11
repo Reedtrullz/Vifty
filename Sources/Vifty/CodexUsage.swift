@@ -564,6 +564,12 @@ private struct RateLimitKeyStyle {
 struct CodexUsageAppServerClient {
     private static let initializeRequestID = "vifty-codex-usage-init"
     private static let requestID = "vifty-codex-usage"
+    static let defaultExecutablePaths = [
+        "/Applications/ChatGPT.app/Contents/Resources/codex",
+        "/Applications/Codex.app/Contents/Resources/codex",
+        "/opt/homebrew/bin/codex",
+        "/usr/local/bin/codex"
+    ]
     private let executableURL: URL?
     private let timeout: TimeInterval
     private let terminationGracePeriod: TimeInterval
@@ -612,6 +618,14 @@ struct CodexUsageAppServerClient {
             "method": "notifications/initialized",
             "params": [:]
         ]
+        if let snapshot = readRateLimits(
+            executableURL,
+            arguments: ["app-server", "--listen", "stdio://"],
+            prefixRequests: [initialize, initialized]
+        ) {
+            return snapshot
+        }
+
         return readRateLimits(
             executableURL,
             arguments: ["app-server", "--stdio"],
@@ -742,12 +756,7 @@ struct CodexUsageAppServerClient {
             return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
         }
 
-        let candidates = [
-            "/Applications/Codex.app/Contents/Resources/codex",
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex"
-        ]
-        return candidates
+        return defaultExecutablePaths
             .map(URL.init(fileURLWithPath:))
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }

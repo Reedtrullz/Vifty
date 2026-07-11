@@ -305,12 +305,60 @@ final class CodexUsageTests: XCTestCase {
             Set(snapshot.limitWindows.map(\.name)),
             Set(["codex 5h", "codex 7d"])
         )
-        XCTAssertEqual(try String(contentsOf: argsLog, encoding: .utf8), "app-server --stdio\n")
+        XCTAssertEqual(try String(contentsOf: argsLog, encoding: .utf8), "app-server --listen stdio://\n")
         let stdin = try String(contentsOf: stdinLog, encoding: .utf8)
         XCTAssertTrue(stdin.contains("initialize"))
         XCTAssertTrue(stdin.contains("account"))
         XCTAssertTrue(stdin.contains("rateLimits"))
         XCTAssertTrue(stdin.contains("read"))
+    }
+
+    func testAppServerClientPrefersCurrentChatGPTBundleExecutable() {
+        XCTAssertEqual(
+            CodexUsageAppServerClient.defaultExecutablePaths.first,
+            "/Applications/ChatGPT.app/Contents/Resources/codex"
+        )
+        XCTAssertTrue(CodexUsageAppServerClient.defaultExecutablePaths.contains(
+            "/Applications/Codex.app/Contents/Resources/codex"
+        ))
+    }
+
+    func testAppServerClientFallsBackToLegacyStdioFlag() throws {
+        let root = try temporaryDirectory()
+        let executable = root.appendingPathComponent("legacy-codex")
+        let argsLog = root.appendingPathComponent("args.log")
+        let script = """
+        #!/bin/sh
+        printf '%s\n' "$*" >> \(shellSingleQuote(argsLog.path))
+        if [ "$*" = "app-server --listen stdio://" ]; then
+          exit 2
+        fi
+        if [ "$*" != "app-server --stdio" ]; then
+          exit 3
+        fi
+        while IFS= read -r line
+        do
+          case "$line" in
+            *account*rateLimits*read*)
+              printf '%s\n' '{"id":"vifty-codex-usage","result":{"rateLimits":{"planType":"pro","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":1800003600}}}}'
+              exit 0
+              ;;
+          esac
+        done
+        """
+        try script.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: executable.path
+        )
+
+        let snapshot = try XCTUnwrap(CodexUsageAppServerClient(executableURL: executable, timeout: 1).read())
+
+        XCTAssertEqual(snapshot.usedPercent, 25, accuracy: 0.001)
+        XCTAssertEqual(
+            try String(contentsOf: argsLog, encoding: .utf8),
+            "app-server --listen stdio://\napp-server --stdio\n"
+        )
     }
 
     func testAppServerClientBoundsShutdownWhenChildIgnoresTerminate() throws {

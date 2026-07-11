@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** Completed, merged into local `main`, and runtime-validated on 2026-07-11.
+
+**Completion evidence:** The six implementation tasks landed through `44b8d04b234f8262badf93b357a6b4393ffdff67`. Exact merged-head `make verify-full` passed 1,013 tests before the post-merge Codex transport follow-up. Human-supervised runtime proof confirmed Auto restoration, a clear manual-control marker, matching helper hashes, clean quit/relaunch, responsive wide/regular/minimum layouts, native Settings, and no notification or XPC failures during the measured healthy window. The follow-up replaced obsolete Codex `app-server --stdio` discovery with the current ChatGPT bundle and `--listen stdio://`, while preserving a tested legacy fallback; measured CPU fell from a 4.51% average / 100.4% peak to 1.10% / 11.7% across successful one-minute quota refreshes.
+
 **Goal:** Implement confirmed Auto restoration on every quit path, durable notification coalescing, bounded Codex refresh, runtime observability, and native Settings/workbench behavior.
 
 **Architecture:** Add small pure result/policy/store types around the existing `AppModel` and `FanControlCoordinator`, then wire AppKit termination and SwiftUI scenes through those contracts. Preserve existing hardware write boundaries and polling cadence while adding measurements and removing redundant work.
@@ -38,16 +42,16 @@
 - Produce: `AppTerminationCoordinator.beginTermination(using:completion:) -> Bool`
 - Change: `AppModel.stopAndRestore() async -> AppTerminationRestoreResult`
 
-- [ ] Add failing coordinator tests for `.restored` and `.failed(message:)`.
-- [ ] Run `swift test --scratch-path "$PWD/.build" --filter FanControlCoordinatorTests` and confirm RED.
-- [ ] Implement `AutoRestoreResult` and make `forceAuto()` return it without weakening state cleanup.
-- [ ] Add failing tests for one in-flight termination, success reply, and failure cancellation.
-- [ ] Run `swift test --scratch-path "$PWD/.build" --filter AppTerminationCoordinatorTests` and confirm RED.
-- [ ] Implement the pure coordinator and wire `applicationShouldTerminate` to `.terminateLater`.
-- [ ] Make failed termination reopen the main window and preserve visible error state.
-- [ ] Remove the custom menu Quit restore duplication; call `terminate(nil)` only.
-- [ ] Run the three focused suites and warnings-as-errors build.
-- [ ] Commit as `fix: confirm auto restore before quitting`.
+- [x] Add failing coordinator tests for `.restored` and `.failed(message:)`.
+- [x] Run `swift test --scratch-path "$PWD/.build" --filter FanControlCoordinatorTests` and confirm RED.
+- [x] Implement `AutoRestoreResult` and make `forceAuto()` return it without weakening state cleanup.
+- [x] Add failing tests for one in-flight termination, success reply, and failure cancellation.
+- [x] Run `swift test --scratch-path "$PWD/.build" --filter AppTerminationCoordinatorTests` and confirm RED.
+- [x] Implement the pure coordinator and wire `applicationShouldTerminate` to `.terminateLater`.
+- [x] Make failed termination reopen the main window and preserve visible error state.
+- [x] Remove the custom menu Quit restore duplication; call `terminate(nil)` only.
+- [x] Run the three focused suites and warnings-as-errors build.
+- [x] Commit as `fix: confirm auto restore before quitting`.
 
 ### Task 2: Durable Notification Coalescing
 
@@ -65,13 +69,13 @@
 - Produce: `LocalNotificationHistoryStore.recordDelivery(of:at:)`
 - Produce: `LocalNotificationTransitionState` with baseline-aware transition methods.
 
-- [ ] Write failing tests for stable kind identifiers, persisted cooldown, private permissions, and first-observation suppression.
-- [ ] Run the new store and AppModel notification tests and confirm RED.
-- [ ] Implement atomic private JSON persistence and stable request identifiers.
-- [ ] Replace in-memory timestamp ownership with the store and baseline-aware transition state.
-- [ ] Keep explicit Auto-restore failure notifications immediate and cooldown-aware.
-- [ ] Run focused notification/preferences suites and warnings-as-errors build.
-- [ ] Commit as `fix: coalesce local notifications across launches`.
+- [x] Write failing tests for stable kind identifiers, persisted cooldown, private permissions, and first-observation suppression.
+- [x] Run the new store and AppModel notification tests and confirm RED.
+- [x] Implement atomic private JSON persistence and stable request identifiers.
+- [x] Replace in-memory timestamp ownership with the store and baseline-aware transition state.
+- [x] Keep explicit Auto-restore failure notifications immediate and cooldown-aware.
+- [x] Run focused notification/preferences suites and warnings-as-errors build.
+- [x] Commit as `fix: coalesce local notifications across launches`.
 
 ### Task 3: Remove Runtime Faults And Add Safe Developer Launch
 
@@ -83,13 +87,13 @@
 - Modify: `Tests/ViftyCoreTests/AppSourceRegressionTests.swift`
 - Modify: `Tests/ViftyCoreTests/DocumentationTrustSurfaceTests.swift`
 
-- [ ] Add failing source/docs tests that reject `thermometer.slash`, require the bundled launcher, and forbid direct raw GUI launch guidance.
-- [ ] Run both focused suites and confirm RED.
-- [ ] Replace the SF Symbol with `thermometer.medium`.
-- [ ] Add a bounded launcher that runs `make app`, then `open .build/Vifty.app`, without helper or fan actions.
-- [ ] Add `make run-app` and document the bundled path.
-- [ ] Run shell syntax, focused tests, and warnings-as-errors build.
-- [ ] Commit as `fix: make local app launch bundle-safe`.
+- [x] Add failing source/docs tests that reject `thermometer.slash`, require the bundled launcher, and forbid direct raw GUI launch guidance.
+- [x] Run both focused suites and confirm RED.
+- [x] Replace the SF Symbol with `thermometer.medium`.
+- [x] Add a bounded launcher that runs `make app`, then `open .build/Vifty.app`, without helper or fan actions.
+- [x] Add `make run-app` and document the bundled path.
+- [x] Run shell syntax, focused tests, and warnings-as-errors build.
+- [x] Commit as `fix: make local app launch bundle-safe`.
 
 ### Task 4: Bound Codex Usage Child Processes
 
@@ -101,12 +105,12 @@
 - Add: `terminationGracePeriod: TimeInterval` to `CodexUsageAppServerClient.init`.
 - Add: bounded process-exit wait helper returning whether the child exited.
 
-- [ ] Add a failing test with a script that ignores `TERM`; assert `read()` returns within response timeout plus grace.
-- [ ] Run `CodexUsageTests` and confirm RED because `waitUntilExit()` blocks.
-- [ ] Replace unbounded exit waiting with a semaphore-backed bounded grace wait.
-- [ ] Close pipes and return `nil` without blocking when the child survives the grace period.
-- [ ] Run `CodexUsageTests` and warnings-as-errors build.
-- [ ] Commit as `fix: bound Codex usage process shutdown`.
+- [x] Add a failing test with a script that ignores `TERM`; assert `read()` returns within response timeout plus grace.
+- [x] Run `CodexUsageTests` and confirm RED because `waitUntilExit()` blocks.
+- [x] Replace unbounded exit waiting with a semaphore-backed bounded grace wait.
+- [x] Close pipes and return `nil` without blocking when the child survives the grace period.
+- [x] Run `CodexUsageTests` and warnings-as-errors build.
+- [x] Commit as `fix: bound Codex usage process shutdown`.
 
 ### Task 5: Runtime Logging And Poll Scheduling
 
@@ -122,13 +126,13 @@
 - Produce privacy-safe `ViftyLog.lifecycle`, `.polling`, `.xpc`, `.notifications`, `.fanControl`, `.codexUsage`.
 - Produce `PollSchedulePolicy.delay(afterInitialPollFor:)` and preserve 5s/10s values.
 
-- [ ] Add failing tests proving the first loop sleeps after the initial poll and preserves active/idle intervals.
-- [ ] Run the policy suite and confirm RED.
-- [ ] Implement the policy and remove the immediate duplicate poll after `start()`.
-- [ ] Add begin/end/outcome logs around polling, XPC requests, notification delivery, termination, and Codex refresh without private values.
-- [ ] Keep per-request XPC connections and current cadence unchanged.
-- [ ] Run focused suites and warnings-as-errors build.
-- [ ] Commit as `perf: instrument and de-duplicate polling`.
+- [x] Add failing tests proving the first loop sleeps after the initial poll and preserves active/idle intervals.
+- [x] Run the policy suite and confirm RED.
+- [x] Implement the policy and remove the immediate duplicate poll after `start()`.
+- [x] Add begin/end/outcome logs around polling, XPC requests, notification delivery, termination, and Codex refresh without private values.
+- [x] Keep per-request XPC connections and current cadence unchanged.
+- [x] Run focused suites and warnings-as-errors build.
+- [x] Commit as `perf: instrument and de-duplicate polling`.
 
 ### Task 6: Native Settings Scene And Wide Telemetry Reflow
 
@@ -147,13 +151,13 @@
 - Produce a `Settings` scene sharing the existing `AppModel`.
 - Change the left-rail Settings & Tools section into a command button that opens Settings.
 
-- [ ] Add failing policy tests for 2, 3, and 4 metric columns at compact, workbench, and ultrawide widths.
-- [ ] Add failing source tests for the Settings scene and left-rail `SettingsLink`.
-- [ ] Implement the adaptive telemetry metric grid.
-- [ ] Move settings content into `ViftySettingsView` and add the native scene.
-- [ ] Remove the large spacer/inline disclosure from the workbench rail.
-- [ ] Run layout/source/AppModel focused suites and warnings-as-errors build.
-- [ ] Commit as `feat: move tools into native settings`.
+- [x] Add failing policy tests for 2, 3, and 4 metric columns at compact, workbench, and ultrawide widths.
+- [x] Add failing source tests for the Settings scene and left-rail `SettingsLink`.
+- [x] Implement the adaptive telemetry metric grid.
+- [x] Move settings content into `ViftySettingsView` and add the native scene.
+- [x] Remove the large spacer/inline disclosure from the workbench rail.
+- [x] Run layout/source/AppModel focused suites and warnings-as-errors build.
+- [x] Commit as `feat: move tools into native settings`.
 
 ### Task 7: Release Boundary, Full Verification, And Evidence
 
@@ -161,10 +165,10 @@
 - Modify only if needed: `docs/release-status.md`, `docs/release.md`, `docs/competitive-analysis.md`
 - Update: Obsidian daily and project notes outside the repository.
 
-- [ ] Run `git diff --check` and shell syntax checks.
-- [ ] Run `make verify SWIFT_BUILD_PATH="$PWD/.build"`.
-- [ ] Recheck disk space, then run `make verify-full SWIFT_BUILD_PATH="$PWD/.build"`.
-- [ ] Confirm ad-hoc hardened-runtime signing remains source-first and no TeamID/notarization claim was introduced.
-- [ ] Review the complete branch diff for safety, notification, privacy, and UI regressions.
-- [ ] Record exact evidence and non-claims in Obsidian.
-- [ ] Commit any final docs/test alignment as `docs: record Vifty safety readiness`.
+- [x] Run `git diff --check` and shell syntax checks.
+- [x] Run `make verify SWIFT_BUILD_PATH="$PWD/.build"`.
+- [x] Recheck disk space, then run `make verify-full SWIFT_BUILD_PATH="$PWD/.build"`.
+- [x] Confirm ad-hoc hardened-runtime signing remains source-first and no TeamID/notarization claim was introduced.
+- [x] Review the complete branch diff for safety, notification, privacy, and UI regressions.
+- [x] Record exact evidence and non-claims in Obsidian.
+- [x] Commit any final docs/test alignment as `docs: record Vifty safety readiness`.
