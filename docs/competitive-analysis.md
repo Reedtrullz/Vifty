@@ -20,7 +20,7 @@ Plain-name comparison set: Macs Fan Control, TG Pro, iStat Menus, Stats, Hot and
 
 - Auditable SMC write boundaries: allowlisted fan mode and target keys, RPM clamping, daemon-first writes, and fail-closed behavior when the helper, hardware shape, or telemetry is uncertain.
 - Developer workload cooling: `viftyctl diagnose --json`, bounded leases, guarded `run`, explicit restore behavior, and local audit evidence that agents can consume without parsing UI copy.
-- Source-first honesty while Apple Developer Program credentials are unavailable, with Homebrew parked until a Developer ID signed, notarized release exists and unsigned-dev builds labeled as tester convenience only.
+- Evidence-gated release trust: source-first and unsigned-dev builds stay explicitly limited, while Developer ID candidates remain untrusted until the exact public artifact, checksum, notarization, Gatekeeper, and Homebrew checks pass.
 - Report-backed compatibility: generated validation indexes and compatibility tables, not handwritten support claims.
 - Helper repair clarity: every blocked write path should tell the user the next safe action and explain why fan writes remain blocked.
 - Subtle in-memory trend sparklines are in scope when they help users judge build, test, or agent workload impact; full historical monitoring, cloud sync, analytics, and persistent telemetry remain out of scope without a separate privacy plan.
@@ -38,7 +38,7 @@ Priority order: trusted release story, hardware validation evidence, daemon safe
 
 The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
 
-1. **Trusted release story:** keep `v1.1.1` source-first, unsigned-dev tester wording explicit, and prepare the future Developer ID lane without weakening its checks.
+1. **Trusted release story:** publish `v1.2.0` only through the strict Developer ID workflow, preserve the historical `v1.1.1` source-first boundary, and keep Homebrew blocked until the public checksum and verifier pass.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, main-window settings, a compact/readiness-oriented menu-bar popover, compact power/history/temperature surfaces, and a better screenshot/demo.
@@ -51,4 +51,4 @@ The concrete execution plan for the next cycle is [plans/2026-06-13-next-workpla
 - No breaking changes to existing `viftyctl` JSON fields.
 - Menu-bar and notification preferences must be additive and local.
 - Compatibility docs may add generated report views, but support claims must remain tied to reviewed evidence.
-- Future trusted releases must keep strict Developer ID, notarization, stapling, TeamID, checksum, verifier, and Homebrew checks.
+- Trusted releases must keep strict Developer ID, notarization, stapling, TeamID, checksum, verifier, and Homebrew checks.

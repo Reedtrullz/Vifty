@@ -66,7 +66,9 @@ The current checked-in developer-workload evidence includes `docs/validation-rep
 
 ### Current release trust status
 
-The latest published public release is Vifty `v1.1.1`, a source-first hotfix release because the project does not currently have Apple Developer Program credentials. There is no Developer ID signed or notarized public binary for `v1.1.1`, and the canonical notarized artifact name `Vifty-v1.1.1.zip` is reserved for a future Developer ID release.
+Vifty `v1.2.0` is the current Developer ID release candidate. The intended personal signing team is active, the required GitHub secret names are configured, and a local Developer ID signing/notarization smoke artifact passed Apple notarization, stapling, and Gatekeeper. Those are preflight facts, not proof that the public `v1.2.0` artifact exists or is trusted.
+
+Treat `v1.2.0` as a trusted binary only after the tagged Release workflow succeeds, the canonical zip/checksum/verifier summary/release checklist are published, the cask receives that exact checksum, and `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against the public artifact. Until then, `v1.1.1` remains the latest published release and its trust boundary is source-first.
 
 The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
@@ -74,13 +76,13 @@ An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the G
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
-Auto-update is future trusted-binary work, not enabled for source-first or unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the Sparkle/Developer ID plan.
+Auto-update is not enabled in `v1.2.0` or in source-first/unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the separate Sparkle trust plan.
 
 ### Install trust levels
 
-1. **Source build:** recommended while Apple Developer Program credentials are unavailable. Build from the immutable source tag and run the local verification suite before installing.
-2. **Unsigned tester app:** optional `Vifty-v1.1.1-unsigned-dev.zip` convenience build for testers who understand Gatekeeper warnings. It is valid only with a matching `.sha256` digest sidecar, not Developer ID signed, not notarized, not Homebrew-trusted, and not the official trusted binary.
-3. **Future trusted binary:** Developer ID signed, notarized, stapled, checksum-verified, and then eligible for Homebrew. This lane stays unavailable until Apple credentials exist and the release verifier passes.
+1. **Trusted binary:** a canonical `Vifty-v<version>.zip` is trusted only when its Developer ID signature, notarization ticket, stapling, TeamID, checksum, release evidence, Gatekeeper assessment, and Homebrew cask all pass the documented verifier path.
+2. **Source build:** build from an immutable source tag and run the local verification suite before installing.
+3. **Unsigned tester app:** historical `Vifty-v1.1.1-unsigned-dev.zip` convenience build for testers who understand Gatekeeper warnings. It is valid only with a matching `.sha256` digest sidecar, not Developer ID signed, not notarized, not Homebrew-trusted, and not the official trusted binary.
 
 ### Why a privileged helper?
 
@@ -128,14 +130,14 @@ To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RE
 
 ### Homebrew
 
-The Homebrew cask is intentionally disabled and parked until Vifty has a Developer ID signed, notarized, stapled, and verifier-passing `Vifty-v<version>.zip` release artifact. Do not use Homebrew as the recommended or trusted source-first install path, and do not point the cask at unsigned-dev artifacts. For public binary trust, a future cask artifact must pass `scripts/verify-release-artifact.sh --team-id <TEAMID>` after a signed/notarized release checksum is published.
+The Homebrew cask is staged for `v1.2.0`, but its checksum is not authoritative until the Release workflow publishes the final notarized zip and the checksum follow-up commit lands. Do not install or recommend the cask while [docs/release-status.md](docs/release-status.md) still labels `v1.2.0` as a candidate. The trusted Homebrew path opens only after `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against the public cask artifact. Never point the cask at an unsigned-dev artifact.
 
 ## Build and verify
 
 Requires macOS 15, Xcode 16, and Swift 6.
 
 ```sh
-# Run fast local trust gates: community/support surface, source-first release metadata,
+# Run fast local trust gates: community/support surface, Developer ID release metadata,
 # fast XCTest suite, warnings-as-errors, release bundle, plist lint, codesign
 # verification, and viftyctl identifier check
 make verify

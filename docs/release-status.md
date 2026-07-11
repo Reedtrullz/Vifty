@@ -4,30 +4,36 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-06-12, the latest published public release is `v1.1.1`, a source-first hotfix release because the project did not have active Apple Developer Program credentials at publication time. The immutable `v1.1.1` source tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972` and supersedes `v1.1.0` for users who hit the helper-unreachable update issue.
+As of 2026-07-11, `v1.2.0` is the first Developer ID release candidate. It is not a trusted public release until the tagged Release workflow and post-publication checks below pass. The latest already-published release remains `v1.1.1`, a source-first hotfix whose immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
-Developer ID account setup status as of 2026-07-07: the intended personal Apple Developer team is visible but still pending. Pending Apple Developer Program access is not release evidence. Do not use another organization's team or certificate for Vifty unless that organization is intentionally meant to own Vifty's public signing identity, GitHub Release trust, Homebrew trust, support burden, and revocation risk.
+Developer ID candidate preflight: the intended personal TeamID `X88J3853S2` is active, all required GitHub release secret names are configured, and a local Vifty artifact signed by that team was accepted by Apple notarization, stapled, and accepted by Gatekeeper. These checks validate the release path but do not substitute for verifying the exact public zip. Do not use another organization's team or certificate for Vifty.
 
 Release lanes:
 
-1. **Trusted notarized Developer ID release:** unavailable until the intended Developer ID account is active, the release secrets are configured for that team, and the signed/notarized artifact verifier passes. Do not claim that `v1.1.1` or any source-first unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
-2. **Source release:** canonical and recommended path while Apple credentials are unavailable. `v1.1.1` is the recommended source tag.
+1. **Developer ID candidate:** `v1.2.0` may become the trusted notarized release only after its tagged workflow, canonical assets, cask checksum handoff, public verifier, and release-readiness checks pass. Candidate metadata or local smoke tests alone are not public release evidence.
+2. **Source release:** `v1.1.1` remains the published source-first fallback. Do not claim it or any unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
-Auto-update status: unavailable for source-first and unsigned-dev builds. Vifty should use Sparkle only in a future Developer ID signed/notarized release with signed appcast metadata; see [auto-update.md](auto-update.md).
+Auto-update status: unavailable in `v1.2.0`, source-first, and unsigned-dev builds. Vifty should use Sparkle only in a separately reviewed Developer ID signed/notarized release with signed appcast metadata; see [auto-update.md](auto-update.md).
 
-Current facts:
+Candidate facts:
+
+- `Resources/Info.plist` and `Casks/vifty.rb` are aligned at `1.2.0`; the cask is enabled for the final candidate but must not be recommended until its SHA-256 is replaced from the published workflow checksum and the public verifier passes.
+- `scripts/check-release-secrets.sh --repo Reedtrullz/Vifty` reports every required secret name. It does not read or print secret values.
+- Local TeamID, hardened-runtime, notarization, stapling, LaunchDaemon allowlist, and Gatekeeper smoke checks passed for a locally built candidate. The GitHub Release artifact must repeat those checks independently.
+
+Historical source-first facts:
 
 - The `v1.1.1` source tag points at `a82f2237ff39c24a6b366dca8f95a17ee54fd972`, and the SwiftPM CI gate passed for source, tests, release app bundle construction, bundle verification, temporary install-script verification, archive, and CI artifact upload before publication.
 - `scripts/check-release-readiness.sh --mode source-first --version 1.1.1 --repo Reedtrullz/Vifty --source-sha a82f2237ff39c24a6b366dca8f95a17ee54fd972 --json` reports `ready` with the attached `Vifty-v1.1.1-unsigned-dev.zip` and checksum assets after verifying that the sidecar digest matches the zip bytes.
 - Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main` (`6b0690b`, `4f729d7`, and `3064b9e`). Users may see "Fan helper unreachable" after updating even on supported hardware.
 - Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary. The honest remediation is the `v1.1.1` source-first hotfix release, still unsigned/not notarized until Apple Developer Program credentials exist.
 - `main` may move after `v1.1.1` publication. Do not use `--require-source-ref origin/main` as a post-publication source-first check unless `origin/main` is intentionally still the release commit.
-- `Resources/Info.plist` now carries `1.1.1`; `Casks/vifty.rb` remains on `1.1.0` and is explicitly disabled because source-first releases must not move Homebrew to an unsigned artifact. Source-first metadata validation allows this disabled cask hold, while Developer ID metadata validation still requires bundle/cask alignment before any future notarized cask release.
+- At `v1.1.1` publication, `Resources/Info.plist` carried `1.1.1` while `Casks/vifty.rb` remained disabled on `1.1.0`, preventing the source-first hotfix from moving Homebrew to an unsigned artifact.
 - Source-first readiness proves the release notes/assets/trust boundaries for the immutable tag. It does not prove the release has no post-publication functional defects; helper reports still need `viftyctl diagnose --json`, launchd evidence, and a follow-up release decision if a new defect appears.
 - Before tagging a source-first candidate, maintainers may add `--require-source-ref <candidate-ref-or-sha>` to reject a stale tag. After publication, use the immutable release commit SHA if a source-ref check is still needed.
-- `scripts/check-release-readiness.sh --mode developer-id ...` remains the strict future trusted-binary preflight. It still requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
-- No unsigned build may use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256`; those canonical names are reserved for a future Developer ID signed and notarized artifact.
+- `scripts/check-release-readiness.sh --mode developer-id ...` is the strict trusted-binary preflight. It requires Apple release secrets, a successful signed/notarized Release workflow, canonical `Vifty-v<version>.zip` assets, verifier summary, and release checklist.
+- No unsigned build may use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256`; those canonical names are reserved for Developer ID signed and notarized artifacts.
 - Do not update the Homebrew cask checksum for a source-first release, do not re-enable the cask, and do not point Homebrew at unsigned-dev artifacts.
 - The older `v1.0.0` public asset is not trust-complete because release verification found a bundle-version mismatch between the extracted app and cask metadata.
 
@@ -89,15 +95,14 @@ If the GitHub Release is not created yet, source-first readiness should block on
 
 For the `v1.1.0` helper issue, use these checks only to reproduce and audit the release boundary. Do not use the `v1.1.0` unsigned-dev target to refresh public assets from `main`; prepare a new source-first hotfix release and make its release notes repeat the unsigned/not-notarized warning.
 
-## Future Developer ID Release Checks
+## Developer ID Release Checks
 
-Before Apple activates the intended personal team, the only allowed Developer ID prep work is non-secret and non-promotional:
+Before pushing a Developer ID tag:
 
-1. Keep source-first and unsigned-dev wording intact.
-2. Keep `Casks/vifty.rb` disabled and pointed only at the future canonical `Vifty-v<version>.zip` shape.
-3. Keep Sparkle/update metadata out of `Resources/Info.plist`.
-4. Keep `.github/workflows/release.yml` strict about Developer ID signing, `VIFTY_XPC_ALLOWED_TEAM_ID`, notarization, stapling, Gatekeeper, artifact verification, and release checklist publication.
-5. Prepare the secret names and local commands, but do not store certificate material in the repo or Obsidian.
+1. Keep Sparkle/update metadata out of `Resources/Info.plist` unless a separate signed-appcast release has been reviewed.
+2. Keep `.github/workflows/release.yml` strict about Developer ID signing, `VIFTY_XPC_ALLOWED_TEAM_ID`, notarization, stapling, Gatekeeper, artifact verification, and release checklist publication.
+3. Verify required secret names and the local signing/notarization path without storing certificate material, passwords, or secret values in the repo or Obsidian.
+4. Enable the cask only in the final candidate commit, and do not recommend it until the workflow checksum handoff and public verifier pass.
 
 All of these must be true before calling a future public binary release trusted:
 
@@ -113,4 +118,4 @@ All of these must be true before calling a future public binary release trusted:
 6. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
 7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release`.
 
-Until those future checks pass, prefer source builds and keep Homebrew disabled rather than describing the Homebrew path as a trusted public binary install.
+Until those checks pass, prefer source builds and do not describe the staged Homebrew path as a trusted public binary install.

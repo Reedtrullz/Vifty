@@ -6,7 +6,7 @@ Contributor reports should use the GitHub **Hardware Validation Report** issue t
 
 The public compatibility status is tracked in [compatibility.md](compatibility.md). Do not treat the intended support scope as broad validation until the compatibility page links to real reports. Unsupported machines should follow [unsupported-hardware.md](unsupported-hardware.md): collect read-only evidence, expect a blocked report, and do not run manual fan-write smoke tests.
 
-For `v1.1.1`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.1-unsigned-dev.zip` tester artifact. Those reports can still prove hardware behavior, but they do not prove Developer ID signing, notarization, Homebrew trust, or trusted binary distribution. Future Developer ID or Homebrew reports should choose the corresponding install source only after that trusted-binary lane exists.
+For `v1.1.1`, record whether the app came from a source build from the tag or the optional `Vifty-v1.1.1-unsigned-dev.zip` tester artifact. Those reports can still prove hardware behavior, but they do not prove Developer ID signing, notarization, Homebrew trust, or trusted binary distribution. Developer ID or Homebrew reports should choose the corresponding install source only after the exact artifact and cask pass the trusted-binary release checks.
 
 ## Evidence Collector
 

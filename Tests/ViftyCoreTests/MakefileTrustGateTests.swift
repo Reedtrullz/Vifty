@@ -28,7 +28,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("RELEASE_REPO ?= Reedtrullz/Vifty"))
         XCTAssertTrue(makefile.contains("SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)"))
         XCTAssertTrue(makefile.contains("UNSIGNED_DEV_SOURCE_REF ?= v$(RELEASE_VERSION)"))
-        XCTAssertTrue(makefile.contains("RELEASE_METADATA_MODE ?= source-first"))
+        XCTAssertTrue(makefile.contains("RELEASE_METADATA_MODE ?= developer-id"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_APP ?= /Applications/Vifty.app"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_OUTPUT ?="))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_INSTALL_SOURCE ?= not-recorded"))

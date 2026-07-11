@@ -4,7 +4,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 1.1.x source/tag | Supported, public binary release pending signed/notarized artifact |
+| 1.2.0 candidate | Supported source; public binary trust pending exact-artifact release verification |
+| 1.1.x source/tag | Supported source-first fallback; unsigned assets are not trust-complete |
 | 1.0.x public asset | Not trust-complete; use source or a corrected 1.1.x release path |
 
 ## Reporting a Vulnerability

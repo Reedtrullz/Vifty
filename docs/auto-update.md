@@ -1,6 +1,6 @@
 # Auto-Update Strategy
 
-Auto-update is not enabled for `v1.1.1` source-first or unsigned-dev builds.
+Auto-update is not enabled for `v1.2.0`, `v1.1.1` source-first, or unsigned-dev builds.
 
 That is intentional. Auto-update installs executable code, so it must meet a higher trust bar than a convenience tester zip. Until the project has Apple Developer Program credentials and a trusted binary release lane, Vifty should recommend source builds and clearly marked unsigned tester artifacts instead of a self-updating app.
 
@@ -9,7 +9,7 @@ That is intentional. Auto-update installs executable code, so it must meet a hig
 - Do not attach an updater to `Vifty-v<version>-unsigned-dev.zip` or any local ad-hoc build.
 - Do not make source-first GitHub Releases, CI artifacts, or Homebrew cask metadata imply automatic binary trust.
 - No updater network checks should run in source-first mode.
-- Keep the canonical `Vifty-v<version>.zip` name reserved for the future Developer ID signed and notarized release artifact.
+- Keep the canonical `Vifty-v<version>.zip` name reserved for a Developer ID signed and notarized release artifact.
 - Keep Homebrew checksum handoff tied to the verified canonical artifact, not an updater feed or unsigned-dev zip.
 
 ## Future Trusted Auto-Update Lane

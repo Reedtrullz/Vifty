@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-11
+
 ### Added
+- A responsive three-column workbench now separates safety and mode controls, fan control, and telemetry, while compact windows stack the same operational sections without clipping the curve editor.
+- The fan-curve editor now supports direct point dragging, stable chart geometry, clearer axes and value readouts, compact point summaries, developer workload presets, and per-fan curve overrides.
+- Menu-bar summaries can combine AI quota, selected temperature, average or primary fan RPM, fan-control owner, adapter wattage, and other user-selected fields; curve profiles can also be selected from the menu.
+- Native Settings now owns menu-bar, startup, notification, profile, and agent-workflow tools instead of extending the main control surface indefinitely.
+- Optional local notification history, in-memory telemetry trends, launch-at-login control, per-fan fixed RPM targets, and copyable guarded workload commands are now available.
 - A Release Trust Report issue template now collects release-readiness JSON, GitHub Release asset listings, verifier/reviewer evidence, Gatekeeper/signing/notarization/cask output, and no-bypass safety confirmations for public binary trust failures.
 - GitHub repository topics and triage labels are now captured in `.github/repo-metadata.json`, checked by `scripts/check-github-metadata.sh`, and covered by fixture-backed tests so the contributor/reporting surface stays reproducible.
 - `examples/viftyctl/guarded-run.sh` now leaves force retry off by default and requires explicit `VIFTY_GUARDED_RUN_FORCE_RETRY=1` opt-in before passing `--force` to `viftyctl run`.
@@ -25,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/review-validation-evidence.sh` now requires `checksums.tsv` coverage for captured evidence files and recomputes SHA-256 digests and byte counts so files cannot be edited or omitted after collection without reviewer detection.
 
 ### Changed
+- App polling now coalesces shared hardware refreshes, avoids duplicate power and agent-status work, instruments slow refreshes, and bounds Codex subprocess output and shutdown so background telemetry uses fewer resources and cannot leave inherited pipes hanging.
+- Local notifications now coalesce across launches, notification and quit edge cases close cleanly, and quitting waits for confirmed Auto restoration before allowing manual-control ownership to end.
+- Codex usage tracking now prefers the current local app-server transport, performs refresh work off the main poll path, and keeps session-log parsing as a bounded fallback.
+- Helper repair, daemon provenance, fan-control ownership, blocked-write, and recovery states are now explicit in the main window, menu bar, diagnostics, and evidence bundles.
+- Manual and agent cooling paths now fail closed on stale helpers, unsafe readiness, ownership conflicts, malformed metadata, unresolved child commands, or incomplete restore evidence.
 - The Hardware Validation Report template now keeps `ViftyHelper probeLocal` optional for unsupported safe-block reports while still asking supported Apple Silicon MacBook Pro validators for helper fan telemetry.
 - Hardware validation docs and the issue template now distinguish source builds, source-first unsigned-dev zips, future notarized releases, and Homebrew installs so `v1.1.0` compatibility reports do not imply trusted binary distribution.
 - The Bug Report template now steers unsupported or blocked fan reports to `viftyctl diagnose --json` first and keeps helper probe output optional unless supported hardware or maintainer follow-up needs it.

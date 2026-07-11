@@ -2,8 +2,8 @@
 
 Vifty has two release modes:
 
-- **Source-first release:** used while the project does not currently have Apple Developer Program credentials. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
-- **Developer ID release:** future trusted binary lane. Artifacts should be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
+- **Source-first release:** used when Developer ID credentials are unavailable. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
+- **Developer ID release:** trusted binary lane. Artifacts must be Developer ID signed, notarized, stapled, and tied to the same TeamID that the privileged daemon enforces over XPC.
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
 
@@ -11,7 +11,7 @@ For the current public release trust state, see [release-status.md](release-stat
 
 Use this mode when Apple Developer Program credentials are unavailable. It does not create a trusted public binary and must not claim Developer ID signing, notarization, stapling, Gatekeeper approval, or Homebrew trust.
 
-Sparkle auto-update is future Developer ID release work. Do not enable Sparkle for source-first or unsigned-dev artifacts. The updater requirements and test plan live in [auto-update.md](auto-update.md).
+Sparkle auto-update is separate trusted-release work. Do not enable Sparkle for source-first, unsigned-dev, or `v1.2.0` artifacts. The updater requirements and test plan live in [auto-update.md](auto-update.md).
 
 The required source-first release-note warning is:
 
@@ -56,7 +56,7 @@ Source-first checklist:
 
    The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes.
 
-   The Makefile target requires the current source to match `v<version>` by default. If you are building from an unpublished candidate, run the script directly with `--require-source-ref <candidate-ref-or-sha>` or set `UNSIGNED_DEV_SOURCE_REF=<candidate-ref-or-sha>` intentionally. Do not build a `Vifty-v<version>-unsigned-dev.zip` from later `main` hardening, and do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for the future Developer ID signed and notarized artifact.
+   The Makefile target requires the current source to match `v<version>` by default. If you are building from an unpublished candidate, run the script directly with `--require-source-ref <candidate-ref-or-sha>` or set `UNSIGNED_DEV_SOURCE_REF=<candidate-ref-or-sha>` intentionally. Do not build a `Vifty-v<version>-unsigned-dev.zip` from later `main` hardening, and do not use `Vifty-v<version>.zip` or `Vifty-v<version>.zip.sha256` for an unsigned build. Those names are reserved for Developer ID signed and notarized artifacts.
 
 4. Before pushing the source tag, optionally confirm that the tag or candidate commit matches the intended source ref:
 
@@ -88,18 +88,16 @@ Source-first checklist:
 
 Use this mode only after the intended personal Apple Developer team is active and Vifty is ready to cross from source-first distribution into trusted-binary release claims.
 
-### Pending Developer ID Account Setup
+### Developer ID Ownership And Secret Hygiene
 
-While the intended personal Apple Developer team is pending, keep Vifty in source-first mode. Do not use a different organization's Developer ID certificate unless that organization is intentionally meant to own Vifty's public signing identity, release trust, Homebrew trust, support burden, and revocation risk.
+Use only the Apple Developer team intentionally designated to own Vifty's public signing identity, GitHub Release trust, Homebrew trust, support burden, and revocation risk. Do not borrow a different organization's Developer ID certificate for a release.
 
-Preparation that is safe before Apple activates the team:
+Keep the signing boundary reproducible and private:
 
-1. Keep the Developer ID workflow strict and unrun for public trust claims.
-2. Keep `Casks/vifty.rb` disabled.
-3. Keep source-first and unsigned-dev release wording intact.
-4. Keep Sparkle updater keys out of `Resources/Info.plist`.
-5. Prepare GitHub secret names only; do not commit certificate material, `.p12` files, app-specific passwords, or exported secret values.
-6. After the team becomes active, create the Developer ID Application certificate under the intended personal team, configure the secrets below, run the manual local signing smoke test, then use the normal Developer ID release checklist.
+1. Keep the Developer ID workflow strict and require artifact verification before publication.
+2. Keep Sparkle updater keys out of `Resources/Info.plist` until a separately verified signed-appcast release is ready.
+3. Store certificate material, `.p12` passwords, Apple app-specific passwords, and other secret values only in the local keychain or GitHub Actions secrets; never commit them or record them in project notes.
+4. Run the local signing/notarization smoke test and the release-secret name preflight before pushing a public tag.
 
 ## Required GitHub Secrets
 
@@ -154,7 +152,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    ```
 
 4. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
-5. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version. Remove the cask `disable!` stanza only for the Developer ID/notarized release lane, after the canonical `Vifty-v<version>.zip` artifact and release verifier are ready.
+5. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version. Remove the cask `disable!` stanza only in the final Developer ID candidate commit immediately before tagging. Do not recommend Homebrew until the published artifact checksum has been applied and the public verifier passes.
 6. Commit the release prep. The cask checksum can be updated in a follow-up commit after the notarized artifact exists.
 7. Tag the commit:
 
@@ -200,7 +198,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
 
    If this fails after an artifact has already been published, cut a corrected patch release instead of treating the Homebrew cask as trusted.
 
-11. After publication, run `git fetch origin main --tags` and `scripts/check-release-readiness.sh --mode developer-id --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` again, then keep the passed schema-backed JSON with release notes or validation evidence. The final JSON should show `releaseMode: "developer-id"` plus `release-source-ref`, `source-ci`, `release-workflow`, `release-secrets`, and `github-release` all passed.
+11. After publication and before moving `main` with the checksum follow-up, run `git fetch origin main --tags` and `scripts/check-release-readiness.sh --mode developer-id --version <version> --repo Reedtrullz/Vifty --require-source-ref origin/main --json` again. Once `main` has moved, use the immutable `v<version>` tag or release commit SHA for `--require-source-ref` instead. Keep the passed schema-backed JSON with release notes or validation evidence. The final JSON should show `releaseMode: "developer-id"` plus `release-source-ref`, `source-ci`, `release-workflow`, `release-secrets`, and `github-release` all passed.
 12. After publication, verify on hardware with [hardware-validation.md](hardware-validation.md). Prefer `scripts/collect-validation-evidence.sh --app /Applications/Vifty.app --release-summary ./Vifty-v<version>-artifact-summary.json --release-checklist ./Vifty-v<version>-release-checklist.md` so release reports include the same read-only evidence bundle, including `review-summary.tsv`, `review-summary.json`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `capabilities-contract.tsv`, `viftyctl-audit.json`, `release-artifact-summary.json`, `release-artifact-summary.tsv`, `release-checklist.md`, `release-checklist.tsv`, bundle plist, LaunchDaemon TeamID, per-binary signing, notarization, Gatekeeper files, the release verifier result, and the release checklist. The collector marks the release-summary row nonzero if the verifier result does not pass or if its version does not match the installed app being tested; it marks the release-checklist row nonzero if the checklist title version does not match the installed app or if required follow-up sections are missing; it marks the capabilities-contract row nonzero if the installed CLI stops advertising the safe `runLifecycle`, direct prepare/restore lifecycle, `policyStatusAvailable: true`, wrapper resource discovery, metadata limits, or force-retry discovery fields. Before treating the installed release as trusted, run `make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json` on the captured bundle and keep the schema-backed `review-result.json` with the report.
 13. For a future auto-update-enabled release, verify Sparkle metadata before publication: `SUFeedURL` must be HTTPS, `SUPublicEDKey` must match the protected EdDSA private key, signed appcast settings must be enabled, `generate_appcast` must have produced the signed appcast for the canonical `Vifty-v<version>.zip`, and the updater must not point at unsigned-dev or source-first artifacts.
 14. Update [compatibility.md](compatibility.md) only with report-backed results. Use `scripts/summarize-validation-reports.sh --input <reports-dir> --output-json <reports-dir>/compatibility-index.json --output-tsv <reports-dir>/compatibility-index.tsv --output-markdown <reports-dir>/compatibility-matrix.md` to index valid reviewed `review-result.json` files and draft a conservative Markdown matrix; each review result declares `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`, the JSON index declares `schemaID: https://vifty.local/schemas/validation-report-index.schema.json`, and the indexer rejects missing or drifted review-result schema IDs, malformed, non-read-only, cooling-mutating, unsupported-mode, unsupported install-source, invalid or missing required source SHA/checksum, mutable or missing source refs for source-build tag evidence, unsupported `agentRunSmokeResult` values, missing or unsupported agent decision/recovery fields, malformed `manualControlActive`, or contradictory passed review outputs. Leave model families as "needs validation" until supported-hardware rows are indexed as `validated-hardware-evidence` from `manualSmokeTestResult: "passed-auto-restored"`. Preserve `recommendedAgentAction`, `recommendedRecoveryAction`, `safeToRequestCooling`, `daemonControlPathReady`, `manualControlActive`, `agentRunSmokeResult`, and `agentRunSmokeSource` as separate developer-workload and readiness proof for guarded `viftyctl run`; do not use it as a substitute for manual fan-control smoke evidence. Use the generated `compatibility-matrix.md`, model-family counts, recommended agent action, recovery action, `safeToRequestCooling`, daemon control-path readiness, and manual-control ownership counts to spot unsafe readiness clusters before publishing compatibility claims.
