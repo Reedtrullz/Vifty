@@ -367,7 +367,7 @@ final class CodexUsageTests: XCTestCase {
         let script = """
         #!/bin/sh
         trap '' TERM
-        sleep 0.6 &
+        sleep 3 &
         wait
         """
         try script.write(to: executable, atomically: true, encoding: .utf8)
@@ -386,7 +386,7 @@ final class CodexUsageTests: XCTestCase {
         let elapsed = Date().timeIntervalSince(startedAt)
 
         XCTAssertNil(snapshot)
-        XCTAssertLessThan(elapsed, 0.7)
+        XCTAssertLessThan(elapsed, 2.0, "shutdown must not wait for the 3-second descendant")
     }
 
     func testReaderReturnsNilWithoutLocalTokenCountEvents() throws {

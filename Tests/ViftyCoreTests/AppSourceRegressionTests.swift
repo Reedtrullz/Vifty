@@ -187,6 +187,13 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(appLog.contains("command"))
     }
 
+    func testCodexUsagePipeShutdownDoesNotDrainToEOF() throws {
+        let codexUsage = try read("Sources/Vifty/CodexUsage.swift")
+
+        XCTAssertFalse(codexUsage.contains("readDataToEndOfFile"))
+        XCTAssertTrue(codexUsage.contains("Descendants may inherit the pipe after Process exits."))
+    }
+
     func testMainWindowPanesAreIndependentlyScrollableAndFillAvailableHeight() throws {
         let contentView = try read("Sources/Vifty/ContentView.swift")
 
