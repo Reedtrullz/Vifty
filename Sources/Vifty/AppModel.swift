@@ -503,7 +503,7 @@ final class AppModel: ObservableObject {
             await pollOnce()
             selectedMode = startupMode
         }
-        await applyCurrentModeSelection()
+        markFanControlDraftPending()
     }
 
     func stop() {

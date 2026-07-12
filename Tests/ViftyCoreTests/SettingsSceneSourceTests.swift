@@ -33,6 +33,7 @@ final class SettingsSceneSourceTests: XCTestCase {
         XCTAssertTrue(general.contains("Text(\"Auto\").tag(ModeSelection.auto)"))
         XCTAssertTrue(general.contains("Text(\"Fixed RPM\").tag(ModeSelection.fixed)"))
         XCTAssertTrue(general.contains("Text(\"Temperature Curve\").tag(ModeSelection.curve)"))
+        XCTAssertTrue(general.contains("StartupModePresentation.resolve(model.startupMode).detail"))
         XCTAssertFalse(general.contains("Text(mode.rawValue)"))
         XCTAssertTrue(menuBar.contains("Picker(\"Menu bar\", selection: $model.menuBarDisplayMode)"))
         XCTAssertTrue(notifications.contains("Toggle(\"Helper failure\", isOn: $model.notificationSettings.helperFailure)"))

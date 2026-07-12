@@ -18,6 +18,11 @@ struct SettingsGeneralView: View {
                 Text("Temperature Curve").tag(ModeSelection.curve)
             }
 
+            Text(StartupModePresentation.resolve(model.startupMode).detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             Toggle("Start Vifty at startup", isOn: launchAtLoginBinding)
                 .help("Open Vifty automatically at macOS login")
 
