@@ -14,6 +14,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertFalse(status.contains("model.start()"))
     }
 
+    func testCopyFeedbackResetsInsteadOfStayingVisibleForever() throws {
+        let settings = try read("Sources/Vifty/SettingsAgentWorkflowView.swift")
+        let content = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(settings.contains("try? await Task.sleep(for: .seconds(2))"))
+        XCTAssertTrue(settings.contains("agentRuleCopied = false"))
+        XCTAssertTrue(settings.contains("agentCommandCopied = false"))
+        XCTAssertTrue(content.contains("helperDiagnosticsCopied = false"))
+    }
+
     func testExactCurvePointSlidersExposeDistinctUnitsAndHints() throws {
         let fanControlPanel = try read("Sources/Vifty/FanControlPanel.swift")
 
