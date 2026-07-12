@@ -424,7 +424,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
         let unsignedDigestBoundary = "The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."
 
-        XCTAssertTrue(cask.contains("version \"1.2.0\""))
+        XCTAssertTrue(cask.contains("version \"1.3.0\""))
         XCTAssertTrue(cask.contains("sha256 \"7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e\""))
         XCTAssertFalse(cask.contains("disable!"))
         XCTAssertTrue(readme.contains("Vifty `v1.2.0` is the current published Developer ID release."))
@@ -486,7 +486,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main`"))
         XCTAssertTrue(releaseStatus.contains("Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary."))
         XCTAssertTrue(releaseStatus.contains("The honest remediation is the `v1.1.1` source-first hotfix release"))
-        XCTAssertTrue(releaseStatus.contains("`Resources/Info.plist` and `Casks/vifty.rb` are aligned at `1.2.0`"))
+        XCTAssertTrue(releaseStatus.contains("Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.0`"))
+        XCTAssertTrue(releaseStatus.contains("`v1.2.0` remains the latest trusted public artifact"))
+        XCTAssertTrue(releaseStatus.contains("pending the required post-release checksum handoff"))
         XCTAssertTrue(releaseStatus.contains("At `v1.1.1` publication, `Resources/Info.plist` carried `1.1.1` while `Casks/vifty.rb` remained disabled on `1.1.0`"))
         XCTAssertTrue(releaseStatus.contains("Do not update the Homebrew cask checksum for a source-first release, do not re-enable the cask, and do not point Homebrew at unsigned-dev artifacts."))
         XCTAssertTrue(releaseStatus.contains("## Source-First v1.1.1 Operator Checks"))
