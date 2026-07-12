@@ -66,9 +66,9 @@ The current checked-in developer-workload evidence includes `docs/validation-rep
 
 ### Current release trust status
 
-Vifty `v1.2.0` is the current published Developer ID release. Its immutable tag resolves to `9bf45f9afc56a36580bede696c479bff0df0cf6a`, the signed/notarized Release workflow passed, and the canonical zip, checksum, verifier summary, and release checklist are published at the [v1.2.0 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.2.0).
+Vifty `v1.3.0` is the current published Developer ID release. Its immutable tag resolves to `5cfd0eaf4409e3cfd2e57c766297d1609f8698cb`, source CI run `29209681445` passed, signed/notarized Release run `29209985030` passed, and the canonical zip, checksum, verifier summary, and release checklist are published at the [v1.3.0 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.3.0).
 
-The exact public zip and the checked-in cask both resolve to SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. Independent `scripts/verify-release-artifact.sh --team-id X88J3853S2` checks pass for bundle version, required executables and schemas, Developer ID TeamID, LaunchDaemon allowlisting, stapling, and Gatekeeper without skip flags. Installed release-mode validation also passes for the exact public app with a matching signed helper, Auto restored, privacy review clear, and no cooling commands. `v1.1.1` remains the published source-first fallback. Manual Fixed/Curve hardware compatibility remains a separate reviewed claim; see [docs/release-status.md](docs/release-status.md).
+The exact public zip and the checked-in cask both resolve to SHA-256 `92e803fa372c9cbd387b9b903ae0531031bc244804946d441616760f1d04a61f`. Independent `scripts/verify-release-artifact.sh --team-id X88J3853S2` checks pass for bundle version, required executables and schemas, Developer ID TeamID, LaunchDaemon allowlisting, stapling, and Gatekeeper without skip flags. Installed release-mode validation for `v1.3.0` is not yet recorded; the latest reviewed installed-app/helper evidence remains `v1.2.0`. `v1.1.1` remains the published source-first fallback. Manual Fixed/Curve hardware compatibility remains a separate reviewed claim; see [docs/release-status.md](docs/release-status.md).
 
 The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
@@ -76,7 +76,7 @@ An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the G
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
-Auto-update is not enabled in `v1.2.0` or in source-first/unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the separate Sparkle trust plan.
+Auto-update is not enabled in `v1.3.0` or in source-first/unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the separate Sparkle trust plan.
 
 ### Install trust levels
 
@@ -130,7 +130,7 @@ To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RE
 
 ### Homebrew
 
-The Homebrew cask now points at the published `v1.2.0` notarized zip with SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`. `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against that exact public artifact using the cask checksum, and installed release-mode review passes after Auto restoration and signed helper alignment. This proves release and cask trust alignment; it is not a manual hardware compatibility claim. Keep compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
+The Homebrew cask now points at the published `v1.3.0` notarized zip with SHA-256 `92e803fa372c9cbd387b9b903ae0531031bc244804946d441616760f1d04a61f`. `scripts/verify-release-artifact.sh --team-id X88J3853S2` passes against that exact public artifact using the cask checksum. Installed release-mode review for `v1.3.0` remains pending; the last reviewed installed-app/helper evidence is for `v1.2.0`. This proves release and cask trust alignment; it is not installed-release or manual hardware compatibility proof. Keep compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
 
 ## Build and verify
 
