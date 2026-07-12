@@ -62,16 +62,17 @@ final class MainWindowLayoutTests: XCTestCase {
         XCTAssertEqual(layout.telemetryPaneMaxWidth, .infinity)
     }
 
-    func testWorkbenchKeepsTelemetryUsableAtEntryWidth() {
+    func test1280ClassDisplayUsesSplitLayoutInsteadOfSparseWorkbench() {
         let layout = MainWindowLayout.resolve(width: 1280, height: 720)
 
-        XCTAssertEqual(layout.mode, .workbench)
-        XCTAssertEqual(layout.controlPaneWidth, 320)
-        XCTAssertGreaterThanOrEqual(layout.editorPaneMinWidth, 460)
+        XCTAssertEqual(layout.mode, .split)
+        XCTAssertFalse(layout.compactTelemetry)
+        XCTAssertGreaterThanOrEqual(layout.controlPaneWidth, 480)
         XCTAssertGreaterThanOrEqual(layout.telemetryPaneMinWidth, 420)
-        XCTAssertLessThanOrEqual(
-            layout.controlPaneWidth + layout.editorPaneMinWidth + layout.telemetryPaneMinWidth,
-            1_200
-        )
+    }
+
+    func testWorkbenchBeginsAt1440Points() {
+        XCTAssertEqual(MainWindowLayout.resolve(width: 1439, height: 820).mode, .split)
+        XCTAssertEqual(MainWindowLayout.resolve(width: 1440, height: 820).mode, .workbench)
     }
 }
