@@ -1,8 +1,40 @@
 import CoreGraphics
 import XCTest
+import ViftyCore
 @testable import Vifty
 
 final class FanCurveChartGeometryTests: XCTestCase {
+    func testResolvedRPMRangeIncludesEveryFanWhenPerFanSeriesIsShown() {
+        let fans = [
+            Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+            Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+        ]
+
+        let range = FanCurveChartGeometry.resolvedRPMRange(
+            base: 1499...4296,
+            fans: fans,
+            includeFanRanges: true
+        )
+
+        XCTAssertEqual(range.lowerBound, 1499)
+        XCTAssertEqual(range.upperBound, 4744)
+    }
+
+    func testResolvedRPMRangeKeepsBaseEditingBoundsWhenFanSeriesIsHidden() {
+        let fans = [
+            Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
+            Fan(id: 1, name: "Right", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4744, controllable: true)
+        ]
+
+        let range = FanCurveChartGeometry.resolvedRPMRange(
+            base: 1499...4296,
+            fans: fans,
+            includeFanRanges: false
+        )
+
+        XCTAssertEqual(range, 1499...4296)
+    }
+
     func testPlotRectUsesWideInsetsAtDesktopWidth() {
         let geometry = FanCurveChartGeometry(
             temperatureRange: 35...105,

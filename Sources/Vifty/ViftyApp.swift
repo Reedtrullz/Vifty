@@ -24,7 +24,11 @@ struct ViftyApp: App {
                     appDelegate.openMainWindowHandler = { openWindow(id: "main") }
                 }
         }
+        .defaultSize(width: 1180, height: 820)
         .windowResizability(.contentMinSize)
+        .commands {
+            ViftyCommands(model: model, openWindow: openWindow)
+        }
 
         Settings {
             ViftySettingsView(model: model)
@@ -52,12 +56,14 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
             model: model,
             openMainWindow: { [weak self] in
                 self?.openMainWindow()
+            },
+            onRestoreAuto: { [weak model] in
+                model?.restoreAuto()
             }
         )
         statusItemController?.openMainWindow = { [weak self] in
             self?.openMainWindow()
         }
-        model.start()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

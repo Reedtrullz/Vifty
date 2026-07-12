@@ -1,6 +1,13 @@
 import Foundation
 
 struct MainWindowLayout: Equatable {
+    private static let workbenchMinimumWidth: CGFloat = 1_440
+    private static let workbenchMinimumHeight: CGFloat = 640
+    private static let splitMinimumWidth: CGFloat = 980
+    private static let splitMinimumHeight: CGFloat = 560
+    private static let compactTelemetryMaximumWidth: CGFloat = 1_120
+    private static let compactTelemetryMaximumHeight: CGFloat = 640
+
     enum Mode: Equatable {
         case split
         case stacked
@@ -18,7 +25,7 @@ struct MainWindowLayout: Equatable {
     let telemetryPaneMaxWidth: CGFloat
 
     static func resolve(width: CGFloat, height: CGFloat) -> MainWindowLayout {
-        if width >= 1280, height >= 640 {
+        if width >= workbenchMinimumWidth, height >= workbenchMinimumHeight {
             let editorIdealWidth = min(max((width * 0.30).rounded(), 620), 860)
             let telemetryIdealWidth = max(520, (width - 320 - editorIdealWidth).rounded(.down))
             return MainWindowLayout(
@@ -34,7 +41,7 @@ struct MainWindowLayout: Equatable {
             )
         }
 
-        if width < 980 || height < 560 {
+        if width < splitMinimumWidth || height < splitMinimumHeight {
             return MainWindowLayout(
                 mode: .stacked,
                 compactTelemetry: true,
@@ -50,7 +57,7 @@ struct MainWindowLayout: Equatable {
 
         return MainWindowLayout(
             mode: .split,
-            compactTelemetry: height < 640 || width < 1120,
+            compactTelemetry: height < compactTelemetryMaximumHeight || width < compactTelemetryMaximumWidth,
             controlPaneWidth: min(max((width * 0.42).rounded(), 420), 500),
             editorPaneMinWidth: 420,
             editorPaneIdealWidth: 560,

@@ -2,14 +2,26 @@ import CoreGraphics
 import Foundation
 import ViftyCore
 
-struct FanCurveChartValue: Equatable {
-    let temperature: Double
-    let rpm: Double
-}
-
 struct FanCurveChartGeometry: Equatable {
     let temperatureRange: ClosedRange<Double>
     let rpmRange: ClosedRange<Double>
+
+    static func resolvedRPMRange(
+        base: ClosedRange<Double>,
+        fans: [Fan],
+        includeFanRanges: Bool
+    ) -> ClosedRange<Double> {
+        let normalizedUpper = max(base.upperBound, base.lowerBound + 100)
+        guard includeFanRanges else {
+            return base.lowerBound...normalizedUpper
+        }
+
+        let fanMinimum = fans.map { Double($0.minimumRPM) }.min() ?? base.lowerBound
+        let fanMaximum = fans.map { Double($0.maximumRPM) }.max() ?? normalizedUpper
+        let lower = min(base.lowerBound, fanMinimum)
+        let upper = max(normalizedUpper, fanMaximum)
+        return lower...max(upper, lower + 100)
+    }
 
     func plotRect(in size: CGSize) -> CGRect {
         let leftInset: CGFloat = size.width < 420 ? 48 : 56
