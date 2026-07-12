@@ -16,4 +16,10 @@ final class TelemetryLayoutPolicyTests: XCTestCase {
         XCTAssertEqual(TelemetryLayoutPolicy.metricColumnCount(for: 860), 4)
         XCTAssertEqual(TelemetryLayoutPolicy.metricColumnCount(for: 1_600), 4)
     }
+
+    func testWindowLayoutBreakpointsDoNotChangeMetricGridAuthority() {
+        XCTAssertEqual(TelemetryLayoutPolicy.metricColumnCount(for: 480), 2)
+        XCTAssertEqual(TelemetryLayoutPolicy.metricColumnCount(for: 720), 3)
+        XCTAssertEqual(TelemetryLayoutPolicy.metricColumnCount(for: 1_280), 4)
+    }
 }

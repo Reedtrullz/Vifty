@@ -175,8 +175,8 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         temperatureValues = Self.temperatureValues(from: recentSamples, latest: latest)
         fanRPMValues = Self.fanRPMValues(from: recentSamples, usesAverageFanRPM: usesAverageFanRPM)
         batteryPowerValues = recentSamples.compactMap(\.batteryPowerWatts)
-        temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "C", decimals: 1)
-        temperatureChangeText = Self.changeText(temperatureValues, unit: "C", decimals: 1)
+        temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "°C", decimals: 1)
+        temperatureChangeText = Self.changeText(temperatureValues, unit: "°C", decimals: 1)
         fanRPMRangeText = Self.unsignedRangeText(fanRPMValues, unit: "RPM", decimals: 0)
         fanRPMChangeText = Self.changeText(fanRPMValues, unit: "RPM", decimals: 0)
         batteryPowerRangeText = Self.signedWattRangeText(batteryPowerValues)
@@ -186,7 +186,7 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
     }
 
     public static func temperatureText(_ value: Double) -> String {
-        String(format: "%.1f C", value)
+        String(format: "%.1f °C", value)
     }
 
     public static func fanRPMText(_ value: Int) -> String {

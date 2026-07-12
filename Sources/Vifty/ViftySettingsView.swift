@@ -4,16 +4,17 @@ struct ViftySettingsView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Label("Settings & Tools", systemImage: "gearshape")
-                    .font(.title2.weight(.semibold))
-
-                SettingsToolsPanel(model: model)
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        TabView {
+            SettingsGeneralView(model: model)
+                .tabItem { Label("General", systemImage: "gearshape") }
+            SettingsMenuBarView(model: model)
+                .tabItem { Label("Menu Bar", systemImage: "menubar.rectangle") }
+            SettingsNotificationsView(model: model)
+                .tabItem { Label("Notifications", systemImage: "bell") }
+            SettingsAgentWorkflowView(model: model)
+                .tabItem { Label("Agent Workflows", systemImage: "terminal") }
         }
-        .frame(minWidth: 620, minHeight: 520)
+        .frame(minWidth: 620, minHeight: 420)
+        .scenePadding()
     }
 }

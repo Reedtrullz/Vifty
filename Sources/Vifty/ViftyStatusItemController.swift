@@ -10,15 +10,21 @@ final class ViftyStatusItemController: NSObject {
     var openMainWindow: () -> Void
 
     private let model: AppModel
+    private let onRestoreAuto: () -> Void
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
     private let primeScheduler = MenuBarTelemetryPrimeScheduler()
     private var cancellables: Set<AnyCancellable> = []
     private var lastAppliedPresentation: MenuBarStatusItemPresentation?
 
-    init(model: AppModel, openMainWindow: @escaping () -> Void) {
+    init(
+        model: AppModel,
+        openMainWindow: @escaping () -> Void,
+        onRestoreAuto: @escaping () -> Void
+    ) {
         self.model = model
         self.openMainWindow = openMainWindow
+        self.onRestoreAuto = onRestoreAuto
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         configureStatusItem()
@@ -40,6 +46,8 @@ final class ViftyStatusItemController: NSObject {
         popover.contentViewController = NSHostingController(
             rootView: MenuBarView(openMainWindow: { [weak self] in
                 self?.performOpenMainWindow()
+            }, onRestoreAuto: onRestoreAuto, onQuit: {
+                NSApplication.shared.terminate(nil)
             })
             .environmentObject(model)
         )

@@ -230,12 +230,9 @@ final class AppModel: ObservableObject {
             refreshTelemetrySummaries()
         }
     }
-    @Published var manualRunLimit: ManualRunLimit = .indefinitely {
-        didSet {
-            updateManualDeadlineForActiveManualMode()
-        }
-    }
+    @Published var manualRunLimit: ManualRunLimit = .defaultForManualControl
     @Published var manualSessionExpiresAt: Date?
+    @Published private(set) var fanControlApplyState: FanControlApplyState = .applied
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
     @Published var hasCompletedHardwarePoll = false
@@ -253,6 +250,10 @@ final class AppModel: ObservableObject {
     @Published var selectedCurveProfileID: CurveProfile.ID?
     private var isSettingSelectedSensorProgrammatically = false
     private var userSelectedSensorID: String?
+    private var lastAppliedFanControlDraft: FanControlDraft?
+    private var appliedManualRunLimit: ManualRunLimit = .defaultForManualControl
+    private var fanControlOperationGeneration: UInt64 = 0
+    private var manualFanControlApplyAttempt: ManualFanControlApplyAttempt?
 
     static let menuBarDisplayModeDefaultsKey = AppPreferencesStore.legacyMenuBarDisplayModeDefaultsKey
     static let highTemperatureAttentionThreshold = 90.0
@@ -297,6 +298,80 @@ final class AppModel: ObservableObject {
     private let daemonPingRefreshInterval: TimeInterval = 30
     private let agentStatusRefreshInterval: TimeInterval = 15
     private let pollSchedulePolicy = PollSchedulePolicy.standard
+
+    private struct ManualFanControlApplyAttempt {
+        let generation: UInt64
+        let draft: FanControlDraft
+        let mode: FanMode
+        let previousManualSessionExpiresAt: Date?
+        var coordinatorConfigured: Bool
+    }
+
+    var currentFanControlDraft: FanControlDraft {
+        FanControlDraft(
+            mode: selectedMode,
+            manualRunLimit: manualRunLimit,
+            fixedRPM: fixedRPM,
+            fixedFanTargets: fixedFanTargets,
+            usePerFanFixedRPM: usePerFanFixedRPM,
+            curve: FanCurveDraft(
+                startTemperature: curveStartTemp,
+                startRPM: curveStartRPM,
+                rampTemperature: curveMidTemp,
+                rampRPM: curveMidRPM,
+                highTemperature: curveMaxTemp,
+                highRPM: curveMaxRPM
+            ),
+            selectedSensorID: selectedSensorID,
+            usePerFanOverrides: usePerFanOverrides,
+            fanOverrides: fanOverrides
+        )
+    }
+
+    var hasPendingFanControlChanges: Bool {
+        guard let lastAppliedFanControlDraft else { return selectedMode != .auto }
+        return currentFanControlDraft.isDirty(comparedTo: lastAppliedFanControlDraft)
+    }
+
+    var controlSessionPresentation: ControlSessionPresentation {
+        ControlSessionPresentation.resolve(ControlSessionInput(
+            helperHealth: helperHealthState,
+            helperHealthNeedsAttention: helperHealthNeedsAttention,
+            helperRepairActionAvailable: helperRepairActionAvailable,
+            manualFanControlAvailable: manualFanControlAvailable,
+            controlOwnershipNeedsAttention: controlOwnershipNeedsAttention,
+            controlOwnershipSummary: controlOwnershipSummary,
+            agentCoolingSummary: agentCoolingSummary,
+            hasAgentCoolingLease: agentControlStatus?.activeLease != nil,
+            agentCoolingNeedsAttention: agentCoolingNeedsAttention,
+            manualControlAttentionSummary: manualControlAttentionSummary,
+            selectedMode: selectedMode,
+            applyState: fanControlPresentationApplyState,
+            manualSessionExpiresAt: manualSessionExpiresAt
+        ))
+    }
+
+    private var fanControlPresentationApplyState: FanControlApplyState {
+        if hasPendingFanControlChanges, fanControlApplyState == .applied {
+            return .pending
+        }
+        if !hasPendingFanControlChanges,
+           fanControlApplyState == .pending,
+           manualFanControlApplyAttempt == nil {
+            return .applied
+        }
+        return fanControlApplyState
+    }
+
+    var menuBarPanelPresentation: MenuBarPanelPresentation {
+        MenuBarPanelPresentation.resolve(input: .init(
+            controlSession: controlSessionPresentation,
+            ownerText: compactControlOwnershipSummary,
+            attentionText: menuBarPanelAttentionText,
+            fans: snapshot?.fans ?? [],
+            isManualControlActive: controlState.manualControlActive
+        ))
+    }
 
     init(
         coordinator: FanControlCoordinator = FanControlCoordinator(hardware: RealMacHardwareService()),
@@ -468,6 +543,7 @@ final class AppModel: ObservableObject {
             failures.append(agentRestoreError)
         }
         guard !failures.isEmpty else {
+            recordAutoRestorationApplied()
             ViftyLog.fanControl.notice("Termination restore confirmed")
             return .restored
         }
@@ -547,7 +623,7 @@ final class AppModel: ObservableObject {
             refreshMenuBarStatusItemIfNeeded()
         }
         refreshCodexUsageIfNeeded()
-        _ = await restoreAutoIfManualSessionExpired()
+        let expiredAutoOperationGeneration = await restoreAutoIfManualSessionExpired()
         let stateBeforeTick = await coordinator.state
         do {
             let nextSnapshot = try await coordinator.tick()
@@ -558,6 +634,12 @@ final class AppModel: ObservableObject {
             await refreshAgentControlStatusIfNeeded(at: pollStartedAt)
             assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: nextSnapshot))
             await syncState()
+            if let expiredAutoOperationGeneration,
+               canCommitAutoRestoration(generation: expiredAutoOperationGeneration) {
+                recordAutoRestorationApplied()
+            } else {
+                reconcileManualApplyAttemptAfterSuccessfulPoll()
+            }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
             ViftyLog.polling.debug("Hardware poll completed")
         } catch {
@@ -583,8 +665,26 @@ final class AppModel: ObservableObject {
                 }
                 assignIfChanged(\.controlState, await coordinator.state)
             } else {
-                _ = await coordinator.forceAuto()
+                let fallbackAutoRestoreResult = await coordinator.forceAuto()
                 await syncState()
+
+                if let expiredAutoOperationGeneration,
+                   fanControlOperationIsCurrent(expiredAutoOperationGeneration) {
+                    switch fallbackAutoRestoreResult {
+                    case .restored:
+                        if canCommitAutoRestoration(generation: expiredAutoOperationGeneration) {
+                            recordAutoRestorationApplied()
+                        } else {
+                            let message = "\(error.localizedDescription)\nFallback Auto restore could not be confirmed."
+                            assignIfChanged(\.lastError, message)
+                            fanControlApplyState = .failed(message: message)
+                        }
+                    case .failed(let fallbackMessage):
+                        let message = "\(error.localizedDescription)\nFallback Auto restore failed: \(fallbackMessage)"
+                        assignIfChanged(\.lastError, message)
+                        fanControlApplyState = .failed(message: message)
+                    }
+                }
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
         }
@@ -771,7 +871,11 @@ final class AppModel: ObservableObject {
     }
 
     func applyModeSelection() {
-        Task { await applyCurrentModeSelection() }
+        if selectedMode == .auto {
+            restoreAuto()
+        } else {
+            markFanControlDraftPending()
+        }
     }
 
     func performModeSelectionAction() {
@@ -779,55 +883,152 @@ final class AppModel: ObservableObject {
     }
 
     func performModeSelectionActionNow() async {
-        if modeSelectionActionRestoresAuto {
+        switch controlSessionPresentation.primaryAction {
+        case .restoreAuto:
             await restoreAutoNow()
-        } else {
-            await applyCurrentModeSelection()
+        case .apply:
+            _ = await applyCurrentModeSelection()
+        case .none, .repairHelper, .copyDiagnostics:
+            break
         }
     }
 
     func restoreAuto() {
-        Task { await restoreAutoNow() }
+        let generation = beginAutoRestoreOperation()
+        Task { await performAutoRestore(generation: generation) }
     }
 
-    func applyCurrentModeSelection() async {
-        let mode = selectedFanMode()
-        if mode != .auto {
-            await refreshManualControlPreflight()
+    func markFanControlDraftPending() {
+        guard selectedMode != .auto else { return }
+        if !hasPendingFanControlChanges,
+           manualFanControlApplyAttempt == nil,
+           let lastAppliedFanControlDraft,
+           controlState.mode == fanMode(for: lastAppliedFanControlDraft) {
+            fanControlApplyState = .applied
+        } else if fanControlApplyState != .applying {
+            fanControlApplyState = .pending
         }
-        if mode != .auto, let blockedReason = manualFanControlBlockedReason {
-            selectedMode = .auto
-            manualSessionExpiresAt = nil
-            lastError = "Manual fan control blocked: \(blockedReason)"
-            await syncState()
-            return
+    }
+
+    func applyPendingFanControl() {
+        Task { _ = await applyCurrentModeSelection() }
+    }
+
+    @discardableResult
+    func applyCurrentModeSelection() async -> FanControlApplyResult {
+        if selectedMode == .auto {
+            await restoreAutoNow()
+            if case .failed(let message) = fanControlApplyState {
+                return .failed(message: message)
+            }
+            return selectedMode == .auto && controlState.mode == .auto ? .applied : .superseded
         }
 
-        updateManualDeadline(for: mode)
-        await coordinator.setFixedFanTargets(fixedFanTargetMapForCurrentMode())
+        if usePerFanFixedRPM, let fans = snapshot?.fans {
+            ensureFixedFanTargets(for: fans)
+        }
+        let previousManualSessionExpiresAt = manualFanControlApplyAttempt?.previousManualSessionExpiresAt
+            ?? manualSessionExpiresAt
+        let generation = beginFanControlOperation()
+        let draft = currentFanControlDraft
+        let mode = fanMode(for: draft)
+
+        await refreshManualControlPreflight()
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
+        }
+        if let blockedReason = manualFanControlBlockedReason {
+            lastError = "Manual fan control blocked: \(blockedReason)"
+            fanControlApplyState = .blocked(reason: blockedReason)
+            await syncState()
+            guard manualFanControlOperationIsCurrent(generation) else {
+                return .superseded
+            }
+            return .blocked(reason: blockedReason)
+        }
+
+        fanControlApplyState = .applying
+        lastError = nil
+        updateManualDeadline(for: mode, runLimit: draft.manualRunLimit)
+        manualFanControlApplyAttempt = ManualFanControlApplyAttempt(
+            generation: generation,
+            draft: draft,
+            mode: mode,
+            previousManualSessionExpiresAt: previousManualSessionExpiresAt,
+            coordinatorConfigured: false
+        )
+
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
+        }
+        await coordinator.setFixedFanTargets(fixedFanTargetMap(for: draft))
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
+        }
+        await coordinator.setFanOverrides(draft.usePerFanOverrides ? draft.fanOverrides : [])
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
+        }
         await coordinator.setMode(mode)
-        let agentRestoreError: String?
-        if mode == .auto {
-            agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
-        } else {
-            agentRestoreError = nil
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
+        }
+        if manualFanControlApplyAttempt?.generation == generation {
+            manualFanControlApplyAttempt?.coordinatorConfigured = true
+        }
+
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
         }
         await pollOnce()
-        if let agentRestoreError {
-            lastError = agentRestoreError
-            await notifyAutoRestoreFailure(agentRestoreError)
+        guard manualFanControlOperationIsCurrent(generation) else {
+            return .superseded
         }
+        if let lastError {
+            restorePreviousManualDeadline(for: generation)
+            fanControlApplyState = .failed(message: lastError)
+            return .failed(message: lastError)
+        }
+        reconcileManualApplyAttemptAfterSuccessfulPoll()
+        guard controlState.mode == mode, controlState.manualControlActive else {
+            let message = "Manual fan control could not be confirmed after Apply."
+            restorePreviousManualDeadline(for: generation)
+            lastError = message
+            fanControlApplyState = .failed(message: message)
+            return .failed(message: message)
+        }
+        return .applied
     }
 
     func restoreAutoNow() async {
-        selectedMode = .auto
-        manualSessionExpiresAt = nil
+        let generation = beginAutoRestoreOperation()
+        await performAutoRestore(generation: generation)
+    }
+
+    private func performAutoRestore(generation: UInt64) async {
+        guard fanControlOperationIsCurrent(generation) else { return }
         await coordinator.setMode(.auto)
+        guard fanControlOperationIsCurrent(generation) else { return }
+
         let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
+        guard fanControlOperationIsCurrent(generation) else { return }
+
+        guard fanControlOperationIsCurrent(generation) else { return }
         await pollOnce()
+        guard fanControlOperationIsCurrent(generation) else { return }
         if let agentRestoreError {
             lastError = agentRestoreError
             await notifyAutoRestoreFailure(agentRestoreError)
+            guard fanControlOperationIsCurrent(generation) else { return }
+        }
+        if let lastError {
+            fanControlApplyState = .failed(message: lastError)
+        } else if controlState.mode != .auto || controlState.manualControlActive {
+            let message = "Auto restore could not be confirmed."
+            lastError = message
+            fanControlApplyState = .failed(message: message)
+        } else {
+            recordAutoRestorationApplied()
         }
     }
 
@@ -865,7 +1066,7 @@ final class AppModel: ObservableObject {
         if let fans = snapshot?.fans, usePerFanOverrides {
             ensureFanOverrides(for: fans)
         }
-        applyModeSelection()
+        markFanControlDraftPending()
     }
 
     @discardableResult
@@ -898,6 +1099,7 @@ final class AppModel: ObservableObject {
         usePerFanOverrides = false
         fanOverrides = []
         curveDefaultsSynced = true
+        markFanControlDraftPending()
     }
 
     func deleteProfile(_ profile: CurveProfile) {
@@ -933,6 +1135,17 @@ final class AppModel: ObservableObject {
                 maximumRPM: fan.maximumRPM
             )
         }
+    }
+
+    func appliedTargetRPM(for fan: Fan) -> Int? {
+        let targetRPM = fan.targetRPM ?? (controlState.manualControlActive ? controlState.lastAppliedRPM[fan.id] : nil)
+        return targetRPM.map { FanCurve.clamp($0, fan.minimumRPM, fan.maximumRPM) }
+    }
+
+    func draftTargetRPMPreview(for fan: Fan) -> Int? {
+        guard selectedMode != .auto, hasPendingFanControlChanges else { return nil }
+        let draftTargetRPM = targetRPMPreview(for: fan)
+        return draftTargetRPM == appliedTargetRPM(for: fan) ? nil : draftTargetRPM
     }
 
     private func refreshTelemetrySummaries() {
@@ -1017,12 +1230,13 @@ final class AppModel: ObservableObject {
     }
 
     func commitFixedFanTargetsAndApply() {
-        Task { await commitFixedFanTargetsAndApplyNow() }
+        persistAppPreferences()
+        markFanControlDraftPending()
     }
 
     func commitFixedFanTargetsAndApplyNow() async {
         persistAppPreferences()
-        await applyCurrentModeSelection()
+        markFanControlDraftPending()
     }
 
     func ensureFanOverrides(for fans: [Fan]) {
@@ -1067,6 +1281,10 @@ final class AppModel: ObservableObject {
         } ?? snapshot?.highestTemperature
     }
 
+    var effectiveSelectedSensorID: String? {
+        selectedSensor?.id
+    }
+
     var temperatureAttentionSummary: String? {
         guard thermalPressure.menuSummary == nil else { return nil }
         guard let sensor = selectedSensor ?? snapshot?.highestTemperature else { return nil }
@@ -1096,6 +1314,12 @@ final class AppModel: ObservableObject {
         guard let lastError else { return nil }
         guard !lastErrorIsCoveredByHelperRecovery(lastError) else { return nil }
         return lastError
+    }
+
+    private var menuBarPanelAttentionText: String? {
+        fanWriteBlockedWhileHotSummary
+            ?? thermalPressure.menuSummary
+            ?? temperatureAttentionSummary
     }
 
     var menuTitle: String {
@@ -2051,15 +2275,14 @@ final class AppModel: ObservableObject {
         ])
     }
 
-    private func fixedFanTargetMapForCurrentMode() -> [Int: Int] {
-        guard selectedMode == .fixed, usePerFanFixedRPM else { return [:] }
+    private func fixedFanTargetMap(for draft: FanControlDraft) -> [Int: Int] {
+        guard draft.mode == .fixed, draft.usePerFanFixedRPM else { return [:] }
         if let fans = snapshot?.fans {
             guard fans.filter(\.controllable).count > 1 else { return [:] }
-            ensureFixedFanTargets(for: fans)
         } else {
-            guard fixedFanTargets.count > 1 else { return [:] }
+            guard draft.fixedFanTargets.count > 1 else { return [:] }
         }
-        return fixedFanTargets.reduce(into: [Int: Int]()) { targetsByID, target in
+        return draft.fixedFanTargets.reduce(into: [Int: Int]()) { targetsByID, target in
             targetsByID[target.fanID] = target.rpm
         }
     }
@@ -2073,30 +2296,49 @@ final class AppModel: ObservableObject {
     }
 
     private func selectedFanMode() -> FanMode {
-        switch selectedMode {
+        fanMode(for: currentFanControlDraft)
+    }
+
+    private func fanMode(for draft: FanControlDraft) -> FanMode {
+        switch draft.mode {
         case .auto:
             .auto
         case .fixed:
-            .fixedRPM(Int(fixedRPM.rounded()))
+            .fixedRPM(Int(draft.fixedRPM.rounded()))
         case .curve:
-            .temperatureCurve(currentCurve())
+            .temperatureCurve(FanCurve(sensorID: draft.selectedSensorID, points: [
+                CurvePoint(
+                    temperatureCelsius: draft.curve.startTemperature,
+                    rpm: Int(draft.curve.startRPM.rounded())
+                ),
+                CurvePoint(
+                    temperatureCelsius: draft.curve.rampTemperature,
+                    rpm: Int(draft.curve.rampRPM.rounded())
+                ),
+                CurvePoint(
+                    temperatureCelsius: draft.curve.highTemperature,
+                    rpm: Int(draft.curve.highRPM.rounded())
+                )
+            ]))
         }
     }
 
     func applyCurveOverrides() {
-        Task {
-            await coordinator.setFanOverrides(usePerFanOverrides ? fanOverrides : [])
-            await applyCurrentModeSelection()
-        }
+        markFanControlDraftPending()
     }
 
-    private func updateManualDeadline(for mode: FanMode) {
+    private func commitManualRunLimit(for mode: FanMode, runLimit: ManualRunLimit) {
+        appliedManualRunLimit = runLimit
+        updateManualDeadline(for: mode, runLimit: appliedManualRunLimit)
+    }
+
+    private func updateManualDeadline(for mode: FanMode, runLimit: ManualRunLimit) {
         guard mode != .auto else {
             manualSessionExpiresAt = nil
             return
         }
 
-        switch manualRunLimit {
+        switch runLimit {
         case .indefinitely:
             manualSessionExpiresAt = nil
         case .minutes(let minutes):
@@ -2104,22 +2346,77 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func updateManualDeadlineForActiveManualMode() {
-        guard controlState.mode != .auto else { return }
-        updateManualDeadline(for: controlState.mode)
-    }
-
-    private func restoreAutoIfManualSessionExpired() async -> Bool {
+    private func restoreAutoIfManualSessionExpired() async -> UInt64? {
         guard selectedMode != .auto,
               let manualSessionExpiresAt,
               now() >= manualSessionExpiresAt else {
-            return false
+            return nil
         }
 
-        selectedMode = .auto
-        self.manualSessionExpiresAt = nil
+        let generation = beginAutoRestoreOperation()
+        guard fanControlOperationIsCurrent(generation) else { return nil }
         await coordinator.setMode(.auto)
-        return true
+        guard fanControlOperationIsCurrent(generation) else { return nil }
+        return generation
+    }
+
+    private func recordAutoRestorationApplied() {
+        manualFanControlApplyAttempt = nil
+        lastAppliedFanControlDraft = currentFanControlDraft
+        fanControlApplyState = .applied
+    }
+
+    private func beginFanControlOperation() -> UInt64 {
+        fanControlOperationGeneration &+= 1
+        manualFanControlApplyAttempt = nil
+        return fanControlOperationGeneration
+    }
+
+    private func beginAutoRestoreOperation() -> UInt64 {
+        let generation = beginFanControlOperation()
+        fanControlApplyState = .applying
+        lastError = nil
+        selectedMode = .auto
+        manualSessionExpiresAt = nil
+        return generation
+    }
+
+    private func fanControlOperationIsCurrent(_ generation: UInt64) -> Bool {
+        fanControlOperationGeneration == generation
+    }
+
+    private func manualFanControlOperationIsCurrent(_ generation: UInt64) -> Bool {
+        fanControlOperationIsCurrent(generation) && selectedMode != .auto
+    }
+
+    private func canCommitAutoRestoration(generation: UInt64) -> Bool {
+        fanControlOperationIsCurrent(generation)
+            && selectedMode == .auto
+            && controlState.mode == .auto
+            && !controlState.manualControlActive
+    }
+
+    private func reconcileManualApplyAttemptAfterSuccessfulPoll() {
+        guard let attempt = manualFanControlApplyAttempt,
+              attempt.coordinatorConfigured,
+              manualFanControlOperationIsCurrent(attempt.generation),
+              controlState.mode == attempt.mode,
+              controlState.manualControlActive else {
+            return
+        }
+
+        commitManualRunLimit(for: attempt.mode, runLimit: attempt.draft.manualRunLimit)
+        lastAppliedFanControlDraft = attempt.draft
+        manualFanControlApplyAttempt = nil
+        fanControlApplyState = currentFanControlDraft == attempt.draft ? .applied : .pending
+    }
+
+    private func restorePreviousManualDeadline(for generation: UInt64) {
+        guard let attempt = manualFanControlApplyAttempt,
+              attempt.generation == generation else {
+            return
+        }
+        manualSessionExpiresAt = attempt.previousManualSessionExpiresAt
     }
 
     private func shouldPreserveManualIntent(afterTickFailure error: Error, attemptedMode: FanMode) -> Bool {
@@ -2428,6 +2725,7 @@ enum ManualRunLimit: Equatable, Hashable, Identifiable {
         }
     }
 
+    static let defaultForManualControl: ManualRunLimit = .minutes(30)
     static let presets: [ManualRunLimit] = [.indefinitely, .minutes(10), .minutes(30), .minutes(60)]
 }
 

@@ -4,6 +4,243 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testEffectiveSelectedSensorFallsBackWithoutOverwritingStaleDraftID() {
+        let model = AppModel()
+        model.snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [
+                TemperatureSensor(id: "gpu", name: "GPU Proximity", celsius: 79, source: .smc),
+                TemperatureSensor(id: "cpu", name: "CPU Package", celsius: 72, source: .smc)
+            ],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        model.selectedSensorID = "stale-sensor"
+
+        XCTAssertEqual(model.selectedSensorID, "stale-sensor")
+        XCTAssertEqual(model.effectiveSelectedSensorID, "cpu")
+        XCTAssertEqual(model.selectedSensor?.id, "cpu")
+    }
+
+    func testSelectingAutoWhileManualApplyWaitsForPreflightKeepsAutoAuthoritative() async {
+        let snapshot = agentHardwareSnapshot(hardwareMode: .automatic)
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let preflightGate = AppModelPreflightGate()
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { await preflightGate.ping() },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.curveDefaultsSynced = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 4_200
+        model.manualRunLimit = .minutes(10)
+
+        let applyTask = Task { await model.applyCurrentModeSelection() }
+        await preflightGate.waitUntilFirstCallStarts()
+
+        model.selectedMode = .auto
+        await model.restoreAutoNow()
+        await preflightGate.releaseFirstCall()
+        let applyResult = await applyTask.value
+
+        XCTAssertEqual(applyResult, .superseded)
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.controlState.mode, .auto)
+        XCTAssertFalse(model.controlState.manualControlActive)
+        XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        XCTAssertEqual(model.controlSessionPresentation.state, .ready)
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertTrue(appliedCommands.isEmpty)
+    }
+
+    func testRevertingManualDraftToAppliedValuesClearsPendingPresentation() async {
+        let snapshot = agentHardwareSnapshot(hardwareMode: .forced)
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.curveDefaultsSynced = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3_000
+        model.manualRunLimit = .indefinitely
+        let initialResult = await model.applyCurrentModeSelection()
+        XCTAssertEqual(initialResult, .applied)
+
+        model.fixedRPM = 4_000
+        model.markFanControlDraftPending()
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .pending)
+
+        model.fixedRPM = 3_000
+        model.markFanControlDraftPending()
+
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        XCTAssertEqual(model.controlSessionPresentation.state, .manual)
+        XCTAssertNotEqual(model.controlSessionPresentation.primaryActionTitle, "Apply Changes")
+    }
+
+    func testSuccessfulPollReconcilesFailedManualApplyWhenAttemptedDraftMatches() async {
+        let snapshot = agentHardwareSnapshot(hardwareMode: .forced)
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3_000
+        model.manualRunLimit = .indefinitely
+        let initialResult = await model.applyCurrentModeSelection()
+        XCTAssertEqual(initialResult, .applied)
+
+        model.fixedRPM = 4_000
+        model.markFanControlDraftPending()
+        await hardware.failNextApply(ViftyError.helperRejected("transient apply failure"))
+        let failedResult = await model.applyCurrentModeSelection()
+
+        guard case .failed = failedResult else {
+            return XCTFail("Expected the manual apply to fail before retry reconciliation")
+        }
+        guard case .failed = model.fanControlApplyState else {
+            return XCTFail("Expected failed apply state before the successful retry poll")
+        }
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+
+        await model.pollOnce()
+
+        XCTAssertNil(model.lastError)
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        XCTAssertEqual(model.controlState.mode, .fixedRPM(4_000))
+        XCTAssertEqual(model.controlSessionPresentation.state, .manual)
+        XCTAssertNotEqual(model.controlSessionPresentation.primaryActionTitle, "Apply Changes")
+    }
+
+    func testExplicitApplyAtOldDeadlineRenewsManualSessionWithoutRestoringAuto() async {
+        let snapshot = agentHardwareSnapshot(hardwareMode: .forced)
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+        )
+        let model = AppModel(
+            coordinator: coordinator,
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3_000
+        model.manualRunLimit = .minutes(10)
+        let initialResult = await model.applyCurrentModeSelection()
+        XCTAssertEqual(initialResult, .applied)
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 1_600))
+
+        clock.now = Date(timeIntervalSince1970: 1_600)
+        model.fixedRPM = 4_500
+        model.markFanControlDraftPending()
+        let renewedResult = await model.applyCurrentModeSelection()
+
+        XCTAssertEqual(renewedResult, .applied)
+        XCTAssertEqual(model.selectedMode, .fixed)
+        let coordinatorState = await coordinator.state
+        XCTAssertEqual(coordinatorState.mode, .fixedRPM(4_500))
+        XCTAssertTrue(coordinatorState.manualControlActive)
+        XCTAssertEqual(model.controlState.mode, .fixedRPM(4_500))
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 2_200))
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        XCTAssertEqual(model.controlSessionPresentation.state, .manual)
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertTrue(restoredFanIDs.isEmpty)
+    }
+
+    func testFailedUntilChangedApplyPreservesPreviouslyCommittedTimedDeadline() async {
+        let snapshot = agentHardwareSnapshot(hardwareMode: .forced)
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(
+                hardware: hardware,
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())
+            ),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 3_000
+        model.manualRunLimit = .minutes(10)
+        let initialResult = await model.applyCurrentModeSelection()
+        XCTAssertEqual(initialResult, .applied)
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 1_600))
+
+        model.fixedRPM = 4_000
+        model.manualRunLimit = .indefinitely
+        model.markFanControlDraftPending()
+        await hardware.failNextApply(ViftyError.helperRejected("transient apply failure"))
+
+        guard case .failed = await model.applyCurrentModeSelection() else {
+            return XCTFail("Expected the Until changed apply to fail")
+        }
+
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 1_600))
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+    }
+
+    func testMarkFanControlDraftPendingUpdatesPresentationWithoutApplyingHardware() {
+        let model = AppModel()
+        model.selectedMode = .curve
+
+        model.markFanControlDraftPending()
+
+        XCTAssertEqual(model.fanControlApplyState, .pending)
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.controlSessionPresentation.primaryAction, .apply)
+    }
+
     func testSaveProfileWithDuplicateNameOverwrites() {
         let model = AppModel()
         model.savedProfiles = []
@@ -564,7 +801,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.manualControlAttentionRecoverySuggestion?.contains("before manual fan control") == true)
     }
 
-    func testManualPendingBlockedPrimaryActionRestoresAutoThroughCoordinator() async {
+    func testManualPendingBlockedPrimaryActionPreservesDraftForHelperRepair() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 1780, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [
@@ -590,10 +827,11 @@ final class AppModelTests: XCTestCase {
 
         await model.performModeSelectionActionNow()
 
-        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.selectedMode, .curve)
         XCTAssertNil(model.manualSessionExpiresAt)
         let restoredFanIDs = await hardware.restoredFanIDs
-        XCTAssertEqual(restoredFanIDs, [0])
+        XCTAssertTrue(restoredFanIDs.isEmpty)
+        XCTAssertEqual(model.controlSessionPresentation.primaryAction, .repairHelper)
     }
 
     func testHelperSupportEvidenceContextCapturesHotManualOutageState() {
@@ -3116,7 +3354,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.recentTelemetryTrendSummary,
-            "Temp +4.2 C · Avg fan +250 RPM · Power -3.1 W · Peak Serious"
+            "Temp +4.2 °C · Avg fan +250 RPM · Power -3.1 W · Peak Serious"
         )
     }
 
@@ -3162,7 +3400,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.menuTitle.contains("Thermal: Serious"))
     }
 
-    func testTimedManualModeRestoresAutoAfterDeadline() async {
+    func testTimedManualModeRestoresAutoAndClearsDraftBookkeeping() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
@@ -3194,11 +3432,93 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedMode, .auto)
         XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        XCTAssertNotEqual(model.controlSessionPresentation.state, .manual)
+        XCTAssertNotEqual(model.controlSessionPresentation.primaryAction, .apply)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0], "Timed expiry must issue a real Auto restore, not only update UI state")
     }
 
-    func testChangingActiveTimedManualRunToUntilChangedClearsOldDeadline() async {
+    func testTimedExpiryFallbackAutoCommitsDraftAfterInitialRestoreFailure() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+        await model.applyCurrentModeSelection()
+        await hardware.failNextRestore(ViftyError.helperRejected("initial expiry restore refused"))
+
+        clock.now = Date(timeIntervalSince1970: 1601)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertTrue(model.lastError?.contains("initial expiry restore refused") == true)
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
+        let restored = await hardware.restoredFanIDs
+        XCTAssertEqual(restored, [0])
+    }
+
+    func testTimedExpiryRestoreFailureMarksApplyStateFailedWhenFallbackAlsoFails() async {
+        let snapshot = HardwareSnapshot(
+            fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
+            modelIdentifier: "MacBookPro18,3",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = AppModelFakeHardware(snapshot: snapshot)
+        let clock = AppModelTestClock(now: Date(timeIntervalSince1970: 1000))
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: hardware, uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            powerReader: { PowerSnapshot(percent: 50) },
+            thermalReader: { .nominal },
+            now: { clock.now },
+            daemonPing: { true },
+            agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.selectedMode = .fixed
+        model.fixedRPM = 5000
+        model.manualRunLimit = .minutes(10)
+        await model.applyCurrentModeSelection()
+        await hardware.failNextRestore(ViftyError.helperRejected("initial expiry restore refused"))
+        await hardware.failNextRestore(ViftyError.helperRejected("fallback Auto restore refused"))
+
+        clock.now = Date(timeIntervalSince1970: 1601)
+        await model.pollOnce()
+
+        XCTAssertEqual(model.selectedMode, .auto)
+        guard case .failed(let message) = model.fanControlApplyState else {
+            return XCTFail("Expected failed apply state after two Auto restore failures")
+        }
+        XCTAssertTrue(message.contains("initial expiry restore refused"))
+        XCTAssertTrue(message.contains("fallback Auto restore refused"))
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+    }
+
+    func testPendingManualRunChangeKeepsCommittedTimedDeadlineUntilApply() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
@@ -3227,6 +3547,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(model.manualSessionExpiresAt)
 
         model.manualRunLimit = .indefinitely
+        XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 1000 + 600))
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+
+        await model.applyCurrentModeSelection()
         XCTAssertNil(model.manualSessionExpiresAt)
 
         clock.now = Date(timeIntervalSince1970: 1000 + 601)
@@ -3243,7 +3567,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(restored.isEmpty)
     }
 
-    func testChangingActiveUntilChangedManualRunToTimedCreatesFreshDeadline() async {
+    func testPendingTimedManualRunDoesNotCreateDeadlineUntilApply() async {
         let snapshot = HardwareSnapshot(
             fans: [Fan(id: 0, name: "Left", currentRPM: 2500, minimumRPM: 1400, maximumRPM: 6000, controllable: true)],
             temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU Proximity", celsius: 64, source: .smc)],
@@ -3273,6 +3597,9 @@ final class AppModelTests: XCTestCase {
 
         model.manualRunLimit = .minutes(30)
 
+        XCTAssertNil(model.manualSessionExpiresAt)
+
+        await model.applyCurrentModeSelection()
         XCTAssertEqual(model.manualSessionExpiresAt, Date(timeIntervalSince1970: 2000 + 1800))
     }
 
@@ -3331,12 +3658,18 @@ final class AppModelTests: XCTestCase {
 
         await model.applyCurrentModeSelection()
         XCTAssertNotNil(model.manualSessionExpiresAt)
+        model.fixedRPM = 5200
+        model.markFanControlDraftPending()
+        XCTAssertEqual(model.fanControlApplyState, .pending)
 
-        _ = await model.stopAndRestore()
+        let result = await model.stopAndRestore()
 
+        XCTAssertEqual(result, .restored)
         XCTAssertFalse(model.isRunning)
         XCTAssertEqual(model.selectedMode, .auto)
         XCTAssertNil(model.manualSessionExpiresAt)
+        XCTAssertFalse(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.fanControlApplyState, .applied)
         let restored = await hardware.restoredFanIDs
         XCTAssertEqual(restored, [0], "Stop must wait for a real Auto restore before callers terminate the app.")
     }
@@ -3457,7 +3790,7 @@ final class AppModelTests: XCTestCase {
 
         await model.applyCurrentModeSelection()
 
-        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.selectedMode, .fixed)
         XCTAssertNil(model.manualSessionExpiresAt)
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
         XCTAssertTrue(model.lastError?.contains("daemon writes are blocked") == true)
@@ -3546,7 +3879,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[1]), 3472)
     }
 
-    func testFixedPerFanDraftSliderChangesApplyOnceWhenCommitted() async {
+    func testFixedPerFanDraftRequiresExplicitApplyAfterCommit() async {
         let snapshot = HardwareSnapshot(
             fans: [
                 Fan(id: 0, name: "Left", currentRPM: 1500, minimumRPM: 1499, maximumRPM: 4296, controllable: true),
@@ -3582,6 +3915,12 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(appliedBeforeCommit.isEmpty)
 
         await model.commitFixedFanTargetsAndApplyNow()
+
+        let pendingCommands = await hardware.appliedCommands
+        XCTAssertTrue(pendingCommands.isEmpty)
+        XCTAssertEqual(model.fanControlApplyState, .pending)
+
+        await model.applyCurrentModeSelection()
 
         let appliedCommands = await hardware.appliedCommands
         XCTAssertEqual(appliedCommands, [
@@ -3662,6 +4001,7 @@ final class AppModelTests: XCTestCase {
         model.usePerFanFixedRPM = true
         model.ensureFixedFanTargets(for: snapshot.fans)
         model.setFixedFanRPM(4200, for: snapshot.fans[0])
+        model.manualRunLimit = .indefinitely
 
         XCTAssertEqual(model.targetRPMPreview(for: snapshot.fans[0]), 3200)
 
@@ -4113,7 +4453,7 @@ final class AppModelTests: XCTestCase {
 
         await model.applyCurrentModeSelection()
 
-        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.selectedMode, .fixed)
         XCTAssertNil(model.manualSessionExpiresAt)
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
         XCTAssertTrue(model.lastError?.contains("Agent Build cooling owns fan control") == true)
@@ -4148,7 +4488,7 @@ final class AppModelTests: XCTestCase {
 
         await model.applyCurrentModeSelection()
 
-        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.selectedMode, .curve)
         XCTAssertNil(model.manualSessionExpiresAt)
         XCTAssertEqual(model.agentControlStatus?.activeLease?.id, "lease-1")
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
@@ -4176,7 +4516,7 @@ final class AppModelTests: XCTestCase {
 
         await model.applyCurrentModeSelection()
 
-        XCTAssertEqual(model.selectedMode, .auto)
+        XCTAssertEqual(model.selectedMode, .curve)
         XCTAssertNil(model.manualSessionExpiresAt)
         XCTAssertTrue(model.lastError?.contains("Manual fan control blocked") == true)
         XCTAssertTrue(model.lastError?.contains("Agent control status is unavailable") == true)
@@ -4742,6 +5082,30 @@ private actor AppModelFakeHardware: HardwareService {
             try? await Task.sleep(nanoseconds: restoreAutoDelayNanoseconds)
         }
         restoredFanIDs.append(fan.id)
+    }
+}
+
+private actor AppModelPreflightGate {
+    private var firstCallStarted = false
+    private var firstCallReleased = false
+
+    func ping() async -> Bool {
+        guard !firstCallStarted else { return true }
+        firstCallStarted = true
+        while !firstCallReleased {
+            await Task.yield()
+        }
+        return true
+    }
+
+    func waitUntilFirstCallStarts() async {
+        while !firstCallStarted {
+            await Task.yield()
+        }
+    }
+
+    func releaseFirstCall() {
+        firstCallReleased = true
     }
 }
 
