@@ -253,6 +253,39 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testTickReturnsPostWriteHardwareForCurveAndAutoRestore() async throws {
+        let curve = FanCurve(points: [
+            CurvePoint(temperatureCelsius: 50, rpm: 3_000),
+            CurvePoint(temperatureCelsius: 70, rpm: 5_000)
+        ])
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [Self.fan(currentRPM: 1_500, hardwareMode: .automatic, targetRPM: 1_500)],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            ),
+            reflectsCommandsInSnapshot: true
+        )
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+
+        await coordinator.setMode(.temperatureCurve(curve))
+        let curveSnapshot = try await coordinator.tick()
+
+        XCTAssertEqual(curveSnapshot.fans.first?.hardwareMode, .forced)
+        XCTAssertEqual(curveSnapshot.fans.first?.targetRPM, 4_000)
+
+        await coordinator.setMode(.auto)
+        let autoSnapshot = try await coordinator.tick()
+
+        XCTAssertEqual(autoSnapshot.fans.first?.hardwareMode, .automatic)
+        XCTAssertEqual(autoSnapshot.fans.first?.targetRPM, 1_400)
+        let state = await coordinator.state
+        XCTAssertEqual(state.mode, .auto)
+        XCTAssertFalse(state.manualControlActive)
+    }
+
     func testExplicitAutoSelectionRestoresEvenWhenStateWasAlreadyCleared() async throws {
         let marker = Self.marker()
         let hardware = FakeHardware(
@@ -522,9 +555,11 @@ private actor FakeHardware: HardwareService {
     var appliedCommands: [FanCommand] = []
     var restoredFanIDs: [Int] = []
     var restoreError: Error?
+    let reflectsCommandsInSnapshot: Bool
 
-    init(snapshot: HardwareSnapshot) {
+    init(snapshot: HardwareSnapshot, reflectsCommandsInSnapshot: Bool = false) {
         self.snapshotValue = snapshot
+        self.reflectsCommandsInSnapshot = reflectsCommandsInSnapshot
     }
 
     func snapshot() async throws -> HardwareSnapshot {
@@ -545,6 +580,14 @@ private actor FakeHardware: HardwareService {
 
     func apply(_ command: FanCommand, fan: Fan) async throws {
         appliedCommands.append(command)
+        guard reflectsCommandsInSnapshot,
+              case .fixedRPM(let targetRPM) = command.mode,
+              let fanIndex = snapshotValue.fans.firstIndex(where: { $0.id == fan.id }) else {
+            return
+        }
+        snapshotValue.fans[fanIndex].currentRPM = targetRPM
+        snapshotValue.fans[fanIndex].hardwareMode = .forced
+        snapshotValue.fans[fanIndex].targetRPM = targetRPM
     }
 
     func restoreAuto(fan: Fan) async throws {
@@ -552,5 +595,12 @@ private actor FakeHardware: HardwareService {
             throw restoreError
         }
         restoredFanIDs.append(fan.id)
+        guard reflectsCommandsInSnapshot,
+              let fanIndex = snapshotValue.fans.firstIndex(where: { $0.id == fan.id }) else {
+            return
+        }
+        snapshotValue.fans[fanIndex].currentRPM = fan.minimumRPM
+        snapshotValue.fans[fanIndex].hardwareMode = .automatic
+        snapshotValue.fans[fanIndex].targetRPM = fan.minimumRPM
     }
 }
