@@ -2,6 +2,28 @@ import Foundation
 import XCTest
 
 final class AppSourceRegressionTests: XCTestCase {
+    func testAppOwnsTheOnlyProductionPollingStart() throws {
+        let app = try read("Sources/Vifty/ViftyApp.swift")
+        let content = try read("Sources/Vifty/ContentView.swift")
+        let menu = try read("Sources/Vifty/MenuBarView.swift")
+        let status = try read("Sources/Vifty/ViftyStatusItemController.swift")
+
+        XCTAssertEqual(app.components(separatedBy: "model.start()").count - 1, 1)
+        XCTAssertFalse(content.contains("model.start()"))
+        XCTAssertFalse(menu.contains("model.start()"))
+        XCTAssertFalse(status.contains("model.start()"))
+    }
+
+    func testCopyFeedbackResetsInsteadOfStayingVisibleForever() throws {
+        let settings = try read("Sources/Vifty/SettingsAgentWorkflowView.swift")
+        let content = try read("Sources/Vifty/ContentView.swift")
+
+        XCTAssertTrue(settings.contains("try? await Task.sleep(for: .seconds(2))"))
+        XCTAssertTrue(settings.contains("agentRuleCopied = false"))
+        XCTAssertTrue(settings.contains("agentCommandCopied = false"))
+        XCTAssertTrue(content.contains("helperDiagnosticsCopied = false"))
+    }
+
     func testExactCurvePointSlidersExposeDistinctUnitsAndHints() throws {
         let fanControlPanel = try read("Sources/Vifty/FanControlPanel.swift")
 

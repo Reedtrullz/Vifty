@@ -5,6 +5,7 @@ struct SettingsAgentWorkflowView: View {
     @ObservedObject var model: AppModel
     @State private var agentRuleCopied = false
     @State private var agentCommandCopied = false
+    @State private var copiedFeedbackTask: Task<Void, Never>?
 
     var body: some View {
         SettingsCategorySection(title: "Agent Workflows", systemImage: "terminal") {
@@ -45,12 +46,17 @@ struct SettingsAgentWorkflowView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .onDisappear {
+            copiedFeedbackTask?.cancel()
+            copiedFeedbackTask = nil
+        }
     }
 
     private func copyAgentWorkflowRule() {
         AgentWorkflowSupport.copyAgentRule()
         agentRuleCopied = true
         agentCommandCopied = false
+        scheduleCopiedFeedbackReset()
     }
 
     private func copyAgentWorkflowCommand(
@@ -60,5 +66,17 @@ struct SettingsAgentWorkflowView: View {
         AgentWorkflowSupport.copyWorkloadCommand(template, mode: mode)
         agentRuleCopied = false
         agentCommandCopied = true
+        scheduleCopiedFeedbackReset()
+    }
+
+    private func scheduleCopiedFeedbackReset() {
+        copiedFeedbackTask?.cancel()
+        copiedFeedbackTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            agentRuleCopied = false
+            agentCommandCopied = false
+            copiedFeedbackTask = nil
+        }
     }
 }

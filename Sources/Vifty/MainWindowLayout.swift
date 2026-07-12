@@ -1,7 +1,7 @@
 import Foundation
 
 struct MainWindowLayout: Equatable {
-    private static let workbenchMinimumWidth: CGFloat = 1_280
+    private static let workbenchMinimumWidth: CGFloat = 1_440
     private static let workbenchMinimumHeight: CGFloat = 640
     private static let splitMinimumWidth: CGFloat = 980
     private static let splitMinimumHeight: CGFloat = 560

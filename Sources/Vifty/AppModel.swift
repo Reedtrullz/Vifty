@@ -449,7 +449,6 @@ final class AppModel: ObservableObject {
         maxAttempts: Int = 1,
         retryDelay: Duration = .milliseconds(250)
     ) async {
-        start()
         let attempts = max(1, maxAttempts)
         for attempt in 1...attempts {
             guard menuBarLabelNeedsTelemetryPrime else { return }
@@ -504,7 +503,7 @@ final class AppModel: ObservableObject {
             await pollOnce()
             selectedMode = startupMode
         }
-        await applyCurrentModeSelection()
+        markFanControlDraftPending()
     }
 
     func stop() {
@@ -896,6 +895,13 @@ final class AppModel: ObservableObject {
     func restoreAuto() {
         let generation = beginAutoRestoreOperation()
         Task { await performAutoRestore(generation: generation) }
+    }
+
+    var canRequestRestoreAuto: Bool {
+        controlSessionPresentation.primaryAction == .restoreAuto
+            || controlState.manualControlActive
+            || controlState.mode != .auto
+            || agentControlStatus?.activeLease != nil
     }
 
     func markFanControlDraftPending() {

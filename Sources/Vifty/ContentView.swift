@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @StateObject private var daemonInstaller = DaemonInstaller()
     @State private var helperRefreshTask: Task<Void, Never>?
+    @State private var helperDiagnosticsFeedbackTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
 
     var body: some View {
@@ -27,8 +28,9 @@ struct ContentView: View {
             mainContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            model.start()
+        .onDisappear {
+            helperDiagnosticsFeedbackTask?.cancel()
+            helperDiagnosticsFeedbackTask = nil
         }
     }
 
@@ -310,6 +312,13 @@ struct ContentView: View {
     private func copyHelperDiagnosticsCommand() {
         HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
+        helperDiagnosticsFeedbackTask?.cancel()
+        helperDiagnosticsFeedbackTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            helperDiagnosticsCopied = false
+            helperDiagnosticsFeedbackTask = nil
+        }
     }
 
     private func performControlSessionPrimaryAction(_ presentation: ControlSessionPresentation) {

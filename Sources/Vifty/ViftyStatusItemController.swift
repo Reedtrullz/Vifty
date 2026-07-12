@@ -113,7 +113,6 @@ final class ViftyStatusItemController: NSObject {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
-        model.start()
         scheduleTelemetryPrimeIfNeeded(policy: Self.popoverPrimePolicy)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApplication.shared.activate(ignoringOtherApps: true)
@@ -122,7 +121,6 @@ final class ViftyStatusItemController: NSObject {
     private func primeStatusItemUntilTelemetryResolved(
         policy: MenuBarTelemetryPrimePolicy
     ) async {
-        model.start()
         for attempt in 1...policy.maxAttempts {
             guard policy.shouldAttempt(
                 attempt,

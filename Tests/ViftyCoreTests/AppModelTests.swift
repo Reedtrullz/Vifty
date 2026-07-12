@@ -2733,7 +2733,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(loaded.codexUsageDisplayPreferences.displayStyle, .text)
     }
 
-    func testStartupFixedModeAppliesOnceThroughManualPreflight() async throws {
+    func testNonAutoStartupPreferenceCreatesDraftWithoutFanWrite() async throws {
         let preferencesURL = temporaryPreferencesPath()
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
         try store.saveThrowing(AppPreferences(
@@ -2760,9 +2760,10 @@ final class AppModelTests: XCTestCase {
         await model.applyStartupModePreferenceIfNeeded()
 
         XCTAssertEqual(model.selectedMode, .fixed)
-        XCTAssertEqual(model.controlState.mode, .fixedRPM(3600))
+        XCTAssertTrue(model.hasPendingFanControlChanges)
+        XCTAssertEqual(model.controlState.mode, .auto)
         let appliedCommands = await hardware.appliedCommands
-        XCTAssertEqual(appliedCommands, [FanCommand(fanID: 0, mode: .fixedRPM(3600))])
+        XCTAssertEqual(appliedCommands, [])
     }
 
     func testHelperFailureNotificationFiresOnAttentionTransitionWhenEnabled() async throws {
