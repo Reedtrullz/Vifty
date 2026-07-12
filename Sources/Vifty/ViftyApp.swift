@@ -26,6 +26,9 @@ struct ViftyApp: App {
         }
         .defaultSize(width: 1180, height: 820)
         .windowResizability(.contentMinSize)
+        .commands {
+            ViftyCommands(model: model, openWindow: openWindow)
+        }
 
         Settings {
             ViftySettingsView(model: model)

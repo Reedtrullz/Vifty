@@ -897,6 +897,13 @@ final class AppModel: ObservableObject {
         Task { await performAutoRestore(generation: generation) }
     }
 
+    var canRequestRestoreAuto: Bool {
+        controlSessionPresentation.primaryAction == .restoreAuto
+            || controlState.manualControlActive
+            || controlState.mode != .auto
+            || agentControlStatus?.activeLease != nil
+    }
+
     func markFanControlDraftPending() {
         guard selectedMode != .auto else { return }
         if !hasPendingFanControlChanges,
