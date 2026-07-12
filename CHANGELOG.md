@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reframed the main window around explicit readiness, fan-control ownership, and one safe next action.
 - Made manual fan edits draft-first with explicit Apply semantics and immediate Auto restoration.
 - Improved per-fan curve visibility, profile discoverability, fan target/drift rows, menu-bar status, native Settings categories, compact layouts, and accessibility output.
+- Centralized app polling ownership, made manual startup defaults draft-only, improved 1280-class pane allocation, and added native Open Vifty and safely gated Restore Auto commands.
+- Made copied support feedback temporary and completed source-level command, layout, startup-safety, and accessibility contracts for the release candidate.
 
 ## [1.2.0] - 2026-07-11
 
