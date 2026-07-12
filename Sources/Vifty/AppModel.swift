@@ -449,7 +449,6 @@ final class AppModel: ObservableObject {
         maxAttempts: Int = 1,
         retryDelay: Duration = .milliseconds(250)
     ) async {
-        start()
         let attempts = max(1, maxAttempts)
         for attempt in 1...attempts {
             guard menuBarLabelNeedsTelemetryPrime else { return }

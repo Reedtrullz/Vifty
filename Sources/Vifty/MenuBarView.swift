@@ -32,9 +32,6 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 320)
-        .task {
-            model.start()
-        }
     }
 
     private func perform(_ action: MenuBarPanelAction) {

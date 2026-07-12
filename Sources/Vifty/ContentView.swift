@@ -27,9 +27,6 @@ struct ContentView: View {
             mainContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            model.start()
-        }
     }
 
     private var mainContent: some View {

@@ -61,7 +61,6 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
         statusItemController?.openMainWindow = { [weak self] in
             self?.openMainWindow()
         }
-        model.start()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
