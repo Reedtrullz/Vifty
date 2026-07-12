@@ -24,7 +24,7 @@ Auto-update status: unavailable in `v1.2.0`, source-first, and unsigned-dev buil
 
 Public release facts:
 
-- `Resources/Info.plist` and `Casks/vifty.rb` are aligned at `1.2.0`; the cask uses the published SHA-256 `7b4b6528a696bfb23995c89c994489cf25e6f4b5cdf50242b7f0a21b897ab28e`.
+- Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.0`. Until the tagged workflow publishes `Vifty-v1.3.0.zip` and its checksum, `v1.2.0` remains the latest trusted public artifact and the checked-in cask checksum is the prior published SHA-256 pending the required post-release checksum handoff.
 - Source CI run `29160869645` passed on release commit `9bf45f9afc56a36580bede696c479bff0df0cf6a`, and Release run `29161176933` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
 - The GitHub Release publishes `Vifty-v1.2.0.zip`, `Vifty-v1.2.0.zip.sha256`, `Vifty-v1.2.0-artifact-summary.json`, and `Vifty-v1.2.0-release-checklist.md`.
 - The published workflow summary and an independent downloaded-artifact verification both passed with TeamID `X88J3853S2`, no signature skips, and no notarization skips.

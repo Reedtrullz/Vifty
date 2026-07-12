@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-12
+
 ### Changed
 - Reframed the main window around explicit readiness, fan-control ownership, and one safe next action.
 - Made manual fan edits draft-first with explicit Apply semantics and immediate Auto restoration.
