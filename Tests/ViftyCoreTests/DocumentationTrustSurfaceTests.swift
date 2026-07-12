@@ -161,7 +161,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let agents = try read("AGENTS.md")
 
         XCTAssertTrue(agents.contains("`v1.1.1` remains the immutable source-first hotfix and `v1.1.0` is superseded"))
-        XCTAssertTrue(agents.contains("`v1.2.0` is the published Developer ID release; its exact public artifact"))
+        XCTAssertTrue(agents.contains("`v1.3.0` is the published Developer ID release; its exact public artifact"))
+        XCTAssertTrue(agents.contains("installed release-mode review are still recorded only for `v1.2.0`"))
         XCTAssertTrue(agents.contains("Trusted binary releases use `.github/workflows/release.yml`"))
         XCTAssertFalse(agents.contains("`v1.1.0` is source-first because Apple Developer Program credentials are unavailable"))
     }
