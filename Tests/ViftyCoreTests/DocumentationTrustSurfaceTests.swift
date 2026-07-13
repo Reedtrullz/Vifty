@@ -426,7 +426,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
         let unsignedDigestBoundary = "The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."
 
-        XCTAssertTrue(cask.contains("version \"1.3.1\""))
+        XCTAssertTrue(cask.contains("version \"1.3.2\""))
         XCTAssertTrue(cask.contains("sha256 \"a2a701d67febd8c533470df2d420144560b3c9dcef627fd82b99b2454cb0e417\""))
         XCTAssertFalse(cask.contains("disable!"))
         XCTAssertTrue(readme.contains("Vifty `v1.3.1` is the current published Developer ID release."))
@@ -489,9 +489,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main`"))
         XCTAssertTrue(releaseStatus.contains("Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary."))
         XCTAssertTrue(releaseStatus.contains("The honest remediation is the `v1.1.1` source-first hotfix release"))
-        XCTAssertTrue(releaseStatus.contains("Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.1` build `6`"))
+        XCTAssertTrue(releaseStatus.contains("Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.2` build `7`"))
+        XCTAssertTrue(releaseStatus.contains("The supervised `v1.3.1` manual smoke is not a passed compatibility claim."))
+        XCTAssertTrue(releaseStatus.contains("selecting Auto during an in-flight Curve tick could briefly show Auto active before the suspended write resumed"))
         XCTAssertTrue(releaseStatus.contains("The privacy-safe release bundle at `.build/public-release-v1.3.0/installed-release-evidence-public-safe` passed"))
-        XCTAssertTrue(releaseStatus.contains("No installed release-mode, signed-helper parity, Auto-restoration, or manual Fixed/Curve compatibility claim is made for `v1.3.1`"))
+        XCTAssertTrue(releaseStatus.contains("no installed Auto-restoration or manual Fixed/Curve compatibility claim is made for `v1.3.1`"))
         XCTAssertTrue(releaseStatus.contains("At `v1.1.1` publication, `Resources/Info.plist` carried `1.1.1` while `Casks/vifty.rb` remained disabled on `1.1.0`"))
         XCTAssertTrue(releaseStatus.contains("Do not update the Homebrew cask checksum for a source-first release, do not re-enable the cask, and do not point Homebrew at unsigned-dev artifacts."))
         XCTAssertTrue(releaseStatus.contains("## Source-First v1.1.1 Operator Checks"))

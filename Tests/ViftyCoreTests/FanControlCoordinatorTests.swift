@@ -286,6 +286,44 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(state.manualControlActive)
     }
 
+    func testAutoSelectionPreemptsInFlightCurveWritesAndRestoresBothFans() async throws {
+        let curve = FanCurve(points: [
+            CurvePoint(temperatureCelsius: 50, rpm: 3_000),
+            CurvePoint(temperatureCelsius: 70, rpm: 5_000)
+        ])
+        let hardware = FakeHardware(
+            snapshot: HardwareSnapshot(
+                fans: [
+                    Fan(id: 0, name: "Left Fan", currentRPM: 1_500, minimumRPM: 1_400, maximumRPM: 6_000, controllable: true, hardwareMode: .automatic, targetRPM: 1_500),
+                    Fan(id: 1, name: "Right Fan", currentRPM: 1_600, minimumRPM: 1_500, maximumRPM: 6_200, controllable: true, hardwareMode: .automatic, targetRPM: 1_600)
+                ],
+                temperatureSensors: [Self.sensor(60)],
+                modelIdentifier: "MacBookPro18,1",
+                isAppleSilicon: true,
+                isMacBookPro: true
+            ),
+            reflectsCommandsInSnapshot: true
+        )
+        await hardware.pauseFirstApply()
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+        await coordinator.setMode(.temperatureCurve(curve))
+
+        let tickTask = Task { try await coordinator.tick() }
+        await hardware.waitForPausedApply()
+        await coordinator.setMode(.auto)
+        await hardware.resumePausedApply()
+        let snapshot = try await tickTask.value
+        let appliedCommandCount = await hardware.appliedCommands.count
+        let restoredFanIDs = await hardware.restoredFanIDs
+
+        XCTAssertEqual(appliedCommandCount, 1)
+        XCTAssertEqual(restoredFanIDs, [0, 1])
+        XCTAssertEqual(snapshot.fans.map(\.hardwareMode), [.automatic, .automatic])
+        let state = await coordinator.state
+        XCTAssertEqual(state.mode, .auto)
+        XCTAssertFalse(state.manualControlActive)
+    }
+
     func testExplicitAutoSelectionRestoresEvenWhenStateWasAlreadyCleared() async throws {
         let marker = Self.marker()
         let hardware = FakeHardware(
@@ -556,6 +594,10 @@ private actor FakeHardware: HardwareService {
     var restoredFanIDs: [Int] = []
     var restoreError: Error?
     let reflectsCommandsInSnapshot: Bool
+    private var shouldPauseFirstApply = false
+    private var applyIsPaused = false
+    private var pausedApplyWaiters: [CheckedContinuation<Void, Never>] = []
+    private var applyResumeContinuation: CheckedContinuation<Void, Never>?
 
     init(snapshot: HardwareSnapshot, reflectsCommandsInSnapshot: Bool = false) {
         self.snapshotValue = snapshot
@@ -578,8 +620,34 @@ private actor FakeHardware: HardwareService {
         restoreError = error
     }
 
+    func pauseFirstApply() {
+        shouldPauseFirstApply = true
+    }
+
+    func waitForPausedApply() async {
+        guard !applyIsPaused else { return }
+        await withCheckedContinuation { continuation in
+            pausedApplyWaiters.append(continuation)
+        }
+    }
+
+    func resumePausedApply() {
+        applyResumeContinuation?.resume()
+        applyResumeContinuation = nil
+    }
+
     func apply(_ command: FanCommand, fan: Fan) async throws {
         appliedCommands.append(command)
+        if shouldPauseFirstApply {
+            shouldPauseFirstApply = false
+            applyIsPaused = true
+            pausedApplyWaiters.forEach { $0.resume() }
+            pausedApplyWaiters.removeAll()
+            await withCheckedContinuation { continuation in
+                applyResumeContinuation = continuation
+            }
+            applyIsPaused = false
+        }
         guard reflectsCommandsInSnapshot,
               case .fixedRPM(let targetRPM) = command.mode,
               let fanIndex = snapshotValue.fans.firstIndex(where: { $0.id == fan.id }) else {

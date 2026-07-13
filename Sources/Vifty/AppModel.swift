@@ -264,6 +264,7 @@ final class AppModel: ObservableObject {
     static let notificationAgentCoolingAttentionDefaultsKey = AppPreferencesStore.legacyNotificationAgentCoolingAttentionDefaultsKey
     static let manualTargetDriftRPMThreshold = 75
     static let manualTargetDriftAttentionSampleCount = 2
+    static let manualTargetWriteSettleInterval: TimeInterval = 5
     static let manualResponseRPMGapThreshold = 250
     static let defaultCodexUsageRefreshInterval: TimeInterval = 5 * 60
 
@@ -287,6 +288,7 @@ final class AppModel: ObservableObject {
     private var startupModeApplied = false
     private var notificationTransitionState = LocalNotificationTransitionState()
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
+    private var manualTargetSettlingFanIDs: Set<Int> = []
     private var elevatedThermalPressureStartedAt: Date?
     private var lastCodexUsageRefreshAt: Date?
     private var lastPowerTelemetryRefreshAt: Date?
@@ -2145,7 +2147,8 @@ final class AppModel: ObservableObject {
         }
 
         return fans.filter { fan in
-            guard fan.hardwareMode == .forced,
+            guard !manualTargetSettlingFanIDs.contains(fan.id),
+                  fan.hardwareMode == .forced,
                   let targetRPM = fan.targetRPM,
                   let expectedRPM = expectedManualTargetRPM(for: fan) else {
                 return false
@@ -2594,6 +2597,10 @@ final class AppModel: ObservableObject {
 
     private func syncState() async {
         assignIfChanged(\.controlState, await coordinator.state)
+        manualTargetSettlingFanIDs = await coordinator.recentManualWriteFanIDs(
+            at: now(),
+            within: Self.manualTargetWriteSettleInterval
+        )
         updateManualTargetDriftStability()
     }
 

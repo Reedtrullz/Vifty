@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-07-13
+
+### Fixed
+- Preempt in-flight Fixed or Curve writes when Auto is selected so a suspended fan write cannot resume and reclaim hardware control after Auto appears active.
+- Allow recent manual target writes a short telemetry-settling window before showing drift attention, while preserving alerts for sustained target mismatch.
+
 ## [1.3.1] - 2026-07-13
 
 ### Fixed

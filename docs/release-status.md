@@ -6,6 +6,10 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 As of 2026-07-13, `v1.3.1` is the current published Developer ID release. Its immutable tag resolves to `be79fca52668ae906ac310eab6dd0b0689afda3c`, source CI run `29214928452` passed, signed/notarized Release run `29215235660` passed, and the four canonical trust assets are public at the [v1.3.1 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.3.1). `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
+Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.2` build `7` for in-flight manual-write preemption and delayed target-readback settling. Until the tagged workflow publishes and independently verifies `Vifty-v1.3.2.zip`, `v1.3.1` remains the latest trusted public artifact and the checked-in cask checksum remains its published SHA-256 pending the required post-release checksum handoff.
+
+The supervised `v1.3.1` manual smoke is not a passed compatibility claim. Fixed and Curve control reached their targets and the right-fan curve line rendered, but selecting Auto during an in-flight Curve tick could briefly show Auto active before the suspended write resumed and returned both fans to Forced mode. Operator recovery after quitting Vifty restored and read-only diagnostics confirmed hardware Auto. `v1.3.2` must repeat exact-build helper parity, installed release-mode review, and supervised Fixed/Curve/Auto smoke before compatibility evidence is promoted.
+
 Developer ID publication evidence: the intended personal TeamID `X88J3853S2` is active, all required GitHub release secret names are configured, and both workflow and independent local verification accepted the signed public artifact's TeamID, Apple notarization ticket, stapling, LaunchDaemon allowlist, and Gatekeeper assessment. The exact public zip and cask now pass those checks independently. Do not use another organization's team or certificate for Vifty.
 
 The public `Vifty-v1.3.1.zip` and checked-in cask both resolve to SHA-256 `a2a701d67febd8c533470df2d420144560b3c9dcef627fd82b99b2454cb0e417`. The published artifact summary declares `status: "passed"`, uses schema ID `https://vifty.local/schemas/release-artifact-summary.schema.json`, and records that signature and notarization checks were not skipped. Independent artifact verification and Developer ID readiness both passed with the exact source ref, source CI, Release workflow, secret names, and all four public assets.
@@ -24,12 +28,12 @@ Auto-update status: unavailable in `v1.3.1`, source-first, and unsigned-dev buil
 
 Public release facts:
 
-- Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.1` build `6`, and the checked-in cask checksum matches the immutable public artifact.
+- Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.2` build `7`; `v1.3.1` remains the latest trusted public artifact pending the tagged release and checksum handoff.
 - Source CI run `29214928452` passed on release commit `be79fca52668ae906ac310eab6dd0b0689afda3c`, and Release run `29215235660` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
 - The GitHub Release publishes `Vifty-v1.3.1.zip`, `Vifty-v1.3.1.zip.sha256`, `Vifty-v1.3.1-artifact-summary.json`, and `Vifty-v1.3.1-release-checklist.md`.
 - The published workflow summary and an independent downloaded-artifact verification both passed with TeamID `X88J3853S2`, no signature skips, and no notarization skips.
 - `scripts/check-release-readiness.sh --mode developer-id --version 1.3.1 --repo Reedtrullz/Vifty --require-source-ref be79fca52668ae906ac310eab6dd0b0689afda3c --json` reported `ready` before the cask follow-up moved `main`.
-- Independent verification of the downloaded public `v1.3.1` artifact passed. No installed release-mode, signed-helper parity, Auto-restoration, or manual Fixed/Curve compatibility claim is made for `v1.3.1` until exact-build evidence is reviewed.
+- Independent verification of the downloaded public `v1.3.1` artifact passed. Its supervised manual smoke exposed the in-flight Auto/Curve race described above, so no installed Auto-restoration or manual Fixed/Curve compatibility claim is made for `v1.3.1`.
 - `scripts/check-release-secrets.sh --repo Reedtrullz/Vifty` reports every required secret name. It does not read or print secret values.
 - Earlier local TeamID, hardened-runtime, notarization, stapling, LaunchDaemon allowlist, and Gatekeeper smoke checks passed for a locally built candidate. The published GitHub Release artifact has now repeated those checks independently; the local smoke remains corroborating preflight, not public artifact proof.
 
