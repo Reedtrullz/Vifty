@@ -20,6 +20,7 @@ public actor FanControlCoordinator {
     private var fanOverrides: [FanCurveOverride] = []
     private var fixedFanTargets: [Int: Int] = [:]
     private var lastManualWriteAtByFanID: [Int: Date] = [:]
+    private var modeGeneration: UInt64 = 0
 
     public private(set) var state: ControlState
     public private(set) var lastObservedSnapshot: HardwareSnapshot?
@@ -52,6 +53,7 @@ public actor FanControlCoordinator {
     }
 
     public func setMode(_ mode: FanMode) {
+        modeGeneration &+= 1
         state.mode = mode
         switch mode {
         case .auto:
@@ -75,72 +77,101 @@ public actor FanControlCoordinator {
     }
 
     public func tick() async throws -> HardwareSnapshot {
-        lastObservedSnapshot = nil
-        let snapshot = try await hardware.snapshot()
-        lastObservedSnapshot = snapshot
-        if state.mode != .auto, snapshot.temperatureSensors.isEmpty {
-            try await restoreAuto(for: snapshot.fans)
-            autoRestoreRequested = false
-            state.manualControlActive = false
-            state.lastAppliedRPM = [:]
-            lastManualWriteAtByFanID = [:]
-            state.statusMessage = "Sensor unavailable, restored Auto"
-            uncleanMarker.clear()
-            throw ViftyError.noTemperatureSensors
-        }
-        try validate(snapshot)
-
-        let wroteFanState: Bool
-        switch state.mode {
-        case .auto:
-            wroteFanState = state.manualControlActive || autoRestoreRequested
-            if wroteFanState {
-                try await restoreAuto(for: snapshot.fans)
+        while true {
+            let generation = modeGeneration
+            let mode = state.mode
+            lastObservedSnapshot = nil
+            let snapshot = try await hardware.snapshot()
+            guard generation == modeGeneration else { continue }
+            lastObservedSnapshot = snapshot
+            if mode != .auto, snapshot.temperatureSensors.isEmpty {
+                guard try await restoreAuto(for: snapshot.fans, generation: generation) else { continue }
+                autoRestoreRequested = false
+                state.manualControlActive = false
+                state.lastAppliedRPM = [:]
+                lastManualWriteAtByFanID = [:]
+                state.statusMessage = "Sensor unavailable, restored Auto"
+                uncleanMarker.clear()
+                throw ViftyError.noTemperatureSensors
             }
-            autoRestoreRequested = false
-            state.manualControlActive = false
-            state.lastAppliedRPM = [:]
-            lastManualWriteAtByFanID = [:]
-            state.statusMessage = "Auto"
-            uncleanMarker.clear()
-        case .fixedRPM(let rpm):
-            wroteFanState = try await applyFixedRPM(rpm, snapshot: snapshot)
-            state.manualControlActive = true
-            uncleanMarker.markActive()
-        case .temperatureCurve(let curve):
-            if fanOverrides.isEmpty {
-                wroteFanState = try await applyCurve(curve, snapshot: snapshot)
-            } else {
-                wroteFanState = try await applyCurveWithOverrides(curve, fanOverrides: fanOverrides, snapshot: snapshot)
+            try validate(snapshot, mode: mode)
+
+            let wroteFanState: Bool
+            switch mode {
+            case .auto:
+                wroteFanState = state.manualControlActive || autoRestoreRequested
+                if wroteFanState {
+                    guard try await restoreAuto(for: snapshot.fans, generation: generation) else { continue }
+                }
+                guard generation == modeGeneration else { continue }
+                autoRestoreRequested = false
+                state.manualControlActive = false
+                state.lastAppliedRPM = [:]
+                lastManualWriteAtByFanID = [:]
+                state.statusMessage = "Auto"
+                uncleanMarker.clear()
+            case .fixedRPM(let rpm):
+                guard let applied = try await applyFixedRPM(rpm, snapshot: snapshot, generation: generation) else { continue }
+                wroteFanState = applied
+                guard generation == modeGeneration else { continue }
+                state.manualControlActive = true
+                uncleanMarker.markActive()
+            case .temperatureCurve(let curve):
+                let applied: Bool?
+                if fanOverrides.isEmpty {
+                    applied = try await applyCurve(curve, snapshot: snapshot, generation: generation)
+                } else {
+                    applied = try await applyCurveWithOverrides(
+                        curve,
+                        fanOverrides: fanOverrides,
+                        snapshot: snapshot,
+                        generation: generation
+                    )
+                }
+                guard let applied else { continue }
+                wroteFanState = applied
+                guard generation == modeGeneration else { continue }
+                state.manualControlActive = true
+                uncleanMarker.markActive()
             }
-            state.manualControlActive = true
-            uncleanMarker.markActive()
-        }
 
-        guard wroteFanState else { return snapshot }
+            guard generation == modeGeneration else { continue }
+            guard wroteFanState else { return snapshot }
 
-        let confirmedSnapshot = try await hardware.snapshot()
-        lastObservedSnapshot = confirmedSnapshot
-        if state.mode != .auto, confirmedSnapshot.temperatureSensors.isEmpty {
-            try await restoreAuto(for: confirmedSnapshot.fans)
-            autoRestoreRequested = false
-            state.manualControlActive = false
-            state.lastAppliedRPM = [:]
-            lastManualWriteAtByFanID = [:]
-            state.statusMessage = "Sensor unavailable, restored Auto"
-            uncleanMarker.clear()
-            throw ViftyError.noTemperatureSensors
+            let confirmedSnapshot = try await hardware.snapshot()
+            guard generation == modeGeneration else { continue }
+            lastObservedSnapshot = confirmedSnapshot
+            if mode != .auto, confirmedSnapshot.temperatureSensors.isEmpty {
+                guard try await restoreAuto(for: confirmedSnapshot.fans, generation: generation) else { continue }
+                autoRestoreRequested = false
+                state.manualControlActive = false
+                state.lastAppliedRPM = [:]
+                lastManualWriteAtByFanID = [:]
+                state.statusMessage = "Sensor unavailable, restored Auto"
+                uncleanMarker.clear()
+                throw ViftyError.noTemperatureSensors
+            }
+            try validate(confirmedSnapshot, mode: mode)
+            return confirmedSnapshot
         }
-        try validate(confirmedSnapshot)
-        return confirmedSnapshot
     }
 
     public func forceAuto() async -> AutoRestoreResult {
+        let previousState = state
+        let previousAutoRestoreRequested = autoRestoreRequested
+        modeGeneration &+= 1
+        let generation = modeGeneration
+        state.mode = .auto
+        autoRestoreRequested = true
+        uncleanMarker.markActive()
         do {
             let snapshot = try await hardware.snapshot()
-            try await restoreAuto(for: snapshot.fans)
+            guard generation == modeGeneration,
+                  try await restoreAuto(for: snapshot.fans, generation: generation),
+                  generation == modeGeneration else {
+                return .failed(message: "Auto restore was superseded by a newer fan-control request")
+            }
             autoRestoreRequested = false
-            state.mode = .auto
             state.manualControlActive = false
             state.lastAppliedRPM = [:]
             lastManualWriteAtByFanID = [:]
@@ -149,29 +180,43 @@ public actor FanControlCoordinator {
             return .restored
         } catch {
             let message = error.localizedDescription
-            state.statusMessage = "Auto restore failed: \(message)"
+            if generation == modeGeneration {
+                state = previousState
+                state.statusMessage = "Auto restore failed: \(message)"
+                autoRestoreRequested = previousAutoRestoreRequested
+            }
             return .failed(message: message)
         }
     }
 
-    private func validate(_ snapshot: HardwareSnapshot) throws {
+    public func recentManualWriteFanIDs(at date: Date, within interval: TimeInterval) -> Set<Int> {
+        guard state.mode != .auto, interval > 0 else { return [] }
+        return Set(lastManualWriteAtByFanID.compactMap { fanID, writtenAt in
+            let age = date.timeIntervalSince(writtenAt)
+            return age >= 0 && age < interval ? fanID : nil
+        })
+    }
+
+    private func validate(_ snapshot: HardwareSnapshot, mode: FanMode? = nil) throws {
         guard snapshot.isAppleSilicon, snapshot.isMacBookPro else {
             throw ViftyError.unsupportedHardware(snapshot.modelIdentifier)
         }
         guard !snapshot.temperatureSensors.isEmpty else {
             throw ViftyError.noTemperatureSensors
         }
-        if state.mode != .auto, !snapshot.fans.contains(where: \.controllable) {
+        if (mode ?? state.mode) != .auto, !snapshot.fans.contains(where: \.controllable) {
             throw ViftyError.noControllableFans
         }
     }
 
-    private func applyFixedRPM(_ rpm: Int, snapshot: HardwareSnapshot) async throws -> Bool {
+    private func applyFixedRPM(_ rpm: Int, snapshot: HardwareSnapshot, generation: UInt64) async throws -> Bool? {
         var appliedFanState = false
         for fan in snapshot.fans where fan.controllable {
+            guard generation == modeGeneration else { return nil }
             let target = FanCurve.clamp(fixedFanTargets[fan.id] ?? rpm, fan.minimumRPM, fan.maximumRPM)
             guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
+            guard generation == modeGeneration else { return nil }
             appliedFanState = true
             state.lastAppliedRPM[fan.id] = target
             lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
@@ -180,7 +225,7 @@ public actor FanControlCoordinator {
         return appliedFanState
     }
 
-    private func applyCurve(_ curve: FanCurve, snapshot: HardwareSnapshot) async throws -> Bool {
+    private func applyCurve(_ curve: FanCurve, snapshot: HardwareSnapshot, generation: UInt64) async throws -> Bool? {
         let sensor = selectedSensor(for: curve, snapshot: snapshot)
         guard let sensor else {
             try await restoreAuto(for: snapshot.fans)
@@ -189,6 +234,7 @@ public actor FanControlCoordinator {
 
         var appliedFanState = false
         for fan in snapshot.fans where fan.controllable {
+            guard generation == modeGeneration else { return nil }
             let target = curve.targetRPM(
                 for: sensor.celsius,
                 minimumRPM: fan.minimumRPM,
@@ -196,6 +242,7 @@ public actor FanControlCoordinator {
             )
             guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
+            guard generation == modeGeneration else { return nil }
             appliedFanState = true
             state.lastAppliedRPM[fan.id] = target
             lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
@@ -245,14 +292,32 @@ public actor FanControlCoordinator {
         return capturedAt.timeIntervalSince(lastWriteAt) >= manualReassertionInterval
     }
 
-    private func restoreAuto(for fans: [Fan]) async throws {
+    @discardableResult
+    private func restoreAuto(for fans: [Fan], generation: UInt64? = nil) async throws -> Bool {
         for fan in fans where fan.controllable {
+            if let generation, generation != modeGeneration { return false }
             try await hardware.restoreAuto(fan: fan)
+            if let generation, generation != modeGeneration { return false }
         }
+        return true
     }
 
     @discardableResult
     public func applyCurveWithOverrides(_ curve: FanCurve, fanOverrides: [FanCurveOverride], snapshot: HardwareSnapshot) async throws -> Bool {
+        try await applyCurveWithOverrides(
+            curve,
+            fanOverrides: fanOverrides,
+            snapshot: snapshot,
+            generation: nil
+        ) ?? false
+    }
+
+    private func applyCurveWithOverrides(
+        _ curve: FanCurve,
+        fanOverrides: [FanCurveOverride],
+        snapshot: HardwareSnapshot,
+        generation: UInt64?
+    ) async throws -> Bool? {
         let sensor = selectedSensor(for: curve, snapshot: snapshot)
         guard let sensor else {
             try await restoreAuto(for: snapshot.fans)
@@ -263,6 +328,7 @@ public actor FanControlCoordinator {
 
         var appliedFanState = false
         for fan in snapshot.fans where fan.controllable {
+            if let generation, generation != modeGeneration { return nil }
             let target: Int
             if let override = overridesByID[fan.id],
                let fanCurve = curve.applying(override: override) {
@@ -280,6 +346,7 @@ public actor FanControlCoordinator {
             }
             guard shouldApply(target, to: fan, capturedAt: snapshot.capturedAt) else { continue }
             try await hardware.apply(FanCommand(fanID: fan.id, mode: .fixedRPM(target)), fan: fan)
+            if let generation, generation != modeGeneration { return nil }
             appliedFanState = true
             state.lastAppliedRPM[fan.id] = target
             lastManualWriteAtByFanID[fan.id] = snapshot.capturedAt
