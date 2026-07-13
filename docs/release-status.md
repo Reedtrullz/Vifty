@@ -6,6 +6,8 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 As of 2026-07-12, `v1.3.0` is the current published Developer ID release. Its immutable tag resolves to `5cfd0eaf4409e3cfd2e57c766297d1609f8698cb`, source CI run `29209681445` passed, signed/notarized Release run `29209985030` passed, and the four canonical trust assets are public at the [v1.3.0 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.3.0). `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
+Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.1` build `6` for the post-write fan-state confirmation fix. Until the tagged workflow publishes and independently verifies `Vifty-v1.3.1.zip`, `v1.3.0` remains the latest trusted public artifact and the checked-in cask checksum remains the prior published SHA-256 pending the required post-release checksum handoff.
+
 Developer ID publication evidence: the intended personal TeamID `X88J3853S2` is active, all required GitHub release secret names are configured, and both workflow and independent local verification accepted the signed public artifact's TeamID, Apple notarization ticket, stapling, LaunchDaemon allowlist, and Gatekeeper assessment. The exact public zip and cask now pass those checks independently. Do not use another organization's team or certificate for Vifty.
 
 The public `Vifty-v1.3.0.zip` and checked-in cask both resolve to SHA-256 `92e803fa372c9cbd387b9b903ae0531031bc244804946d441616760f1d04a61f`. The published artifact summary declares `status: "passed"`, uses schema ID `https://vifty.local/schemas/release-artifact-summary.schema.json`, and records that signature and notarization checks were not skipped. Developer ID readiness reports `status: "ready"` with release source ref, source CI, Release workflow, secret names, and all four public assets passed.
@@ -24,7 +26,7 @@ Auto-update status: unavailable in `v1.3.0`, source-first, and unsigned-dev buil
 
 Public release facts:
 
-- Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.0`, and the checked-in cask checksum matches the immutable public artifact.
+- Release-candidate metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.3.1` build `6`; `v1.3.0` remains the latest trusted public artifact pending the tagged release and checksum handoff.
 - Source CI run `29209681445` passed on release commit `5cfd0eaf4409e3cfd2e57c766297d1609f8698cb`, and Release run `29209985030` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
 - The GitHub Release publishes `Vifty-v1.3.0.zip`, `Vifty-v1.3.0.zip.sha256`, `Vifty-v1.3.0-artifact-summary.json`, and `Vifty-v1.3.0-release-checklist.md`.
 - The published workflow summary and an independent downloaded-artifact verification both passed with TeamID `X88J3853S2`, no signature skips, and no notarization skips.

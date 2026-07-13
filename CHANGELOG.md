@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-13
+
+### Fixed
+- Confirm fan hardware state after Fixed, Curve, and Auto writes so the UI no longer evaluates newly applied control state against stale pre-write telemetry or flashes between active, pending, and drift-attention states.
+
 ## [1.3.0] - 2026-07-12
 
 ### Changed
