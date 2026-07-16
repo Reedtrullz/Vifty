@@ -12,7 +12,7 @@ struct TelemetryEvidencePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Telemetry & Evidence", systemImage: "waveform.path.ecg")
-                .font(.headline)
+                .viftyFont(.headline)
 
             TelemetryOverviewPanel(
                 power: power,
@@ -22,12 +22,35 @@ struct TelemetryEvidencePanel: View {
 
             HStack {
                 Text("Temperatures")
-                    .font(.headline)
+                    .viftyFont(.headline)
                 Spacer()
-                if let highest = sensors.max(by: { $0.celsius < $1.celsius }) {
-                    Text("Highest \(TemperatureDisplayFormatter.decimal(highest.celsius))")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                if let metrics = TemperatureMetricAccessibilityPresentation.resolve(
+                    sensors: sensors,
+                    effectiveSensorID: effectiveSensorID
+                ) {
+                    HStack(spacing: 10) {
+                        Text(metrics.curveSensorValue)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .accessibilityLabel(metrics.curveSensorLabel)
+                            .accessibilityValue(metrics.curveSensorValue)
+                            .accessibilityIdentifier(
+                                ViftyAccessibilityIdentifier.curveSensorMetric
+                            )
+                        Text(metrics.highestTemperatureValue)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .accessibilityLabel(metrics.highestTemperatureLabel)
+                            .accessibilityValue(metrics.highestTemperatureValue)
+                            .accessibilityIdentifier(
+                                ViftyAccessibilityIdentifier.highestTemperatureMetric
+                            )
+                    }
+                    .viftyFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(ViftyAccessibilityIdentifier.temperatureMetrics)
                 }
             }
 
@@ -61,11 +84,11 @@ private struct TelemetryOverviewPanel: View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
             HStack {
                 Label("Power & History", systemImage: "chart.xyaxis.line")
-                    .font(.headline)
+                    .viftyFont(.headline)
                     .foregroundStyle(power?.isPluggedIn == true ? .green : .primary)
                 Spacer()
                 Text(summaryHeaderText)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -99,16 +122,18 @@ private struct TelemetryOverviewPanel: View {
 
             if let power, let warning = PowerInsights(snapshot: power).chargerWarning {
                 Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
             }
 
             if summary.sampleCount > 1 {
                 TelemetryHistoryChart(summary: summary, compact: compact)
-            } else {
-                Text("History appears after the first successful poll.")
-                    .font(.caption)
+            } else if let historyReadinessText = TelemetryHistorySummary.historyReadinessText(
+                sampleCount: summary.sampleCount
+            ) {
+                Text(historyReadinessText)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -137,10 +162,9 @@ private struct TelemetryOverviewPanel: View {
         if let power {
             parts.append(PowerDisplayFormatter.panelHeadline(for: power))
         }
+        parts.append(summary.plottedSeriesCountText)
         if let sampleWindowText = summary.sampleWindowText {
-            parts.append("\(summary.sampleCountText) · last \(sampleWindowText)")
-        } else {
-            parts.append(summary.sampleCountText)
+            parts.append("retained window \(sampleWindowText)")
         }
         return parts.joined(separator: " · ")
     }
@@ -220,7 +244,7 @@ private struct HistorySparkline: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .viftyFont(.caption2, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .frame(width: compact ? 34 : 42, alignment: .leading)
             SparklinePath(
@@ -232,13 +256,15 @@ private struct HistorySparkline: View {
                 .frame(height: compact ? 20 : 24)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(rangeText)
-                    .font(.caption2.monospacedDigit())
+                    .viftyFont(.caption2)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 if let changeText {
                     Text(changeText)
-                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .viftyFont(.caption2, weight: .semibold)
+                        .monospacedDigit()
                         .foregroundStyle(.primary.opacity(0.8))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -274,11 +300,14 @@ private struct SparklinePath: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let plottedValues = smoothedValues(values)
-            let points = points(for: plottedValues, in: geometry.size)
+            let points = SparklineGeometry.points(
+                for: values,
+                width: geometry.size.width,
+                height: geometry.size.height
+            ).map { CGPoint(x: $0.x, y: $0.y) }
             ZStack {
                 Path { path in
-                    addSmoothedLine(to: &path, points: points)
+                    addRawLine(to: &path, points: points)
                 }
                 .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
 
@@ -296,44 +325,11 @@ private struct SparklinePath: View {
         .accessibilityHidden(true)
     }
 
-    private func points(for plottedValues: [Double], in size: CGSize) -> [CGPoint] {
-        guard plottedValues.count > 1,
-              let minValue = plottedValues.min(),
-              let maxValue = plottedValues.max() else { return [] }
-
-        let isFlat = abs(maxValue - minValue) < 0.0001
-        let valueRange = max(maxValue - minValue, 0.0001)
-        let width = max(size.width, 1)
-        let height = max(size.height, 1)
-        let xStep = width / CGFloat(plottedValues.count - 1)
-
-        return plottedValues.enumerated().map { index, value in
-            let normalized = isFlat ? 0.5 : (value - minValue) / valueRange
-            return CGPoint(
-                x: CGFloat(index) * xStep,
-                y: height - (CGFloat(normalized) * height)
-            )
-        }
-    }
-
-    private func addSmoothedLine(to path: inout Path, points: [CGPoint]) {
-        var previousPoint: CGPoint?
-        for (index, point) in points.enumerated() {
-            if index == 0 {
-                path.move(to: point)
-            } else if let previousPoint {
-                let midPoint = CGPoint(
-                    x: (previousPoint.x + point.x) / 2,
-                    y: (previousPoint.y + point.y) / 2
-                )
-                path.addQuadCurve(to: midPoint, control: previousPoint)
-                if index == points.count - 1 {
-                    path.addQuadCurve(to: point, control: point)
-                }
-            } else {
-                path.addLine(to: point)
-            }
-            previousPoint = point
+    private func addRawLine(to path: inout Path, points: [CGPoint]) {
+        guard let first = points.first else { return }
+        path.move(to: first)
+        for point in points.dropFirst() {
+            path.addLine(to: point)
         }
     }
 
@@ -353,15 +349,6 @@ private struct SparklinePath: View {
         return CGPoint(x: x, y: y)
     }
 
-    private func smoothedValues(_ rawValues: [Double]) -> [Double] {
-        guard rawValues.count > 4 else { return rawValues }
-        return rawValues.indices.map { index in
-            let lowerBound = max(rawValues.startIndex, index - 2)
-            let upperBound = min(rawValues.index(before: rawValues.endIndex), index + 2)
-            let window = rawValues[lowerBound...upperBound]
-            return window.reduce(0, +) / Double(window.count)
-        }
-    }
 }
 
 private struct SparklineValueBadge: View {
@@ -370,7 +357,8 @@ private struct SparklineValueBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold).monospacedDigit())
+            .viftyFont(.caption2, weight: .semibold)
+            .monospacedDigit()
             .foregroundStyle(.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -390,7 +378,7 @@ private struct ThermalPressureTrail: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("Thermal")
-                .font(.caption2.weight(.semibold))
+                .viftyFont(.caption2, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .frame(width: compact ? 34 : 42, alignment: .leading)
             HStack(spacing: 2) {
@@ -402,7 +390,8 @@ private struct ThermalPressureTrail: View {
             }
             .frame(height: compact ? 6 : 8)
             Text(summaryText)
-                .font(.caption2.monospacedDigit())
+                .viftyFont(.caption2)
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -452,11 +441,11 @@ private struct PowerDetailDisclosure: View {
                         .lineLimit(1)
                 }
             }
-            .font(.caption)
+            .viftyFont(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }
-        .font(.caption.weight(.semibold))
+        .viftyFont(.caption, weight: .semibold)
         .foregroundStyle(.secondary)
         .padding(.top, compact ? 0 : 2)
     }
@@ -506,10 +495,11 @@ private struct PowerMetric: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.caption2)
+                    .viftyFont(.caption2)
                     .foregroundStyle(.secondary)
                 Text(value)
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .viftyFont(.subheadline, weight: .semibold)
+                    .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }

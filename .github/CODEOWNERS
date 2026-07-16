@@ -29,7 +29,7 @@ examples/viftyctl/  @Reedtrullz
 
 # IOKit / SMC surface
 Sources/ViftyCore/HardwareService.swift  @Reedtrullz
-Sources/ViftyCore/LocalFanHelperClient.swift  @Reedtrullz
+Sources/ViftyFanControlSafety/  @Reedtrullz
 Sources/ViftyCore/SMCClient.swift  @Reedtrullz
 Sources/ViftyCore/RealMacHardwareService.swift  @Reedtrullz
 Sources/ViftyPrivateIOKit/  @Reedtrullz

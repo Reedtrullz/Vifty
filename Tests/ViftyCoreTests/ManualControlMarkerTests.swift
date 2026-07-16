@@ -8,6 +8,17 @@ final class ManualControlMarkerTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
+    func testDefaultMarkerUsesXCTestPrivateStorageInsteadOfLiveApplicationSupport() {
+        let liveURL = FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Vifty/manual-control-active")
+            .standardizedFileURL
+        let testURL = ManualControlMarker.resolvedDefaultURLForCurrentProcess.standardizedFileURL
+
+        XCTAssertNotEqual(testURL, liveURL)
+        XCTAssertTrue(testURL.path.contains("vifty-manual-control-marker-xctest"))
+    }
+
     func testMarkActiveCreatesFile() {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
@@ -24,12 +35,19 @@ final class ManualControlMarkerTests: XCTestCase {
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
-    func testDoubleMarkDoesNotCrash() {
+    func testDoubleMarkKeepsExistingMarkerIdentity() throws {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
         marker.markActive()
+        let originalAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
         marker.markActive()
+        let repeatedAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
         XCTAssertTrue(marker.wasManualControlActive)
+        XCTAssertEqual(
+            originalAttributes[.systemFileNumber] as? NSNumber,
+            repeatedAttributes[.systemFileNumber] as? NSNumber
+        )
+        XCTAssertEqual(try Data(contentsOf: url), Data("active".utf8))
     }
 
     func testDoubleClearDoesNotCrash() {

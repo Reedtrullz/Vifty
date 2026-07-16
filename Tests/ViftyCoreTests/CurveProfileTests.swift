@@ -90,4 +90,16 @@ final class CurveProfileTests: XCTestCase {
         let profile = try JSONDecoder().decode(CurveProfile.self, from: Data(json.utf8))
         XCTAssertEqual(profile.fanOverrides, [])
     }
+
+    func testDecodingUsesTheSameTemperatureAndOverrideNormalizationAsInit() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","name":"Unsorted","startTemp":90,"startRPM":6000,"midTemp":50,"midRPM":3000,"maxTemp":30,"maxRPM":1200,"fanOverrides":[{"fanID":2,"startRPM":2100,"midRPM":3100,"maxRPM":4100},{"fanID":0,"startRPM":2000,"midRPM":3000,"maxRPM":4000}]}
+        """
+
+        let profile = try JSONDecoder().decode(CurveProfile.self, from: Data(json.utf8))
+
+        XCTAssertEqual([profile.startTemp, profile.midTemp, profile.maxTemp], [30, 50, 90])
+        XCTAssertEqual([profile.startRPM, profile.midRPM, profile.maxRPM], [1200, 3000, 6000])
+        XCTAssertEqual(profile.fanOverrides.map(\.fanID), [0, 2])
+    }
 }

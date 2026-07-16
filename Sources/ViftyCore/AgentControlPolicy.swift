@@ -39,23 +39,44 @@ public struct AgentControlPolicy: Equatable, Sendable {
         guard request.durationSeconds > 0, request.durationSeconds <= maxDurationSeconds else { return .denied(.durationTooLong, message: "Duration must be between 1 second and \(maxDurationSeconds) seconds.") }
         guard request.maxRPMPercent >= minimumAgentRPMPercent, request.maxRPMPercent <= maximumAllowedRPMPercent else { return .denied(.rpmOutOfRange, message: "RPM percent must be between \(minimumAgentRPMPercent) and \(maximumAllowedRPMPercent).") }
 
-        let controllableFans = snapshot.fans.filter(\.controllable)
-        guard !controllableFans.isEmpty else { return .denied(.noControllableFans, message: "No controllable fans were reported by the helper.") }
+        let physicalFans = snapshot.fans
+        guard !physicalFans.isEmpty else {
+            return .denied(
+                .noControllableFans,
+                message: "No fan has trusted telemetry for daemon-owned fixed-RPM control."
+            )
+        }
 
         var seenFanIDs = Set<Int>()
-        for fan in controllableFans {
+        for fan in physicalFans {
             guard seenFanIDs.insert(fan.id).inserted else {
-                return .denied(.policyDenied, message: "Controllable fan telemetry contains duplicate fan ID \(fan.id).")
+                return .denied(.policyDenied, message: "Physical fan telemetry contains duplicate fan ID \(fan.id).")
             }
             guard SMCFanControlKeys.isValidFanID(fan.id) else {
-                return .denied(.policyDenied, message: "Controllable fan telemetry contains invalid fan ID \(fan.id); SMC fan IDs must be 0 through 9.")
+                return .denied(.policyDenied, message: "Physical fan telemetry contains invalid fan ID \(fan.id); SMC fan IDs must be 0 through 9.")
             }
-            guard fan.maximumRPM > 0, fan.minimumRPM >= 0, fan.minimumRPM <= fan.maximumRPM else {
-                return .denied(.policyDenied, message: "Controllable fan telemetry contains an invalid RPM range for fan ID \(fan.id).")
+            guard fan.controlEligibility.canRestoreOSManagedMode else {
+                return .denied(
+                    .policyDenied,
+                    message: "Physical fan telemetry lacks trusted restore-mode eligibility for fan ID \(fan.id)."
+                )
             }
         }
 
-        let targets = Dictionary(uniqueKeysWithValues: controllableFans.map { fan in
+        let fixedEligibleFans = physicalFans.filter { $0.controlEligibility.canApplyFixedRPM }
+        guard !fixedEligibleFans.isEmpty else {
+            return .denied(
+                .noControllableFans,
+                message: "No fan has trusted telemetry for daemon-owned fixed-RPM control."
+            )
+        }
+        for fan in fixedEligibleFans {
+            guard fan.maximumRPM > 0, fan.minimumRPM >= 0, fan.minimumRPM <= fan.maximumRPM else {
+                return .denied(.policyDenied, message: "Fixed-eligible fan telemetry contains an invalid RPM range for fan ID \(fan.id).")
+            }
+        }
+
+        let targets = Dictionary(uniqueKeysWithValues: fixedEligibleFans.map { fan in
             let span = fan.maximumRPM - fan.minimumRPM
             let rpm = fan.minimumRPM + Int((Double(span) * Double(request.maxRPMPercent) / 100.0).rounded())
             return (fan.id, FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM))

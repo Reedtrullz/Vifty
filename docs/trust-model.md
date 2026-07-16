@@ -1,5 +1,15 @@
 # Trust Model
 
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
+
 Vifty controls fans through private macOS SMC interfaces, so trust has to be explicit. This document describes what runs with privilege, what can write fan state, what agents can request, and what Vifty refuses to do.
 
 ## Summary
@@ -37,9 +47,10 @@ The daemon accepts XPC clients by signing identity:
 
 - `tech.reidar.vifty` for the app.
 - `tech.reidar.vifty.ctl` for `viftyctl`.
-- `tech.reidar.vifty.helper` for `ViftyHelper` read-only daemon probes.
 
-Local ad-hoc builds leave `VIFTY_XPC_ALLOWED_TEAM_ID` empty so contributors can build the project. Public release builds should set `VIFTY_XPC_ALLOWED_TEAM_ID` so the daemon also requires the configured Apple Developer TeamID.
+`ViftyHelper` uses its local privileged SMC path rather than daemon XPC, so it is not an allowed XPC client.
+
+When a local ad-hoc build leaves `VIFTY_XPC_ALLOWED_TEAM_ID` empty, the daemon trusts no XPC write clients and fan writes fail closed; read-only app telemetry can still use unprivileged fallbacks. Teamless development access is explicit only: a development LaunchDaemon must set `VIFTY_XPC_ADHOC_DEVELOPMENT=1`, bind `VIFTY_XPC_ADHOC_ALLOWED_UID`, and provide exact absolute app and `viftyctl` paths through `VIFTY_XPC_ADHOC_APP_PATH` and `VIFTY_XPC_ADHOC_CTL_PATH`. The daemon then requires matching audit-token EUID, signing identifier, and canonical executable path. `ViftyHelper` does not call daemon XPC and is not an allowed client. Missing, partial, invalid-enable, legacy-helper, or mixed TeamID/development metadata fails closed. Public releases set `VIFTY_XPC_ALLOWED_TEAM_ID` to the Developer ID TeamID and must contain no `VIFTY_XPC_ADHOC_*` metadata.
 
 Platform-binary status does not bypass Vifty's signing identifier checks.
 
@@ -78,6 +89,26 @@ Vifty refuses or restores control when safety inputs are not trustworthy, includ
 Unsupported-hardware behavior is defined in [unsupported-hardware.md](unsupported-hardware.md). A safe block keeps the Mac under macOS Auto, reports `safeToRequestCooling: false` with `daemonControlPathReady: true` when daemon paths are available, and must not be bypassed with helper or raw SMC fan writes.
 
 Manual control uses an unclean-exit marker so the next launch can restore Auto if Vifty exited while manual fan control was active.
+
+## App Replacement Boundary
+
+The source installer replaces only the unprivileged app bundle. It does not stop, remove, repair, or overwrite the installed LaunchDaemon helper, and its replacement preflights are read-only.
+
+For a current protocol-v2 install, replacement requires a fresh, exit-zero `viftyctl diagnose --json` attestation from the authenticated installed CLI, with a complete trusted physical fan set in Auto/System, valid mode keys, clear transaction/recovery ownership, no active agent lease, and no manual-control marker. Developer ID installs are Apple-anchor/TeamID/identifier/deep-seal checked before a private CLI copy runs; explicit debug ad-hoc installs must match the configured UID and exact installed app/CLI paths. A failed or incomplete protocol-v2 report cannot downgrade into a legacy path.
+
+Before changing helper authority, the privileged replacement bootstrap copies the complete candidate into a root-owned `ReplacementTransactions/<UUID>/CandidateSnapshot/Vifty.app`, independently re-verifies its signature/identifiers, proves the caller source was stable across the copy, and derives both the lifecycle executable and candidate binding only from that snapshot. The binding contains the bundle-root row and every descendant's relative path, type, UID, GID, permission mode, link count, and type-appropriate size plus file SHA-256 or symbolic-link target. The manifest hash does not claim to bind ACLs or extended attributes: `ditto` preserves them in the snapshot, Developer ID validation separately enforces the signed code seal, and local ad-hoc development trust remains an explicit exact-path/operator boundary rather than an ACL/xattr authenticity claim.
+
+Replacement recovery state is kept in the root-private mode-`0600` `/Library/Application Support/ViftyMaintenanceEvidence/replacement-state-v1.json` ledger, separate from the replaceable mode-`0644` `last-execution-v1.json` operator-evidence record. Ordinary repair failures and ordinary successful repairs therefore cannot erase a prepared, locked, or completed replacement obligation. A later prepare or uninstall may remove that ledger only after another quiesce plus complete Auto/System proof, validated unlock, transaction removal, and directory durability barriers. Recursive immutable-flag changes first journal `locking` or `unlocking`; partial flag operations, process/power loss between a flag change and its next ledger state, transaction-retirement interruption, and record-rename/fsync ambiguity are resolved on the same or a later authorized invocation by rereading the actual tree flags and root-private ledger, reauthenticating the destination against its recorded candidate/previous identity, and converging to a validated all-locked or all-unlocked state. Exit `75` claims frozen authority only when the exact launchd label is currently proven disabled and offline; otherwise prepare/root uncertainty is exit `76`.
+
+The only legacy compatibility path is the published Developer ID `v1.3.2` build `7`. Before executing legacy code, the installer verifies that exact version/build, app/CLI/daemon/helper canonical byte and CDHash identities, explicit Apple Developer ID requirements, bundled LaunchDaemon TeamID, and the deep app seal. It runs a private reverified copy of the canonical CLI beside a private canonical daemon copy, then runs a private stable copy of the new bundle's `probeLocal` command. The hardened local reader must report one FNum-backed inventory of 1 to 10 fans with contiguous IDs `0..<fanCount`, whose per-fan mode key, restore eligibility, and Auto/System raw mode exactly match the fresh `v1.3.2` daemon report and its installed/bundled daemon hash parity. Mode-only fans may pass when they are eligible for OS-managed restore even if Fixed RPM is unavailable. Forced, partial, unreachable, leased, manual-marker, mismatched, other-version, noncanonical, and generic legacy states fail before copy. The old schema is evidence only for that allowlisted migration; it is never interpreted as protocol-v2 ownership authority. These checks are point-in-time snapshots, not a daemon quiescence lease; the existing daemon remains authoritative for concurrent bounded lease expiry and Auto restoration during the app-only swap.
+
+## Privileged Helper Maintenance Boundary
+
+Destructive helper repair and uninstall use one lifecycle boundary. Under protocol v2, the daemon blocks new fan-control ownership, restores the complete trusted physical fan set to Auto/System, requires fresh confirmation, and consumes one short-lived operation token only after revalidating the boot session, daemon session, journal generation, quiesce generation, fan inventory, and exact canonical bundled `ViftyHelper` SHA-256. The requesting CLI hashes its sibling helper, while the daemon independently hashes its own canonical app sibling and requires equality; client report data cannot choose the receipt identity. It persists authorization at the fixed `/Library/Application Support/Vifty/Maintenance/authorized-v1.json` path. The directory is root-owned mode `0700`; authorized and claimed receipts are root-owned mode `0600`, singly linked, bounded, and opened without following symlinks. Every daemon bootstrap synchronously revokes prior authorized and claimed receipts before constructing the writer boundary or exposing XPC, and startup fails closed if revocation fails.
+
+After administrator authorization, an immutable digest-checked root worker atomically claims a valid receipt, parses the full disabled-service key literally, disables the launchd label, boots the service out, and confirms it remains disabled and offline. It then independently restores and freshly confirms the complete Auto/System fan set using a root-staged copy of the helper bytes snapshotted before authorization. Production accepts that helper only when its SHA-256 is unchanged and its signature satisfies Vifty's exact helper identifier, TeamID, Developer ID intermediate/leaf OIDs and authority chain, and hardened runtime. Only after that mandatory post-freeze proof does it consume the claim and delete legacy files; repair alone may re-enable the label afterward. The outer process requires recent caller-UID/parent-PID-bound completed root evidence before any registration or final unregister transition. Signal or incomplete-root paths persist blocked evidence and cannot register repair.
+
+Authority selection is explicit. A successful protocol-v2 prepare is receipt-only: missing, expired, cross-boot, operation-mismatched, or changed-helper authority fails without offline downgrade. A structurally exact current-schema `PROTOCOL_MISMATCH` report may select offline recovery. A fresh structured `HELPER_UNREACHABLE` report first reuses a still-valid receipt; without one, root must snapshot and verify the exact published v1.3.2 daemon SHA-256 and CDHash plus its daemon identifier, TeamID, Developer ID OIDs/authority chain, and hardened runtime before service freeze. Generic unavailable, stale, malformed, safety-blocked, or lookalike-v1.3.2 states cannot enter teardown. Protocol-v1 uninstall asks the signed main app to finish SMAppService unregistration only after root cleanup. That bridge accepts only a recent completed root phase record from `/Library/Application Support/ViftyMaintenanceEvidence/last-execution-v1.json`, whose root-owned non-writable directory is separately traversable for read-only verification, and requires the same requesting user and lifecycle parent process recorded by the root worker; the private receipt directory remains inaccessible to the user process. Direct invocation, replay from another process, repair requests, incomplete phases, stale evidence, or caller-chosen paths cannot unregister the service. App and shell-wrapper entrypoints use clean `env -i` execution with Bash profiles disabled before lifecycle parsing; the signed app also pins the reviewed script digest, while direct source execution retains the explicit operator-trusted-checkout boundary.
 
 ## Agent Cooling Flow
 
@@ -126,7 +157,22 @@ Public releases should be:
 
 Ad-hoc CI artifacts, local builds, and source-first unsigned-dev convenience zips are useful for development and tester convenience, but they are not a substitute for signed, notarized public releases.
 
-Vifty `v1.2.0` is the current published Developer ID release. Its exact public artifact and matching cask checksum pass release evidence, TeamID, notarization, stapling, and Gatekeeper checks without skips. Installed release-mode evidence also passes after explicit Auto restoration and signed-helper alignment, with a privacy-safe read-only review that ran no cooling commands. Manual Fixed/Curve hardware compatibility remains a separate claim. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
+### Canonical v1.3.2 migration identity
+
+The installer’s one legacy replacement exception is bound to the canonical public archive, not merely to matching version text or TeamID. The source is `https://github.com/Reedtrullz/Vifty/releases/download/v1.3.2/Vifty-v1.3.2.zip`; its SHA-256 is `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`, matching `Casks/vifty.rb`.
+
+The archive was downloaded to fresh scratch storage, hashed before extraction, extracted once, and inspected without executing any component. Reproduce the identities with `shasum -a 256 Vifty-v1.3.2.zip`, `ditto -x -k Vifty-v1.3.2.zip extracted`, `shasum -a 256 extracted/Vifty.app/Contents/MacOS/{Vifty,viftyctl,ViftyDaemon,ViftyHelper}`, and `codesign -dvvv` on each executable for its CDHash. The pinned results are:
+
+| Component | SHA-256 | CDHash |
+|---|---|---|
+| Vifty | `10e6ca95faa8167bf81df49bfa7407ad5f8ab3e55cf7720085ec61334897c55e` | `666e4972fcb31fa3fcb3134c956daae0bdf62189` |
+| viftyctl | `63d2837795f22a34f1833c9c38a49b2c95d87339262347cca89b0245f7068f3e` | `95a55844ba7b4983712c69693ec4c4b80a7e1205` |
+| ViftyDaemon | `7543c573528a57bb096b045b9a7476b1d4da4aef88b7cd8b54d4cd2ca5bf7dac` | `c5613e3020d94de1d141917d7b950fc367a6e61a` |
+| ViftyHelper | `f081eb5f0f3097d0baf8b96b8655cb038d6b5e8abb406e53192305af31a98cf0` | `c5802ef35c7cbeabad37db5657dd20fa95f727ba` |
+
+Before any legacy code runs, the installer also requires `anchor apple generic`, the Developer ID Application leaf/intermediate certificate OIDs, leaf OU `X88J3853S2`, exact signing identifiers, and a valid deep app seal. It copies the pinned CLI and sibling daemon into a private `0700` run directory, rechecks their signatures and byte identities there, and executes only that private CLI copy. Its Auto/System evidence is a fresh point-in-time snapshot rather than a daemon-held quiescence lease; the existing daemon continues to own any concurrent bounded lease, expiry, and Auto restoration during the app-only rename swap.
+
+The generated fact block above is authoritative for the current public version, build, architecture, identities, checksum, TeamID, and trust state. The exact `v1.3.2` public artifact passes release-level signing/notarization checks, installed release-mode review, and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`. The [release review](validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json) and [manual-smoke attestation](validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md) scope those claims to that exact binary and model; they do not validate the current branch or broad Apple Silicon compatibility. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 

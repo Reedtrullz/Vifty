@@ -204,6 +204,9 @@
         "commandErrorSchemaID",
         "runSchemaID",
         "resolvedChildExecutableReported",
+        "signalScope",
+        "descendantCleanupBeforeAutoRestore",
+        "backgroundProcessesAllowed",
         "daemonStatusAvailable",
         "policySource",
         "policyStatusAvailable",
@@ -256,6 +259,29 @@
             "null"
           ],
           "description": "Copied from pre-capabilities runLifecycle.resolvedChildExecutableReported. When true, passed run proof must include run.resolvedChildExecutable."
+        },
+        "signalScope": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "processGroup",
+            null
+          ],
+          "description": "Copied from pre-capabilities runLifecycle.signalScope. Current safe smoke evidence requires processGroup."
+        },
+        "descendantCleanupBeforeAutoRestore": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backgroundProcessesAllowed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "daemonStatusAvailable": {
           "type": [
@@ -456,7 +482,10 @@
         "autoRestoreSucceeded",
         "childExitCode",
         "resolvedChildExecutable",
-        "resolvedChildExecutablePathPrivacy"
+        "resolvedChildExecutablePathPrivacy",
+        "signalScope",
+        "descendantCleanupBeforeAutoRestore",
+        "backgroundProcessesAllowed"
       ],
       "properties": {
         "exitStatus": {
@@ -600,6 +629,28 @@
             null
           ],
           "description": "Digest availability status copied from completed viftyctl run --json output. computed means resolvedChildExecutableSHA256 is present; unavailable means Vifty could not read or hash the executable bytes; null means the run was skipped or the report is legacy."
+        },
+        "signalScope": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "processGroup",
+            null
+          ]
+        },
+        "descendantCleanupBeforeAutoRestore": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backgroundProcessesAllowed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-ax-collector-error-v1.schema.json",
+  "title": "Vifty UI review Accessibility collector error v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "schemaID", "code", "message", "promptRequested", "readOnly", "actionsPerformed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/ui-review-ax-collector-error-v1.schema.json" },
+    "code": {
+      "enum": ["AX_PERMISSION_MISSING", "AX_USAGE", "AX_SEAL_FAILED", "AX_COLLECTION_BLOCKED", "AX_IO_ERROR", "AX_INTERNAL_ERROR"]
+    },
+    "message": { "type": "string", "minLength": 1 },
+    "promptRequested": { "const": false },
+    "readOnly": { "const": true },
+    "actionsPerformed": { "type": "array", "maxItems": 0, "items": { "type": "string" } }
+  }
+}

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 @preconcurrency import UserNotifications
 import ViftyCore
 
@@ -50,6 +51,21 @@ struct LocalNotificationSettings: Codable, Equatable {
             agentCoolingAttention
         }
     }
+
+    mutating func set(_ kind: LocalNotificationKind, enabled: Bool) {
+        switch kind {
+        case .helperFailure:
+            helperFailure = enabled
+        case .elevatedThermalPressure:
+            elevatedThermalPressure = enabled
+        case .autoRestoreFailure:
+            autoRestoreFailure = enabled
+        case .pluggedInBatteryDrain:
+            pluggedInBatteryDrain = enabled
+        case .agentCoolingAttention:
+            agentCoolingAttention = enabled
+        }
+    }
 }
 
 struct LocalNotification: Equatable {
@@ -83,22 +99,83 @@ struct LocalNotificationTransitionState {
 @MainActor
 protocol LocalNotificationDelivering: AnyObject {
     func deliver(_ notification: LocalNotification) async -> Bool
+    func authorizationStatus() async -> LocalNotificationAuthorization
+    func requestAuthorization() async -> LocalNotificationAuthorization
+    func deliverTestNotification() async -> Bool
+    func openNotificationSettings() async -> Bool
+}
+
+extension LocalNotificationDelivering {
+    func authorizationStatus() async -> LocalNotificationAuthorization { .unavailable }
+    func requestAuthorization() async -> LocalNotificationAuthorization { .unavailable }
+    func deliverTestNotification() async -> Bool { false }
+    func openNotificationSettings() async -> Bool { false }
 }
 
 @MainActor
 final class UserNotificationDeliverer: LocalNotificationDelivering {
-    private var requestedAuthorization = false
+    private let controller: LocalNotificationAuthorizationController
 
+    init(client: any LocalNotificationCenterClient = UserNotificationCenterClient()) {
+        self.controller = LocalNotificationAuthorizationController(client: client)
+    }
+
+    func deliver(_ notification: LocalNotification) async -> Bool {
+        guard !UserNotificationCenterClient.isRunningUnderXCTest else { return false }
+        return await controller.deliver(notification, allowUpgradeFallbackRequest: true)
+    }
+
+    func authorizationStatus() async -> LocalNotificationAuthorization {
+        await controller.refresh()
+    }
+
+    func requestAuthorization() async -> LocalNotificationAuthorization {
+        await controller.requestForExplicitOptIn()
+    }
+
+    func deliverTestNotification() async -> Bool {
+        await controller.deliverTestNotification()
+    }
+
+    func openNotificationSettings() async -> Bool {
+        await controller.openSettings()
+    }
+}
+
+final class UserNotificationCenterClient: LocalNotificationCenterClient, @unchecked Sendable {
     init() {}
+
+    func authorizationStatus() async -> LocalNotificationAuthorization {
+        guard !Self.isRunningUnderXCTest else { return .unavailable }
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return .authorized
+        case .denied:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .unavailable
+        }
+    }
+
+    func requestAuthorization() async -> LocalNotificationAuthorization {
+        guard !Self.isRunningUnderXCTest else { return .unavailable }
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound])
+            return granted ? .authorized : .denied
+        } catch {
+            ViftyLog.notifications.error("Notification authorization request failed")
+            return .unavailable
+        }
+    }
 
     func deliver(_ notification: LocalNotification) async -> Bool {
         guard !Self.isRunningUnderXCTest else { return false }
         let center = UNUserNotificationCenter.current()
-        guard await ensureAuthorization(center: center) else {
-            ViftyLog.notifications.debug("Notification suppressed because authorization is unavailable")
-            return false
-        }
-
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
@@ -124,23 +201,14 @@ final class UserNotificationDeliverer: LocalNotificationDelivering {
         }
     }
 
-    private func ensureAuthorization(center: UNUserNotificationCenter) async -> Bool {
-        let settings = await center.notificationSettings()
-        switch settings.authorizationStatus {
-        case .authorized, .provisional, .ephemeral:
-            return true
-        case .denied:
-            return false
-        case .notDetermined:
-            guard !requestedAuthorization else { return false }
-            requestedAuthorization = true
-            return (try? await center.requestAuthorization(options: [.alert, .sound])) == true
-        @unknown default:
+    func openNotificationSettings() async -> Bool {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
             return false
         }
+        return await MainActor.run { NSWorkspace.shared.open(url) }
     }
 
-    private static var isRunningUnderXCTest: Bool {
+    static var isRunningUnderXCTest: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.processName == "xctest"
             || NSClassFromString("XCTestCase") != nil

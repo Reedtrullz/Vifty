@@ -81,6 +81,9 @@ public struct ViftyCtlFanReport: Codable, Equatable, Sendable {
     public var hardwareModeRawValue: Int?
     public var hardwareModeKey: String?
     public var targetRPM: Int?
+    public var canApplyFixedRPM: Bool?
+    public var canRestoreOSManagedMode: Bool?
+    public var controlIneligibilityReasons: [String]?
 
     public init(fan: Fan) {
         self.id = fan.id
@@ -93,6 +96,9 @@ public struct ViftyCtlFanReport: Codable, Equatable, Sendable {
         self.hardwareModeRawValue = fan.hardwareMode?.rawValue
         self.hardwareModeKey = fan.hardwareModeKey
         self.targetRPM = fan.targetRPM
+        self.canApplyFixedRPM = fan.controlEligibility.canApplyFixedRPM
+        self.canRestoreOSManagedMode = fan.controlEligibility.canRestoreOSManagedMode
+        self.controlIneligibilityReasons = fan.controlEligibility.reasons.map(\.rawValue)
     }
 }
 
@@ -182,8 +188,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     public var fans: [ViftyCtlFanReport]
     public var temperatureSensors: [ViftyCtlTemperatureSensorReport]
     public var agentControl: AgentControlStatus
+    public var fanControlOwnership: FanControlOwnershipStatus?
     public var daemonSnapshotError: String?
     public var agentControlStatusError: String?
+    public var fanControlOwnershipStatusError: String?
     public var checks: [ViftyCtlReadinessCheck]
 
     private enum CodingKeys: String, CodingKey {
@@ -212,8 +220,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         case fans
         case temperatureSensors
         case agentControl
+        case fanControlOwnership
         case daemonSnapshotError
         case agentControlStatusError
+        case fanControlOwnershipStatusError
         case checks
     }
 
@@ -241,8 +251,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         fans: [ViftyCtlFanReport],
         temperatureSensors: [ViftyCtlTemperatureSensorReport],
         agentControl: AgentControlStatus,
+        fanControlOwnership: FanControlOwnershipStatus? = nil,
         daemonSnapshotError: String? = nil,
         agentControlStatusError: String? = nil,
+        fanControlOwnershipStatusError: String? = nil,
         checks: [ViftyCtlReadinessCheck]
     ) {
         self.schemaVersion = schemaVersion
@@ -278,8 +290,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         self.fans = fans
         self.temperatureSensors = temperatureSensors
         self.agentControl = agentControl
+        self.fanControlOwnership = fanControlOwnership
         self.daemonSnapshotError = daemonSnapshotError
         self.agentControlStatusError = agentControlStatusError
+        self.fanControlOwnershipStatusError = fanControlOwnershipStatusError
         self.checks = checks
     }
 
@@ -332,8 +346,16 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 forKey: .temperatureSensors
             ),
             agentControl: try container.decode(AgentControlStatus.self, forKey: .agentControl),
+            fanControlOwnership: try container.decodeIfPresent(
+                FanControlOwnershipStatus.self,
+                forKey: .fanControlOwnership
+            ),
             daemonSnapshotError: try container.decodeIfPresent(String.self, forKey: .daemonSnapshotError),
             agentControlStatusError: try container.decodeIfPresent(String.self, forKey: .agentControlStatusError),
+            fanControlOwnershipStatusError: try container.decodeIfPresent(
+                String.self,
+                forKey: .fanControlOwnershipStatusError
+            ),
             checks: checks
         )
     }
@@ -365,8 +387,13 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         try container.encode(fans, forKey: .fans)
         try container.encode(temperatureSensors, forKey: .temperatureSensors)
         try container.encode(agentControl, forKey: .agentControl)
+        try container.encodeIfPresent(fanControlOwnership, forKey: .fanControlOwnership)
         try container.encodeIfPresent(daemonSnapshotError, forKey: .daemonSnapshotError)
         try container.encodeIfPresent(agentControlStatusError, forKey: .agentControlStatusError)
+        try container.encodeIfPresent(
+            fanControlOwnershipStatusError,
+            forKey: .fanControlOwnershipStatusError
+        )
         try container.encode(checks, forKey: .checks)
     }
 
@@ -379,11 +406,15 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         appPreferences: ViftyAppPreferencesDiagnostic = .unavailable,
         daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic = .unavailable,
         daemonSnapshotError: String? = nil,
-        agentControlStatusError: String? = nil
+        agentControlStatusError: String? = nil,
+        fanControlOwnership: FanControlOwnershipStatus? = nil,
+        fanControlOwnershipStatusError: String? = nil
     ) -> ViftyCtlReadinessReport {
         let fans = snapshot.fans.map(ViftyCtlFanReport.init(fan:))
         let sensors = snapshot.temperatureSensors.map(ViftyCtlTemperatureSensorReport.init(sensor:))
-        let controllableFans = snapshot.fans.filter(\.controllable)
+        let controllableFans = snapshot.fans.filter {
+            $0.controllable && $0.controlEligibility.canApplyFixedRPM
+        }
         let checks = makeChecks(
             snapshot: snapshot,
             agentControl: agentControl,
@@ -393,7 +424,9 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             appPreferences: appPreferences,
             daemonRuntime: daemonRuntime,
             daemonSnapshotError: daemonSnapshotError,
-            agentControlStatusError: agentControlStatusError
+            agentControlStatusError: agentControlStatusError,
+            fanControlOwnership: fanControlOwnership,
+            fanControlOwnershipStatusError: fanControlOwnershipStatusError
         )
         let state = resolveState(from: checks)
         let recommendedAgentAction = recommendedAgentAction(for: state, checks: checks)
@@ -418,8 +451,10 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             fans: fans,
             temperatureSensors: sensors,
             agentControl: agentControl,
+            fanControlOwnership: fanControlOwnership,
             daemonSnapshotError: daemonSnapshotError,
             agentControlStatusError: agentControlStatusError,
+            fanControlOwnershipStatusError: fanControlOwnershipStatusError,
             checks: checks
         )
     }
@@ -433,14 +468,17 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         appPreferences: ViftyAppPreferencesDiagnostic,
         daemonRuntime: ViftyCtlDaemonRuntimeDiagnostic,
         daemonSnapshotError: String?,
-        agentControlStatusError: String?
+        agentControlStatusError: String?,
+        fanControlOwnership: FanControlOwnershipStatus?,
+        fanControlOwnershipStatusError: String?
     ) -> [ViftyCtlReadinessCheck] {
-        [
+        var checks = [
             daemonSnapshotAvailableCheck(daemonSnapshotError),
             agentControlStatusAvailableCheck(agentControlStatusError),
             daemonControlPathReadyCheck(
                 daemonSnapshotError: daemonSnapshotError,
-                agentControlStatusError: agentControlStatusError
+                agentControlStatusError: agentControlStatusError,
+                ownershipStatusError: fanControlOwnershipStatusError
             ),
             daemonRuntimeMatchesExpectedCheck(daemonRuntime),
             supportedHardwareCheck(snapshot),
@@ -455,6 +493,81 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             manualControlClearCheck(manualControlActive, appPreferences: appPreferences),
             fanModeTelemetryCheck(snapshot)
         ]
+        if fanControlOwnership != nil || fanControlOwnershipStatusError != nil {
+            checks.insert(
+                fanControlOwnershipStatusAvailableCheck(fanControlOwnershipStatusError),
+                at: 2
+            )
+            checks.append(contentsOf: fanControlOwnershipChecks(
+                fanControlOwnership,
+                snapshot: snapshot,
+                agentControl: agentControl
+            ))
+            let replacementAttestation = replacementMaintenanceAttestationCheck(
+                snapshot: snapshot,
+                agentControl: agentControl,
+                manualControlActive: manualControlActive,
+                daemonSnapshotError: daemonSnapshotError,
+                agentControlStatusError: agentControlStatusError,
+                ownershipStatus: fanControlOwnership,
+                ownershipStatusError: fanControlOwnershipStatusError
+            )
+            // This is affirmative replacement authority, not another general
+            // cooling-readiness failure. Missing authority is fail-closed for
+            // the installer while preserving the existing readiness taxonomy.
+            if replacementAttestation.passed {
+                checks.append(replacementAttestation)
+            }
+        }
+        return checks
+    }
+
+    /// A narrow, read-only attestation for replacing the installed app bundle.
+    ///
+    /// This deliberately reuses the daemon maintenance inventory analyzer: its
+    /// restore eligibility is derived from a trusted FNum-backed physical fan
+    /// domain, not from `fans.count`. The installer still cross-checks the raw
+    /// fields so a legacy report cannot opt into this assertion by shape alone.
+    private static func replacementMaintenanceAttestationCheck(
+        snapshot: HardwareSnapshot,
+        agentControl: AgentControlStatus,
+        manualControlActive: Bool,
+        daemonSnapshotError: String?,
+        agentControlStatusError: String?,
+        ownershipStatus: FanControlOwnershipStatus?,
+        ownershipStatusError: String?
+    ) -> ViftyCtlReadinessCheck {
+        let inventory = HelperMaintenanceSnapshotAnalyzer.analyze(snapshot)
+        let supportedHardware = snapshot.isAppleSilicon && snapshot.isMacBookPro
+        let ownershipClear = ownershipStatus.map { status in
+            status.protocolVersion == FanControlProtocolVersion.current
+                && status.owner == nil
+                && status.phase == nil
+                && status.transactionID == nil
+                && status.expectedFanIDs.isEmpty
+                && status.confirmedOSManagedFanIDs.isEmpty
+                && !status.recoveryPending
+                && status.errorCode == nil
+                && status.errorMessage == nil
+        } == true
+        let passed = daemonSnapshotError == nil
+            && agentControlStatusError == nil
+            && ownershipStatusError == nil
+            && snapshot.fanControlProtocolVersion == FanControlProtocolVersion.current
+            && supportedHardware
+            && inventory.blockers.isEmpty
+            && ownershipClear
+            && agentControl.activeLease == nil
+            && !manualControlActive
+
+        return ViftyCtlReadinessCheck(
+            id: "replacementMaintenanceAttestation",
+            severity: .error,
+            passed: passed,
+            message: passed
+                ? "Fresh protocol-v2 telemetry attests one complete physical fan inventory in Auto/System with no owner or lease."
+                : "App replacement is not attested: require supported hardware, protocol v2, one complete trusted fan inventory in Auto/System, and explicit clear ownership and lease state."
+        )
     }
 
     private static func daemonSnapshotAvailableCheck(_ error: String?) -> ViftyCtlReadinessCheck {
@@ -493,11 +606,202 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         )
     }
 
+    private static func fanControlOwnershipStatusAvailableCheck(
+        _ error: String?
+    ) -> ViftyCtlReadinessCheck {
+        if let error {
+            return ViftyCtlReadinessCheck(
+                id: "fanControlOwnershipStatusAvailable",
+                severity: .error,
+                passed: false,
+                message: "Daemon fan-control ownership status is unavailable: \(error)"
+            )
+        }
+        return ViftyCtlReadinessCheck(
+            id: "fanControlOwnershipStatusAvailable",
+            severity: .info,
+            passed: true,
+            message: "Daemon fan-control ownership status is available."
+        )
+    }
+
+    private static func fanControlOwnershipChecks(
+        _ status: FanControlOwnershipStatus?,
+        snapshot: HardwareSnapshot,
+        agentControl: AgentControlStatus
+    ) -> [ViftyCtlReadinessCheck] {
+        guard let status else {
+            return [
+                ViftyCtlReadinessCheck(
+                    id: "fanControlProtocolCurrent",
+                    severity: .error,
+                    passed: false,
+                    message: "Fan-control protocol version could not be verified."
+                ),
+                ViftyCtlReadinessCheck(
+                    id: "fanControlOwnershipStateValid",
+                    severity: .error,
+                    passed: false,
+                    message: "Fan-control ownership state could not be verified."
+                ),
+                ViftyCtlReadinessCheck(
+                    id: "fanControlRecoveryClear",
+                    severity: .error,
+                    passed: false,
+                    message: "Fan-control recovery state could not be verified."
+                ),
+                ViftyCtlReadinessCheck(
+                    id: "fanControlOwnershipClear",
+                    severity: .error,
+                    passed: false,
+                    message: "Fan-control ownership could not be verified as clear."
+                ),
+                ViftyCtlReadinessCheck(
+                    id: "fanControlHardwareConsistent",
+                    severity: .error,
+                    passed: false,
+                    message: "Physical fan ownership could not be reconciled with daemon state."
+                )
+            ]
+        }
+
+        let protocolCurrent = status.protocolVersion >= FanControlProtocolVersion.current
+            && snapshot.fanControlProtocolVersion >= FanControlProtocolVersion.current
+        let protocolCheck = ViftyCtlReadinessCheck(
+            id: "fanControlProtocolCurrent",
+            severity: .error,
+            passed: protocolCurrent,
+            message: protocolCurrent
+                ? "Daemon and snapshot advertise fan-control protocol v2."
+                : "Fan-control protocol v2 is required; update or safely repair the helper before cooling."
+        )
+
+        let confirmedIsSubset = Set(status.confirmedOSManagedFanIDs).isSubset(of: status.expectedFanIDs)
+        let transactionIDPresent = status.transactionID?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let ownerShapeValid: Bool = switch status.owner {
+        case nil:
+            status.phase == nil
+                && status.transactionID == nil
+                && status.expectedFanIDs.isEmpty
+                && status.confirmedOSManagedFanIDs.isEmpty
+                && !status.recoveryPending
+        case .manual(let sessionID):
+            status.phase == .active
+                && transactionIDPresent
+                && !sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !status.expectedFanIDs.isEmpty
+                && status.confirmedOSManagedFanIDs.isEmpty
+                && !status.recoveryPending
+        case .agent(let leaseID):
+            status.phase == .active
+                && transactionIDPresent
+                && !leaseID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !status.expectedFanIDs.isEmpty
+                && status.confirmedOSManagedFanIDs.isEmpty
+                && !status.recoveryPending
+        case .recovery:
+            (status.phase == .restoring || status.phase == .restorePending)
+                && transactionIDPresent
+                && !status.expectedFanIDs.isEmpty
+                && status.recoveryPending
+        }
+        let stateValid = ownerShapeValid && confirmedIsSubset && status.errorCode == nil
+        let stateCheck = ViftyCtlReadinessCheck(
+            id: "fanControlOwnershipStateValid",
+            severity: .error,
+            passed: stateValid,
+            message: stateValid
+                ? "Daemon fan-control ownership state is structurally valid."
+                : "Daemon fan-control ownership state is corrupt or internally inconsistent\(status.errorCode.map { ": \($0)" } ?? ".")"
+        )
+
+        let recoveryClear = !status.recoveryPending
+            && status.owner != .recovery
+            && status.phase != .restoring
+            && status.phase != .restorePending
+        let recoveryCheck = ViftyCtlReadinessCheck(
+            id: "fanControlRecoveryClear",
+            severity: .error,
+            passed: recoveryClear,
+            message: recoveryClear
+                ? "No fan-control recovery transaction is pending."
+                : "Fan-control recovery is pending; request one full Auto restore and verify it before cooling."
+        )
+
+        let ownershipClear = status.owner == nil && !status.recoveryPending
+        let ownershipClearCheck = ViftyCtlReadinessCheck(
+            id: "fanControlOwnershipClear",
+            severity: .error,
+            passed: ownershipClear,
+            message: ownershipClear
+                ? "No manual, agent, or recovery fan-control owner is active."
+                : "A fan-control owner is already active; request one full Auto restore and re-run diagnose before new cooling."
+        )
+
+        let fanIDs = snapshot.fans.map(\.id)
+        let fansByID = Dictionary(snapshot.fans.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let expectedSet = Set(status.expectedFanIDs)
+        let inventoryValid = fanIDs.count == Set(fanIDs).count
+            && fanIDs.allSatisfy(SMCFanControlKeys.isValidFanID)
+            && expectedSet.isSubset(of: fansByID.keys)
+        let forcedFanIDs = Set(snapshot.fans.compactMap {
+            $0.hardwareMode == .forced ? $0.id : nil
+        })
+        let outsideExpectedIsOSManaged = snapshot.fans
+            .filter { !expectedSet.contains($0.id) }
+            .allSatisfy { $0.hardwareMode == .automatic || $0.hardwareMode == .system }
+        let expectedMatchesForcedDomain = expectedSet == forcedFanIDs
+        let physicalStateConsistent: Bool
+        switch status.owner {
+        case nil:
+            physicalStateConsistent = snapshot.fans.allSatisfy {
+                $0.controlEligibility.canRestoreOSManagedMode
+                    && ($0.hardwareMode == .automatic || $0.hardwareMode == .system)
+            }
+        case .manual:
+            physicalStateConsistent = !expectedSet.isEmpty
+                && expectedMatchesForcedDomain
+                && outsideExpectedIsOSManaged
+                && status.expectedFanIDs.allSatisfy {
+                    fansByID[$0]?.hardwareMode == .forced && fansByID[$0]?.targetRPM != nil
+                }
+        case .agent(let leaseID):
+            let leaseTargetFanIDs = Set(
+                agentControl.activeLease?.targetRPMByFanID.keys.map { $0 } ?? []
+            )
+            physicalStateConsistent = agentControl.activeLease?.id == leaseID
+                && !expectedSet.isEmpty
+                && expectedSet == leaseTargetFanIDs
+                && expectedMatchesForcedDomain
+                && outsideExpectedIsOSManaged
+                && status.expectedFanIDs.allSatisfy {
+                    fansByID[$0]?.hardwareMode == .forced && fansByID[$0]?.targetRPM != nil
+                }
+        case .recovery:
+            physicalStateConsistent = false
+        }
+        let hardwareConsistent = inventoryValid && physicalStateConsistent
+        let hardwareCheck = ViftyCtlReadinessCheck(
+            id: "fanControlHardwareConsistent",
+            severity: .error,
+            passed: hardwareConsistent,
+            message: hardwareConsistent
+                ? "Fresh fan telemetry agrees with daemon ownership."
+                : "Fresh fan telemetry disagrees with daemon ownership, includes partial inventory, or shows Forced/Unknown mode without an owner."
+        )
+
+        return [protocolCheck, stateCheck, recoveryCheck, ownershipClearCheck, hardwareCheck]
+    }
+
     private static func daemonControlPathReadyCheck(
         daemonSnapshotError: String?,
-        agentControlStatusError: String?
+        agentControlStatusError: String?,
+        ownershipStatusError: String?
     ) -> ViftyCtlReadinessCheck {
-        let passed = daemonSnapshotError == nil && agentControlStatusError == nil
+        let passed = daemonSnapshotError == nil
+            && agentControlStatusError == nil
+            && ownershipStatusError == nil
         return ViftyCtlReadinessCheck(
             id: "daemonControlPathReady",
             severity: .error,
@@ -787,6 +1091,8 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     ) -> ViftyCtlReadinessRecoveryAction {
         if failedCheck("daemonSnapshotAvailable", in: checks)
             || failedCheck("agentControlStatusAvailable", in: checks)
+            || failedCheck("fanControlOwnershipStatusAvailable", in: checks)
+            || failedCheck("fanControlProtocolCurrent", in: checks)
             || failedCheck("daemonControlPathReady", in: checks)
             || failedCheck("daemonRuntimeMatchesExpected", in: checks) {
             return .repairHelper
@@ -794,7 +1100,11 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
 
         if agentAction == .restoreAutoBeforeRequestingCooling
             || failedCheck("activeLeaseClear", in: checks)
-            || failedCheck("manualControlClear", in: checks) {
+            || failedCheck("manualControlClear", in: checks)
+            || failedCheck("fanControlRecoveryClear", in: checks)
+            || failedCheck("fanControlOwnershipClear", in: checks)
+            || failedCheck("fanControlOwnershipStateValid", in: checks)
+            || failedCheck("fanControlHardwareConsistent", in: checks) {
             return .restoreAutoBeforeRetry
         }
 
@@ -827,6 +1137,12 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         appendAction(action)
 
         if failedCheck("activeLeaseClear", in: checks) || failedCheck("manualControlClear", in: checks) {
+            appendAction(.restoreAutoBeforeRetry)
+        }
+        if failedCheck("fanControlRecoveryClear", in: checks)
+            || failedCheck("fanControlOwnershipClear", in: checks)
+            || failedCheck("fanControlOwnershipStateValid", in: checks)
+            || failedCheck("fanControlHardwareConsistent", in: checks) {
             appendAction(.restoreAutoBeforeRetry)
         }
 
@@ -871,7 +1187,12 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
             ))
         }
 
-        if failedCheck("activeLeaseClear", in: checks) || failedCheck("manualControlClear", in: checks) {
+        if failedCheck("activeLeaseClear", in: checks)
+            || failedCheck("manualControlClear", in: checks)
+            || failedCheck("fanControlRecoveryClear", in: checks)
+            || failedCheck("fanControlOwnershipClear", in: checks)
+            || failedCheck("fanControlOwnershipStateValid", in: checks)
+            || failedCheck("fanControlHardwareConsistent", in: checks) {
             let toolPath = "\(appPath)/Contents/MacOS/viftyctl"
             commands.append(ViftyCtlOperatorRecoveryCommand(
                 id: "restore-auto-current-app",
@@ -920,6 +1241,11 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
     private static func daemonControlPathReady(from checks: [ViftyCtlReadinessCheck]) -> Bool {
         if checks.contains(where: { $0.id == "daemonControlPathReady" }) {
             return !failedCheck("daemonControlPathReady", in: checks)
+                && !failedCheck("fanControlOwnershipStatusAvailable", in: checks)
+                && !failedCheck("fanControlProtocolCurrent", in: checks)
+                && !failedCheck("fanControlOwnershipStateValid", in: checks)
+                && !failedCheck("fanControlRecoveryClear", in: checks)
+                && !failedCheck("fanControlHardwareConsistent", in: checks)
         }
         return !failedCheck("daemonSnapshotAvailable", in: checks)
             && !failedCheck("agentControlStatusAvailable", in: checks)

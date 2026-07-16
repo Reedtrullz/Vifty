@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 public struct ViftyCtlResult: Equatable, Sendable {
@@ -82,6 +83,12 @@ public enum ViftyCtlChildTerminationReason: String, Codable, Equatable, Sendable
     case signalInferred
 }
 
+public enum ViftyCtlSignalScope: String, Codable, Equatable, Sendable {
+    case none
+    case immediateChild
+    case processGroup
+}
+
 private struct ViftyCtlExecutableDigest: Equatable, Sendable {
     var sha256: String?
     var status: ViftyCtlExecutableDigestStatus
@@ -100,6 +107,9 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
     public var structuredPreChildFailures: Bool
     public var cleanupStateReportedOnLaunchFailure: Bool
     public var resolvedChildExecutableReported: Bool
+    public var signalScope: ViftyCtlSignalScope
+    public var descendantCleanupBeforeAutoRestore: Bool
+    public var backgroundProcessesAllowed: Bool
 
     public init(
         childCommandPreflightBeforeCooling: Bool = true,
@@ -107,7 +117,10 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         autoRestoreAfterChildExit: Bool = true,
         structuredPreChildFailures: Bool = true,
         cleanupStateReportedOnLaunchFailure: Bool = true,
-        resolvedChildExecutableReported: Bool = true
+        resolvedChildExecutableReported: Bool = true,
+        signalScope: ViftyCtlSignalScope = .processGroup,
+        descendantCleanupBeforeAutoRestore: Bool = true,
+        backgroundProcessesAllowed: Bool = false
     ) {
         self.childCommandPreflightBeforeCooling = childCommandPreflightBeforeCooling
         self.signalsForwardedToChild = signalsForwardedToChild
@@ -115,6 +128,9 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         self.structuredPreChildFailures = structuredPreChildFailures
         self.cleanupStateReportedOnLaunchFailure = cleanupStateReportedOnLaunchFailure
         self.resolvedChildExecutableReported = resolvedChildExecutableReported
+        self.signalScope = signalScope
+        self.descendantCleanupBeforeAutoRestore = descendantCleanupBeforeAutoRestore
+        self.backgroundProcessesAllowed = backgroundProcessesAllowed
     }
 
     public static let unsupported = ViftyCtlRunLifecycleCapabilities(
@@ -123,7 +139,10 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         autoRestoreAfterChildExit: false,
         structuredPreChildFailures: false,
         cleanupStateReportedOnLaunchFailure: false,
-        resolvedChildExecutableReported: false
+        resolvedChildExecutableReported: false,
+        signalScope: .none,
+        descendantCleanupBeforeAutoRestore: false,
+        backgroundProcessesAllowed: true
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -133,6 +152,9 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         case structuredPreChildFailures
         case cleanupStateReportedOnLaunchFailure
         case resolvedChildExecutableReported
+        case signalScope
+        case descendantCleanupBeforeAutoRestore
+        case backgroundProcessesAllowed
     }
 
     public init(from decoder: any Decoder) throws {
@@ -143,6 +165,12 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         structuredPreChildFailures = try container.decode(Bool.self, forKey: .structuredPreChildFailures)
         cleanupStateReportedOnLaunchFailure = try container.decode(Bool.self, forKey: .cleanupStateReportedOnLaunchFailure)
         resolvedChildExecutableReported = try container.decodeIfPresent(Bool.self, forKey: .resolvedChildExecutableReported) ?? false
+        signalScope = try container.decodeIfPresent(ViftyCtlSignalScope.self, forKey: .signalScope) ?? .immediateChild
+        descendantCleanupBeforeAutoRestore = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .descendantCleanupBeforeAutoRestore
+        ) ?? false
+        backgroundProcessesAllowed = try container.decodeIfPresent(Bool.self, forKey: .backgroundProcessesAllowed) ?? true
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -153,6 +181,9 @@ public struct ViftyCtlRunLifecycleCapabilities: Codable, Equatable, Sendable {
         try container.encode(structuredPreChildFailures, forKey: .structuredPreChildFailures)
         try container.encode(cleanupStateReportedOnLaunchFailure, forKey: .cleanupStateReportedOnLaunchFailure)
         try container.encode(resolvedChildExecutableReported, forKey: .resolvedChildExecutableReported)
+        try container.encode(signalScope, forKey: .signalScope)
+        try container.encode(descendantCleanupBeforeAutoRestore, forKey: .descendantCleanupBeforeAutoRestore)
+        try container.encode(backgroundProcessesAllowed, forKey: .backgroundProcessesAllowed)
     }
 }
 
@@ -832,6 +863,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
     public var coolingLeasePrepared: Bool
     public var autoRestoreAttempted: Bool
     public var autoRestoreSucceeded: Bool?
+    public var childProcessFailurePhase: ViftyCtlChildProcessFailurePhase?
+    public var childExitCode: Int32?
+    public var descendantCleanupCompleted: Bool?
+    public var backgroundProcessesMayRemain: Bool?
     public var retryAfterSeconds: Int?
     public var generatedAt: Date
 
@@ -847,6 +882,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
         autoRestoreSucceeded: Bool? = nil,
+        childProcessFailurePhase: ViftyCtlChildProcessFailurePhase? = nil,
+        childExitCode: Int32? = nil,
+        descendantCleanupCompleted: Bool? = nil,
+        backgroundProcessesMayRemain: Bool? = nil,
         retryAfterSeconds: Int? = nil,
         generatedAt: Date
     ) {
@@ -862,6 +901,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         self.coolingLeasePrepared = coolingLeasePrepared
         self.autoRestoreAttempted = autoRestoreAttempted
         self.autoRestoreSucceeded = autoRestoreSucceeded
+        self.childProcessFailurePhase = childProcessFailurePhase
+        self.childExitCode = childExitCode
+        self.descendantCleanupCompleted = descendantCleanupCompleted
+        self.backgroundProcessesMayRemain = backgroundProcessesMayRemain
         self.retryAfterSeconds = retryAfterSeconds
         self.generatedAt = generatedAt
     }
@@ -878,6 +921,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         case coolingLeasePrepared
         case autoRestoreAttempted
         case autoRestoreSucceeded
+        case childProcessFailurePhase
+        case childExitCode
+        case descendantCleanupCompleted
+        case backgroundProcessesMayRemain
         case retryAfterSeconds
         case generatedAt
     }
@@ -900,6 +947,19 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         coolingLeasePrepared = try container.decodeIfPresent(Bool.self, forKey: .coolingLeasePrepared) ?? false
         autoRestoreAttempted = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreAttempted) ?? false
         autoRestoreSucceeded = try container.decodeIfPresent(Bool.self, forKey: .autoRestoreSucceeded)
+        childProcessFailurePhase = try container.decodeIfPresent(
+            ViftyCtlChildProcessFailurePhase.self,
+            forKey: .childProcessFailurePhase
+        )
+        childExitCode = try container.decodeIfPresent(Int32.self, forKey: .childExitCode)
+        descendantCleanupCompleted = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .descendantCleanupCompleted
+        )
+        backgroundProcessesMayRemain = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .backgroundProcessesMayRemain
+        )
         retryAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
     }
@@ -921,6 +981,10 @@ public struct ViftyCtlCommandErrorReport: Codable, Equatable, Sendable {
         } else {
             try container.encodeNil(forKey: .autoRestoreSucceeded)
         }
+        try container.encodeIfPresent(childProcessFailurePhase, forKey: .childProcessFailurePhase)
+        try container.encodeIfPresent(childExitCode, forKey: .childExitCode)
+        try container.encodeIfPresent(descendantCleanupCompleted, forKey: .descendantCleanupCompleted)
+        try container.encodeIfPresent(backgroundProcessesMayRemain, forKey: .backgroundProcessesMayRemain)
         try container.encodeIfPresent(retryAfterSeconds, forKey: .retryAfterSeconds)
         try container.encode(generatedAt, forKey: .generatedAt)
     }
@@ -941,6 +1005,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
     public var resolvedChildExecutable: String?
     public var resolvedChildExecutableSHA256: String?
     public var resolvedChildExecutableSHA256Status: ViftyCtlExecutableDigestStatus?
+    public var signalScope: ViftyCtlSignalScope
+    public var descendantCleanupBeforeAutoRestore: Bool
+    public var backgroundProcessesAllowed: Bool
     public var generatedAt: Date
 
     public init(
@@ -958,6 +1025,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         resolvedChildExecutable: String? = nil,
         resolvedChildExecutableSHA256: String? = nil,
         resolvedChildExecutableSHA256Status: ViftyCtlExecutableDigestStatus? = nil,
+        signalScope: ViftyCtlSignalScope = .processGroup,
+        descendantCleanupBeforeAutoRestore: Bool = true,
+        backgroundProcessesAllowed: Bool = false,
         generatedAt: Date
     ) {
         self.schemaVersion = schemaVersion
@@ -974,6 +1044,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         self.resolvedChildExecutable = resolvedChildExecutable
         self.resolvedChildExecutableSHA256 = resolvedChildExecutableSHA256
         self.resolvedChildExecutableSHA256Status = resolvedChildExecutableSHA256Status
+        self.signalScope = signalScope
+        self.descendantCleanupBeforeAutoRestore = descendantCleanupBeforeAutoRestore
+        self.backgroundProcessesAllowed = backgroundProcessesAllowed
         self.generatedAt = generatedAt
     }
 
@@ -992,6 +1065,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         case resolvedChildExecutable
         case resolvedChildExecutableSHA256
         case resolvedChildExecutableSHA256Status
+        case signalScope
+        case descendantCleanupBeforeAutoRestore
+        case backgroundProcessesAllowed
         case generatedAt
     }
 
@@ -1015,6 +1091,12 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         resolvedChildExecutable = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutable)
         resolvedChildExecutableSHA256 = try container.decodeIfPresent(String.self, forKey: .resolvedChildExecutableSHA256)
         resolvedChildExecutableSHA256Status = try container.decodeIfPresent(ViftyCtlExecutableDigestStatus.self, forKey: .resolvedChildExecutableSHA256Status)
+        signalScope = try container.decodeIfPresent(ViftyCtlSignalScope.self, forKey: .signalScope) ?? .immediateChild
+        descendantCleanupBeforeAutoRestore = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .descendantCleanupBeforeAutoRestore
+        ) ?? false
+        backgroundProcessesAllowed = try container.decodeIfPresent(Bool.self, forKey: .backgroundProcessesAllowed) ?? true
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
     }
 
@@ -1038,6 +1120,9 @@ public struct ViftyCtlRunReport: Codable, Equatable, Sendable {
         try container.encodeIfPresent(resolvedChildExecutable, forKey: .resolvedChildExecutable)
         try container.encodeIfPresent(resolvedChildExecutableSHA256, forKey: .resolvedChildExecutableSHA256)
         try container.encodeIfPresent(resolvedChildExecutableSHA256Status, forKey: .resolvedChildExecutableSHA256Status)
+        try container.encode(signalScope, forKey: .signalScope)
+        try container.encode(descendantCleanupBeforeAutoRestore, forKey: .descendantCleanupBeforeAutoRestore)
+        try container.encode(backgroundProcessesAllowed, forKey: .backgroundProcessesAllowed)
         try container.encode(generatedAt, forKey: .generatedAt)
     }
 }
@@ -1098,15 +1183,43 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
 
 public protocol ViftyCtlAgentControlClient: Sendable {
     func snapshot() async throws -> HardwareSnapshot
+    func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus
     func status() async throws -> AgentControlStatus
     func auditEvents(limit: Int) async throws -> [AgentControlAuditEvent]
     func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus
     func restore(reason: String) async throws -> AgentControlStatus
+    func restore(
+        reason: String,
+        unreadableJournalRecoveryAuthority: UnreadableJournalRecoveryAuthority?
+    ) async throws -> AgentControlStatus
+    func prepareHelperMaintenance(operation: HelperMaintenanceOperation) async throws -> HelperMaintenanceReport
+    func consumeHelperMaintenanceToken(
+        _ request: HelperMaintenanceAuthorizationRequest
+    ) async throws -> HelperMaintenanceAuthorization
+    func cancelHelperMaintenance() async throws
+}
+
+public extension ViftyCtlAgentControlClient {
+    func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus { .osManaged }
+    func prepareHelperMaintenance(
+        operation: HelperMaintenanceOperation
+    ) async throws -> HelperMaintenanceReport {
+        throw ViftyError.helperRejected("Helper-maintenance authority is unavailable.")
+    }
+    func consumeHelperMaintenanceToken(
+        _ request: HelperMaintenanceAuthorizationRequest
+    ) async throws -> HelperMaintenanceAuthorization {
+        throw ViftyError.helperRejected("Helper-maintenance authority is unavailable.")
+    }
+    func cancelHelperMaintenance() async throws {
+        throw ViftyError.helperRejected("Helper-maintenance authority is unavailable.")
+    }
 }
 
 public protocol ViftyCtlProcessRunning: Sendable {
     func resolve(_ arguments: [String]) throws -> [String]
     func run(_ arguments: [String]) throws -> Int32
+    func runMaintainingSignalShield(_ arguments: [String]) -> ViftyCtlProcessRunCompletion
 }
 
 private struct ViftyCtlForceRetryWaitError: Error, LocalizedError, Sendable {
@@ -1130,6 +1243,14 @@ public extension ViftyCtlProcessRunning {
     func resolve(_ arguments: [String]) throws -> [String] {
         arguments
     }
+
+    func runMaintainingSignalShield(_ arguments: [String]) -> ViftyCtlProcessRunCompletion {
+        do {
+            return ViftyCtlProcessRunCompletion(exitCode: try run(arguments))
+        } catch {
+            return ViftyCtlProcessRunCompletion(error: error)
+        }
+    }
 }
 
 public struct ViftyCtlDaemonClient: ViftyCtlAgentControlClient {
@@ -1147,6 +1268,10 @@ public struct ViftyCtlDaemonClient: ViftyCtlAgentControlClient {
         try await client.snapshot()
     }
 
+    public func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus {
+        try await client.fanControlOwnershipStatus()
+    }
+
     public func auditEvents(limit: Int) async throws -> [AgentControlAuditEvent] {
         try await client.agentControlAudit(limit: limit)
     }
@@ -1157,6 +1282,39 @@ public struct ViftyCtlDaemonClient: ViftyCtlAgentControlClient {
 
     public func restore(reason: String) async throws -> AgentControlStatus {
         try await client.restoreAgentControl(reason: reason)
+    }
+
+    public func restore(
+        reason: String,
+        unreadableJournalRecoveryAuthority: UnreadableJournalRecoveryAuthority?
+    ) async throws -> AgentControlStatus {
+        guard let unreadableJournalRecoveryAuthority else {
+            return try await restore(reason: reason)
+        }
+        _ = try await client.restoreAllAuto(AutoRestoreRequest(
+            transactionID: "viftyctl-restore-\(UUID().uuidString)",
+            expectedFanIDs: [],
+            reason: reason,
+            allowRestoreAllTrustedFans: true,
+            unreadableJournalRecoveryAuthority: unreadableJournalRecoveryAuthority
+        ))
+        return try await client.agentControlStatus()
+    }
+
+    public func prepareHelperMaintenance(
+        operation: HelperMaintenanceOperation
+    ) async throws -> HelperMaintenanceReport {
+        try await client.prepareHelperMaintenance(operation: operation)
+    }
+
+    public func consumeHelperMaintenanceToken(
+        _ request: HelperMaintenanceAuthorizationRequest
+    ) async throws -> HelperMaintenanceAuthorization {
+        try await client.consumeHelperMaintenanceToken(request)
+    }
+
+    public func cancelHelperMaintenance() async throws {
+        try await client.cancelHelperMaintenance()
     }
 }
 
@@ -1171,6 +1329,7 @@ public struct ViftyCtlRunner: Sendable {
     private let agentRuleBundleURL: URL?
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
+    private let maintenanceReportReader: @Sendable (String) throws -> HelperMaintenanceReport
 
     public init(
         client: any ViftyCtlAgentControlClient,
@@ -1186,7 +1345,10 @@ public struct ViftyCtlRunner: Sendable {
         manualControlClearer: @escaping @Sendable () -> Void = { ManualControlMarker().clear() },
         agentRuleBundleURL: URL? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
-        sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
+        sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) },
+        maintenanceReportReader: @escaping @Sendable (String) throws -> HelperMaintenanceReport = {
+            try Self.readMaintenanceReport(atPath: $0)
+        }
     ) {
         self.client = client
         self.processRunner = processRunner
@@ -1198,6 +1360,7 @@ public struct ViftyCtlRunner: Sendable {
         self.agentRuleBundleURL = agentRuleBundleURL
         self.now = now
         self.sleep = sleep
+        self.maintenanceReportReader = maintenanceReportReader
     }
 
     public func run(_ command: ViftyCtlCommand) async throws -> ViftyCtlResult {
@@ -1264,7 +1427,10 @@ public struct ViftyCtlRunner: Sendable {
                     exitCode: prepareSucceeded(status, request: request) ? 0 : 1
                 )
             case .restoreAuto(let reason, let json):
-                let status = try await client.restore(reason: reason)
+                let status = try await client.restore(
+                    reason: reason,
+                    unreadableJournalRecoveryAuthority: .explicitOperator
+                )
                 manualControlClearer()
                 let stdout = try formatStatus(status, json: json)
                 return ViftyCtlResult(stdout: stdout)
@@ -1291,8 +1457,10 @@ public struct ViftyCtlRunner: Sendable {
                     let stderr = "viftyctl run: prepare denied — \(message)\n"
                     return ViftyCtlResult(stderr: stderr, exitCode: 1)
                 }
+                let completion = processRunner.runMaintainingSignalShield(resolvedChildArguments)
+                defer { completion.finishSignalHandling() }
                 do {
-                    let exitCode = try processRunner.run(resolvedChildArguments)
+                    let exitCode = try completion.get()
                     return try await restoreAfterRun(
                         reason: "viftyctl run child exited with \(exitCode)",
                         childExitCode: exitCode,
@@ -1302,7 +1470,10 @@ public struct ViftyCtlRunner: Sendable {
                         json: json
                     )
                 } catch {
-                    let reason = "viftyctl run failed to launch child: \(error.localizedDescription)"
+                    let lifecycleError = error as? ViftyCtlChildProcessLifecycleError
+                    let reason = lifecycleError.map {
+                        "viftyctl run child lifecycle failed during \($0.phase.rawValue): \($0.localizedDescription)"
+                    } ?? "viftyctl run failed to launch child: \(error.localizedDescription)"
                     do {
                         _ = try await client.restore(reason: reason)
                     } catch {
@@ -1314,7 +1485,8 @@ public struct ViftyCtlRunner: Sendable {
                                 message: message,
                                 coolingLeasePrepared: true,
                                 autoRestoreAttempted: true,
-                                autoRestoreSucceeded: false
+                                autoRestoreSucceeded: false,
+                                childProcessLifecycleError: lifecycleError
                             )
                         }
                         throw ViftyError.helperRejected(message)
@@ -1326,11 +1498,54 @@ public struct ViftyCtlRunner: Sendable {
                             message: error.localizedDescription,
                             coolingLeasePrepared: true,
                             autoRestoreAttempted: true,
-                            autoRestoreSucceeded: true
+                            autoRestoreSucceeded: true,
+                            childProcessLifecycleError: lifecycleError
                         )
                     }
                     throw error
                 }
+            case .helperMaintenancePrepare(let operation):
+                let report = try await client.prepareHelperMaintenance(operation: operation)
+                let authorizedShape = report.operation == operation
+                    && report.safeToStop
+                    && report.quiesced
+                    && report.restoreAttempted
+                    && report.restoreSucceeded
+                    && report.completeExpectedSetConfirmed
+                    && report.blockers.isEmpty
+                    && report.token?.operation == operation
+                return ViftyCtlResult(
+                    stdout: try encodeJSON(report) + "\n",
+                    exitCode: authorizedShape ? 0 : 75
+                )
+            case .helperMaintenanceConsume(let operation, let reportPath):
+                let report = try maintenanceReportReader(reportPath)
+                guard report.schemaVersion == HelperMaintenanceReport.currentSchemaVersion,
+                      report.schemaID == HelperMaintenanceReport.schemaID,
+                      report.operation == operation,
+                      report.safeToStop,
+                      report.quiesced,
+                      report.restoreSucceeded,
+                      report.completeExpectedSetConfirmed,
+                      report.blockers.isEmpty,
+                      let token = report.token,
+                      token.operation == operation else {
+                    throw ViftyError.helperRejected(
+                        "Maintenance report is blocked, incomplete, mismatched, or has no daemon token."
+                    )
+                }
+                let authorization = try await client.consumeHelperMaintenanceToken(
+                    HelperMaintenanceAuthorizationRequest(operation: operation, token: token)
+                )
+                return ViftyCtlResult(
+                    stdout: try encodeJSON(authorization) + "\n",
+                    exitCode: authorization.authorized
+                        && authorization.quiesced
+                        && authorization.tokenConsumed ? 0 : 75
+                )
+            case .helperMaintenanceCancel:
+                try await client.cancelHelperMaintenance()
+                return ViftyCtlResult(stdout: "{\"cancelled\":true}\n")
             }
         } catch {
             guard jsonRequested(for: command) else { throw error }
@@ -1363,6 +1578,7 @@ public struct ViftyCtlRunner: Sendable {
         coolingLeasePrepared: Bool = false,
         autoRestoreAttempted: Bool = false,
         autoRestoreSucceeded: Bool? = nil,
+        childProcessLifecycleError: ViftyCtlChildProcessLifecycleError? = nil,
         retryAfterSeconds: Int? = nil
     ) throws -> ViftyCtlResult {
         let report = ViftyCtlCommandErrorReport(
@@ -1372,6 +1588,10 @@ public struct ViftyCtlRunner: Sendable {
             coolingLeasePrepared: coolingLeasePrepared,
             autoRestoreAttempted: autoRestoreAttempted,
             autoRestoreSucceeded: autoRestoreSucceeded,
+            childProcessFailurePhase: childProcessLifecycleError?.phase,
+            childExitCode: childProcessLifecycleError?.childExitCode,
+            descendantCleanupCompleted: childProcessLifecycleError?.descendantCleanupCompleted,
+            backgroundProcessesMayRemain: childProcessLifecycleError?.backgroundProcessesMayRemain,
             retryAfterSeconds: retryAfterSeconds,
             generatedAt: now()
         )
@@ -1391,6 +1611,10 @@ public struct ViftyCtlRunner: Sendable {
             return json
         case .run(_, _, let json, _):
             return json
+        case .helperMaintenancePrepare,
+             .helperMaintenanceConsume,
+             .helperMaintenanceCancel:
+            return true
         }
     }
 
@@ -1412,7 +1636,60 @@ public struct ViftyCtlRunner: Sendable {
             return "restore-auto"
         case .run:
             return "run"
+        case .helperMaintenancePrepare:
+            return "helper-maintenance-prepare"
+        case .helperMaintenanceConsume:
+            return "helper-maintenance-consume"
+        case .helperMaintenanceCancel:
+            return "helper-maintenance-cancel"
         }
+    }
+
+    public static func readMaintenanceReport(atPath path: String) throws -> HelperMaintenanceReport {
+        let maximumBytes = XPCHelperMaintenanceCoding.maximumPayloadBytes
+        var metadata = stat()
+        guard lstat(path, &metadata) == 0,
+              metadata.st_mode & S_IFMT == S_IFREG,
+              metadata.st_size > 0,
+              metadata.st_size <= off_t(maximumBytes) else {
+            throw ViftyError.helperRejected(
+                "Maintenance report must be a bounded regular file and not a symlink."
+            )
+        }
+        let descriptor = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard descriptor >= 0 else {
+            throw ViftyError.helperRejected("Could not open maintenance report safely.")
+        }
+        defer { close(descriptor) }
+        var opened = stat()
+        guard fstat(descriptor, &opened) == 0,
+              opened.st_mode & S_IFMT == S_IFREG,
+              opened.st_dev == metadata.st_dev,
+              opened.st_ino == metadata.st_ino,
+              opened.st_size == metadata.st_size else {
+            throw ViftyError.helperRejected("Maintenance report changed while opening.")
+        }
+        var data = Data()
+        data.reserveCapacity(Int(opened.st_size))
+        var buffer = [UInt8](repeating: 0, count: 16 * 1_024)
+        while true {
+            let count = read(descriptor, &buffer, buffer.count)
+            if count == 0 { break }
+            if count < 0 {
+                if errno == EINTR { continue }
+                throw ViftyError.helperRejected("Could not read maintenance report safely.")
+            }
+            guard data.count + count <= maximumBytes else {
+                throw ViftyError.helperRejected("Maintenance report exceeded the size limit.")
+            }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        guard data.count == Int(opened.st_size) else {
+            throw ViftyError.helperRejected("Maintenance report changed while reading.")
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try decoder.decode(HelperMaintenanceReport.self, from: data)
     }
 
     private func commandErrorCode(for error: any Error) -> AgentControlErrorCode? {
@@ -1464,7 +1741,12 @@ public struct ViftyCtlRunner: Sendable {
         let generatedAt = now()
         async let snapshotProbe = capture { try await client.snapshot() }
         async let statusProbe = capture { try await client.status() }
-        let (snapshotResult, statusResult) = await (snapshotProbe, statusProbe)
+        async let ownershipProbe = capture { try await client.fanControlOwnershipStatus() }
+        let (snapshotResult, statusResult, ownershipResult) = await (
+            snapshotProbe,
+            statusProbe,
+            ownershipProbe
+        )
 
         let snapshot: HardwareSnapshot
         let daemonSnapshotError: String?
@@ -1488,6 +1770,17 @@ public struct ViftyCtlRunner: Sendable {
             agentControlStatusError = error.localizedDescription
         }
 
+        let ownershipStatus: FanControlOwnershipStatus?
+        let ownershipStatusError: String?
+        switch ownershipResult {
+        case .success(let value):
+            ownershipStatus = value
+            ownershipStatusError = nil
+        case .failure(let error):
+            ownershipStatus = nil
+            ownershipStatusError = error.localizedDescription
+        }
+
         return ViftyCtlReadinessReport.make(
             snapshot: snapshot,
             agentControl: status,
@@ -1497,7 +1790,9 @@ public struct ViftyCtlRunner: Sendable {
             appPreferences: appPreferencesReader(),
             daemonRuntime: daemonRuntimeReader(),
             daemonSnapshotError: daemonSnapshotError,
-            agentControlStatusError: agentControlStatusError
+            agentControlStatusError: agentControlStatusError,
+            fanControlOwnership: ownershipStatus,
+            fanControlOwnershipStatusError: ownershipStatusError
         )
     }
 

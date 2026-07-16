@@ -1,222 +1,255 @@
+import Foundation
 import XCTest
 @testable import Vifty
 
 @MainActor
 final class DaemonInstallerTests: XCTestCase {
-    func testHelperActionCopyMatchesInstallerStatus() {
-        let installer = DaemonInstaller()
-        let installDetail = "Installs the root LaunchDaemon used for fan reads and writes. Fan writes stay blocked until the daemon responds."
-        let approveDetail = "Opens Login Items approval. Approve Vifty's fan helper, then return to Vifty. Fan writes stay blocked until the daemon responds."
-        let reinstallDetail = "Recopies the daemon, strips quarantine, fixes ownership, and restarts launchd. Fan writes stay blocked until the daemon responds."
-        let repairDetail = "Repairs the helper install, fixes ownership, strips quarantine, and restarts launchd. Fan writes stay blocked until the daemon responds."
-        let missingBundleDetail = "Vifty is missing its bundled LaunchDaemon plist. Rebuild or reinstall Vifty from source before installing the helper."
-        let cases: [(status: String, canInstall: Bool, title: String, help: String, detail: String, statusSummary: String)] = [
-            ("Checking helper", true, "Install Helper", "Install the privileged fan helper", installDetail, "macOS helper status: checking install state"),
-            ("Fan helper not installed", true, "Install Helper", "Install the privileged fan helper", installDetail, "macOS helper status: not installed"),
-            ("Approve fan helper in Login Items", true, "Approve Helper", "Open Login Items approval for the fan helper", approveDetail, "macOS helper status: waiting for Login Items approval"),
-            ("Fan helper enabled", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
-            ("Fan helper installed", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
-            ("Fan helper installed; waiting for daemon response", true, "Reinstall Helper", "Reinstall or repair the privileged fan helper", reinstallDetail, "macOS helper status: installed"),
-            ("Fan helper install failed: denied", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
-            ("Fan helper repair was canceled; fan writes stay blocked until the helper is installed.", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
-            ("Fan helper repair failed; fan writes stay blocked. Copy support evidence if it keeps failing.", true, "Repair Helper", "Repair the privileged fan helper", repairDetail, "macOS helper status: last install or repair failed"),
-            ("Fan helper plist not found in app bundle", false, "Helper Unavailable", missingBundleDetail, missingBundleDetail, "macOS helper status: bundled plist missing"),
-            (
-                "macOS 13 or newer is required for bundled daemon install",
-                false,
-                "Helper Unavailable",
-                "macOS 13 or newer is required for bundled daemon install",
-                "macOS 13 or newer is required for bundled daemon install",
-                "macOS helper status: unsupported macOS version"
-            )
+    func testHelperActionPresentationComesFromBackendStateInsteadOfStatusCopy() {
+        let cases: [(DaemonInstallerBackendStatus, String, HelperActionKind)] = [
+            (.notRegistered, "Install Helper", .install),
+            (.requiresApproval, "Approve Helper", .approve),
+            (.enabled, "Reinstall Helper", .reinstall),
+            (.unknown, "Helper Status Unknown", .unavailable)
         ]
 
-        for testCase in cases {
-            installer.statusText = testCase.status
-            installer.canInstall = testCase.canInstall
+        for (status, title, kind) in cases {
+            let installer = DaemonInstaller(
+                backend: InstallerBackendFixture(status: status),
+                installService: InstallerServiceFixture(result: .blockedResult)
+            )
+            installer.statusText = "arbitrary localized or transient copy"
 
-            XCTAssertEqual(installer.actionTitle, testCase.title, testCase.status)
-            XCTAssertEqual(installer.actionHelp, testCase.help, testCase.status)
-            XCTAssertEqual(installer.actionDescription, testCase.detail, testCase.status)
-            XCTAssertEqual(installer.helperStatusSummary, testCase.statusSummary, testCase.status)
+            XCTAssertEqual(installer.actionPresentation.kind, kind)
+            XCTAssertEqual(installer.actionPresentation.title, title)
         }
     }
 
-    func testAdministratorInstallFailureStatusSanitizesRawFallbackErrors() {
-        let installer = DaemonInstaller()
-        let cases: [(stderr: String, expected: String)] = [
-            (
-                "",
-                "Fan helper repair was canceled or failed; fan writes stay blocked until the helper is installed."
-            ),
-            (
-                "execution error: User canceled. (-128)",
-                "Fan helper repair was canceled; fan writes stay blocked until the helper is installed."
-            ),
-            (
-                "osascript: authorization denied by user",
-                "Fan helper repair was denied; fan writes stay blocked until the helper is installed."
-            ),
-            (
-                "launchctl bootstrap system /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist failed: 5: Input/output error",
-                "Fan helper repair failed; fan writes stay blocked. Copy support evidence if it keeps failing."
-            )
-        ]
+    func testUnavailableHelperActionIsStructuredAndNonActionable() {
+        let installer = DaemonInstaller(
+            backend: InstallerBackendFixture(status: .notFound),
+            installService: InstallerServiceFixture(result: .blockedResult)
+        )
+        installer.refresh()
 
-        for testCase in cases {
-            let status = installer.administratorInstallFailureStatus(stderr: testCase.stderr)
-
-            XCTAssertEqual(status, testCase.expected, testCase.stderr)
-            XCTAssertFalse(status.contains("osascript"))
-            XCTAssertFalse(status.contains("launchctl"))
-        }
+        XCTAssertEqual(installer.actionPresentation.kind, .unavailable)
+        XCTAssertEqual(installer.actionPresentation.title, "Helper Unavailable")
+        XCTAssertFalse(installer.actionPresentation.isAvailable)
     }
 
-    func testAdministratorInstallScriptRestrictsDaemonAndPlistPermissionsBeforeBootstrap() {
-        let installer = DaemonInstaller()
-        let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-        let stdoutLogTarget = "/var/log/tech.reidar.vifty.daemon.out.log"
-        let stderrLogTarget = "/var/log/tech.reidar.vifty.daemon.err.log"
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
-            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: plistTarget,
-            stdoutLogTarget: stdoutLogTarget,
-            stderrLogTarget: stderrLogTarget
+    func testWorkingHelperKeepsAccurateActionNameButDisablesReentry() {
+        let presentation = HelperActionPresentation.resolve(
+            backendStatus: .enabled,
+            canInstall: false,
+            isWorking: true,
+            unavailableMessage: "unavailable"
         )
 
-        XCTAssertTrue(script.contains("chmod 755 \"$helper_tmp\""))
-        XCTAssertTrue(script.contains("chown root:wheel \"$helper_tmp\""))
-        XCTAssertTrue(script.contains("chmod 644 \"$plist_tmp\""))
-        XCTAssertTrue(script.contains("chown root:wheel \"$plist_tmp\""))
-        XCTAssertTrue(script.contains("xattr -cr \"$helper_tmp\" \"$plist_tmp\" 2>/dev/null || true"))
-        XCTAssertTrue(script.contains("for log_path in '\(stdoutLogTarget)' '\(stderrLogTarget)'; do"))
-        XCTAssertTrue(script.contains("touch \"$log_path\""))
-        XCTAssertTrue(script.contains("chmod 600 \"$log_path\""))
-        XCTAssertTrue(script.contains("chown root:wheel \"$log_path\""))
-        XCTAssertTrue(
-            script.contains("chmod 644 \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "LaunchDaemon plist permissions must be fixed before launchd loads it."
-        )
-        XCTAssertTrue(
-            script.contains("chown root:wheel \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "LaunchDaemon plist ownership must be fixed before launchd loads it."
-        )
-        XCTAssertTrue(
-            script.contains("xattr -cr \"$helper_tmp\" \"$plist_tmp\"", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "Copied ad-hoc source-first helper files must not keep quarantine before launchd loads them."
-        )
-        XCTAssertTrue(
-            script.contains("mv -f \"$helper_tmp\" '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "The staged daemon must be moved into place before launchd starts it."
-        )
-        XCTAssertTrue(
-            script.contains("mv -f \"$plist_tmp\" '\(plistTarget)'", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "The staged LaunchDaemon plist must be moved into place before launchd loads it."
-        )
-        XCTAssertTrue(
-            script.contains("chmod 600 \"$log_path\"", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "Daemon logs must be restricted before launchd starts writing to them."
-        )
-        XCTAssertTrue(
-            script.contains("chown root:wheel \"$log_path\"", before: "launchctl bootstrap system '\(plistTarget)'"),
-            "Daemon logs must be root-owned before launchd starts writing to them."
-        )
+        XCTAssertEqual(presentation.kind, .reinstall)
+        XCTAssertEqual(presentation.title, "Reinstall Helper")
+        XCTAssertFalse(presentation.isAvailable)
     }
 
-    func testAdministratorInstallScriptBootsOutBeforeReplacingPrivilegedFiles() {
-        let installer = DaemonInstaller()
-        let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
-            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: plistTarget
+    func testHelperActionCopyDescribesVerifiedLifecycle() {
+        let backend = InstallerBackendFixture(status: .notRegistered)
+        let installer = DaemonInstaller(
+            backend: backend,
+            installService: InstallerServiceFixture(result: .blockedResult)
         )
 
-        XCTAssertTrue(
-            script.contains("launchctl bootout system '\(plistTarget)' 2>/dev/null || true", before: "cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' \"$helper_tmp\""),
-            "Repair should stop the existing launchd service before replacing the daemon executable."
-        )
-        XCTAssertTrue(
-            script.contains("launchctl bootout system '\(plistTarget)' 2>/dev/null || true", before: "mv -f \"$plist_tmp\" '\(plistTarget)'"),
-            "Repair should stop the existing launchd service before replacing the LaunchDaemon plist."
-        )
+        installer.refresh()
+        XCTAssertEqual(installer.actionTitle, "Install Helper")
+        XCTAssertTrue(installer.actionDescription.contains("Registers the bundled root LaunchDaemon"))
+        XCTAssertFalse(installer.actionDescription.contains("ownership preflight"))
+
+        backend.status = .enabled
+        installer.refresh()
+        XCTAssertEqual(installer.actionTitle, "Reinstall Helper")
+        XCTAssertEqual(installer.actionHelp, "Safely reinstall or repair the privileged fan helper")
+        XCTAssertTrue(installer.actionDescription.contains("before any helper teardown or replacement"))
     }
 
-    func testAdministratorInstallScriptKickstartsDaemonAfterBootstrap() {
-        let installer = DaemonInstaller()
-        let plistTarget = "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
-            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: plistTarget
+    func testUnknownHelperStatusDoesNotOfferARepairActionThatAlwaysBlocks() {
+        let installer = DaemonInstaller(
+            backend: InstallerBackendFixture(status: .unknown),
+            installService: InstallerServiceFixture(result: .blockedResult)
         )
 
-        XCTAssertTrue(script.contains("launchctl kickstart -k 'system/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(
-            script.contains("launchctl bootstrap system '\(plistTarget)'", before: "launchctl kickstart -k 'system/tech.reidar.vifty.daemon'"),
-            "Repair should load the LaunchDaemon before kickstarting it so the daemon responds immediately after install."
-        )
+        installer.refresh()
+
+        XCTAssertEqual(installer.actionPresentation.kind, .unavailable)
+        XCTAssertEqual(installer.actionPresentation.title, "Helper Status Unknown")
+        XCTAssertFalse(installer.actionPresentation.isAvailable)
+        XCTAssertTrue(installer.actionPresentation.description.contains("confirmed registration state"))
     }
 
-    func testAdministratorInstallScriptStagesPrivilegedFilesBeforeMovingIntoPlace() {
-        let installer = DaemonInstaller()
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon",
-            plistSource: "/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
-        )
+    func testRefreshMapsServiceManagementStatusWithoutStartingLifecycle() async {
+        let backend = InstallerBackendFixture(status: .enabled)
+        let service = InstallerServiceFixture(result: .blockedResult)
+        let installer = DaemonInstaller(backend: backend, installService: service)
 
-        XCTAssertTrue(script.contains("helper_tmp=\"$(mktemp '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon.XXXXXX')\""))
-        XCTAssertTrue(script.contains("plist_tmp=\"$(mktemp '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist.XXXXXX')\""))
-        XCTAssertTrue(script.contains("trap 'rm -f \"$helper_tmp\" \"$plist_tmp\"' EXIT"))
-        XCTAssertTrue(script.contains("cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' \"$helper_tmp\""))
-        XCTAssertTrue(script.contains("cp '/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
-        XCTAssertTrue(script.contains("mv -f \"$helper_tmp\" '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertTrue(script.contains("mv -f \"$plist_tmp\" '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
-        XCTAssertFalse(script.contains("cp '/Applications/Vifty.app/Contents/MacOS/ViftyDaemon' '/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon'"))
-        XCTAssertFalse(script.contains("cp '/Applications/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist' '/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist'"))
+        installer.refresh()
+
+        XCTAssertEqual(installer.statusText, "Fan helper enabled")
+        XCTAssertTrue(installer.canInstall)
+        let serviceCallCount = await service.callCount()
+        XCTAssertEqual(serviceCallCount, 0)
     }
 
-    func testAdministratorInstallScriptQuotesPaths() {
-        let installer = DaemonInstaller()
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/tmp/Vifty Test/ViftyDaemon",
-            plistSource: "/tmp/Vifty Test/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+    func testEnabledHelperUsesAsyncLifecycleServiceAndFailsClosedOnBlockedPreflight() async {
+        let backend = InstallerBackendFixture(status: .enabled)
+        let service = InstallerServiceFixture(result: .blockedResult)
+        let app = URL(fileURLWithPath: "/Applications/Vifty.app")
+        let script = app.appendingPathComponent("Contents/Resources/vifty-helper-lifecycle.sh")
+        let installer = DaemonInstaller(
+            backend: backend,
+            installService: service,
+            bundleURL: app,
+            lifecycleScriptURL: script
         )
 
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/ViftyDaemon' \"$helper_tmp\""))
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty Test/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
+        let result = await installer.installOrOpenApproval()
+
+        let serviceCallCount = await service.callCount()
+        XCTAssertEqual(serviceCallCount, 1)
+        let call = await service.lastCall()
+        XCTAssertEqual(call?.operation, .repair)
+        XCTAssertEqual(call?.appBundleURL, app)
+        XCTAssertEqual(call?.lifecycleScriptURL, script)
+        XCTAssertEqual(
+            installer.statusText,
+            "Helper maintenance is blocked until Vifty confirms Auto/System ownership with a valid maintenance token."
+        )
+        XCTAssertFalse(installer.isWorking)
+        XCTAssertTrue(installer.canInstall)
+        XCTAssertEqual(backend.openSettingsCount, 0)
+        XCTAssertEqual(result, .blocked)
+        XCTAssertFalse(result.shouldRefreshHelperState)
     }
 
-    func testAdministratorInstallScriptQuotesApostrophesInPathsAndProgramArguments() {
-        let installer = DaemonInstaller()
-        let script = installer.administratorInstallShellScript(
-            daemonSource: "/tmp/Vifty's Test/ViftyDaemon",
-            plistSource: "/tmp/Vifty's Test/tech.reidar.vifty.daemon.plist",
-            helperTarget: "/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon",
-            plistTarget: "/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
+    func testApprovalOpensLoginItemsWithoutCallingLifecycle() async {
+        let backend = InstallerBackendFixture(status: .requiresApproval)
+        let service = InstallerServiceFixture(result: .blockedResult)
+        let installer = DaemonInstaller(backend: backend, installService: service)
+
+        let result = await installer.installOrOpenApproval()
+
+        XCTAssertEqual(backend.openSettingsCount, 1)
+        let serviceCallCount = await service.callCount()
+        XCTAssertEqual(serviceCallCount, 0)
+        XCTAssertEqual(result, .approvalOpened)
+        XCTAssertTrue(result.shouldRefreshHelperState)
+    }
+
+    func testFirstInstallRegistersSMAppServiceWithoutRunningDestructiveLifecycle() async {
+        let backend = InstallerBackendFixture(status: .notRegistered)
+        let service = InstallerServiceFixture(result: .blockedResult)
+        let installer = DaemonInstaller(backend: backend, installService: service)
+
+        let result = await installer.installOrOpenApproval()
+
+        XCTAssertEqual(result, .completed)
+        XCTAssertEqual(backend.registerCount, 1)
+        XCTAssertEqual(backend.status, .enabled)
+        let firstInstallLifecycleCalls = await service.callCount()
+        XCTAssertEqual(firstInstallLifecycleCalls, 0)
+    }
+
+    func testUnknownServiceStateFailsClosedWithoutRegisterOrLifecycle() async {
+        let backend = InstallerBackendFixture(status: .unknown)
+        let service = InstallerServiceFixture(result: .blockedResult)
+        let installer = DaemonInstaller(backend: backend, installService: service)
+
+        let result = await installer.installOrOpenApproval()
+
+        XCTAssertEqual(result, .blocked)
+        XCTAssertEqual(backend.registerCount, 0)
+        let unknownLifecycleCalls = await service.callCount()
+        XCTAssertEqual(unknownLifecycleCalls, 0)
+        XCTAssertTrue(installer.statusText.contains("unknown"))
+    }
+
+    func testUIWrapperContainsNoProcessOrPrivilegedLifecycleImplementation() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let installer = try String(
+            contentsOf: root.appendingPathComponent("Sources/Vifty/DaemonInstaller.swift"),
+            encoding: .utf8
+        )
+        let content = try String(
+            contentsOf: root.appendingPathComponent("Sources/Vifty/ContentView.swift"),
+            encoding: .utf8
         )
 
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/ViftyDaemon' \"$helper_tmp\""))
-        XCTAssertTrue(script.contains("cp '/tmp/Vifty'\\''s Test/tech.reidar.vifty.daemon.plist' \"$plist_tmp\""))
-        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Add :ProgramArguments:0 string /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' \"$plist_tmp\""))
-        XCTAssertTrue(script.contains("/usr/libexec/PlistBuddy -c 'Set :ProgramArguments:0 /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon' \"$plist_tmp\""))
+        XCTAssertFalse(installer.contains("Process()"))
+        XCTAssertFalse(installer.contains("waitUntilExit"))
+        XCTAssertFalse(installer.contains("launchctl"))
+        XCTAssertFalse(installer.contains("osascript"))
+        XCTAssertFalse(installer.contains("isExecutableFile(atPath: lifecycleScriptURL.path)"))
+        XCTAssertTrue(content.contains("let actionResult = await daemonInstaller.installOrOpenApproval()"))
+        XCTAssertTrue(content.contains("guard actionResult.shouldRefreshHelperState else { return }"))
+        XCTAssertFalse(content.contains("helperActionDisabled: !daemonInstaller.canInstall"))
+        XCTAssertTrue(content.contains("helperActionPresentation.isAvailable"))
     }
 }
 
-private extension String {
-    func contains(_ firstNeedle: String, before secondNeedle: String) -> Bool {
-        guard let firstRange = range(of: firstNeedle),
-              let secondRange = range(of: secondNeedle) else {
-            return false
-        }
-        return firstRange.lowerBound < secondRange.lowerBound
+@MainActor
+private final class InstallerBackendFixture: DaemonInstallerBackend {
+    var status: DaemonInstallerBackendStatus
+    let requiresBundledDaemonResources = false
+    private(set) var openSettingsCount = 0
+    private(set) var registerCount = 0
+    var statusAfterRegister: DaemonInstallerBackendStatus = .enabled
+
+    init(status: DaemonInstallerBackendStatus) {
+        self.status = status
     }
+
+    func register() throws {
+        registerCount += 1
+        status = statusAfterRegister
+    }
+
+    func openLoginItemsSettings() {
+        openSettingsCount += 1
+    }
+}
+
+private actor InstallerServiceFixture: DaemonInstallServicing {
+    struct Call: Sendable {
+        var operation: DaemonInstallOperation
+        var appBundleURL: URL
+        var lifecycleScriptURL: URL
+    }
+
+    private let result: DaemonInstallResult
+    private var calls: [Call] = []
+
+    init(result: DaemonInstallResult) {
+        self.result = result
+    }
+
+    func perform(
+        operation: DaemonInstallOperation,
+        appBundleURL: URL,
+        lifecycleScriptURL: URL
+    ) async -> DaemonInstallResult {
+        calls.append(Call(
+            operation: operation,
+            appBundleURL: appBundleURL,
+            lifecycleScriptURL: lifecycleScriptURL
+        ))
+        return result
+    }
+
+    func callCount() -> Int { calls.count }
+    func lastCall() -> Call? { calls.last }
+}
+
+private extension DaemonInstallResult {
+    static let blockedResult = DaemonInstallResult(
+        outcome: .blocked,
+        operatorMessage: "Helper maintenance is blocked until Vifty confirms Auto/System ownership with a valid maintenance token."
+    )
 }

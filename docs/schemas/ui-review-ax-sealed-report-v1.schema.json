@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-ax-sealed-report-v1.schema.json",
+  "title": "Vifty UI review sealed Accessibility report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "request",
+    "rawCapture",
+    "fixtureReport",
+    "debugExecutableSHA256",
+    "debugBuildProvenance",
+    "collectorBuildProvenance",
+    "runtimeIdentity",
+    "assertion",
+    "actionsPerformed"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/ui-review-ax-sealed-report-v1.schema.json" },
+    "request": { "$ref": "#/$defs/evidenceRequest" },
+    "rawCapture": { "$ref": "#/$defs/artifactBinding" },
+    "fixtureReport": { "$ref": "#/$defs/artifactBinding" },
+    "debugExecutableSHA256": { "$ref": "#/$defs/sha256" },
+    "debugBuildProvenance": { "$ref": "#/$defs/debugBuildProvenance" },
+    "collectorBuildProvenance": { "$ref": "#/$defs/collectorBuildProvenance" },
+    "runtimeIdentity": { "$ref": "#/$defs/targetIdentity" },
+    "assertion": { "$ref": "#/$defs/assertion" },
+    "actionsPerformed": {
+      "type": "array",
+      "maxItems": 0,
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "debugBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "schemaID", "sourceCommit", "sourceTree", "productRole", "configuration", "buildTransactionID"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "schemaID": { "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json" },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sourceTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "productRole": { "const": "debug-fixture-app" },
+        "configuration": { "const": "debug" },
+        "buildTransactionID": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "collectorBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "schemaID", "sourceCommit", "sourceTree", "productRole", "configuration", "buildTransactionID"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "schemaID": { "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json" },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sourceTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "productRole": { "const": "ax-collector" },
+        "configuration": { "const": "debug" },
+        "buildTransactionID": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "semanticRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appearance", "contrast", "interaction", "state", "surface", "textSize", "transparency", "window"],
+      "properties": {
+        "appearance": { "type": "string", "minLength": 1 },
+        "contrast": { "type": "string", "minLength": 1 },
+        "interaction": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "surface": { "type": "string", "minLength": 1 },
+        "textSize": { "type": "string", "minLength": 1 },
+        "transparency": { "type": "string", "minLength": 1 },
+        "window": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkID", "captureID", "processIdentifier", "windowIdentifier", "rootIdentifier", "semanticRequest", "requestSHA256"],
+      "properties": {
+        "checkID": { "type": "string", "minLength": 1 },
+        "captureID": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._-]+$" },
+        "processIdentifier": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "windowIdentifier": { "type": "string", "minLength": 1 },
+        "rootIdentifier": { "type": "string", "minLength": 1 },
+        "semanticRequest": { "$ref": "#/$defs/semanticRequest" },
+        "requestSHA256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "targetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["processIdentifier", "windowIdentifier", "rootIdentifier"],
+      "properties": {
+        "processIdentifier": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "windowIdentifier": { "type": "string", "minLength": 1 },
+        "rootIdentifier": { "type": "string", "minLength": 1 }
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sha256"],
+      "properties": {
+        "artifact": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed", "observationPaths", "facts", "failures"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "passed": { "type": "boolean" },
+        "observationPaths": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "facts": { "type": "object", "additionalProperties": { "type": "string" } },
+        "failures": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+      }
+    }
+  }
+}

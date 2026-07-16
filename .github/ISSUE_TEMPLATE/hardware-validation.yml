@@ -28,7 +28,7 @@ body:
         sudo /Applications/Vifty.app/Contents/MacOS/ViftyHelper probeLocal
         ```
 
-        Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only. A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported safe-block reports. Before manual Fixed/Curve smoke, run `make manual-smoke-readiness` or `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`; it only runs `viftyctl diagnose --json`, records `readOnly: true` and `coolingCommandsRun: false` in JSON mode, and exits `75` when smoke must be skipped. Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware after that preflight passes, and restore Auto afterward.
+        Unsupported machines should follow docs/unsupported-hardware.md and collect read-only evidence only. A `viftyctl diagnose --json` report showing the hardware gate is enough for unsupported Apple Silicon safe-block reports. The public release is arm64-only and cannot run on Intel; for Intel choose the binary-unavailable options below instead of claiming a diagnostic safe block. Before manual Fixed/Curve smoke, run `make manual-smoke-readiness` or `MANUAL_SMOKE_READINESS_JSON=1 make manual-smoke-readiness`; it only runs `viftyctl diagnose --json`, records `readOnly: true` and `coolingCommandsRun: false` in JSON mode, and exits `75` when smoke must be skipped. Only run the manual fan write smoke test on supported Apple Silicon MacBook Pro hardware after that preflight passes, and restore Auto afterward.
 
   - type: input
     id: vifty-version
@@ -43,7 +43,7 @@ body:
     id: install-source
     attributes:
       label: Install source
-      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA. Do not choose notarized or Homebrew unless a future trusted-binary release actually provided that path.
+      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA. Choose notarized or Homebrew only for an exact published trusted-binary artifact such as v1.3.2.
       options:
         - Source build from tag
         - Source-first unsigned-dev zip
@@ -94,7 +94,7 @@ body:
         - M4 Pro/Max MacBook Pro
         - M5 Pro/Max MacBook Pro
         - Apple Silicon non-MacBook-Pro
-        - Intel MacBook Pro
+        - Intel MacBook Pro — public binary unavailable
         - Other
     validations:
       required: true
@@ -108,6 +108,7 @@ body:
         - ready
         - degraded
         - blocked
+        - not run — public binary unavailable
     validations:
       required: true
 
@@ -115,10 +116,11 @@ body:
     id: daemon-control-path-ready
     attributes:
       label: Daemon control path ready
-      description: What did `daemonControlPathReady` report in `viftyctl diagnose --json`? Supported-hardware validation should be true; false means repair the helper before manual or agent cooling.
+      description: What did `daemonControlPathReady` report in `viftyctl diagnose --json`? Supported-hardware validation should be true; false means repair the helper before manual or agent cooling. Choose not run for Intel, where the arm64 release cannot execute.
       options:
         - "true"
         - "false"
+        - not run — public binary unavailable
     validations:
       required: true
 
@@ -126,7 +128,7 @@ body:
     id: diagnose-json
     attributes:
       label: viftyctl diagnose --json
-      description: Paste the full JSON output. This command is read-only.
+      description: Paste the full JSON output. This command is read-only. For Intel, state that the public arm64 binary was unavailable instead of inventing diagnose output.
       render: json
       placeholder: |
         {
@@ -156,12 +158,18 @@ body:
       label: Manual fan write smoke test
       description: Did you run the short lease/manual fan write smoke test from docs/hardware-validation.md? Run `make manual-smoke-readiness` first and skip smoke if it reports blocked readiness.
       options:
+        - Not run — read-only evidence only
         - Passed and Auto restore confirmed
         - Skipped because readiness was blocked
         - Skipped because hardware is unsupported
         - Failed
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Choosing **Not run — read-only evidence only** maps to `manualSmokeTestResult: not-recorded`; it is useful diagnostic evidence but is not manual compatibility proof.
 
   - type: textarea
     id: manual-smoke-notes
@@ -220,7 +228,7 @@ body:
         schema-resources	0	0	agent-contract	Bundled viftyctl JSON Schemas should be present and hashed.
         capabilities-schema-resources	0	0	agent-contract	Capabilities output should advertise installed schema resource paths.
         capabilities-contract	0	0	agent-contract	Capabilities output should advertise the safe run lifecycle, direct prepare/restore lifecycle, policyStatusAvailable: true, and supervised force-retry support.
-        launchdaemon-teamid	0	0 for public release	release-trust	Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty.
+        launchdaemon-teamid	0	0 for public release	release-trust	Public releases expose VIFTY_XPC_ALLOWED_TEAM_ID and no VIFTY_XPC_ADHOC_* keys; an empty local TeamID is read-only/fail-closed for daemon XPC writes.
         spctl-assess-app	0	0 for public release	release-trust	Gatekeeper assessment should pass for notarized releases.
     validations:
       required: false

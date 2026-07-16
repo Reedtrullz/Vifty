@@ -4,25 +4,32 @@ struct SettingsMenuBarView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        SettingsCategorySection(title: "Menu Bar", systemImage: "menubar.rectangle") {
-            Picker("Menu bar", selection: $model.menuBarDisplayMode) {
-                ForEach(MenuBarDisplayMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-
-            if model.menuBarDisplayMode == .custom {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Custom fields")
-                        .font(.subheadline.weight(.semibold))
-                    ForEach(MenuBarField.allCases) { field in
-                        Toggle(field.label, isOn: menuBarCustomFieldBinding(field))
+        SettingsPane(accessibilityPane: .menuBar) {
+            Section("Display") {
+                Picker("Menu bar", selection: $model.menuBarDisplayMode) {
+                    ForEach(MenuBarDisplayMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
                     }
                 }
             }
 
+            if model.menuBarDisplayMode == .custom {
+                Section {
+                    ForEach(MenuBarField.allCases) { field in
+                        let presentation = menuBarFieldPresentation(field)
+                        Toggle(field.label, isOn: menuBarCustomFieldBinding(field))
+                            .disabled(!presentation.isToggleEnabled)
+                            .help(presentation.helpText)
+                    }
+                } header: {
+                    Text("Custom Fields")
+                } footer: {
+                    Text(SettingsMenuBarFieldTogglePresentation.minimumSelectionHelp)
+                }
+            }
+
             if model.menuBarDisplaysCodexUsage {
-                VStack(alignment: .leading, spacing: 8) {
+                Section("Codex Usage") {
                     Picker("Codex display", selection: $model.codexUsageDisplayStyle) {
                         ForEach(CodexUsageDisplayStyle.allCases) { style in
                             Text(style.label).tag(style)
@@ -52,6 +59,15 @@ struct SettingsMenuBarView: View {
         Binding(
             get: { model.isMenuBarCustomFieldEnabled(field) },
             set: { model.setMenuBarCustomField(field, enabled: $0) }
+        )
+    }
+
+    private func menuBarFieldPresentation(
+        _ field: MenuBarField
+    ) -> SettingsMenuBarFieldTogglePresentation {
+        SettingsMenuBarFieldTogglePresentation.resolve(
+            field: field,
+            selectedFields: model.menuBarCustomFields
         )
     }
 }

@@ -5,18 +5,23 @@ ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/..
 cd "${ROOT_DIR}"
 
 REPO=""
+ENVIRONMENT_NAME="release"
 SECRET_LIST_FILE=""
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-secrets.sh [--repo owner/name] [--secret-list-file path]
+Usage: scripts/check-release-secrets.sh [--repo owner/name] [--environment name] [--secret-list-file path]
 
-Checks that the GitHub repository has the release secrets required by
-docs/release.md. The script reads secret names only; it never reads values.
+Checks that the protected GitHub environment has the release secrets required
+by docs/release.md. The script reads environment secret names only; it never
+reads values. It proves name presence on that environment at check time, not
+the absence of same-name repository/organization secrets or the storage scope
+that supplied a prior workflow run.
 
 Options:
   --repo owner/name          Repository to inspect. Defaults to gh's current repo.
-  --secret-list-file path    Read pre-captured `gh secret list` output for tests.
+  --environment name         GitHub environment to inspect. Defaults to release.
+  --secret-list-file path    Read pre-captured `gh secret list --env` output for tests.
   -h, --help                 Show this help.
 USAGE
 }
@@ -37,6 +42,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       SECRET_LIST_FILE="$2"
+      shift 2
+      ;;
+    --environment)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --environment requires a value" >&2
+        exit 64
+      fi
+      ENVIRONMENT_NAME="$2"
       shift 2
       ;;
     -h|--help)
@@ -77,8 +90,9 @@ else
       exit 69
     fi
   fi
-  if ! secret_names="$(gh secret list --repo "${REPO}" 2>/dev/null | awk 'NF { print $1 }')"; then
-    echo "error: could not list GitHub Actions secrets for ${REPO}" >&2
+  if ! secret_names="$(gh secret list --env "${ENVIRONMENT_NAME}" --repo "${REPO}" 2>/dev/null | awk 'NF { print $1 }')"; then
+    echo "error: could not list GitHub Actions secrets for environment ${ENVIRONMENT_NAME} in ${REPO}" >&2
+    echo "The environment must exist and be readable; repository-scoped secrets do not satisfy this release gate." >&2
     exit 69
   fi
 fi
@@ -94,12 +108,13 @@ if [ "${#missing[@]}" -gt 0 ]; then
   for name in "${missing[@]}"; do
     echo "Missing required release secret: ${name}" >&2
   done
-  echo "Configure the required repository secrets in docs/release.md before rerunning the Release workflow." >&2
+  echo "Configure the required secrets on the GitHub ${ENVIRONMENT_NAME} environment as documented in docs/release.md before rerunning the Release workflow." >&2
   exit 1
 fi
 
 if [ -n "${REPO}" ]; then
-  echo "Release secrets OK for ${REPO}: ${#required_secrets[@]} required names are configured."
+  echo "Release environment secrets OK for ${REPO}/${ENVIRONMENT_NAME}: ${#required_secrets[@]} required names are configured."
 else
-  echo "Release secrets OK: ${#required_secrets[@]} required names are configured."
+  echo "Release environment secrets OK for ${ENVIRONMENT_NAME}: ${#required_secrets[@]} required names are configured."
 fi
+echo "Scope note: this name-only preflight cannot prove that broader-scope duplicates are absent or attest the resolved secret origin inside a workflow run."

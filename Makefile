@@ -1,13 +1,26 @@
-.PHONY: app run-app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
+.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
 VIFTY_XPC_ALLOWED_TEAM_ID ?=
+VIFTY_XPC_ADHOC_DEVELOPMENT ?= 0
+VIFTY_XPC_ADHOC_ALLOWED_UID ?=
+VIFTY_XPC_ADHOC_APP_PATH ?=
+VIFTY_XPC_ADHOC_CTL_PATH ?=
+VIFTY_XPC_ADHOC_HELPER_PATH ?=
 SWIFT_BUILD_PATH ?=
-SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",)
-SWIFT_PRODUCTS_DIR = $(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION))
+SWIFT_BUILD_EXTRA_ARGS ?=
+SWIFT_BUILD_PROVENANCE_FILE ?=
+RELEASE_ARCHITECTURE ?= $(shell ruby -rjson -e 'print JSON.parse(File.read(ARGV[0])).dig("product", "architectures").fetch(0)' .github/release-manifest.json)
+RELEASE_ARCHITECTURES ?= $(shell ruby -rjson -e 'print JSON.parse(File.read(ARGV[0])).dig("product", "architectures").sort.join(" ")' .github/release-manifest.json)
+RELEASE_SWIFT_TRIPLE ?= $(RELEASE_ARCHITECTURE)-apple-macosx15.0
+RELEASE_SWIFT_PLATFORM_DIR ?= $(RELEASE_ARCHITECTURE)-apple-macosx
+SWIFT_TRIPLE_ARGS = $(if $(filter release,$(CONFIGURATION)),--triple "$(RELEASE_SWIFT_TRIPLE)",)
+SWIFT_PROVENANCE_ARGS = $(if $(SWIFT_BUILD_PROVENANCE_FILE),-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __vifty_src -Xlinker "$(SWIFT_BUILD_PROVENANCE_FILE)",)
+SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",) $(SWIFT_TRIPLE_ARGS) $(SWIFT_PROVENANCE_ARGS) $(SWIFT_BUILD_EXTRA_ARGS)
+SWIFT_PRODUCTS_DIR = $(if $(filter release,$(CONFIGURATION)),$(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(RELEASE_SWIFT_PLATFORM_DIR)/$(CONFIGURATION),.build/$(RELEASE_SWIFT_PLATFORM_DIR)/$(CONFIGURATION)),$(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION)))
 VERIFY_TEST_TARGET ?= test-fast
-SLOW_TEST_SKIP_ARGS := --skip 'ViftyCoreTests\.(AgentCoolingEvidenceScriptTests|AgentRunSmokeEvidenceScriptTests|GuardedRunScriptTests|ReleaseArtifactScriptTests|ReleaseMetadataScriptTests|ValidationEvidenceReviewScriptTests|ValidationEvidenceScriptTests|ValidationReportSummaryScriptTests)'
+SLOW_TEST_SKIP_ARGS := --skip 'ViftyCoreTests\.(AgentCoolingEvidenceScriptTests|AgentRunSmokeEvidenceScriptTests|GuardedRunScriptTests|HelperLifecycleScriptTests|InstallReplacementPreflightScriptTests|ReleaseArtifactScriptTests|ReleaseManifestScriptTests|ReleaseMetadataScriptTests|UIReviewEvidenceScriptTests|ValidationEvidenceReviewScriptTests|ValidationEvidenceScriptTests|ValidationReportSummaryScriptTests)'
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 RELEASE_REPO ?= Reedtrullz/Vifty
 SOURCE_FIRST_SOURCE_REF ?= v$(RELEASE_VERSION)
@@ -25,6 +38,7 @@ VALIDATION_EVIDENCE_RELEASE_CHECKLIST ?=
 VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
 VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1
 REPAIR_HELPER_APP ?= /Applications/Vifty.app
+UNINSTALL_HELPER_APP ?= /Applications/Vifty.app
 CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 VALIDATION_EVIDENCE_BUNDLE ?=
@@ -58,11 +72,23 @@ AGENT_RUN_SMOKE_SOURCE_SHA ?=
 AGENT_RUN_SMOKE_SOURCE_ARTIFACT ?=
 AGENT_RUN_SMOKE_EXPECTED_DAEMON ?=
 AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH ?= 0
+UI_REVIEW_MANIFEST ?= $(PWD)/docs/ui-review/evidence-manifest.local.json
+UI_REVIEW_EVIDENCE_DIR ?= $(PWD)/.build/ui-review-evidence
+UI_REVIEW_PRODUCTS_DIR ?= $(PWD)/.build/ui-review-products
+UI_REVIEW_DEBUG_EXECUTABLE ?= $(UI_REVIEW_PRODUCTS_DIR)/debug/Vifty.app/Contents/MacOS/Vifty
+UI_REVIEW_RELEASE_BINARY ?= $(UI_REVIEW_PRODUCTS_DIR)/release/Vifty
+UI_REVIEW_AX_COLLECTOR ?= $(UI_REVIEW_PRODUCTS_DIR)/debug/ViftyAXCollector
+UI_REVIEW_SOURCE_COMMIT ?=
+UI_REVIEW_CHECKPOINT ?= $(PWD)/docs/ui-review/automated-checkpoint.json
+UI_REVIEW_HERO ?= $(PWD)/docs/images/vifty-screenshot.png
+UI_REVIEW_REPOSITORY_ROOT ?= $(PWD)
 APP_NAME := Vifty
-APP_DIR := .build/$(APP_NAME).app
+APP_DIR ?= .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
 MACOS := $(CONTENTS)/MacOS
 SCHEMAS := $(CONTENTS)/Resources/schemas
+BUNDLED_SCHEMA_INVENTORY ?= scripts/bundled-schema-inventory.txt
+SCHEMA_SOURCE_DIR ?= docs/schemas
 WRAPPERS := $(CONTENTS)/Resources/viftyctl-wrappers
 APP_ICON := Resources/ViftyIcon.icns
 DAEMON_PLIST := $(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
@@ -70,7 +96,24 @@ DAEMON_PLIST := $(CONTENTS)/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
 install: CONFIGURATION = release
 pkg: CONFIGURATION = release
 
-app: ## Build the release app bundle
+release-facts: ## Validate the authoritative release identity and artifact facts
+	./scripts/check-release-manifest.sh
+	./scripts/render-release-facts.sh --check
+	ruby scripts/check-workflow-contract.rb
+
+package-bundled-schemas: ## Package the explicit reviewed JSON Schema inventory byte-for-byte
+	/usr/bin/ruby scripts/package-bundled-schemas.rb --inventory "$(BUNDLED_SCHEMA_INVENTORY)" --source "$(SCHEMA_SOURCE_DIR)" --destination "$(SCHEMAS)"
+
+release-contract-ruby-tests: ## Run portable release inventory and artifact-contract regressions
+	/usr/bin/ruby Tests/Ruby/BundledSchemaInventoryTests.rb
+	/usr/bin/ruby Tests/Ruby/ReleaseArtifactContractTests.rb
+
+installer-lifecycle-ruby-tests: ## Run portable installer lifecycle transaction and trust regressions
+	/usr/bin/ruby Tests/Ruby/InstallerLifecycleTrustContractTests.rb
+	/usr/bin/ruby Tests/Ruby/HelperLifecycleReplacementFixtureTests.rb
+
+app: release-facts ## Build the release app bundle
+	VIFTY_XPC_ADHOC_DEVELOPMENT="$(VIFTY_XPC_ADHOC_DEVELOPMENT)" VIFTY_XPC_ADHOC_ALLOWED_UID="$(VIFTY_XPC_ADHOC_ALLOWED_UID)" VIFTY_XPC_ADHOC_APP_PATH="$(VIFTY_XPC_ADHOC_APP_PATH)" VIFTY_XPC_ADHOC_CTL_PATH="$(VIFTY_XPC_ADHOC_CTL_PATH)" VIFTY_XPC_ADHOC_HELPER_PATH="$(VIFTY_XPC_ADHOC_HELPER_PATH)" ./scripts/configure-daemon-plist.sh --configuration "$(CONFIGURATION)" --team-id "$(VIFTY_XPC_ALLOWED_TEAM_ID)" --validate-only
 	swift build $(SWIFT_BUILD_ARGS) -c $(CONFIGURATION)
 	rm -rf "$(APP_DIR)"
 	mkdir -p "$(MACOS)"
@@ -81,21 +124,32 @@ app: ## Build the release app bundle
 	cp "$(SWIFT_PRODUCTS_DIR)/ViftyHelper" "$(MACOS)/ViftyHelper"
 	cp "$(SWIFT_PRODUCTS_DIR)/ViftyCtl" "$(MACOS)/viftyctl"
 	cp "$(SWIFT_PRODUCTS_DIR)/ViftyDaemon" "$(MACOS)/ViftyDaemon"
-	cp docs/schemas/*.schema.json "$(SCHEMAS)/"
+	$(MAKE) package-bundled-schemas SCHEMAS="$(SCHEMAS)" BUNDLED_SCHEMA_INVENTORY="$(BUNDLED_SCHEMA_INVENTORY)" SCHEMA_SOURCE_DIR="$(SCHEMA_SOURCE_DIR)"
 	install -m 755 scripts/collect-agent-cooling-evidence.sh "$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh"
 	install -m 755 scripts/check-manual-smoke-readiness.sh "$(CONTENTS)/Resources/check-manual-smoke-readiness.sh"
 	install -m 755 scripts/check-agent-run-smoke-readiness.sh "$(CONTENTS)/Resources/check-agent-run-smoke-readiness.sh"
 	install -m 755 scripts/collect-agent-run-smoke-evidence.sh "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
+	install -m 755 scripts/vifty-helper-lifecycle.sh "$(CONTENTS)/Resources/vifty-helper-lifecycle.sh"
+	install -m 755 scripts/repair-vifty-helper.sh "$(CONTENTS)/Resources/repair-vifty-helper.sh"
+	install -m 755 scripts/uninstall-vifty.sh "$(CONTENTS)/Resources/uninstall-vifty.sh"
 	install -m 755 examples/viftyctl/*.sh "$(WRAPPERS)/"
 	install -m 644 examples/viftyctl/README.md "$(WRAPPERS)/README.md"
 	cp "$(APP_ICON)" "$(CONTENTS)/Resources/ViftyIcon.icns"
 	cp "Resources/Info.plist" "$(CONTENTS)/Info.plist"
 	cp "Resources/tech.reidar.vifty.daemon.plist" "$(DAEMON_PLIST)"
-	if [ -n "$(VIFTY_XPC_ALLOWED_TEAM_ID)" ]; then /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:VIFTY_XPC_ALLOWED_TEAM_ID $(VIFTY_XPC_ALLOWED_TEAM_ID)" "$(DAEMON_PLIST)"; fi
+	VIFTY_XPC_ADHOC_DEVELOPMENT="$(VIFTY_XPC_ADHOC_DEVELOPMENT)" VIFTY_XPC_ADHOC_ALLOWED_UID="$(VIFTY_XPC_ADHOC_ALLOWED_UID)" VIFTY_XPC_ADHOC_APP_PATH="$(VIFTY_XPC_ADHOC_APP_PATH)" VIFTY_XPC_ADHOC_CTL_PATH="$(VIFTY_XPC_ADHOC_CTL_PATH)" VIFTY_XPC_ADHOC_HELPER_PATH="$(VIFTY_XPC_ADHOC_HELPER_PATH)" ./scripts/configure-daemon-plist.sh --plist "$(DAEMON_PLIST)" --configuration "$(CONFIGURATION)" --team-id "$(VIFTY_XPC_ALLOWED_TEAM_ID)"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.helper "$(MACOS)/ViftyHelper"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.daemon "$(MACOS)/ViftyDaemon"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --identifier tech.reidar.vifty.ctl "$(MACOS)/viftyctl"
 	codesign --force --sign "$(SIGNING_IDENTITY)" --options runtime --entitlements Resources/Vifty.entitlements "$(APP_DIR)"
+	@if [ "$(CONFIGURATION)" = "release" ]; then \
+		expected="$(RELEASE_ARCHITECTURES)"; \
+		for binary in "$(MACOS)/Vifty" "$(MACOS)/ViftyHelper" "$(MACOS)/ViftyDaemon" "$(MACOS)/viftyctl"; do \
+			actual="$$(lipo -archs "$$binary" | tr ' ' '\n' | sort | xargs)"; \
+			if [ "$$actual" != "$$expected" ]; then echo "Architecture mismatch for $$binary: expected $$expected, got $$actual" >&2; exit 1; fi; \
+		done; \
+	fi
+	@test -z "$$(find "$(CONTENTS)" -name 'ViftyAXCollector*' -o -name 'ViftyAXEvidenceCore*' -o -name 'AXReader.swift' -o -name 'AXTraversal.swift' -o -name 'AXEvidenceModels.swift' -o -name 'AXPredicateCatalog.swift' -o -name 'ui-review-ax-*.schema.json')" || { echo "AX evidence tooling must not be bundled in Vifty.app" >&2; exit 1; }
 	@echo "Built $(APP_DIR)"
 
 run-app: ## Build and open the local app bundle
@@ -104,8 +158,14 @@ run-app: ## Build and open the local app bundle
 install: ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
 
+install-dev-adhoc: ## Explicit debug-only install with exact UID/path XPC allowlist
+	CONFIGURATION=debug VIFTY_ENABLE_ADHOC_XPC=1 ./scripts/install-vifty.sh
+
 repair-helper: ## Explicitly repair the installed privileged helper
 	./scripts/repair-vifty-helper.sh --app "$(REPAIR_HELPER_APP)"
+
+uninstall-helper: ## Safely remove the installed privileged helper
+	./scripts/uninstall-vifty.sh --app "$(UNINSTALL_HELPER_APP)"
 
 pkg: ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
@@ -153,6 +213,24 @@ agent-run-smoke-evidence-current-build: ## Build current app and collect supervi
 	$(MAKE) app CONFIGURATION=release SIGNING_IDENTITY="$(SIGNING_IDENTITY)" VIFTY_XPC_ALLOWED_TEAM_ID="$(VIFTY_XPC_ALLOWED_TEAM_ID)"
 	$(MAKE) agent-run-smoke-evidence VIFTYCTL="$(MACOS)/viftyctl" AGENT_RUN_SMOKE_INSTALL_SOURCE=local-ad-hoc-build AGENT_RUN_SMOKE_SOURCE_REF="$(CURRENT_BUILD_SOURCE_REF)" AGENT_RUN_SMOKE_SOURCE_SHA="$(CURRENT_BUILD_SOURCE_SHA)" AGENT_RUN_SMOKE_EXPECTED_DAEMON="$(MACOS)/ViftyDaemon" AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH=1
 
+ui-review-build-products: ## Build one clean-tree provenance-bound UI review product transaction
+	./scripts/build-ui-review-products.sh
+
+ui-review-ruby-tests: ## Run portable UI review provenance, publication, and archive safety tests
+	/usr/bin/ruby Tests/Ruby/UIReviewBuildProvenanceTests.rb
+	/usr/bin/ruby Tests/Ruby/UIReviewProductPublicationTests.rb
+	/usr/bin/ruby Tests/Ruby/UIReviewSourceArchiveTests.rb
+
+ui-review-verify-automated: ## Verify autonomous native UI/AX evidence while human and system-setting rows remain explicit
+	./scripts/run-ui-review-fixture.sh --verify-automated --manifest "$(UI_REVIEW_MANIFEST)" --evidence-dir "$(UI_REVIEW_EVIDENCE_DIR)" --debug-executable "$(UI_REVIEW_DEBUG_EXECUTABLE)" --release-binary "$(UI_REVIEW_RELEASE_BINARY)" --collector-executable "$(UI_REVIEW_AX_COLLECTOR)"
+
+ui-review-write-checkpoint: ## Verify and write the portable exact-50 automated UI checkpoint
+	@if [ -z "$(UI_REVIEW_SOURCE_COMMIT)" ]; then echo "UI_REVIEW_SOURCE_COMMIT is required" >&2; exit 64; fi
+	./scripts/write-ui-review-checkpoint.rb --repository-root "$(UI_REVIEW_REPOSITORY_ROOT)" --manifest "$(UI_REVIEW_MANIFEST)" --evidence-dir "$(UI_REVIEW_EVIDENCE_DIR)" --debug-executable "$(UI_REVIEW_DEBUG_EXECUTABLE)" --release-binary "$(UI_REVIEW_RELEASE_BINARY)" --collector-executable "$(UI_REVIEW_AX_COLLECTOR)" --source-commit "$(UI_REVIEW_SOURCE_COMMIT)" --output "$(UI_REVIEW_CHECKPOINT)" --hero "$(UI_REVIEW_HERO)"
+
+ui-review-verify: ## Verify the full UI matrix including exact visual and VoiceOver attestations
+	./scripts/run-ui-review-fixture.sh --verify-matrix --manifest "$(UI_REVIEW_MANIFEST)" --evidence-dir "$(UI_REVIEW_EVIDENCE_DIR)" --debug-executable "$(UI_REVIEW_DEBUG_EXECUTABLE)" --release-binary "$(UI_REVIEW_RELEASE_BINARY)" --collector-executable "$(UI_REVIEW_AX_COLLECTOR)"
+
 source-first-release-notes: ## Write source-first release notes for the current version
 	./scripts/write-release-checklist.sh --mode source-first --version "$(RELEASE_VERSION)" $(if $(SOURCE_FIRST_SOURCE_REF),--source-ref "$(SOURCE_FIRST_SOURCE_REF)",)
 
@@ -171,7 +249,8 @@ test-full: ## Run the full XCTest suite, including slow evidence/release script 
 	swift test $(SWIFT_BUILD_ARGS)
 
 verify: ## Run fast local trust gates without installing
-	/bin/bash -n scripts/*.sh examples/viftyctl/*.sh
+	/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh
+	$(MAKE) release-facts
 	scripts/check-community-standards.sh
 	scripts/validate-release-metadata.sh --mode "$(RELEASE_METADATA_MODE)"
 	$(MAKE) $(VERIFY_TEST_TARGET)
@@ -183,9 +262,18 @@ verify: ## Run fast local trust gates without installing
 	test -x "$(CONTENTS)/Resources/check-manual-smoke-readiness.sh"
 	test -x "$(CONTENTS)/Resources/check-agent-run-smoke-readiness.sh"
 	test -x "$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh"
+	test -x "$(CONTENTS)/Resources/vifty-helper-lifecycle.sh"
+	test -x "$(CONTENTS)/Resources/repair-vifty-helper.sh"
+	test -x "$(CONTENTS)/Resources/uninstall-vifty.sh"
+	test -z "$$(find "$(CONTENTS)" -name 'ViftyAXCollector*' -o -name 'ViftyAXEvidenceCore*' -o -name 'AXReader.swift' -o -name 'AXTraversal.swift' -o -name 'AXEvidenceModels.swift' -o -name 'AXPredicateCatalog.swift' -o -name 'ui-review-ax-*.schema.json')"
 	test -x scripts/check-manual-smoke-readiness.sh
 	test -x scripts/check-agent-run-smoke-readiness.sh
 	test -x scripts/repair-vifty-helper.sh
+	test -x scripts/uninstall-vifty.sh
+	test -x scripts/configure-daemon-plist.sh
+	@for key in VIFTY_XPC_ADHOC_DEVELOPMENT VIFTY_XPC_ADHOC_ALLOWED_UID VIFTY_XPC_ADHOC_APP_PATH VIFTY_XPC_ADHOC_CTL_PATH VIFTY_XPC_ADHOC_HELPER_PATH; do \
+		if /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$$key" "$(DAEMON_PLIST)" >/dev/null 2>&1; then echo "Release LaunchDaemon plist must omit $$key" >&2; exit 1; fi; \
+	done
 	@source_wrappers="$$(find examples/viftyctl -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
 	bundle_wrappers="$$(find "$(WRAPPERS)" -maxdepth 1 -type f -name '*.sh' -exec basename {} \; | sort)"; \
 	if [ "$$source_wrappers" != "$$bundle_wrappers" ]; then \
@@ -207,7 +295,7 @@ verify: ## Run fast local trust gates without installing
 	codesign -dvvv "$(MACOS)/viftyctl" 2>&1 | grep 'Identifier=tech.reidar.vifty.ctl'
 
 verify-full: VERIFY_TEST_TARGET = test-full
-verify-full: verify ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks
+verify-full: verify release-contract-ruby-tests installer-lifecycle-ruby-tests ui-review-ruby-tests ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

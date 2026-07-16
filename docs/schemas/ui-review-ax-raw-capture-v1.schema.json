@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-ax-raw-capture-v1.schema.json",
+  "title": "Vifty UI review raw Accessibility capture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "request",
+    "collectorBuildProvenance",
+    "source",
+    "permissionTrusted",
+    "promptRequested",
+    "initialTarget",
+    "finalTarget",
+    "traversal",
+    "observations",
+    "scrollEvidence",
+    "actionsPerformed",
+    "readErrors"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/ui-review-ax-raw-capture-v1.schema.json" },
+    "request": { "$ref": "#/$defs/evidenceRequest" },
+    "collectorBuildProvenance": { "$ref": "#/$defs/collectorBuildProvenance" },
+    "source": { "const": "macos-accessibility-api" },
+    "permissionTrusted": { "type": "boolean" },
+    "promptRequested": { "const": false },
+    "initialTarget": { "$ref": "#/$defs/targetIdentity" },
+    "finalTarget": { "$ref": "#/$defs/targetIdentity" },
+    "traversal": { "$ref": "#/$defs/traversal" },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/observation" }
+    },
+    "scrollEvidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scrollEvidence" }
+    },
+    "actionsPerformed": {
+      "type": "array",
+      "maxItems": 0,
+      "items": { "type": "string" }
+    },
+    "readErrors": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "collectorBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "schemaID", "sourceCommit", "sourceTree", "productRole", "configuration", "buildTransactionID"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "schemaID": { "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json" },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sourceTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "productRole": { "const": "ax-collector" },
+        "configuration": { "const": "debug" },
+        "buildTransactionID": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semanticRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appearance", "contrast", "interaction", "state", "surface", "textSize", "transparency", "window"],
+      "properties": {
+        "appearance": { "type": "string", "minLength": 1 },
+        "contrast": { "type": "string", "minLength": 1 },
+        "interaction": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "surface": { "type": "string", "minLength": 1 },
+        "textSize": { "type": "string", "minLength": 1 },
+        "transparency": { "type": "string", "minLength": 1 },
+        "window": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkID", "captureID", "processIdentifier", "windowIdentifier", "rootIdentifier", "semanticRequest", "requestSHA256"],
+      "properties": {
+        "checkID": { "type": "string", "minLength": 1 },
+        "captureID": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._-]+$" },
+        "processIdentifier": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "windowIdentifier": { "type": "string", "minLength": 1 },
+        "rootIdentifier": { "type": "string", "minLength": 1 },
+        "semanticRequest": { "$ref": "#/$defs/semanticRequest" },
+        "requestSHA256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "targetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["processIdentifier", "windowIdentifier", "rootIdentifier"],
+      "properties": {
+        "processIdentifier": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "windowIdentifier": { "type": "string", "minLength": 1 },
+        "rootIdentifier": { "type": "string", "minLength": 1 }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "size": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      }
+    },
+    "rectangle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location", "length"],
+      "properties": {
+        "location": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "typedValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "string" }, "value": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "boolean" }, "value": { "type": "boolean" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "signed-integer" }, "value": { "type": "integer" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "unsigned-integer" }, "value": { "type": "integer", "minimum": 0 } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "number" }, "value": { "type": "number" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "point" }, "value": { "$ref": "#/$defs/point" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "size" }, "value": { "$ref": "#/$defs/size" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "rectangle" }, "value": { "$ref": "#/$defs/rectangle" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "range" }, "value": { "$ref": "#/$defs/range" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": { "type": { "const": "error" }, "value": { "type": "integer" } }
+        }
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "order", "depth", "role", "actions", "childCount", "readErrors"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 },
+        "depth": { "type": "integer", "minimum": 0 },
+        "role": { "type": "string", "minLength": 1 },
+        "subrole": { "type": "string" },
+        "identifier": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "label": { "type": "string" },
+        "help": { "type": "string" },
+        "value": { "$ref": "#/$defs/typedValue" },
+        "valueDescription": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "focused": { "type": "boolean" },
+        "selected": { "type": "boolean" },
+        "position": { "$ref": "#/$defs/point" },
+        "size": { "$ref": "#/$defs/size" },
+        "actions": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "childCount": { "type": "integer", "minimum": 0 },
+        "readErrors": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "traversal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "nodeCount", "maximumNodeCount", "maximumDepth", "truncationReasons"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "nodeCount": { "type": "integer", "minimum": 1 },
+        "maximumNodeCount": { "type": "integer", "minimum": 1, "maximum": 16384 },
+        "maximumDepth": { "type": "integer", "minimum": 1, "maximum": 128 },
+        "truncationReasons": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "scrollEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scrollAreaPath", "verticalScrollBarPath", "minimumValue", "maximumValue", "currentValue", "viewportHeight", "contentHeight"],
+      "oneOf": [
+        {
+          "properties": {
+            "minimumValue": { "type": "number" },
+            "maximumValue": { "type": "number" }
+          }
+        },
+        {
+          "properties": {
+            "minimumValue": { "type": "null" },
+            "maximumValue": { "type": "null" }
+          }
+        }
+      ],
+      "properties": {
+        "scrollAreaPath": { "type": "string", "minLength": 1 },
+        "verticalScrollBarPath": { "type": "string", "minLength": 1 },
+        "minimumValue": {
+          "type": ["number", "null"],
+          "description": "Observed AXMinValue, or null when macOS reports the attribute unavailable."
+        },
+        "maximumValue": {
+          "type": ["number", "null"],
+          "description": "Observed AXMaxValue, or null when macOS reports the attribute unavailable."
+        },
+        "currentValue": { "type": "number" },
+        "viewportHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "contentHeight": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

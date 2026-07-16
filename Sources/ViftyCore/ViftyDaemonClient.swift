@@ -1,23 +1,52 @@
 @preconcurrency import Foundation
 
 public final class ViftyDaemonClient: @unchecked Sendable {
-    private let timeout: TimeInterval
-    private let connectionFactory: @Sendable () -> any ViftyDaemonConnection
+    /// Protected-mode recovery may wait up to ten seconds per physical fan.
+    /// Fan-control requests therefore need a deadline that covers the full
+    /// allowlisted ten-fan transaction plus bounded daemon/readback overhead.
+    public static let defaultFanControlTransactionTimeout: TimeInterval = 125
 
-    public init(
+    private let timeout: TimeInterval
+    private let fanControlTransactionTimeout: TimeInterval
+    private let connectionFactory: @Sendable () -> any ViftyDaemonConnection
+    private let maintenanceHelperIdentity: @Sendable () throws -> String
+
+    public convenience init(
         serviceName: String = ViftyDaemonConstants.machServiceName,
         timeout: TimeInterval = 3
     ) {
+        self.init(
+            serviceName: serviceName,
+            timeout: timeout,
+            fanControlTransactionTimeout: Self.defaultFanControlTransactionTimeout
+        )
+    }
+
+    public init(
+        serviceName: String,
+        timeout: TimeInterval,
+        fanControlTransactionTimeout: TimeInterval
+    ) {
         self.timeout = timeout
+        self.fanControlTransactionTimeout = max(timeout, fanControlTransactionTimeout)
         self.connectionFactory = { XPCDaemonConnection(serviceName: serviceName) }
+        self.maintenanceHelperIdentity = {
+            try HelperMaintenanceCandidateIdentity.bundledHelperSHA256()
+        }
     }
 
     init(
         timeout: TimeInterval = 3,
-        connectionFactory: @escaping @Sendable () -> any ViftyDaemonConnection
+        fanControlTransactionTimeout: TimeInterval? = nil,
+        connectionFactory: @escaping @Sendable () -> any ViftyDaemonConnection,
+        maintenanceHelperIdentity: @escaping @Sendable () throws -> String = {
+            try HelperMaintenanceCandidateIdentity.bundledHelperSHA256()
+        }
     ) {
         self.timeout = timeout
+        self.fanControlTransactionTimeout = max(timeout, fanControlTransactionTimeout ?? timeout)
         self.connectionFactory = connectionFactory
+        self.maintenanceHelperIdentity = maintenanceHelperIdentity
     }
 
     public func ping() async -> Bool {
@@ -82,8 +111,8 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func prepareAgentControl(_ request: AgentControlRequest) async throws -> AgentControlStatus {
-        try await withProxy { proxy, finish in
-            proxy.prepareAgentControl(XPCAgentControlCoding.encode(request)) { dictionary, error in
+        try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.prepareAgentControlV2(XPCAgentControlCoding.encode(request)) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
                     return
@@ -99,8 +128,8 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func restoreAgentControl(reason: String) async throws -> AgentControlStatus {
-        try await withProxy { proxy, finish in
-            proxy.restoreAgentControl(reason) { dictionary, error in
+        try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.restoreAgentControlV2(reason) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
                     return
@@ -115,6 +144,124 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         }
     }
 
+    public func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus {
+        try await withProxy { proxy, finish in
+            proxy.fanControlOwnershipStatus { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let status = XPCFanControlCoding.decodeOwnershipStatus(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned invalid fan-control ownership status.")))
+                    return
+                }
+                finish(.success(status))
+            }
+        }
+    }
+
+    public func applyManualFanControl(
+        _ request: ManualFanControlRequest
+    ) async throws -> FanControlTransactionResult {
+        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.applyManualFanControl(XPCFanControlCoding.encode(request)) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let result = XPCFanControlCoding.decodeTransactionResult(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid manual fan-control result.")))
+                    return
+                }
+                finish(.success(result))
+            }
+        }
+    }
+
+    public func restoreAllAuto(
+        _ request: AutoRestoreRequest
+    ) async throws -> FanControlTransactionResult {
+        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.restoreAllAuto(XPCFanControlCoding.encode(request)) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let result = XPCFanControlCoding.decodeTransactionResult(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid full-set Auto result.")))
+                    return
+                }
+                finish(.success(result))
+            }
+        }
+    }
+
+    public func prepareHelperMaintenance(
+        operation: HelperMaintenanceOperation
+    ) async throws -> HelperMaintenanceReport {
+        let helperSHA256 = try maintenanceHelperIdentity()
+        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.prepareHelperMaintenance(
+                operation.rawValue,
+                helperSHA256: helperSHA256
+            ) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let report = XPCHelperMaintenanceCoding.decodeReport(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected(
+                        "Daemon returned an invalid helper-maintenance report."
+                    )))
+                    return
+                }
+                finish(.success(report))
+            }
+        }
+    }
+
+    public func consumeHelperMaintenanceToken(
+        _ request: HelperMaintenanceAuthorizationRequest
+    ) async throws -> HelperMaintenanceAuthorization {
+        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+            proxy.consumeHelperMaintenanceToken(XPCHelperMaintenanceCoding.encode(request)) {
+                dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let authorization = XPCHelperMaintenanceCoding.decodeAuthorization(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected(
+                        "Daemon returned an invalid helper-maintenance authorization."
+                    )))
+                    return
+                }
+                finish(.success(authorization))
+            }
+        }
+    }
+
+    public func cancelHelperMaintenance() async throws {
+        let _: Void = try await withProxy { proxy, finish in
+            proxy.cancelHelperMaintenance { cancelled, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                } else if cancelled {
+                    finish(.success(()))
+                } else {
+                    finish(.failure(ViftyError.helperRejected(
+                        "Daemon did not cancel helper maintenance."
+                    )))
+                }
+            }
+        }
+    }
+
     public func apply(_ command: FanCommand, fan: Fan) async throws {
         try validateFanID(fan.id)
         guard command.fanID == fan.id else {
@@ -122,9 +269,10 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         }
 
         switch command.mode {
-        case .fixedRPM(let rpm):
-            try validateWritableFan(fan)
-            try await setFixedRPM(fanID: fan.id, rpm: rpm, minimumRPM: fan.minimumRPM, maximumRPM: fan.maximumRPM)
+        case .fixedRPM:
+            throw ViftyError.helperRejected(
+                "Legacy per-fan writes are disabled. Use a protocol-v2 manual fan-control transaction."
+            )
         case .auto:
             try await restoreAuto(fan: fan)
         case .temperatureCurve:
@@ -134,16 +282,17 @@ public final class ViftyDaemonClient: @unchecked Sendable {
 
     public func restoreAuto(fan: Fan) async throws {
         try validateFanID(fan.id)
-        try validateWritableFan(fan)
-        try await withProxy { proxy, finish in
-            proxy.restoreAuto(fan.id, minimumRPM: fan.minimumRPM, maximumRPM: fan.maximumRPM) { ok, error in
-                if ok {
-                    finish(.success(()))
-                } else {
-                    finish(.failure(ViftyError.helperRejected(error ?? "Daemon failed to restore Auto.")))
-                }
-            }
+        guard fan.controlEligibility.canRestoreOSManagedMode else {
+            throw ViftyError.helperRejected("Fan \(fan.id) lacks trusted mode telemetry for Auto recovery.")
         }
+        _ = try await restoreAllAuto(
+            AutoRestoreRequest(
+                transactionID: "legacy-auto-\(UUID().uuidString)",
+                expectedFanIDs: [],
+                reason: "Legacy client requested Auto; mapped to authoritative full-set restore",
+                allowRestoreAllTrustedFans: true
+            )
+        )
     }
 
     private func validateFanID(_ fanID: Int) throws {
@@ -152,25 +301,8 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         }
     }
 
-    private func validateWritableFan(_ fan: Fan) throws {
-        guard fan.controllable, fan.maximumRPM > fan.minimumRPM else {
-            throw ViftyError.noControllableFans
-        }
-    }
-
-    private func setFixedRPM(fanID: Int, rpm: Int, minimumRPM: Int, maximumRPM: Int) async throws {
-        try await withProxy { proxy, finish in
-            proxy.setFixedRPM(fanID, rpm: rpm, minimumRPM: minimumRPM, maximumRPM: maximumRPM) { ok, error in
-                if ok {
-                    finish(.success(()))
-                } else {
-                    finish(.failure(ViftyError.helperRejected(error ?? "Daemon failed to set fixed RPM.")))
-                }
-            }
-        }
-    }
-
     private func withProxy<T: Sendable>(
+        timeout requestTimeout: TimeInterval? = nil,
         _ operation: @escaping (
             ViftyDaemonProtocol,
             @escaping @Sendable (Result<T, Error>) -> Void
@@ -200,13 +332,14 @@ public final class ViftyDaemonClient: @unchecked Sendable {
             connection.resume()
 
             let timer = DispatchSource.makeTimerSource(queue: .global())
-            timer.schedule(deadline: .now() + timeout)
+            timer.schedule(deadline: .now() + (requestTimeout ?? timeout))
             timer.setEventHandler {
                 if state.finish(.failure(ViftyError.helperRejected("Daemon request timed out.")), continuation: continuation) {
                     connection.invalidate()
                     ViftyCoreLog.xpc.warning("Daemon request timed out")
                 }
             }
+            state.retain(timer: timer)
             timer.resume()
 
             guard let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
@@ -273,6 +406,14 @@ private final class XPCDaemonConnection: ViftyDaemonConnection, @unchecked Senda
 private final class CallbackState<T: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var finished = false
+    private var retainedTimer: DispatchSourceTimer?
+
+    func retain(timer: DispatchSourceTimer) {
+        lock.withLock {
+            guard !finished else { return }
+            retainedTimer = timer
+        }
+    }
 
     @discardableResult
     func finish(_ result: Result<T, Error>, continuation: CheckedContinuation<T, Error>) -> Bool {
@@ -280,6 +421,7 @@ private final class CallbackState<T: Sendable>: @unchecked Sendable {
         defer { lock.unlock() }
         guard !finished else { return false }
         finished = true
+        retainedTimer = nil
         switch result {
         case .success(let value):
             continuation.resume(returning: value)

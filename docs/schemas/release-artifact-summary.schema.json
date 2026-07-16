@@ -2,100 +2,470 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/release-artifact-summary.schema.json",
   "title": "Vifty release artifact verification summary",
-  "description": "Machine-readable summary written by scripts/verify-release-artifact.sh for pre-publish and post-publish release trust evidence.",
-  "type": "object",
-  "required": [
-    "schemaVersion",
-    "schemaID",
-    "status",
-    "generatedAtUTC",
-    "caskVersion",
-    "caskURL",
-    "expectedArtifactName",
-    "artifactPath",
-    "appPath",
-    "bundleVersion",
-    "expectedSHA",
-    "expectedSHASource",
-    "actualSHA",
-    "expectedTeamID",
-    "requiredTeamID",
-    "signatureChecksSkipped",
-    "notarizationChecksSkipped",
-    "checks"
-  ],
-  "properties": {
-    "schemaVersion": {
-      "const": 1
+  "description": "Version 2 adds release-manifest identity, entry kind, immutable tag/source binding, build, and architecture evidence while retaining explicit version-1 decoding for historical v1.3.2 summaries.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/legacyVersion1"
     },
-    "schemaID": {
-      "const": "https://vifty.local/schemas/release-artifact-summary.schema.json"
-    },
-    "status": {
-      "enum": [
-        "passed",
-        "failed"
-      ]
-    },
-    "generatedAtUTC": {
-      "type": "string"
-    },
-    "caskVersion": {
-      "type": "string"
-    },
-    "caskURL": {
-      "type": "string"
-    },
-    "expectedArtifactName": {
-      "type": "string"
-    },
-    "artifactPath": {
-      "type": "string"
-    },
-    "appPath": {
-      "type": "string"
-    },
-    "bundleVersion": {
-      "type": "string"
-    },
-    "expectedSHA": {
-      "type": "string"
-    },
-    "expectedSHASource": {
-      "enum": [
-        "cask sha256",
-        "expected sha256"
-      ]
-    },
-    "actualSHA": {
-      "type": "string"
-    },
-    "expectedTeamID": {
-      "type": "string"
-    },
-    "requiredTeamID": {
-      "type": "string"
-    },
-    "signatureChecksSkipped": {
-      "type": "boolean"
-    },
-    "notarizationChecksSkipped": {
-      "type": "boolean"
-    },
-    "failureCheck": {
-      "type": "string"
-    },
-    "failureMessage": {
-      "type": "string"
-    },
-    "checks": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/releaseCheck"
-      }
+    {
+      "$ref": "#/$defs/currentVersion2"
     }
-  },
+  ],
   "$defs": {
+    "baseProperties": {
+      "type": "object",
+      "properties": {
+        "schemaID": {
+          "const": "https://vifty.local/schemas/release-artifact-summary.schema.json"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "generatedAtUTC": {
+          "type": "string"
+        },
+        "caskVersion": {
+          "type": "string",
+          "description": "Homebrew cask version observed when verification ran. In a version-2 pre-publication candidate summary, this can remain on the prior published release."
+        },
+        "caskURL": {
+          "type": "string"
+        },
+        "expectedArtifactName": {
+          "type": "string",
+          "description": "Canonical artifact name for the selected release identity. Version 2 derives this from releaseVersion, not necessarily caskVersion."
+        },
+        "artifactPath": {
+          "type": "string"
+        },
+        "appPath": {
+          "type": "string"
+        },
+        "bundleVersion": {
+          "type": "string"
+        },
+        "expectedSHA": {
+          "type": "string"
+        },
+        "expectedSHASource": {
+          "enum": [
+            "cask sha256",
+            "expected sha256",
+            "manifest sha256"
+          ]
+        },
+        "actualSHA": {
+          "type": "string"
+        },
+        "expectedTeamID": {
+          "type": "string"
+        },
+        "requiredTeamID": {
+          "type": "string"
+        },
+        "signatureChecksSkipped": {
+          "type": "boolean"
+        },
+        "notarizationChecksSkipped": {
+          "type": "boolean"
+        },
+        "failureCheck": {
+          "type": "string"
+        },
+        "failureMessage": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/releaseCheck"
+          }
+        }
+      }
+    },
+    "legacyVersion1": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "status",
+        "generatedAtUTC",
+        "caskVersion",
+        "caskURL",
+        "expectedArtifactName",
+        "artifactPath",
+        "appPath",
+        "bundleVersion",
+        "expectedSHA",
+        "expectedSHASource",
+        "actualSHA",
+        "expectedTeamID",
+        "requiredTeamID",
+        "signatureChecksSkipped",
+        "notarizationChecksSkipped",
+        "checks"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "schemaID": {
+          "const": "https://vifty.local/schemas/release-artifact-summary.schema.json"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "generatedAtUTC": {
+          "type": "string"
+        },
+        "caskVersion": {
+          "type": "string"
+        },
+        "caskURL": {
+          "type": "string"
+        },
+        "expectedArtifactName": {
+          "type": "string"
+        },
+        "artifactPath": {
+          "type": "string"
+        },
+        "appPath": {
+          "type": "string"
+        },
+        "bundleVersion": {
+          "type": "string"
+        },
+        "expectedSHA": {
+          "type": "string"
+        },
+        "expectedSHASource": {
+          "enum": [
+            "cask sha256",
+            "expected sha256"
+          ]
+        },
+        "actualSHA": {
+          "type": "string"
+        },
+        "expectedTeamID": {
+          "type": "string"
+        },
+        "requiredTeamID": {
+          "type": "string"
+        },
+        "signatureChecksSkipped": {
+          "type": "boolean"
+        },
+        "notarizationChecksSkipped": {
+          "type": "boolean"
+        },
+        "failureCheck": {
+          "type": "string"
+        },
+        "failureMessage": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/releaseCheck"
+          }
+        }
+      }
+    },
+    "currentVersion2": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "status",
+        "generatedAtUTC",
+        "caskVersion",
+        "caskURL",
+        "expectedArtifactName",
+        "artifactPath",
+        "appPath",
+        "bundleVersion",
+        "bundleBuild",
+        "bundleIdentifier",
+        "releaseVersion",
+        "releaseTag",
+        "releaseSourceCommit",
+        "releaseManifestEntryKind",
+        "releaseManifestSchemaVersion",
+        "releaseManifestSHA256",
+        "runtimeIdentifiers",
+        "launchDaemonLabel",
+        "machServiceName",
+        "architectures",
+        "expectedSHA",
+        "expectedSHASource",
+        "actualSHA",
+        "expectedTeamID",
+        "requiredTeamID",
+        "signatureChecksSkipped",
+        "notarizationChecksSkipped",
+        "checks"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "schemaID": {
+          "const": "https://vifty.local/schemas/release-artifact-summary.schema.json"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "generatedAtUTC": {
+          "type": "string"
+        },
+        "caskVersion": {
+          "type": "string",
+          "description": "Homebrew cask version observed when verification ran. For a pre-publication candidate, this remains the prior published version while releaseVersion identifies the candidate."
+        },
+        "caskURL": {
+          "type": "string"
+        },
+        "expectedArtifactName": {
+          "type": "string",
+          "description": "Canonical Vifty-v<releaseVersion>.zip name for the selected version-2 release identity."
+        },
+        "artifactPath": {
+          "type": "string"
+        },
+        "appPath": {
+          "type": "string"
+        },
+        "bundleVersion": {
+          "type": "string"
+        },
+        "bundleBuild": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "bundleIdentifier": {
+          "type": "string"
+        },
+        "releaseVersion": {
+          "type": "string",
+          "description": "Candidate, current published, or historical release-manifest version selected for verification; this is the version-2 artifact identity and must match bundleVersion."
+        },
+        "releaseTag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Canonical tag recorded by the selected entry in the tagged release-manifest snapshot."
+        },
+        "releaseSourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "The commit peeled from the selected manifest tag for candidate, published, and historical entries."
+        },
+        "releaseManifestEntryKind": {
+          "enum": [
+            "candidate",
+            "published",
+            "historical"
+          ],
+          "description": "Entry kind in the immutable release-manifest snapshot stored at releaseSourceCommit; this does not change when the current manifest later promotes or archives the release."
+        },
+        "releaseManifestSchemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "releaseManifestSHA256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the exact .github/release-manifest.json blob stored at the peeled release-tag commit."
+        },
+        "runtimeIdentifiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "app",
+            "daemon",
+            "helper",
+            "ctl"
+          ],
+          "properties": {
+            "app": {
+              "const": "tech.reidar.vifty"
+            },
+            "daemon": {
+              "const": "tech.reidar.vifty.daemon"
+            },
+            "helper": {
+              "const": "tech.reidar.vifty.helper"
+            },
+            "ctl": {
+              "const": "tech.reidar.vifty.ctl"
+            }
+          }
+        },
+        "launchDaemonLabel": {
+          "type": "string"
+        },
+        "machServiceName": {
+          "type": "string"
+        },
+        "architectures": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "expected",
+            "app",
+            "helper",
+            "daemon",
+            "ctl"
+          ],
+          "properties": {
+            "expected": {
+              "$ref": "#/$defs/architectureSet"
+            },
+            "app": {
+              "$ref": "#/$defs/architectureSet"
+            },
+            "helper": {
+              "$ref": "#/$defs/architectureSet"
+            },
+            "daemon": {
+              "$ref": "#/$defs/architectureSet"
+            },
+            "ctl": {
+              "$ref": "#/$defs/architectureSet"
+            }
+          }
+        },
+        "expectedSHA": {
+          "type": "string"
+        },
+        "expectedSHASource": {
+          "enum": [
+            "cask sha256",
+            "expected sha256",
+            "manifest sha256"
+          ]
+        },
+        "actualSHA": {
+          "type": "string"
+        },
+        "expectedTeamID": {
+          "type": "string"
+        },
+        "requiredTeamID": {
+          "type": "string"
+        },
+        "signatureChecksSkipped": {
+          "type": "boolean"
+        },
+        "notarizationChecksSkipped": {
+          "type": "boolean"
+        },
+        "failureCheck": {
+          "type": "string"
+        },
+        "failureMessage": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/releaseCheck"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "passed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "minItems": 14,
+                "maxItems": 14
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "releaseManifestEntryKind": {
+                "const": "candidate"
+              }
+            },
+            "required": [
+              "releaseManifestEntryKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expectedSHASource": {
+                "enum": [
+                  "expected sha256",
+                  "manifest sha256"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "releaseManifestEntryKind": {
+                "enum": [
+                  "published",
+                  "historical"
+                ]
+              }
+            },
+            "required": [
+              "releaseManifestEntryKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expectedSHASource": {
+                "const": "manifest sha256"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "architectureSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "arm64",
+          "x86_64"
+        ]
+      }
+    },
     "releaseCheck": {
       "type": "object",
       "required": [

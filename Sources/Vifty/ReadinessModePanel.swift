@@ -1,5 +1,21 @@
 import SwiftUI
 
+@MainActor
+enum ModeSelectionInteraction {
+    static func userInitiatedBinding(
+        selection: Binding<ModeSelection>,
+        onUserSelection: @escaping (ModeSelection) -> Void
+    ) -> Binding<ModeSelection> {
+        Binding(
+            get: { selection.wrappedValue },
+            set: { mode in
+                selection.wrappedValue = mode
+                onUserSelection(mode)
+            }
+        )
+    }
+}
+
 struct ReadinessModePanel: View {
     @Binding var selectedMode: ModeSelection
     @Binding var manualRunLimit: ManualRunLimit
@@ -17,7 +33,7 @@ struct ReadinessModePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Safety & Mode", systemImage: "shield.lefthalf.filled")
-                .font(.headline)
+                .viftyFont(.headline)
 
             if let fanWriteBlockedWhileHotSummary {
                 HStack(spacing: 8) {
@@ -25,10 +41,10 @@ struct ReadinessModePanel: View {
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(fanWriteBlockedWhileHotSummary)
-                            .font(.caption.weight(.semibold))
+                            .viftyFont(.caption, weight: .semibold)
                         if let fanWriteBlockedWhileHotRecoverySuggestion {
                             Text(fanWriteBlockedWhileHotRecoverySuggestion)
-                                .font(.caption)
+                                .viftyFont(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(3)
                         }
@@ -44,7 +60,10 @@ struct ReadinessModePanel: View {
                 onPrimaryAction: onPrimaryAction
             )
 
-            Picker(selection: $selectedMode) {
+            Picker(selection: ModeSelectionInteraction.userInitiatedBinding(
+                selection: $selectedMode,
+                onUserSelection: onModeChange
+            )) {
                 Text("Auto").tag(ModeSelection.auto)
                 Text("Fixed RPM").tag(ModeSelection.fixed)
                 Text("Temperature Curve").tag(ModeSelection.curve)
@@ -53,9 +72,6 @@ struct ReadinessModePanel: View {
             }
             .pickerStyle(.segmented)
             .accessibilityLabel("Mode")
-            .onChange(of: selectedMode) {
-                onModeChange(selectedMode)
-            }
 
             if selectedMode != .auto {
                 Picker("Manual run", selection: $manualRunLimit) {
@@ -72,18 +88,18 @@ struct ReadinessModePanel: View {
 
             if let manualControlAttentionSummary {
                 Label(manualControlAttentionSummary, systemImage: "hourglass.badge.exclamationmark")
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
                 if let manualControlAttentionRecoverySuggestion {
                     Text(manualControlAttentionRecoverySuggestion)
-                        .font(.caption)
+                        .viftyFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                 }
             } else if let manualFanControlBlockedReason {
                 Label(manualFanControlBlockedReason, systemImage: "lock.shield")
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }

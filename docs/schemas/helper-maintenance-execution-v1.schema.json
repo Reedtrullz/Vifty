@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/helper-maintenance-execution-v1.json",
+  "title": "Vifty privileged helper-maintenance execution evidence",
+  "description": "Root-authenticated phase evidence for helper repair, uninstall, and an installer replacement transaction. This record is not daemon teardown authority. Replacement prepare evidence binds the requesting installer process, a public transaction correlation ID, and immutable candidate and previous-bundle identities before a declared installed or rolled-back finish may re-enable authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "operation",
+    "status",
+    "blocker",
+    "authorityMode",
+    "requestingUserID",
+    "requestingProcessID",
+    "updatedAt",
+    "phases"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/helper-maintenance-execution-v1.json" },
+    "operation": { "enum": ["repair", "uninstall"] },
+    "status": { "enum": ["in-progress", "blocked", "replacement-prepared", "replacement-locked", "completed"] },
+    "blocker": { "type": "string" },
+    "authorityMode": { "enum": ["undetermined", "daemon-receipt", "offline-auto"] },
+    "requestingUserID": { "type": "integer", "minimum": 0 },
+    "requestingProcessID": { "type": "integer", "minimum": 2 },
+    "requestingProcessStartID": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "replacementAppPath": { "type": "string", "pattern": "^/.*Vifty\\.app$" },
+    "replacementTransactionID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "replacementResult": { "enum": ["installed", "rolled-back"] },
+    "replacementCandidateBinding": { "$ref": "#/$defs/bundleBinding" },
+    "replacementPreviousBinding": { "$ref": "#/$defs/bundleBinding" },
+    "replacementLockedBinding": { "$ref": "#/$defs/bundleBinding" },
+    "replacementLifecyclePath": {
+      "type": "string",
+      "pattern": "^/.*/ReplacementTransactions/[0-9a-f-]{36}/vifty-helper-lifecycle\\.sh$"
+    },
+    "replacementLifecycleSHA256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "replacementFlagTransition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "targetState", "startedAt"],
+      "properties": {
+        "operation": { "enum": ["locking", "unlocking"] },
+        "targetState": { "enum": ["locked", "unlocked"] },
+        "startedAt": { "type": "number" }
+      }
+    },
+    "updatedAt": { "type": "number" },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "attempted", "succeeded"],
+        "properties": {
+          "phase": {
+            "enum": [
+              "verify-privileged-authority",
+              "disable-service-and-confirm-offline",
+              "post-freeze-offline-auto-confirm",
+              "remove-legacy-helper-plist-and-logs",
+              "lock-replacement-bundle-and-verify",
+              "register-smappservice-and-verify",
+              "reenable-service-after-cleanup"
+            ]
+          },
+          "attempted": { "type": "boolean" },
+          "succeeded": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "bundleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "manifest", "manifestSHA256", "identity"],
+      "properties": {
+        "sourcePath": { "type": "string", "pattern": "^/.*Vifty\\.app$" },
+        "manifest": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/bundleManifestRow" },
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": { "const": "." },
+              "type": { "const": "directory" }
+            },
+            "required": ["path", "type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        "manifestSHA256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ownerUID", "teamID", "componentIdentifiers", "componentSHA256"],
+          "properties": {
+            "kind": { "enum": ["developer-id", "adhoc"] },
+            "ownerUID": { "type": "integer", "minimum": 0 },
+            "teamID": { "type": ["string", "null"], "pattern": "^[A-Z0-9]{10}$" },
+            "componentIdentifiers": {
+              "const": {
+                "Vifty": "tech.reidar.vifty",
+                "viftyctl": "tech.reidar.vifty.ctl",
+                "ViftyDaemon": "tech.reidar.vifty.daemon",
+                "ViftyHelper": "tech.reidar.vifty.helper"
+              }
+            },
+            "componentSHA256": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["Vifty", "viftyctl", "ViftyDaemon", "ViftyHelper"],
+              "properties": {
+                "Vifty": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "viftyctl": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "ViftyDaemon": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "ViftyHelper": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "bundleManifestRow": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "type", "uid", "gid", "mode", "nlink"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "type": { "const": "directory" },
+            "uid": { "type": "integer", "minimum": 0 },
+            "gid": { "type": "integer", "minimum": 0 },
+            "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+            "nlink": { "type": "integer", "minimum": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "type", "uid", "gid", "mode", "nlink", "size", "sha256"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "type": { "const": "file" },
+            "uid": { "type": "integer", "minimum": 0 },
+            "gid": { "type": "integer", "minimum": 0 },
+            "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+            "nlink": { "type": "integer", "minimum": 1 },
+            "size": { "type": "integer", "minimum": 0 },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "type", "uid", "gid", "mode", "nlink", "size", "linkTarget"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "type": { "const": "symlink" },
+            "uid": { "type": "integer", "minimum": 0 },
+            "gid": { "type": "integer", "minimum": 0 },
+            "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+            "nlink": { "type": "integer", "minimum": 1 },
+            "size": { "type": "integer", "minimum": 0 },
+            "linkTarget": { "type": "string" }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["replacementTransactionID"] },
+      "then": {
+        "required": [
+          "replacementAppPath",
+          "requestingProcessStartID"
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "replacement-prepared" } }, "required": ["status"] },
+      "then": {
+        "required": [
+          "replacementAppPath",
+          "requestingProcessStartID",
+          "replacementTransactionID",
+          "replacementCandidateBinding",
+          "replacementPreviousBinding",
+          "replacementLifecyclePath",
+          "replacementLifecycleSHA256"
+        ],
+        "not": { "required": ["replacementResult"] }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "replacement-locked" } }, "required": ["status"] },
+      "then": {
+        "required": [
+          "replacementAppPath",
+          "requestingProcessStartID",
+          "replacementTransactionID",
+          "replacementResult",
+          "replacementCandidateBinding",
+          "replacementPreviousBinding",
+          "replacementLockedBinding",
+          "replacementLifecyclePath",
+          "replacementLifecycleSHA256"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "completed" } },
+        "required": ["status", "replacementTransactionID"]
+      },
+      "then": {
+        "required": [
+          "replacementResult",
+          "replacementCandidateBinding",
+          "replacementPreviousBinding",
+          "replacementLockedBinding",
+          "replacementLifecyclePath",
+          "replacementLifecycleSHA256"
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "blocker": { "const": "" },
+          "authorityMode": { "enum": ["daemon-receipt", "offline-auto"] }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "replacementFlagTransition": {
+            "properties": { "operation": { "const": "locking" } },
+            "required": ["operation"]
+          }
+        },
+        "required": ["replacementFlagTransition"]
+      },
+      "then": {
+        "properties": { "status": { "const": "replacement-prepared" } },
+        "not": { "anyOf": [{ "required": ["replacementResult"] }, { "required": ["replacementLockedBinding"] }] }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "replacementFlagTransition": {
+            "properties": { "operation": { "const": "unlocking" } },
+            "required": ["operation"]
+          }
+        },
+        "required": ["replacementFlagTransition"]
+      },
+      "then": {
+        "properties": {
+          "status": { "const": "replacement-locked" },
+          "replacementResult": { "const": "installed" }
+        },
+        "required": ["replacementResult", "replacementLockedBinding"]
+      }
+    }
+  ]
+}

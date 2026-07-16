@@ -298,6 +298,152 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode release"))
     }
 
+    func testReviewAcceptsVersion2CandidateSummaryWhileCaskRemainsPublished() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryCaskVersion: "1.2.3",
+            releaseSummaryBundleVersion: "1.2.4",
+            releaseSummaryReleaseVersion: "1.2.4",
+            releaseSummaryExpectedArtifactName: "Vifty-v1.2.4.zip",
+            releaseSummaryExpectedSHASource: "expected sha256",
+            releaseChecklistVersion: "1.2.4",
+            sourceRef: "v1.2.4",
+            sourceArtifactName: "Vifty-v1.2.4.zip"
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Validation evidence review OK: mode release"))
+    }
+
+    func testReviewAcceptsCandidateSnapshotSummaryAfterCurrentManifestMovesReleaseToHistory() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryCaskVersion: "1.2.4",
+            releaseSummaryBundleVersion: "1.2.3",
+            releaseSummaryReleaseVersion: "1.2.3",
+            releaseSummaryExpectedArtifactName: "Vifty-v1.2.3.zip",
+            releaseSummaryExpectedSHASource: "manifest sha256",
+            releaseChecklistVersion: "1.2.3",
+            sourceRef: "v1.2.3",
+            sourceArtifactName: "Vifty-v1.2.3.zip"
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+    }
+
+    func testReviewRejectsForgedManifestSHA256() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryExpectedSHASource: "manifest sha256",
+            releaseSummaryForgedManifestSHA256: String(repeating: "f", count: 64)
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("releaseManifestSHA256 does not match tagged release manifest snapshot"), result.stderr)
+    }
+
+    func testReviewRejectsCurrentManifestArtifactSHADriftAfterPromotion() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryExpectedSHASource: "expected sha256",
+            releaseSummaryCurrentManifestSHA: String(repeating: "e", count: 64)
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("current authoritative manifest artifact SHA does not match immutable release evidence"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsMissingOrDuplicateVerifierChecks() throws {
+        let missing = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryExpectedSHASource: "manifest sha256",
+            releaseSummaryOmittedCheckName: "required-executables"
+        )
+        let missingResult = try missing.runReview(mode: "release")
+        XCTAssertEqual(missingResult.exitCode, 65)
+        XCTAssertTrue(missingResult.stderr.contains("checks must contain the exact verifier check-name set"), missingResult.stderr)
+
+        let duplicate = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryExpectedSHASource: "manifest sha256",
+            releaseSummaryDuplicateCheckName: "artifact-sha"
+        )
+        let duplicateResult = try duplicate.runReview(mode: "release")
+        XCTAssertEqual(duplicateResult.exitCode, 65)
+        XCTAssertTrue(duplicateResult.stderr.contains("checks must contain unique names"), duplicateResult.stderr)
+    }
+
+    func testReviewRejectsNonGrandfatheredVersion1Summary() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 1
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("schemaVersion 1 is grandfathered only for exact public v1.3.2 evidence"),
+            result.stderr
+        )
+    }
+
+    func testReviewRejectsVersion2CandidateMismatchWhenUsingCaskChecksum() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            includeReleaseSummary: true,
+            includeReleaseChecklist: true,
+            releaseArtifactStatus: "0",
+            releaseSummarySchemaVersion: 2,
+            releaseSummaryCaskVersion: "1.2.3",
+            releaseSummaryBundleVersion: "1.2.4",
+            releaseSummaryReleaseVersion: "1.2.4",
+            releaseSummaryExpectedArtifactName: "Vifty-v1.2.4.zip",
+            releaseSummaryExpectedSHASource: "cask sha256",
+            releaseChecklistVersion: "1.2.4",
+            sourceRef: "v1.2.4",
+            sourceArtifactName: "Vifty-v1.2.4.zip"
+        )
+
+        let result = try harness.runReview(mode: "release")
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("using cask sha256 must have matching caskVersion and releaseVersion"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsSourceFirstUnsignedZipAsReleaseTrustEvidence() throws {
         let harness = try ValidationEvidenceReviewHarness(
             includeReleaseSummary: true,
@@ -585,6 +731,35 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
     }
 
+    func testReviewRejectsManualSmokeReadinessSummaryWithOnlyStaleDiagnoseState() throws {
+        let harness = try ValidationEvidenceReviewHarness(
+            installSource: "local-ad-hoc-build",
+            sourceRef: "main",
+            sourceSHA: String(repeating: "1", count: 40)
+        )
+        let readinessSummaryURL = try harness.writeManualSmokeReadinessSummary()
+        var readinessSummary = try harness.readJSON(readinessSummaryURL)
+        readinessSummary["diagnoseState"] = readinessSummary.removeValue(forKey: "state")
+        let readinessData = try JSONSerialization.data(
+            withJSONObject: readinessSummary,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try readinessData.write(to: readinessSummaryURL)
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            manualSmokeReadinessSummaryURL: readinessSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(
+            result.stderr.contains("manual-smoke readiness summary state must be ready or degraded"),
+            result.stderr
+        )
+    }
+
     func testReviewRejectsManualSmokeReadinessSummaryWithAgentRunnableOperatorCommand() throws {
         let harness = try ValidationEvidenceReviewHarness(
             installSource: "local-ad-hoc-build",
@@ -811,6 +986,28 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         XCTAssertEqual(summary["agentRunSmokeStartupModeSource"] as? String, "persisted")
         XCTAssertEqual(summary["agentRunSmokeStartupModeReadError"] as? String, "")
         XCTAssertTrue((summary["warnings"] as? [String])?.isEmpty == true)
+    }
+
+    func testReviewRejectsAgentRunSmokeWithoutProcessGroupLifecycleProof() throws {
+        let harness = try ValidationEvidenceReviewHarness()
+        let smokeSummaryURL = try harness.writeAgentRunSmokeSummary(
+            status: "passed",
+            signalScope: "immediateChild",
+            descendantCleanupBeforeAutoRestore: false,
+            backgroundProcessesAllowed: true
+        )
+
+        let result = try harness.runReview(
+            mode: "supported-hardware",
+            manualSmokeResult: "passed-auto-restored",
+            manualSmokeSource: "https://github.com/reidar/vifty/issues/42",
+            agentRunSmokeSummaryURL: smokeSummaryURL
+        )
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("passed agent-run-smoke summary must report signalScope=processGroup"))
+        XCTAssertTrue(result.stderr.contains("passed agent-run-smoke summary must report descendantCleanupBeforeAutoRestore=true"))
+        XCTAssertTrue(result.stderr.contains("passed agent-run-smoke summary must report backgroundProcessesAllowed=false"))
     }
 
     func testReviewDerivesValidatedAgentRunSmokeFromCapturedSummaryWithStructuredRateLimitRetry() throws {
@@ -1043,7 +1240,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
             JSONSerialization.jsonObject(with: Data(contentsOf: smokeSummaryURL)) as? [String: Any]
         )
         summary["childCommand"] = [
-            "/Users/reidar/Private Client/bin/client-build-tool",
+            "/Users/private-user/Private Client/bin/client-build-tool",
             "--token",
             "super-secret-token"
         ]
@@ -1072,7 +1269,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let harness = try ValidationEvidenceReviewHarness()
         let smokeSummaryURL = try harness.writeAgentRunSmokeBundleSummary(
             status: "passed",
-            resolvedChildExecutable: "/Users/reidar/Private Client/bin/client-build-tool"
+            resolvedChildExecutable: "/Users/private-user/Private Client/bin/client-build-tool"
         )
 
         let result = try harness.runReview(
@@ -1595,6 +1792,9 @@ private enum ValidationEvidenceDiagnoseFixture {
 private final class ValidationEvidenceReviewHarness {
     let rootURL: URL
     let bundleURL: URL
+    let releaseManifestURL: URL
+    let releaseSourceRepositoryURL: URL
+    private(set) var releaseSourceCommit: String
 
     init(
         diagnoseStatus: String = "0",
@@ -1621,11 +1821,20 @@ private final class ValidationEvidenceReviewHarness {
         releaseArtifactStatus: String = "skipped",
         signatureChecksSkipped: Bool = false,
         notarizationChecksSkipped: Bool = false,
+        releaseSummarySchemaVersion: Int = 2,
         releaseSummarySchemaID: String = "https://vifty.local/schemas/release-artifact-summary.schema.json",
+        releaseSummaryCaskVersion: String = "1.2.3",
+        releaseSummaryBundleVersion: String = "1.2.3",
+        releaseSummaryReleaseVersion: String? = nil,
         releaseSummaryExpectedArtifactName: String = "Vifty-v1.2.3.zip",
+        releaseSummaryExpectedSHASource: String = "manifest sha256",
         releaseSummaryExpectedSHA: String = String(repeating: "a", count: 64),
         releaseSummaryActualSHA: String = String(repeating: "a", count: 64),
         releaseSummaryCheckStatus: String = "passed",
+        releaseSummaryForgedManifestSHA256: String? = nil,
+        releaseSummaryOmittedCheckName: String? = nil,
+        releaseSummaryDuplicateCheckName: String? = nil,
+        releaseSummaryCurrentManifestSHA: String? = nil,
         releaseChecklistVersion: String = "1.2.3",
         launchDaemonTeamID: String = "TEAMID1234",
         installSource: String = "local-developer-id-build",
@@ -1638,7 +1847,27 @@ private final class ValidationEvidenceReviewHarness {
         rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-validation-review-\(UUID().uuidString)", isDirectory: true)
         bundleURL = rootURL.appendingPathComponent("evidence", isDirectory: true)
+        releaseManifestURL = rootURL.appendingPathComponent("release-manifest.json")
+        releaseSourceRepositoryURL = rootURL.appendingPathComponent("release-source", isDirectory: true)
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: releaseSourceRepositoryURL, withIntermediateDirectories: true)
+        _ = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", releaseSourceRepositoryURL.path, "init", "--quiet"]
+        )
+        _ = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: [
+                "-C", releaseSourceRepositoryURL.path,
+                "-c", "user.name=Vifty Tests",
+                "-c", "user.email=vifty-tests@example.invalid",
+                "commit", "--quiet", "--allow-empty", "-m", "release source"
+            ]
+        )
+        releaseSourceCommit = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", releaseSourceRepositoryURL.path, "rev-parse", "HEAD"]
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         var statuses: [String: String] = [
             "app-info-plist": "0",
@@ -1720,11 +1949,20 @@ private final class ValidationEvidenceReviewHarness {
             try writeReleaseArtifactSummary(
                 signatureChecksSkipped: signatureChecksSkipped,
                 notarizationChecksSkipped: notarizationChecksSkipped,
+                schemaVersion: releaseSummarySchemaVersion,
                 schemaID: releaseSummarySchemaID,
+                caskVersion: releaseSummaryCaskVersion,
+                bundleVersion: releaseSummaryBundleVersion,
+                releaseVersion: releaseSummaryReleaseVersion,
                 expectedArtifactName: releaseSummaryExpectedArtifactName,
+                expectedSHASource: releaseSummaryExpectedSHASource,
                 expectedSHA: releaseSummaryExpectedSHA,
                 actualSHA: releaseSummaryActualSHA,
-                checkStatus: releaseSummaryCheckStatus
+                checkStatus: releaseSummaryCheckStatus,
+                forgedManifestSHA256: releaseSummaryForgedManifestSHA256,
+                omittedCheckName: releaseSummaryOmittedCheckName,
+                duplicateCheckName: releaseSummaryDuplicateCheckName,
+                currentManifestSHA: releaseSummaryCurrentManifestSHA
             )
         }
         if includeReleaseChecklist {
@@ -1785,6 +2023,13 @@ private final class ValidationEvidenceReviewHarness {
             arguments += ["--agent-run-smoke-summary", agentRunSmokeSummaryURL.path]
         }
         process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            [
+                "VIFTY_RELEASE_MANIFEST_PATH": releaseManifestURL.path,
+                "VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT": releaseSourceRepositoryURL.path
+            ],
+            uniquingKeysWith: { _, new in new }
+        )
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -1824,7 +2069,7 @@ private final class ValidationEvidenceReviewHarness {
             "readOnly": true,
             "coolingCommandsRun": false,
             "diagnoseExitStatus": status == "ready" ? 0 : 75,
-            "diagnoseState": status == "ready" ? "ready" : "blocked",
+            "state": status == "ready" ? "ready" : "blocked",
             "modelIdentifier": "MacBookPro18,3",
             "isAppleSilicon": true,
             "isMacBookPro": true,
@@ -1965,6 +2210,9 @@ private final class ValidationEvidenceReviewHarness {
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
         resolvedChildExecutableReported: Bool? = true,
+        signalScope: String? = "processGroup",
+        descendantCleanupBeforeAutoRestore: Bool? = true,
+        backgroundProcessesAllowed: Bool? = false,
         resolvedChildExecutable: String? = "sleep",
         resolvedChildExecutablePathPrivacy: String? = "basenameOnly",
         resolvedChildExecutableSHA256: String? = String(repeating: "a", count: 64),
@@ -2008,6 +2256,9 @@ private final class ValidationEvidenceReviewHarness {
             commandErrorSchemaID: commandErrorSchemaID,
             runSchemaID: runSchemaID,
             resolvedChildExecutableReported: resolvedChildExecutableReported,
+            signalScope: signalScope,
+            descendantCleanupBeforeAutoRestore: descendantCleanupBeforeAutoRestore,
+            backgroundProcessesAllowed: backgroundProcessesAllowed,
             resolvedChildExecutable: resolvedChildExecutable,
             resolvedChildExecutablePathPrivacy: resolvedChildExecutablePathPrivacy,
             resolvedChildExecutableSHA256: resolvedChildExecutableSHA256,
@@ -2053,6 +2304,9 @@ private final class ValidationEvidenceReviewHarness {
         commandErrorSchemaID: String = "https://vifty.local/schemas/viftyctl-command-error.schema.json",
         runSchemaID: String = "https://vifty.local/schemas/viftyctl-run.schema.json",
         resolvedChildExecutableReported: Bool? = true,
+        signalScope: String? = "processGroup",
+        descendantCleanupBeforeAutoRestore: Bool? = true,
+        backgroundProcessesAllowed: Bool? = false,
         resolvedChildExecutable: String? = "sleep",
         resolvedChildExecutablePathPrivacy: String? = "basenameOnly",
         finalRunResolvedChildExecutable: String? = "/bin/sleep",
@@ -2116,7 +2370,10 @@ private final class ValidationEvidenceReviewHarness {
                 "resolvedChildExecutable": NSNull(),
                 "resolvedChildExecutablePathPrivacy": "notProvided",
                 "resolvedChildExecutableSHA256": NSNull(),
-                "resolvedChildExecutableSHA256Status": NSNull()
+                "resolvedChildExecutableSHA256Status": NSNull(),
+                "signalScope": NSNull(),
+                "descendantCleanupBeforeAutoRestore": NSNull(),
+                "backgroundProcessesAllowed": NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -2166,7 +2423,10 @@ private final class ValidationEvidenceReviewHarness {
                 "resolvedChildExecutable": resolvedChildExecutable as Any? ?? NSNull(),
                 "resolvedChildExecutablePathPrivacy": resolvedChildExecutablePathPrivacy as Any? ?? NSNull(),
                 "resolvedChildExecutableSHA256": resolvedChildExecutableSHA256 as Any? ?? NSNull(),
-                "resolvedChildExecutableSHA256Status": resolvedChildExecutableSHA256Status as Any? ?? NSNull()
+                "resolvedChildExecutableSHA256Status": resolvedChildExecutableSHA256Status as Any? ?? NSNull(),
+                "signalScope": signalScope as Any? ?? NSNull(),
+                "descendantCleanupBeforeAutoRestore": descendantCleanupBeforeAutoRestore as Any? ?? NSNull(),
+                "backgroundProcessesAllowed": backgroundProcessesAllowed as Any? ?? NSNull()
             ]
             commands = [
                 ["name": "pre-capabilities", "status": 0, "stdout": "pre-capabilities.json", "stderr": "pre-capabilities.stderr", "statusFile": "pre-capabilities.status"],
@@ -2194,7 +2454,7 @@ private final class ValidationEvidenceReviewHarness {
                 status: 0,
                 stdout: "pre-capabilities.json",
                 stderr: "pre-capabilities.stderr",
-                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)","run":"\#(runSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)}}"#
+                stdoutContents: #"{"schemaVersion":\#(capabilitiesSchemaVersion),"schemaIDs":{"capabilities":"\#(capabilitiesSchemaID)","diagnose":"\#(diagnoseSchemaID)","commandError":"\#(commandErrorSchemaID)","run":"\#(runSchemaID)"},"daemonStatusAvailable":\#(daemonStatusAvailable),"policySource":"\#(policySource)","policyStatusAvailable":\#(policyStatusAvailable),"policy":{"enabled":\#(policyEnabled)},"runLifecycle":{"signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false}}"#
             )
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
@@ -2225,7 +2485,7 @@ private final class ValidationEvidenceReviewHarness {
             let finalRunSignalNameField = finalRunSignalName.map { #","childSignalName":"\#($0)""# } ?? ""
             let initialRunStdoutContents = rateLimitRetryAttempted
                 ? (rateLimitInitialStdoutContents ?? #"{"schemaVersion":1,"command":"run","errorCode":"PREPARE_RATE_LIMITED","message":"Wait before retrying","safeToProceed":false,"recommendedRecoveryAction":"waitBeforeRetry","coolingLeasePrepared":false,"autoRestoreAttempted":false,"autoRestoreSucceeded":null,"retryAfterSeconds":\#(rateLimitRetryAfterSeconds)}"#)
-                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(finalRunExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
+                : #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(finalRunExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false,"autoRestoreError":null}"#
             try writeAgentRunSmokeCommandFiles(
                 in: smokeBundleURL,
                 name: "viftyctl-run",
@@ -2241,7 +2501,7 @@ private final class ValidationEvidenceReviewHarness {
                     status: runExitStatus,
                     stdout: "viftyctl-run-retry.json",
                     stderr: "viftyctl-run-retry.stderr",
-                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(finalRunExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"autoRestoreError":null}"#
+                    stdoutContents: #"{"schemaVersion":1,"schemaID":"\#(runSchemaID)","command":"run","coolingLeasePrepared":\#(coolingLeasePrepared),"autoRestoreAttempted":\#(autoRestoreAttempted),"autoRestoreSucceeded":\#(autoRestoreSucceeded),"childExitCode":\#(childExitCode)\#(finalRunTerminationField)\#(finalRunSignalField)\#(finalRunSignalNameField),"resolvedChildExecutable":"\#(finalRunExecutable ?? "/bin/sleep")"\#(finalRunDigestField)\#(finalRunDigestStatusField),"signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false,"autoRestoreError":null}"#
                 )
             }
         }
@@ -2260,6 +2520,9 @@ private final class ValidationEvidenceReviewHarness {
             "commandErrorSchemaID": commandErrorSchemaID,
             "runSchemaID": runSchemaID,
             "resolvedChildExecutableReported": resolvedChildExecutableReported as Any? ?? NSNull(),
+            "signalScope": signalScope as Any? ?? NSNull(),
+            "descendantCleanupBeforeAutoRestore": descendantCleanupBeforeAutoRestore as Any? ?? NSNull(),
+            "backgroundProcessesAllowed": backgroundProcessesAllowed as Any? ?? NSNull(),
             "daemonStatusAvailable": status == "blocked" ? false : daemonStatusAvailable,
             "policySource": status == "blocked" ? "fallbackUnavailable" : policySource,
             "policyStatusAvailable": status == "blocked" ? false : policyStatusAvailable,
@@ -2673,63 +2936,308 @@ private final class ValidationEvidenceReviewHarness {
     private func writeReleaseArtifactSummary(
         signatureChecksSkipped: Bool,
         notarizationChecksSkipped: Bool,
+        schemaVersion: Int,
         schemaID: String,
+        caskVersion: String,
+        bundleVersion: String,
+        releaseVersion: String?,
         expectedArtifactName: String,
+        expectedSHASource: String,
         expectedSHA: String,
         actualSHA: String,
-        checkStatus: String
+        checkStatus: String,
+        forgedManifestSHA256: String?,
+        omittedCheckName: String?,
+        duplicateCheckName: String?,
+        currentManifestSHA: String?
     ) throws {
-        try writeJSON(
-            "release-artifact-summary.json",
-            [
-                "schemaVersion": 1,
-                "schemaID": schemaID,
-                "status": "passed",
-                "generatedAtUTC": "2026-06-11T00:00:00Z",
-                "caskVersion": "1.2.3",
-                "caskURL": "https://github.com/Reedtrullz/Vifty/releases/download/v1.2.3/Vifty-v1.2.3.zip",
-                "expectedArtifactName": expectedArtifactName,
-                "artifactPath": "/tmp/Vifty-v1.2.3.zip",
-                "appPath": "/tmp/extract/Vifty.app",
-                "bundleVersion": "1.2.3",
-                "expectedSHA": expectedSHA,
-                "expectedSHASource": "expected sha256",
-                "actualSHA": actualSHA,
-                "expectedTeamID": "TEAMID1234",
-                "requiredTeamID": "TEAMID1234",
-                "signatureChecksSkipped": signatureChecksSkipped,
-                "notarizationChecksSkipped": notarizationChecksSkipped,
-                "checks": [
-                    [
-                        "name": "artifact-sha",
-                        "status": "passed",
-                        "scope": "release-trust",
-                        "note": "Artifact SHA-256 matched expected sha256."
-                    ],
-                    [
-                        "name": "codesign-teamid",
-                        "status": checkStatus,
-                        "scope": "release-trust",
-                        "note": "Signature and TeamID checks."
-                    ],
-                    [
-                        "name": "notarization-gatekeeper",
-                        "status": "passed",
-                        "scope": "release-trust",
-                        "note": "Stapler validation and Gatekeeper assessment passed."
-                    ]
-                ]
-            ]
+        let resolvedReleaseVersion = releaseVersion ?? bundleVersion
+        let currentEntryKind = caskVersion == resolvedReleaseVersion || expectedSHASource == "expected sha256"
+            ? "published"
+            : "historical"
+        let taggedManifestSHA256 = try writeTaggedCandidateManifest(
+            version: resolvedReleaseVersion,
+            build: 43,
+            sha: expectedSHASource == "manifest sha256" ? expectedSHA : nil
         )
+        try writeAuthoritativeReleaseManifest(
+            caskVersion: caskVersion,
+            releaseVersion: resolvedReleaseVersion,
+            releaseEntryKind: currentEntryKind,
+            selectedSHA: currentManifestSHA ?? expectedSHA,
+            selectedBuild: 43,
+            candidateHasManifestSHA: true
+        )
+
+        var checks = Self.releaseCheckNames
+            .filter { $0 != omittedCheckName }
+            .map { name -> [String: Any] in
+                [
+                    "name": name,
+                    "status": name == "codesign-teamid" ? checkStatus : "passed",
+                    "scope": "release-trust",
+                    "note": "\(name) release trust check."
+                ]
+            }
+        if let duplicateCheckName,
+           let duplicated = checks.first(where: { $0["name"] as? String == duplicateCheckName }) {
+            checks.append(duplicated)
+        }
+
+        var summary: [String: Any] = [
+            "schemaVersion": schemaVersion,
+            "schemaID": schemaID,
+            "status": "passed",
+            "generatedAtUTC": "2026-06-11T00:00:00Z",
+            "caskVersion": caskVersion,
+            "caskURL": "https://github.com/Reedtrullz/Vifty/releases/download/v\(caskVersion)/Vifty-v\(caskVersion).zip",
+            "expectedArtifactName": expectedArtifactName,
+            "artifactPath": "/tmp/\(expectedArtifactName)",
+            "appPath": "/tmp/extract/Vifty.app",
+            "bundleVersion": bundleVersion,
+            "expectedSHA": expectedSHA,
+            "expectedSHASource": expectedSHASource,
+            "actualSHA": actualSHA,
+            "expectedTeamID": "TEAMID1234",
+            "requiredTeamID": "TEAMID1234",
+            "signatureChecksSkipped": signatureChecksSkipped,
+            "notarizationChecksSkipped": notarizationChecksSkipped,
+            "checks": checks
+        ]
+        if schemaVersion == 2 {
+            summary["bundleBuild"] = 43
+            summary["bundleIdentifier"] = "tech.reidar.vifty"
+            summary["releaseVersion"] = resolvedReleaseVersion
+            summary["releaseTag"] = "v\(resolvedReleaseVersion)"
+            summary["releaseSourceCommit"] = releaseSourceCommit
+            summary["releaseManifestEntryKind"] = "candidate"
+            summary["releaseManifestSchemaVersion"] = 1
+            summary["releaseManifestSHA256"] = forgedManifestSHA256 ?? taggedManifestSHA256
+            summary["runtimeIdentifiers"] = [
+                "app": "tech.reidar.vifty",
+                "daemon": "tech.reidar.vifty.daemon",
+                "helper": "tech.reidar.vifty.helper",
+                "ctl": "tech.reidar.vifty.ctl"
+            ]
+            summary["launchDaemonLabel"] = "tech.reidar.vifty.daemon"
+            summary["machServiceName"] = "tech.reidar.vifty.daemon"
+            summary["architectures"] = [
+                "expected": ["arm64"],
+                "app": ["arm64"],
+                "helper": ["arm64"],
+                "daemon": ["arm64"],
+                "ctl": ["arm64"]
+            ]
+        }
+        try writeJSON("release-artifact-summary.json", summary)
         try writeText(
             "release-artifact-summary.tsv",
             contents: """
             field\tvalue
-            installedAppBundleVersion\t1.2.3
-            caskVersion\t1.2.3
-            bundleVersion\t1.2.3
+            installedAppBundleVersion\t\(bundleVersion)
+            caskVersion\t\(caskVersion)
+            bundleVersion\t\(bundleVersion)
+            releaseVersion\t\(resolvedReleaseVersion)
             """
         )
+    }
+
+    private static let releaseCheckNames = [
+        "artifact-sha",
+        "app-bundle-present",
+        "required-executables",
+        "support-scripts",
+        "workload-wrappers",
+        "schema-resources",
+        "plist-lint",
+        "bundle-version",
+        "bundle-identity",
+        "xpc-trust-metadata",
+        "binary-architectures",
+        "codesign-teamid",
+        "codesign-runtime-entitlements",
+        "notarization-gatekeeper"
+    ]
+
+    private func writeTaggedCandidateManifest(
+        version: String,
+        build: Int,
+        sha: String?
+    ) throws -> String {
+        let manifestURL = releaseSourceRepositoryURL
+            .appendingPathComponent(".github/release-manifest.json")
+        try FileManager.default.createDirectory(
+            at: manifestURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let priorSourceCommit = releaseSourceCommit
+        let candidateSHA: Any = sha ?? NSNull()
+        let manifest: [String: Any] = [
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "schemaVersion": 1,
+            "schemaID": "https://vifty.local/schemas/release-manifest.schema.json",
+            "product": [
+                "bundleID": "tech.reidar.vifty",
+                "daemonID": "tech.reidar.vifty.daemon",
+                "helperID": "tech.reidar.vifty.helper",
+                "ctlID": "tech.reidar.vifty.ctl",
+                "architectures": ["arm64"],
+                "minimumMacOS": "15.0"
+            ],
+            "releasePolicy": [
+                "developerTeamID": "TEAMID1234",
+                "signedTagsRequiredFromVersion": "1.0.0"
+            ],
+            "historicalReleases": [],
+            "publishedRelease": [
+                "version": "0.0.1",
+                "build": 1,
+                "tag": "v0.0.1",
+                "sourceCommit": priorSourceCommit,
+                "sourceCIRunID": 1,
+                "releaseWorkflowRunID": 1,
+                "artifact": "Vifty-v0.0.1.zip",
+                "checksumAsset": "Vifty-v0.0.1.zip.sha256",
+                "artifactSummary": "Vifty-v0.0.1-artifact-summary.json",
+                "releaseChecklist": "Vifty-v0.0.1-release-checklist.md",
+                "sha256": String(repeating: "0", count: 64),
+                "artifactTrust": "passed",
+                "signingTrust": "developer-id-notarized",
+                "tagTrust": "historical-unsigned",
+                "installedReleaseReview": "pending",
+                "manualCompatibility": "pending",
+                "manualCompatibilityScope": NSNull()
+            ],
+            "candidate": [
+                "version": version,
+                "build": build,
+                "tag": "v\(version)",
+                "artifact": "Vifty-v\(version).zip",
+                "checksumAsset": "Vifty-v\(version).zip.sha256",
+                "artifactSummary": "Vifty-v\(version)-artifact-summary.json",
+                "releaseChecklist": "Vifty-v\(version)-release-checklist.md",
+                "sha256": candidateSHA,
+                "artifactTrust": "pending",
+                "signingTrust": "pending",
+                "tagTrust": "signed-required",
+                "installedReleaseReview": "pending",
+                "manualCompatibility": "pending",
+                "manualCompatibilityScope": NSNull()
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: manifestURL)
+        _ = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", releaseSourceRepositoryURL.path, "add", ".github/release-manifest.json"]
+        )
+        _ = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: [
+                "-C", releaseSourceRepositoryURL.path,
+                "-c", "user.name=Vifty Tests",
+                "-c", "user.email=vifty-tests@example.invalid",
+                "commit", "--quiet", "-m", "tagged release manifest"
+            ]
+        )
+        releaseSourceCommit = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", releaseSourceRepositoryURL.path, "rev-parse", "HEAD"]
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try Self.run(
+            executable: URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", releaseSourceRepositoryURL.path, "tag", "-f", "v\(version)", releaseSourceCommit]
+        )
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func writeAuthoritativeReleaseManifest(
+        caskVersion: String,
+        releaseVersion: String,
+        releaseEntryKind: String,
+        selectedSHA: String,
+        selectedBuild: Int,
+        candidateHasManifestSHA: Bool
+    ) throws {
+        func release(
+            version: String,
+            build: Int,
+            sha: Any,
+            sourceCommit: Any,
+            tagTrust: String
+        ) -> [String: Any] {
+            [
+                "version": version,
+                "build": build,
+                "tag": "v\(version)",
+                "sourceCommit": sourceCommit,
+                "artifact": "Vifty-v\(version).zip",
+                "checksumAsset": "Vifty-v\(version).zip.sha256",
+                "artifactSummary": "Vifty-v\(version)-artifact-summary.json",
+                "releaseChecklist": "Vifty-v\(version)-release-checklist.md",
+                "sha256": sha,
+                "tagTrust": tagTrust
+            ]
+        }
+
+        let selectedPublished = releaseEntryKind == "published"
+        let publishedVersion = selectedPublished ? releaseVersion : caskVersion
+        let published = release(
+            version: publishedVersion,
+            build: selectedPublished ? selectedBuild : selectedBuild + 1,
+            sha: selectedPublished ? selectedSHA : String(repeating: "b", count: 64),
+            sourceCommit: releaseSourceCommit,
+            tagTrust: "signed-verified"
+        )
+        let historical: [[String: Any]] = releaseEntryKind == "historical"
+            ? [release(
+                version: releaseVersion,
+                build: selectedBuild,
+                sha: selectedSHA,
+                sourceCommit: releaseSourceCommit,
+                tagTrust: "signed-verified"
+            )]
+            : []
+        let candidate: Any
+        if releaseEntryKind == "candidate" {
+            let candidateSHA: Any
+            if candidateHasManifestSHA {
+                candidateSHA = selectedSHA
+            } else {
+                candidateSHA = NSNull()
+            }
+            candidate = release(
+                version: releaseVersion,
+                build: selectedBuild,
+                sha: candidateSHA,
+                sourceCommit: NSNull(),
+                tagTrust: "signed-required"
+            )
+        } else {
+            candidate = NSNull()
+        }
+        let manifest: [String: Any] = [
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "schemaVersion": 1,
+            "schemaID": "https://vifty.local/schemas/release-manifest.schema.json",
+            "product": [
+                "bundleID": "tech.reidar.vifty",
+                "daemonID": "tech.reidar.vifty.daemon",
+                "helperID": "tech.reidar.vifty.helper",
+                "ctlID": "tech.reidar.vifty.ctl",
+                "architectures": ["arm64"],
+                "minimumMacOS": "15.0"
+            ],
+            "releasePolicy": [
+                "developerTeamID": "TEAMID1234",
+                "signedTagsRequiredFromVersion": "1.0.0"
+            ],
+            "historicalReleases": historical,
+            "publishedRelease": published,
+            "candidate": candidate
+        ]
+        try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+            .write(to: releaseManifestURL)
     }
 
     private func writeReleaseChecklist(version: String) throws {
@@ -2855,6 +3363,9 @@ private final class ValidationEvidenceReviewHarness {
     runLifecycle.structuredPreChildFailures\ttrue\ttrue
     runLifecycle.cleanupStateReportedOnLaunchFailure\ttrue\ttrue
     runLifecycle.resolvedChildExecutableReported\ttrue\ttrue
+    runLifecycle.signalScope\tprocessGroup\tprocessGroup
+    runLifecycle.descendantCleanupBeforeAutoRestore\ttrue\ttrue
+    runLifecycle.backgroundProcessesAllowed\tfalse\tfalse
     runLifecycle.signalsForwardedToChild\tINT,TERM,HUP\tINT,TERM,HUP
     directControlLifecycle.prepareUsesIdempotencyKey\ttrue\ttrue
     directControlLifecycle.restoreAutoAcceptsIdempotencyKey\tfalse\tfalse
@@ -2867,4 +3378,27 @@ private final class ValidationEvidenceReviewHarness {
     wrapperResources.guardedRunScript\tguarded-run.sh\tguarded-run.sh
     wrapperResources.workloadScripts\tbun-build.sh,bun-test.sh,cargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pnpm-build.sh,pnpm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,uv-build.sh,uv-test.sh,xcode-build.sh,xcode-test.sh\tbun-build.sh,bun-test.sh,cargo-build.sh,cargo-test.sh,custom-workload.sh,go-build.sh,go-test.sh,local-model.sh,make-build.sh,make-test.sh,make-verify.sh,npm-build.sh,npm-test.sh,pnpm-build.sh,pnpm-test.sh,pytest.sh,swift-release-build.sh,swift-test.sh,uv-build.sh,uv-test.sh,xcode-build.sh,xcode-test.sh
     """
+
+    @discardableResult
+    private static func run(executable: URL, arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = arguments
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        if process.terminationStatus != 0 {
+            let error = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            throw NSError(
+                domain: "ValidationEvidenceReviewHarness",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: error]
+            )
+        }
+        return output
+    }
 }

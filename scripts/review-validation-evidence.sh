@@ -202,6 +202,12 @@ if [[ ! -d "${BUNDLE_DIR}" ]]; then
   exit 66
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+RELEASE_ARTIFACT_CONTRACT_PATH="${VIFTY_RELEASE_ARTIFACT_CONTRACT_PATH:-${ROOT_DIR}/scripts/lib/release_artifact_contract.rb}"
+RELEASE_MANIFEST_PATH="${VIFTY_RELEASE_MANIFEST_PATH:-${ROOT_DIR}/.github/release-manifest.json}"
+RELEASE_SOURCE_REPOSITORY="${VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT:-${ROOT_DIR}}"
+
 ruby -rjson -rcsv -rdigest -rfileutils -e '
   bundle = File.expand_path(ARGV.fetch(0))
   mode = ARGV.fetch(1)
@@ -213,6 +219,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   agent_run_smoke_source = ARGV.fetch(7, "")
   agent_run_smoke_readiness_summary_path = ARGV.fetch(8, "")
   agent_run_smoke_summary_path = ARGV.fetch(9, "")
+  release_artifact_contract_path = ARGV.fetch(10)
+  release_manifest_path = ARGV.fetch(11)
+  release_source_repository = ARGV.fetch(12)
+  load release_artifact_contract_path if mode == "release"
   failures = []
   warnings = []
   VALIDATION_REVIEW_RESULT_SCHEMA_ID = "https://vifty.local/schemas/validation-review-result.schema.json"
@@ -270,6 +280,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     "runLifecycle.structuredPreChildFailures" => "true",
     "runLifecycle.cleanupStateReportedOnLaunchFailure" => "true",
     "runLifecycle.resolvedChildExecutableReported" => "true",
+    "runLifecycle.signalScope" => "processGroup",
+    "runLifecycle.descendantCleanupBeforeAutoRestore" => "true",
+    "runLifecycle.backgroundProcessesAllowed" => "false",
     "runLifecycle.signalsForwardedToChild" => "INT,TERM,HUP",
     "directControlLifecycle.prepareUsesIdempotencyKey" => "true",
     "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => "false",
@@ -804,8 +817,8 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     unless summary["diagnoseExitStatus"] == 0
       failures << "manual-smoke readiness summary diagnoseExitStatus must be 0 before passed manual smoke"
     end
-    unless %w[ready degraded].include?(summary["diagnoseState"].to_s)
-      failures << "manual-smoke readiness summary diagnoseState must be ready or degraded"
+    unless %w[ready degraded].include?(summary["state"].to_s)
+      failures << "manual-smoke readiness summary state must be ready or degraded"
     end
     unless summary["safeToRequestCooling"] == true
       failures << "manual-smoke readiness summary safeToRequestCooling must be true"
@@ -1568,6 +1581,9 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
           preflight["diagnoseSchemaID"] == DIAGNOSE_SCHEMA_ID &&
           preflight["commandErrorSchemaID"] == COMMAND_ERROR_SCHEMA_ID &&
           preflight["runSchemaID"] == RUN_SCHEMA_ID &&
+          preflight["signalScope"] == "processGroup" &&
+          preflight["descendantCleanupBeforeAutoRestore"] == true &&
+          preflight["backgroundProcessesAllowed"] == false &&
           preflight["daemonStatusAvailable"] == true &&
           preflight["policySource"] == "daemonStatus" &&
           preflight["policyStatusAvailable"] == true &&
@@ -1602,7 +1618,10 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
             pre_capabilities["daemonStatusAvailable"] == true &&
             pre_capabilities["policySource"] == "daemonStatus" &&
             pre_capabilities["policyStatusAvailable"] == true &&
-            pre_capabilities.dig("policy", "enabled") == true
+            pre_capabilities.dig("policy", "enabled") == true &&
+            pre_capabilities.dig("runLifecycle", "signalScope") == "processGroup" &&
+            pre_capabilities.dig("runLifecycle", "descendantCleanupBeforeAutoRestore") == true &&
+            pre_capabilities.dig("runLifecycle", "backgroundProcessesAllowed") == false
           failures << "passed agent-run-smoke pre-capabilities JSON must have daemon-backed policy status"
         end
       end
@@ -1630,6 +1649,15 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       unless run["childExitCode"] == 0
         failures << "passed agent-run-smoke summary must report childExitCode=0"
       end
+      unless run["signalScope"] == "processGroup"
+        failures << "passed agent-run-smoke summary must report signalScope=processGroup"
+      end
+      unless run["descendantCleanupBeforeAutoRestore"] == true
+        failures << "passed agent-run-smoke summary must report descendantCleanupBeforeAutoRestore=true"
+      end
+      unless run["backgroundProcessesAllowed"] == false
+        failures << "passed agent-run-smoke summary must report backgroundProcessesAllowed=false"
+      end
       if preflight["resolvedChildExecutableReported"] == true
         resolved_child_executable = run["resolvedChildExecutable"]
         resolved_child_executable_path_privacy = run["resolvedChildExecutablePathPrivacy"]
@@ -1654,6 +1682,15 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
           if final_resolved_child_executable.is_a?(String) &&
               File.basename(final_resolved_child_executable) != resolved_child_executable
             failures << "passed agent-run-smoke final run JSON resolvedChildExecutable basename must match summary run.resolvedChildExecutable"
+          end
+          if final_run_json["signalScope"] != run["signalScope"]
+            failures << "passed agent-run-smoke final run JSON signalScope must match summary run.signalScope"
+          end
+          if final_run_json["descendantCleanupBeforeAutoRestore"] != run["descendantCleanupBeforeAutoRestore"]
+            failures << "passed agent-run-smoke final run JSON descendantCleanupBeforeAutoRestore must match summary run.descendantCleanupBeforeAutoRestore"
+          end
+          if final_run_json["backgroundProcessesAllowed"] != run["backgroundProcessesAllowed"]
+            failures << "passed agent-run-smoke final run JSON backgroundProcessesAllowed must match summary run.backgroundProcessesAllowed"
           end
         end
         child_termination_reason = run["childTerminationReason"]
@@ -2179,8 +2216,13 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
 
     release_summary = parse_json(bundle, "release-artifact-summary.json", failures) || {}
-    unless release_summary["schemaVersion"] == 1
-      failures << "release-artifact-summary.json schemaVersion must be 1"
+    failures.concat(ViftyReleaseArtifactContract.validate_summary(
+      summary_path: bundle_path(bundle, "release-artifact-summary.json"),
+      manifest_path: release_manifest_path,
+      source_repository: release_source_repository
+    ))
+    unless [1, 2].include?(release_summary["schemaVersion"])
+      failures << "release-artifact-summary.json schemaVersion must be 1 or 2"
     end
     unless release_summary["schemaID"] == RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID
       failures << "release-artifact-summary.json schemaID must be #{RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID}"
@@ -2199,11 +2241,48 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     end
     if release_summary["bundleVersion"].to_s.empty?
       failures << "release-artifact-summary.json must include bundleVersion"
-    elsif release_summary["caskVersion"].to_s != release_summary["bundleVersion"].to_s
-      failures << "release caskVersion must match bundleVersion"
     end
-    unless release_summary["expectedArtifactName"].to_s == "Vifty-v#{release_summary["caskVersion"]}.zip"
-      failures << "release-artifact-summary.json expectedArtifactName must be Vifty-v#{release_summary["caskVersion"]}.zip"
+
+    release_identity_version = release_summary["caskVersion"].to_s
+    if release_summary["schemaVersion"] == 1
+      if !release_summary["bundleVersion"].to_s.empty? && release_summary["caskVersion"].to_s != release_summary["bundleVersion"].to_s
+        failures << "release caskVersion must match bundleVersion"
+      end
+    elsif release_summary["schemaVersion"] == 2
+      release_identity_version = release_summary["releaseVersion"].to_s
+      if release_identity_version.empty?
+        failures << "release-artifact-summary.json version 2 must include releaseVersion"
+      elsif release_identity_version != release_summary["bundleVersion"].to_s
+        failures << "release-artifact-summary.json releaseVersion must match bundleVersion"
+      end
+
+      unless release_summary["releaseTag"].to_s == "v#{release_identity_version}"
+        failures << "release-artifact-summary.json releaseTag must match releaseVersion"
+      end
+      release_entry_kind = release_summary["releaseManifestEntryKind"].to_s
+      unless %w[candidate published historical].include?(release_entry_kind)
+        failures << "release-artifact-summary.json releaseManifestEntryKind must be candidate, published, or historical"
+      end
+      unless release_summary["releaseSourceCommit"].to_s.match?(/\A[0-9a-f]{40}\z/)
+        failures << "release-artifact-summary.json releaseSourceCommit must be a lowercase 40-character tag commit"
+      end
+
+      expected_sha_source = release_summary["expectedSHASource"].to_s
+      if expected_sha_source == "cask sha256"
+        unless release_summary["caskVersion"].to_s == release_identity_version
+          failures << "release-artifact-summary.json using cask sha256 must have matching caskVersion and releaseVersion"
+        end
+      elsif expected_sha_source == "expected sha256"
+        unless release_entry_kind == "candidate"
+          failures << "release-artifact-summary.json using expected sha256 must select a candidate entry"
+        end
+      elsif expected_sha_source != "manifest sha256"
+        failures << "release-artifact-summary.json expectedSHASource must be cask sha256, expected sha256, or manifest sha256"
+      end
+    end
+
+    unless release_summary["expectedArtifactName"].to_s == "Vifty-v#{release_identity_version}.zip"
+      failures << "release-artifact-summary.json expectedArtifactName must be Vifty-v#{release_identity_version}.zip"
     end
     %w[expectedSHA actualSHA].each do |field|
       unless release_summary[field].to_s.match?(/\A[0-9a-f]{64}\z/)
@@ -2233,6 +2312,45 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       end
     end
 
+    if release_summary["schemaVersion"] == 2
+      unless release_summary["releaseManifestSchemaVersion"].is_a?(Integer) && release_summary["releaseManifestSchemaVersion"].positive?
+        failures << "release-artifact-summary.json releaseManifestSchemaVersion must be a positive integer"
+      end
+      unless release_summary["bundleBuild"].is_a?(Integer) && release_summary["bundleBuild"] > 0
+        failures << "release-artifact-summary.json bundleBuild must be a positive integer"
+      end
+      expected_ids = {
+        "app" => "tech.reidar.vifty",
+        "daemon" => "tech.reidar.vifty.daemon",
+        "helper" => "tech.reidar.vifty.helper",
+        "ctl" => "tech.reidar.vifty.ctl"
+      }
+      unless release_summary["bundleIdentifier"] == expected_ids["app"]
+        failures << "release-artifact-summary.json bundleIdentifier must be tech.reidar.vifty"
+      end
+      unless release_summary["runtimeIdentifiers"] == expected_ids
+        failures << "release-artifact-summary.json runtimeIdentifiers must match Vifty app/daemon/helper/ctl identities"
+      end
+      unless release_summary["launchDaemonLabel"] == expected_ids["daemon"] && release_summary["machServiceName"] == expected_ids["daemon"]
+        failures << "release-artifact-summary.json LaunchDaemon label and Mach service must match tech.reidar.vifty.daemon"
+      end
+      architecture_sets = release_summary["architectures"]
+      unless architecture_sets.is_a?(Hash) && %w[expected app helper daemon ctl].all? { |field| architecture_sets[field].is_a?(Array) && !architecture_sets[field].empty? }
+        failures << "release-artifact-summary.json architectures must include non-empty expected/app/helper/daemon/ctl arrays"
+      else
+        expected_architectures = architecture_sets["expected"].sort
+        %w[app helper daemon ctl].each do |field|
+          unless architecture_sets[field].sort == expected_architectures
+            failures << "release-artifact-summary.json architectures.#{field} must match architectures.expected"
+          end
+        end
+      end
+      release_check_names = release_checks.map { |check| check.is_a?(Hash) ? check["name"] : nil }.compact
+      %w[bundle-identity xpc-trust-metadata binary-architectures].each do |required_check|
+        failures << "release-artifact-summary.json checks must include #{required_check}" unless release_check_names.include?(required_check)
+      end
+    end
+
     release_rows = parse_tsv(bundle, "release-artifact-summary.tsv", failures)
     release_fields = release_rows.to_h { |row| [row["field"], row["value"]] }
     installed_version = release_fields["installedAppBundleVersion"].to_s
@@ -2247,8 +2365,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     checklist_version = release_checklist_fields["titleVersion"].to_s
     if checklist_version.empty?
       failures << "release-checklist.tsv must include titleVersion"
-    elsif !release_summary["caskVersion"].to_s.empty? && checklist_version != release_summary["caskVersion"].to_s
-      failures << "release checklist titleVersion must match release caskVersion"
+    elsif !release_identity_version.empty? && checklist_version != release_identity_version
+      if release_summary["schemaVersion"] == 1
+        failures << "release checklist titleVersion must match release caskVersion"
+      else
+        failures << "release checklist titleVersion must match release version"
+      end
     end
     checklist_installed_version = release_checklist_fields["installedAppBundleVersion"].to_s
     if checklist_installed_version.empty?
@@ -2287,4 +2409,4 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
   failures.each { |failure| warn "- #{failure}" }
   warnings.each { |warning| warn "warning: #{warning}" }
   exit 65
-' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${MANUAL_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_SUMMARY_PATH}"
+' "${BUNDLE_DIR}" "${MODE}" "${SUMMARY_PATH}" "${MANUAL_SMOKE_RESULT}" "${MANUAL_SMOKE_SOURCE}" "${MANUAL_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_RESULT}" "${AGENT_RUN_SMOKE_SOURCE}" "${AGENT_RUN_SMOKE_READINESS_SUMMARY_PATH}" "${AGENT_RUN_SMOKE_SUMMARY_PATH}" "${RELEASE_ARTIFACT_CONTRACT_PATH}" "${RELEASE_MANIFEST_PATH}" "${RELEASE_SOURCE_REPOSITORY}"

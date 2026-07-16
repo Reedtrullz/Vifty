@@ -7,6 +7,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
     public var selectedTemperatureName: String?
     public var selectedTemperatureCelsius: Double?
     public var temperatureWasUserSelected: Bool
+    public var temperatureRole: TemperatureSensorRole?
     public var highestTemperatureCelsius: Double?
     public var firstFanRPM: Int?
     public var averageFanRPM: Double?
@@ -19,6 +20,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
         selectedTemperatureName: String? = nil,
         selectedTemperatureCelsius: Double? = nil,
         temperatureWasUserSelected: Bool = false,
+        temperatureRole: TemperatureSensorRole? = nil,
         highestTemperatureCelsius: Double?,
         firstFanRPM: Int?,
         averageFanRPM: Double? = nil,
@@ -30,6 +32,7 @@ public struct TelemetrySample: Equatable, Identifiable, Sendable {
         self.selectedTemperatureName = selectedTemperatureName
         self.selectedTemperatureCelsius = selectedTemperatureCelsius
         self.temperatureWasUserSelected = temperatureWasUserSelected
+        self.temperatureRole = temperatureRole
         self.highestTemperatureCelsius = highestTemperatureCelsius
         self.firstFanRPM = firstFanRPM
         self.averageFanRPM = averageFanRPM
@@ -116,6 +119,7 @@ public struct TelemetryHistory: Equatable, Sendable {
 public struct TelemetryHistorySummary: Equatable, Sendable {
     public var sampleCount: Int
     public var sampleCountText: String
+    public var plottedSeriesCountText: String
     public var sampleWindowText: String?
     public var latestTemperatureLabel: String
     public var latestTemperatureText: String?
@@ -175,6 +179,13 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         temperatureValues = Self.temperatureValues(from: recentSamples, latest: latest)
         fanRPMValues = Self.fanRPMValues(from: recentSamples, usesAverageFanRPM: usesAverageFanRPM)
         batteryPowerValues = recentSamples.compactMap(\.batteryPowerWatts)
+        plottedSeriesCountText = Self.plottedSeriesCountText(
+            temperatureCount: temperatureValues.count,
+            fanCount: fanRPMValues.count,
+            batteryPowerCount: batteryPowerValues.count,
+            thermalPressureCount: min(history.sampleCount, boundedThermalLimit),
+            retainedSampleCount: history.sampleCount
+        )
         temperatureRangeText = Self.unsignedRangeText(temperatureValues, unit: "°C", decimals: 1)
         temperatureChangeText = Self.changeText(temperatureValues, unit: "°C", decimals: 1)
         fanRPMRangeText = Self.unsignedRangeText(fanRPMValues, unit: "RPM", decimals: 0)
@@ -241,11 +252,53 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
         return "\(hours) h \(remainderMinutes) min"
     }
 
+    public static func historyReadinessText(sampleCount: Int) -> String? {
+        switch sampleCount {
+        case ..<1:
+            return "History appears after two successful polls."
+        case 1:
+            return "History appears after one more successful poll."
+        default:
+            return nil
+        }
+    }
+
+    public static func plottedSeriesCountText(
+        temperatureCount: Int,
+        fanCount: Int,
+        batteryPowerCount: Int,
+        thermalPressureCount: Int,
+        retainedSampleCount: Int
+    ) -> String {
+        let availableSeries = [
+            (label: "temp", count: temperatureCount),
+            (label: "fan", count: fanCount),
+            (label: "power", count: batteryPowerCount),
+            (label: "thermal", count: thermalPressureCount)
+        ].filter { $0.count > 0 }
+
+        guard !availableSeries.isEmpty else {
+            return retainedSampleCount == 1 ? "1 retained sample" : "\(retainedSampleCount) retained samples"
+        }
+
+        let uniqueCounts = Set(availableSeries.map { $0.count })
+        if uniqueCounts.count == 1, let count = uniqueCounts.first {
+            return count == 1 ? "1 retained sample" : "\(count) plotted samples"
+        }
+
+        return availableSeries
+            .map { "\($0.count) \($0.label)" }
+            .joined(separator: " · ") + " points"
+    }
+
     public static func changeText(_ values: [Double], unit: String, decimals: Int) -> String? {
         guard let first = values.first, let last = values.last, values.count > 1 else { return nil }
         let delta = last - first
         let epsilon = decimals == 0 ? 0.5 : 0.05
-        guard abs(delta) >= epsilon else { return "steady" }
+        guard abs(delta) >= epsilon else {
+            let observedRange = (values.max() ?? first) - (values.min() ?? first)
+            return observedRange >= epsilon ? "returned to start" : "steady"
+        }
         let sign = delta > 0 ? "+" : "-"
         let formatted = formatUnsigned(abs(delta), unit: unit, decimals: decimals)
         return "\(sign)\(formatted)"
@@ -267,6 +320,12 @@ public struct TelemetryHistorySummary: Equatable, Sendable {
 
     private static func temperatureLabel(for sample: TelemetrySample?) -> String {
         guard let sample, sample.selectedTemperatureCelsius != nil else { return "Latest temp" }
+        if let role = sample.temperatureRole {
+            guard let name = sample.selectedTemperatureName, !name.isEmpty else {
+                return role.displayName
+            }
+            return "\(role.displayName) · \(name)"
+        }
         if sample.temperatureWasUserSelected { return "Selected temp" }
         guard let name = sample.selectedTemperatureName else { return "Highest temp" }
         return isCPUTemperatureName(name) ? "CPU temp" : "Highest temp"

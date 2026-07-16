@@ -1,6 +1,7 @@
 # Swift / SPM
 .build/
 DerivedData/
+.derivedData/
 *.xcodeproj
 *.xcworkspace
 Package.resolved
@@ -15,3 +16,6 @@ Package.resolved
 
 # Local agent workflow scratch
 .superpowers/
+
+# Machine-local native UI capture ledger (portable checkpoint is tracked separately)
+docs/ui-review/evidence-manifest.local.json

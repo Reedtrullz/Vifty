@@ -1,5 +1,15 @@
 # Release Process
 
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
+
 Vifty has two release modes:
 
 - **Source-first release:** used when Developer ID credentials are unavailable. The GitHub Release is the source tag plus release notes, with an optional clearly marked unsigned tester app zip.
@@ -11,7 +21,7 @@ For the current public release trust state, see [release-status.md](release-stat
 
 Use this mode when Apple Developer Program credentials are unavailable. It does not create a trusted public binary and must not claim Developer ID signing, notarization, stapling, Gatekeeper approval, or Homebrew trust.
 
-Sparkle auto-update is separate trusted-release work. Do not enable Sparkle for source-first, unsigned-dev, or `v1.2.0` artifacts. The updater requirements and test plan live in [auto-update.md](auto-update.md).
+Sparkle auto-update is separate trusted-release work. Do not enable Sparkle for source-first, unsigned-dev, or the current `v1.3.2` artifact. The updater requirements and test plan live in [auto-update.md](auto-update.md).
 
 The required source-first release-note warning is:
 
@@ -95,13 +105,14 @@ Use only the Apple Developer team intentionally designated to own Vifty's public
 Keep the signing boundary reproducible and private:
 
 1. Keep the Developer ID workflow strict and require artifact verification before publication.
-2. Keep Sparkle updater keys out of `Resources/Info.plist` until a separately verified signed-appcast release is ready.
-3. Store certificate material, `.p12` passwords, Apple app-specific passwords, and other secret values only in the local keychain or GitHub Actions secrets; never commit them or record them in project notes.
-4. Run the local signing/notarization smoke test and the release-secret name preflight before pushing a public tag.
+2. Configure the GitHub `release` environment with at least one directly verified non-owner User reviewer, self-review prevention, and administrator bypass disabled. A Team slug alone is not accepted because the environment response does not prove that the Team contains another eligible human. A YAML `environment: release` declaration alone is not proof of protection: GitHub can create a referenced missing environment without protection rules, and GitHub otherwise allows administrators to bypass protection by default. The trusted `sign-notarize` job therefore checks out the exact protected-main `github.sha`, hashes and runs its workflow contract plus `scripts/check-release-environment.sh --repo Reedtrullz/Vifty` before any signing-secret reference is evaluated. That checker also requires strict `SwiftPM checks` from GitHub Actions, branch protection enforced for administrators, at least one approving pull-request review, stale-review dismissal, CODEOWNERS review, approval after the latest push, conversation resolution, and no pull-request bypass, force-push, or deletion allowance. Its normalized readback is SHA-bound into the publication contract, revalidated by the isolated publish job, and retained in the private workflow handoff artifact for 90 days.
+3. Keep Sparkle updater keys out of `Resources/Info.plist` until a separately verified signed-appcast release is ready.
+4. Store certificate material, `.p12` passwords, Apple app-specific passwords, and other secret values only in the local keychain or GitHub Actions secrets on the protected `release` environment; never commit them or record them in project notes. Do not configure repository- or organization-scoped copies. GitHub's `${{ secrets.NAME }}` expression exposes the resolved value, not its storage scope, and falls back to a same-name repository or organization secret when the environment copy is absent. The workflow can constrain where secret references occur, but it cannot attest their origin from inside the job.
+5. Run the local signing/notarization smoke test and the release-secret name preflight before pushing a public tag.
 
-## Required GitHub Secrets
+## Required GitHub Environment Secrets
 
-Configure these repository secrets before running the `Release` workflow:
+Configure these secrets on the protected GitHub `release` environment before running the `Release` workflow. Do not configure repository- or organization-scoped copies. The release-secret operator preflight deliberately calls `gh secret list --env release --repo ...`, so a missing environment or credentials available only outside the environment fail that preflight. This proves that the required names exist on the environment at check time; it does not prove that duplicate names are absent at broader scopes or retrospectively prove which scope supplied a prior workflow run.
 
 - `APPLE_TEAM_ID` — Apple Developer TeamID used for signing and XPC allowlisting.
 - `APPLE_ID` — Apple ID email for `xcrun notarytool`.
@@ -112,15 +123,20 @@ Configure these repository secrets before running the `Release` workflow:
 
 ## Developer ID Version Requirements
 
-Before tagging a Developer ID release, update all trusted-binary release-facing versions to the same value:
+Before tagging a Developer ID release, add a non-null `candidate` to `.github/release-manifest.json` and align the candidate identity without repointing Homebrew:
 
+- `.github/release-manifest.json` candidate `version`, `build`, tag, and canonical asset names
 - `Resources/Info.plist` `CFBundleShortVersionString`
-- `Casks/vifty.rb` `version`
+- `Resources/Info.plist` monotonically increasing `CFBundleVersion`
 - Git tag, formatted as `v<version>`
 
-The release workflow fails if the tag-derived release version, bundle version, cask version, release artifact URL, cask SHA shape, cask signing metadata, privileged-helper cleanup path, TeamID-gated daemon build configuration, notarization/stapling workflow gates, release verifier signature/notarization checks, Gatekeeper assessment, or GitHub Release asset publication does not align. The workflow must not pass verifier skip flags that disable public signature or notarization checks. The cask must not declare `signing_identity identity: "-"`, and its uninstall caveats must remove `/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon`. Update the Homebrew cask checksum with `scripts/update-cask-checksum.sh` after the workflow publishes the final notarized zip and checksum, then run `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` to verify the published artifact still matches the cask and passes signing, stapling, and Gatekeeper checks.
+The candidate build must be greater than the published build. `Casks/vifty.rb` must remain exactly on the manifest's published version and SHA until the new notarized artifact exists, passes verification, and the candidate is promoted; pointing the cask at an unpublished candidate would create a broken install URL/checksum. The release workflow fails if the tag-derived version, candidate, bundle version/build, published cask version/SHA, release artifact names, cask signing metadata, safe bundled uninstall lifecycle, TeamID-gated daemon build configuration, notarization/stapling gates, verifier signature/notarization checks, Gatekeeper assessment, or GitHub Release asset publication does not align. A candidate checksum may remain `null` until the notarized zip exists; only the protected pre-publication verifier may use a differing explicit `--expected-sha` from the just-created sidecar. Current and historical published entries are always verified against their immutable manifest SHA, and every selected entry—including a candidate—must resolve `releaseSourceCommit` from the exact manifest tag's peeled commit. The Homebrew cask remains bound only to the current `publishedRelease`.
 
-The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` must point at the same name.
+`historicalReleases` is append-only. CI materializes the prior manifest and its continuity checker from the trusted PR base, push-before commit, or exact first parent. Existing historical entries must remain an unchanged prefix; when `publishedRelease` changes, the previous published object must be appended unchanged exactly once. A missing prior manifest is accepted only for the pinned initial v1.3.2 manifest introduction.
+
+In a version-2 verifier summary, `releaseVersion`, `releaseTag`, `releaseSourceCommit`, `releaseManifestEntryKind`, and `releaseManifestSHA256` bind the evidence to the exact `.github/release-manifest.json` bytes stored at the peeled release-tag commit. Promotion does not rewrite that immutable identity: a summary created from a tagged `candidate` remains a candidate-snapshot summary after the current manifest moves the release to `publishedRelease` and later `historicalReleases`. Evidence collection/review separately requires the current authoritative manifest to preserve the tagged version/build/tag/artifact asset names, bind `sourceCommit` to the peeled tag commit, and pin the summary's actual artifact SHA. Passed summaries contain the exact unique 14-check verifier set, with every check marked `passed` in `release-trust` scope. The protected release workflow may temporarily verify a current candidate with a null manifest SHA only because the protected publication contract independently carries that just-built SHA into the write-scoped publish job. Legacy schema-version-1 evidence acceptance is limited to the exact public v1.3.2 artifact and its historical check set; a separate verifier-only v1.3.2 fallback exists because that tag predates the manifest file, but its generated v2 result is not accepted by strict evidence collection/review. Later releases cannot use either escape hatch. The workflow must not pass verifier skip flags that disable public signature or notarization checks. The cask must not declare `signing_identity identity: "-"` or bypass the bundled lifecycle with direct `sudo launchctl`/`rm` teardown.
+
+The candidate notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` points at that name only after candidate promotion and checksum handoff.
 
 ## Developer ID Release Checklist
 
@@ -130,7 +146,18 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    scripts/check-release-secrets.sh --repo Reedtrullz/Vifty
    ```
 
-   This checks only secret names, not values. It should report all required Developer ID and notarization secret names before a release tag is pushed or a failed release workflow is rerun.
+   This checks only secret names, not values, on the GitHub `release` environment. It should report all required Developer ID and notarization secret names before a release tag is pushed or a failed release workflow is rerun. A missing or unreadable `release` environment, or names configured only outside that environment, blocks the operator preflight. Because GitHub does not expose secret-origin metadata to the running job, separately confirm that same-name repository or organization secrets do not exist.
+
+   Confirm the protected scheduling gate separately:
+
+   ```sh
+   scripts/check-release-environment.sh --repo Reedtrullz/Vifty \
+     --output .build/release-environment-readback.json
+   ```
+
+   This read-only API check must show at least one complete eligible non-owner User login, `preventSelfReview: true`, `administratorsCanBypass: false`, protected-branch-only deployment policy, and the full strong-protection contract for `main`. Team-only configuration remains blocked because membership is not proved by the environment response. A missing/unreadable environment, owner-only or Team-only reviewer rule, enabled or unreadable administrator bypass, deployment-policy drift, administrator-exempt branch protection, missing reviewed CI/PR/CODEOWNERS/last-push/conversation gates, any pull-request bypass, or force-push/deletion allowance blocks publication setup. If no eligible reviewer exists, keep the manifest candidate `null`, do not create an owner-only substitute, and do not dispatch the Release workflow. The trusted `sign-notarize` job validates the exact protected-main workflow contract, repeats this API readback, binds it into the publication contract, and keeps the revalidated normalized evidence for 90 days in the workflow artifact; the job fails before signing secrets are used even if GitHub has auto-created an unprotected environment from the workflow reference.
+
+   Publication also requires GitHub's rulesets API to expose an active tag-target ruleset that applies to the exact `refs/tags/v<version>` ref, has no bypass actors, and contains both the `update` and `deletion` restrictions. The release workflow performs that semantic read itself, records the matching ruleset ID, include-pattern evidence, rule types, empty bypass set, and API-visibility result in the protected publication contract, then rechecks the same ruleset immediately before and after promotion. Missing API visibility, an excluded tag, a bypass actor, or either missing restriction blocks publication.
 
 2. Confirm the read-only release readiness preflight. Fetch the intended release source first so the preflight can reject stale local refs:
 
@@ -152,33 +179,49 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    ```
 
 4. Update `CHANGELOG.md`: move `Unreleased` entries under the new version and date.
-5. Update `Resources/Info.plist` and `Casks/vifty.rb` to the release version. Remove the cask `disable!` stanza only in the final Developer ID candidate commit immediately before tagging. Do not recommend Homebrew until the published artifact checksum has been applied and the public verifier passes.
-6. Commit the release prep. The cask checksum can be updated in a follow-up commit after the notarized artifact exists.
-7. Tag the commit:
+5. Add the release candidate to `.github/release-manifest.json`, choose a build number greater than the published build, and update `Resources/Info.plist` to the candidate version/build. Do not edit, delete, or reorder prior `historicalReleases`. During a later promotion, append the exact previous `publishedRelease` before replacing it. Keep `Casks/vifty.rb` exactly on the current published manifest version/SHA throughout candidate build, signing, notarization, and publication. The candidate SHA may remain `null` until the notarized artifact exists. Do not repoint or recommend Homebrew until the candidate is promoted and the public checksum has been applied and verified.
+6. Commit the release prep, merge it to protected `main`, and wait for CI to pass on that exact merged commit. The cask checksum and published manifest facts are post-publication follow-up changes.
+7. Create and push an annotated signed tag for that exact CI-passed commit:
 
    ```sh
-   git tag v<version>
-   git push origin main --tags
+   git tag -s v<version> <exact-merged-main-sha> -m "Vifty v<version>"
+   git verify-tag v<version>
+   git push origin v<version>
+   gh workflow run Release --ref main -f tag=v<version>
    ```
 
-8. Watch the `Release` workflow. It will:
+   Future signed-tag policy starts at the manifest's non-null `signedTagsRequiredFromVersion`; the historical unsigned `v1.3.2` record remains evidence and is not rewritten. Release publication is deliberately not triggered by tag push: dispatch the reviewed workflow from protected `main` and pass the existing signed tag as input. The workflow uses the exact protected-main workflow revision's signer policy for `git verify-tag`; the release tag cannot authorize its own signer. The verified annotated-tag object SHA and peeled commit SHA are carried in the publication contract and rechecked against the remote ref around promotion. The publication job creates the draft through the GitHub REST API only after that exact identity check; it never treats tag existence or a tag-addressed release CLI as signature proof. Separately, the workflow must prove through GitHub's rulesets API that the exact tag is covered by an active, no-bypass update-and-deletion ruleset; that evidence is embedded in the publication contract and revalidated by ruleset ID before the draft can become public.
 
-   - validate tag and bundle versions;
-   - validate that release metadata and the cask artifact URL agree;
-   - import the Developer ID Application certificate into a temporary keychain;
-   - run the full XCTest suite with an isolated SwiftPM build path;
-   - build with `SIGNING_IDENTITY` and `VIFTY_XPC_ALLOWED_TEAM_ID`;
-   - verify signing identifiers and TeamID;
+8. Watch the manually dispatched `Release` workflow. It will:
+
+   - validate the manifest candidate, tag signature, and bundle version/build;
+   - verify remote tag-object parity, protected-main ancestry, and a successful CI run for the exact tag commit;
+   - validate candidate bundle identity while proving the cask still names the exact published manifest artifact and SHA;
+   - run pinned, checksum-verified `actionlint`, the full XCTest suite, warnings-as-errors build, and ad-hoc app assembly in the read-only prepare job;
+   - hash every candidate file and upload only that unsigned/ad-hoc candidate plus its inventory;
+   - pause at the GitHub `release` environment scheduling gate before any signing secret is exposed;
+   - check out the exact trusted protected-main workflow revision separately, inventory its workflows, workflow-contract checker, release scripts, schemas, manifest, cask, and entitlements, validate that exact workflow contract, then revalidate the trusted inventory around protected execution;
+   - download and revalidate the candidate without executing release scripts supplied by the candidate tag;
+   - import the Developer ID Application certificate with private file modes into a temporary keychain, bind `codesign` to that keychain, and sign the already-built candidate without SwiftPM, tests, or a general `make` target;
+   - verify all signing identifiers, TeamID, bundle/daemon identities, build number, exact architectures, hardened runtime flags, and exact reviewed app entitlements;
    - submit the app to Apple notarization;
    - staple the notarization ticket;
+   - delete the temporary keychain and certificate in an `always()` cleanup step;
    - zip `Vifty.app` as `Vifty-v<version>.zip`;
-   - verify the generated zip artifact against its just-created checksum, signing TeamID, stapling, Gatekeeper state, and bundled schema resources;
+   - verify the generated zip artifact against its just-created checksum, signing TeamID, hardened runtime/entitlements, stapling, Gatekeeper state, and bundled schemas exactly matching the reviewed source contracts;
    - write `Vifty-v<version>-artifact-summary.json`;
    - write `Vifty-v<version>-release-checklist.md`;
-   - publish the zip, SHA-256 checksum, verification summary, and release checklist to the GitHub Release;
+   - pass only the verified assets to a separate publication job, the only job with `contents: write`; that job rechecks the full v2 identity/build/architecture/check-array contract, checklist structure, and contract-bound immutable-tag ruleset evidence before publishing the zip, SHA-256 checksum, verification summary, and release checklist;
+   - generate a cryptographically random run-unique ownership nonce, place its exact marker in the draft body and nonce in the draft title, REST-create the draft, and capture its immutable GitHub release database ID directly from that mutation response;
+   - upload every canonical asset through the GitHub uploads API path containing that captured database ID, with a GET-by-ID post-state check after each upload; tag-addressed create, edit, upload, and delete commands are forbidden;
+   - refuse promotion unless the exact tag object/commit and the recorded active no-bypass update/deletion ruleset still match, then use only the captured database ID for promotion or containment mutations;
+   - query the release post-state after every create, upload, promote, or re-draft outcome; a nonzero or ambiguous mutation, identity mismatch, signal, or failed final readback arms an ID-based re-draft, and the job hard-fails if a subsequent immutable-ID readback cannot prove `draft: true` plus the exact ownership marker;
+   - if REST creation returns an ambiguous response before an ID is trusted, discover by tag only to locate a unique draft whose numeric ID, exact tag, draft title/state, empty initial asset set, and cryptographically random marker all match this run; an unrelated by-tag release is never patched, even when that makes containment a hard failure;
    - prepend the release checklist to generated GitHub Release notes.
 
-9. Update `Casks/vifty.rb` with the SHA-256 checksum from the release artifact:
+   Published-artifact verification is version-pinned, not partially pinned: schemas, executable support-script destinations, the complete bundled workload-wrapper set, and app entitlements are derived from the published manifest entry's exact `sourceCommit`. Candidate verification deliberately uses the current checkout policy. CI therefore checks out full Git history (`fetch-depth: 0`); if a published source commit or any required historical contract file is unavailable or invalid, verification fails closed rather than applying future `main` policy to old immutable bytes.
+
+9. After the exact public artifact and sidecar checksum exist and pass verification, append the complete existing `publishedRelease` object unchanged to the end of `historicalReleases`; never edit, delete, or reorder earlier history entries. Then replace `publishedRelease` with the exact candidate facts: version/build/tag, source commit, exact source-CI and Release run IDs, four canonical asset names, SHA-256, and trust states; finally clear `candidate`. The appended history entry must remain fact-for-fact identical to the prior current entry, and the new current version/build must be greater than every historical entry. Do not promote the manifest before those public facts exist. Apply the same authorized SHA-256 to `Casks/vifty.rb`:
 
    ```sh
    scripts/update-cask-checksum.sh \
@@ -186,7 +229,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
      --version <version>
    ```
 
-   The updater accepts the normal `shasum -a 256` output from the release workflow, requires the checksum artifact name to match the cask version, and re-runs release metadata validation before and after editing the cask.
+   The updater accepts the normal `shasum -a 256` output from the release workflow, requires the target version, artifact name, and checksum to match the newly promoted published manifest, writes and validates a same-directory sibling candidate, then atomically renames it over the cask. It restores the original cask with the same rename discipline if final release-metadata validation fails. Then run `scripts/render-release-facts.sh --write`, `scripts/check-release-manifest.sh`, and `scripts/render-release-facts.sh --check` before committing the manifest/cask/docs follow-up. The fact check also rejects prose that still labels an older version as current.
 
 10. Verify the public artifact and cask agree:
 
@@ -194,7 +237,7 @@ The notarized release asset is named `Vifty-v<version>.zip`; `Casks/vifty.rb` mu
    scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
    ```
 
-   This downloads the cask URL unless `--artifact <zip>` is provided, checks the SHA-256, extracts `Vifty.app`, verifies bundle version, required executables, bundled `Contents/Resources/schemas` JSON Schemas including stable `$schema` and `$id` values for release-readiness, release-artifact-summary, agent-cooling evidence summary/review, agent-run smoke evidence summary, validation-report-index, validation-review-result, and `viftyctl` contracts, verifies the bundled read-only and supervised agent evidence collector scripts, validates plist files, checks Developer ID TeamID alignment including the LaunchDaemon `VIFTY_XPC_ALLOWED_TEAM_ID`, validates stapling, and runs Gatekeeper assessment. The release workflow runs the same verifier before publishing with `--expected-sha` because the final cask checksum follow-up commit does not exist yet, and publishes the verifier's JSON summary as release evidence. The summary declares `schemaID: https://vifty.local/schemas/release-artifact-summary.schema.json`, and release evidence review rejects summaries with a missing or drifted schema identity. When `--summary` is provided and a release-trust check fails, the verifier writes a failed summary naming the failing check so reviewers do not have to reconstruct the failure from transient logs alone.
+   This downloads the cask URL unless `--artifact <zip>` is provided, checks the SHA-256, extracts `Vifty.app`, verifies bundle version, required executables, and bundled `Contents/Resources/schemas` JSON Schemas exactly matching the reviewed source contracts for release-readiness, release-artifact-summary, agent-cooling evidence summary/review, agent-run smoke evidence summary, validation-report-index, validation-review-result, and `viftyctl`, verifies the bundled read-only and supervised agent evidence collector scripts, validates plist files, checks Developer ID TeamID alignment including the LaunchDaemon `VIFTY_XPC_ALLOWED_TEAM_ID`, verifies hardened runtime flags and exact app entitlements, validates stapling, and runs Gatekeeper assessment. The release workflow runs the same verifier before publishing with `--expected-sha` because the final cask checksum follow-up commit does not exist yet, and publishes the verifier's JSON summary as release evidence. The summary declares `schemaID: https://vifty.local/schemas/release-artifact-summary.schema.json`, and release evidence review rejects summaries with a missing or drifted schema identity. When `--summary` is provided and a release-trust check fails, including manifest or other early setup failures, the verifier writes a schema-valid failed summary naming the failing check so reviewers do not have to reconstruct the failure from transient logs alone.
 
    If this fails after an artifact has already been published, cut a corrected patch release instead of treating the Homebrew cask as trusted.
 

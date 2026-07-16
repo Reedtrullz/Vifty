@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/helper-maintenance-authority-v1.json",
+  "title": "Vifty daemon-authorized helper maintenance receipt",
+  "description": "Short-lived destructive-maintenance authority persisted by the authenticated daemon only after its single-use token is revalidated and consumed while fan control remains quiesced. helperSHA256 is the daemon-independently-verified exact canonical bundled ViftyHelper identity, not a client-chosen digest. The JSON is authoritative only at Vifty's fixed root-owned, mode-0600, no-follow path inside the root-owned mode-0700 maintenance directory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "recordKind",
+    "operation",
+    "tokenID",
+    "tokenIssuedAt",
+    "authorizedAt",
+    "expiresAt",
+    "bootSessionID",
+    "daemonSessionID",
+    "journalGeneration",
+    "expectedFanIDs",
+    "helperSHA256",
+    "quiesceGeneration",
+    "quiesced",
+    "tokenConsumed"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/helper-maintenance-authority-v1.json" },
+    "recordKind": { "const": "daemon-authorized-helper-maintenance" },
+    "operation": { "enum": ["repair", "uninstall"] },
+    "tokenID": { "type": "string", "minLength": 1 },
+    "tokenIssuedAt": { "type": "number" },
+    "authorizedAt": { "type": "number" },
+    "expiresAt": { "type": "number" },
+    "bootSessionID": { "type": "string", "minLength": 1 },
+    "daemonSessionID": { "type": "string", "minLength": 1 },
+    "journalGeneration": { "type": "integer", "minimum": 0 },
+    "expectedFanIDs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 0, "maximum": 9 }
+    },
+    "helperSHA256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "quiesceGeneration": { "type": "integer", "minimum": 1 },
+    "quiesced": { "const": true },
+    "tokenConsumed": { "const": true }
+  }
+}

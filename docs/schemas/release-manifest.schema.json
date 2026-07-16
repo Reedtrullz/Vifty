@@ -1,0 +1,414 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.local/schemas/release-manifest.schema.json",
+  "title": "Vifty release facts manifest",
+  "description": "Single authority for Vifty product identity, architecture, release policy, append-only historical releases, exact current published artifact facts, and a separate nullable release candidate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "schemaID",
+    "product",
+    "releasePolicy",
+    "historicalReleases",
+    "publishedRelease",
+    "candidate"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.local/schemas/release-manifest.schema.json"
+    },
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundleID",
+        "daemonID",
+        "helperID",
+        "ctlID",
+        "architectures",
+        "minimumMacOS"
+      ],
+      "properties": {
+        "bundleID": {
+          "const": "tech.reidar.vifty"
+        },
+        "daemonID": {
+          "const": "tech.reidar.vifty.daemon"
+        },
+        "helperID": {
+          "const": "tech.reidar.vifty.helper"
+        },
+        "ctlID": {
+          "const": "tech.reidar.vifty.ctl"
+        },
+        "architectures": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "arm64",
+              "x86_64"
+            ]
+          }
+        },
+        "minimumMacOS": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "releasePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "developerTeamID",
+        "signedTagsRequiredFromVersion"
+      ],
+      "properties": {
+        "developerTeamID": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{10}$"
+        },
+        "signedTagsRequiredFromVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "publishedRelease": {
+      "$ref": "#/$defs/publishedRelease"
+    },
+    "historicalReleases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/publishedRelease"
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/candidateRelease"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "manualCompatibilityScope": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modelIdentifiers",
+            "reviewReport",
+            "attestation"
+          ],
+          "properties": {
+            "modelIdentifiers": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9]*[0-9]+,[0-9]+$"
+              }
+            },
+            "reviewReport": {
+              "type": "string",
+              "pattern": "^docs/validation-reports/[A-Za-z0-9._/-]+/review-result\\.json$"
+            },
+            "attestation": {
+              "type": "string",
+              "pattern": "^docs/validation-reports/[A-Za-z0-9._/-]+/manual-smoke-attestation\\.md$"
+            }
+          }
+        }
+      ]
+    },
+    "baseReleaseProperties": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "build",
+        "tag",
+        "artifact",
+        "checksumAsset",
+        "artifactSummary",
+        "releaseChecklist",
+        "sha256",
+        "artifactTrust",
+        "signingTrust",
+        "tagTrust",
+        "installedReleaseReview",
+        "manualCompatibility",
+        "manualCompatibilityScope"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "build": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "artifact": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip$"
+        },
+        "checksumAsset": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip\\.sha256$"
+        },
+        "artifactSummary": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-artifact-summary\\.json$"
+        },
+        "releaseChecklist": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-release-checklist\\.md$"
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "artifactTrust": {
+          "enum": [
+            "pending",
+            "passed"
+          ]
+        },
+        "signingTrust": {
+          "enum": [
+            "pending",
+            "developer-id-notarized"
+          ]
+        },
+        "tagTrust": {
+          "enum": [
+            "historical-unsigned",
+            "signed-required",
+            "signed-verified"
+          ]
+        },
+        "installedReleaseReview": {
+          "enum": [
+            "pending",
+            "passed"
+          ]
+        },
+        "manualCompatibility": {
+          "enum": [
+            "pending",
+            "passed-auto-restored"
+          ]
+        },
+        "manualCompatibilityScope": {
+          "$ref": "#/$defs/manualCompatibilityScope"
+        }
+      }
+    },
+    "publishedRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "build",
+        "tag",
+        "sourceCommit",
+        "sourceCIRunID",
+        "releaseWorkflowRunID",
+        "artifact",
+        "checksumAsset",
+        "artifactSummary",
+        "releaseChecklist",
+        "sha256",
+        "artifactTrust",
+        "signingTrust",
+        "tagTrust",
+        "installedReleaseReview",
+        "manualCompatibility",
+        "manualCompatibilityScope"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "build": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "sourceCIRunID": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "releaseWorkflowRunID": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip$"
+        },
+        "checksumAsset": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip\\.sha256$"
+        },
+        "artifactSummary": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-artifact-summary\\.json$"
+        },
+        "releaseChecklist": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-release-checklist\\.md$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifactTrust": {
+          "const": "passed"
+        },
+        "signingTrust": {
+          "const": "developer-id-notarized"
+        },
+        "tagTrust": {
+          "enum": [
+            "historical-unsigned",
+            "signed-verified"
+          ]
+        },
+        "installedReleaseReview": {
+          "enum": [
+            "pending",
+            "passed"
+          ]
+        },
+        "manualCompatibility": {
+          "enum": [
+            "pending",
+            "passed-auto-restored"
+          ]
+        },
+        "manualCompatibilityScope": {
+          "$ref": "#/$defs/manualCompatibilityScope"
+        }
+      }
+    },
+    "candidateRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "build",
+        "tag",
+        "artifact",
+        "checksumAsset",
+        "artifactSummary",
+        "releaseChecklist",
+        "sha256",
+        "artifactTrust",
+        "signingTrust",
+        "tagTrust",
+        "installedReleaseReview",
+        "manualCompatibility",
+        "manualCompatibilityScope"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "build": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "artifact": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip$"
+        },
+        "checksumAsset": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+\\.zip\\.sha256$"
+        },
+        "artifactSummary": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-artifact-summary\\.json$"
+        },
+        "releaseChecklist": {
+          "type": "string",
+          "pattern": "^Vifty-v[0-9]+\\.[0-9]+\\.[0-9]+-release-checklist\\.md$"
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "artifactTrust": {
+          "const": "pending"
+        },
+        "signingTrust": {
+          "const": "pending"
+        },
+        "tagTrust": {
+          "const": "signed-required"
+        },
+        "installedReleaseReview": {
+          "const": "pending"
+        },
+        "manualCompatibility": {
+          "const": "pending"
+        },
+        "manualCompatibilityScope": {
+          "type": "null"
+        }
+      }
+    }
+  }
+}

@@ -175,6 +175,34 @@ final class AgentControlPolicyTests: XCTestCase {
         XCTAssertEqual(nonPositiveDecision.errorCode, .policyDenied)
     }
 
+    func testDeniesLegacyOrDisplayOnlyFanTelemetry() {
+        let policy = AgentControlPolicy(enabled: true)
+        let snapshot = HardwareSnapshot(
+            fans: [
+                Fan(
+                    id: 0,
+                    name: "Left",
+                    currentRPM: 1500,
+                    minimumRPM: 1500,
+                    maximumRPM: 4500,
+                    controllable: true,
+                    controlEligibility: .legacyUnspecified
+                )
+            ],
+            temperatureSensors: [TemperatureSensor(id: "Tp09", name: "CPU", celsius: 61, source: .synthetic)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true,
+            fanControlProtocolVersion: FanControlProtocolVersion.legacy
+        )
+
+        let decision = policy.evaluate(Self.request(), snapshot: snapshot, thermalPressure: .nominal)
+
+        XCTAssertFalse(decision.allowed)
+        XCTAssertEqual(decision.errorCode, .policyDenied)
+        XCTAssertTrue(decision.message.contains("restore-mode eligibility"))
+    }
+
     func testDeniesTooLongDurationAndTooHighRPMPercent() {
         let policy = AgentControlPolicy(enabled: true, maximumAllowedRPMPercent: 80, maxDurationSeconds: 3600)
         let long = AgentControlRequest(workload: .build, durationSeconds: 7201, maxRPMPercent: 70, reason: "Too long", idempotencyKey: "a")

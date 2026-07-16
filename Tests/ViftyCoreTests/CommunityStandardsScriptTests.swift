@@ -24,6 +24,8 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "agent-template-privacy-review", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "hardware-template-agent-run-smoke", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-template-source-first", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "structured-release-hardware-templates", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "codeowners-support", in: checks), "passed")
     }
 
@@ -91,6 +93,40 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(summary["status"] as? String, "blocked")
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         XCTAssertEqual(checkStatus(named: "bug-template-evidence-collector", in: checks), "blocked")
+    }
+
+    func testCheckerRejectsLowercasePullRequestTemplatePath() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let canonical = harness.rootURL.appendingPathComponent(".github/PULL_REQUEST_TEMPLATE.md")
+        let intermediate = harness.rootURL.appendingPathComponent(".github/pr-template-intermediate.md")
+        let lowercase = harness.rootURL.appendingPathComponent(".github/pull_request_template.md")
+        try FileManager.default.moveItem(at: canonical, to: intermediate)
+        try FileManager.default.moveItem(at: intermediate, to: lowercase)
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        let checks = try XCTUnwrap(try result.json()["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "blocked")
+    }
+
+    func testCheckerRejectsLowercasePullRequestTemplateSymlink() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let canonical = harness.rootURL.appendingPathComponent(".github/PULL_REQUEST_TEMPLATE.md")
+        let lowercase = harness.rootURL.appendingPathComponent(".github/pull_request_template.md")
+        try FileManager.default.removeItem(at: canonical)
+        try FileManager.default.createSymbolicLink(
+            atPath: lowercase.path,
+            withDestinationPath: "../README.md"
+        )
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        let checks = try XCTUnwrap(try result.json()["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "blocked")
     }
 
     private func checkStatus(named name: String, in checks: [[String: Any]]) -> String? {
@@ -169,6 +205,7 @@ private final class CommunityStandardsHarness {
         "SECURITY.md",
         "SUPPORT.md",
         ".github/CODEOWNERS",
+        ".github/release-manifest.json",
         ".github/PULL_REQUEST_TEMPLATE.md",
         ".github/ISSUE_TEMPLATE/config.yml",
         ".github/ISSUE_TEMPLATE/bug-report.yml",

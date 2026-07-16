@@ -1,0 +1,656 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-evidence-manifest-v3.schema.json",
+  "title": "Vifty UI review evidence manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "evidenceKind",
+    "fixtureStates",
+    "captureLedger",
+    "fixtureReports",
+    "visualCells",
+    "accessibilityChecks",
+    "humanAttestations",
+    "releaseExclusion",
+    "safetyContract",
+    "nonClaims"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 3
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "evidenceKind": {
+      "const": "hardware-free-native-container-debug-fixture"
+    },
+    "fixtureStates": {
+      "const": [
+        "healthy-auto",
+        "divergent-per-fan-curve-draft",
+        "active-manual",
+        "recovery-mixed-ownership",
+        "helper-blocked",
+        "notification-denied",
+        "edited-profile",
+        "selected-vs-highest-temperature",
+        "raw-spike-telemetry"
+      ]
+    },
+    "captureLedger": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/captureRecord"
+      }
+    },
+    "fixtureReports": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/fixtureRequirement"
+      }
+    },
+    "visualCells": {
+      "type": "array",
+      "minItems": 28,
+      "maxItems": 28,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/namedRequirement"
+      }
+    },
+    "accessibilityChecks": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/namedRequirement"
+      }
+    },
+    "humanAttestations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visual",
+        "voiceOver"
+      ],
+      "properties": {
+        "visual": {
+          "$ref": "#/$defs/humanAttestation"
+        },
+        "voiceOver": {
+          "$ref": "#/$defs/humanAttestation"
+        }
+      }
+    },
+    "releaseExclusion": {
+      "$ref": "#/$defs/releaseExclusion"
+    },
+    "safetyContract": {
+      "$ref": "#/$defs/safetyContract"
+    },
+    "nonClaims": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "automated-passed",
+        "passed",
+        "failed"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sha256OrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "buildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "sourceCommit",
+        "sourceTree",
+        "productRole",
+        "configuration",
+        "buildTransactionID"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "schemaID": {
+          "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceTree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "productRole": {
+          "type": "string",
+          "enum": [
+            "debug-fixture-app",
+            "release-exclusion",
+            "ax-collector"
+          ]
+        },
+        "configuration": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "release"
+          ]
+        },
+        "buildTransactionID": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "productRole": {
+              "const": "debug-fixture-app"
+            },
+            "configuration": {
+              "const": "debug"
+            }
+          }
+        },
+        {
+          "properties": {
+            "productRole": {
+              "const": "release-exclusion"
+            },
+            "configuration": {
+              "const": "release"
+            }
+          }
+        },
+        {
+          "properties": {
+            "productRole": {
+              "const": "ax-collector"
+            },
+            "configuration": {
+              "const": "debug"
+            }
+          }
+        }
+      ]
+    },
+    "buildProvenanceOrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/buildProvenance"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "captureIDOrNull": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/].*$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "surface",
+        "window",
+        "appearance",
+        "contrast",
+        "transparency",
+        "textSize",
+        "interaction"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "healthy-auto",
+            "divergent-per-fan-curve-draft",
+            "active-manual",
+            "recovery-mixed-ownership",
+            "helper-blocked",
+            "notification-denied",
+            "edited-profile",
+            "selected-vs-highest-temperature",
+            "raw-spike-telemetry"
+          ]
+        },
+        "surface": {
+          "type": "string",
+          "enum": [
+            "main",
+            "settings-general",
+            "settings-menu-bar",
+            "settings-notifications",
+            "settings-agent-workflows",
+            "menu-popover"
+          ]
+        },
+        "window": {
+          "type": "string",
+          "enum": [
+            "780x480",
+            "1180x820",
+            "1280x720",
+            "1500x900",
+            "native",
+            "320xauto"
+          ]
+        },
+        "appearance": {
+          "type": "string",
+          "enum": [
+            "light",
+            "dark"
+          ]
+        },
+        "contrast": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "increased"
+          ]
+        },
+        "transparency": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "reduced"
+          ]
+        },
+        "textSize": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "accessibility"
+          ]
+        },
+        "interaction": {
+          "type": "string",
+          "enum": [
+            "none",
+            "structural-scroll"
+          ]
+        }
+      }
+    },
+    "fixtureRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "status",
+        "captureID",
+        "request"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/request/properties/state"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "captureID": {
+          "$ref": "#/$defs/captureIDOrNull"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        }
+      }
+    },
+    "namedRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "captureID",
+        "request"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "captureID": {
+          "$ref": "#/$defs/captureIDOrNull"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        }
+      }
+    },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processIdentifier",
+        "executablePath",
+        "executableSHA256",
+        "provenance",
+        "windowNumber",
+        "windowIdentifier",
+        "accessibilityIdentifier",
+        "windowClass",
+        "containerKind",
+        "isVisible",
+        "contentWidth",
+        "contentHeight",
+        "backingScaleFactor"
+      ],
+      "properties": {
+        "processIdentifier": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "executablePath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "executableSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "swiftui-main-window",
+            "swiftui-settings-scene",
+            "ns-popover-status-item"
+          ]
+        },
+        "windowNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "windowIdentifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accessibilityIdentifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "windowClass": {
+          "type": "string",
+          "minLength": 1
+        },
+        "containerKind": {
+          "type": "string",
+          "enum": [
+            "main-window",
+            "settings-window",
+            "popover"
+          ]
+        },
+        "isVisible": {
+          "const": true
+        },
+        "contentWidth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contentHeight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "backingScaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 4
+        }
+      }
+    },
+    "screenshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "sha256",
+        "canonicalPixelSHA256"
+      ],
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonicalPixelSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "accessibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawArtifact",
+        "rawSHA256",
+        "artifact",
+        "sha256",
+        "collectorExecutablePath",
+        "collectorExecutableSHA256",
+        "collectorBuildProvenance"
+      ],
+      "properties": {
+        "rawArtifact": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "rawSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "collectorExecutablePath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "collectorExecutableSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "collectorBuildProvenance": {
+          "$ref": "#/$defs/buildProvenance"
+        }
+      }
+    },
+    "captureRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "requestSHA256",
+        "fixtureReportArtifact",
+        "fixtureReportSHA256",
+        "debugExecutablePath",
+        "debugExecutableSHA256",
+        "debugBuildProvenance",
+        "runtimeIdentity"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureReportArtifact": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "fixtureReportSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugExecutablePath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "debugExecutableSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugBuildProvenance": {
+          "$ref": "#/$defs/buildProvenance"
+        },
+        "runtimeIdentity": {
+          "$ref": "#/$defs/runtimeIdentity"
+        },
+        "screenshot": {
+          "$ref": "#/$defs/screenshot"
+        },
+        "accessibility": {
+          "$ref": "#/$defs/accessibility"
+        }
+      }
+    },
+    "humanAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "artifact",
+        "sha256"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256OrNull"
+        }
+      }
+    },
+    "releaseExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "binary",
+        "sha256",
+        "buildProvenance",
+        "forbiddenMarkers"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "binary": {
+          "const": ".build/ui-review-products/release/Vifty"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256OrNull"
+        },
+        "buildProvenance": {
+          "$ref": "#/$defs/buildProvenanceOrNull"
+        },
+        "forbiddenMarkers": {
+          "const": [
+            "--ui-review-fixture",
+            "ViftyReviewFixture"
+          ]
+        }
+      }
+    },
+    "safetyContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelStartSkipped",
+        "attemptedHardwareCommands",
+        "attemptedExternalMutations",
+        "realControlPathConstructions",
+        "finalReportRequired",
+        "observedEnvironmentRequired",
+        "observedNSWindowRequired",
+        "captureLinkRequired"
+      ],
+      "properties": {
+        "modelStartSkipped": {
+          "const": true
+        },
+        "attemptedHardwareCommands": {
+          "const": 0
+        },
+        "attemptedExternalMutations": {
+          "const": 0
+        },
+        "realControlPathConstructions": {
+          "const": 0
+        },
+        "finalReportRequired": {
+          "const": true
+        },
+        "observedEnvironmentRequired": {
+          "const": true
+        },
+        "observedNSWindowRequired": {
+          "const": true
+        },
+        "captureLinkRequired": {
+          "const": true
+        }
+      }
+    }
+  }
+}

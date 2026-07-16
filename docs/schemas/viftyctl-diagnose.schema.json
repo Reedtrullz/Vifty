@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vifty.local/schemas/viftyctl-diagnose.schema.json",
   "title": "viftyctl diagnose --json readiness report",
-  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked, safeToRequestCooling=false, daemonControlPathReady=false, manualControlActive=true, daemonRuntime.matchRequired=true with daemonRuntime.matchesExpectedDaemon not true, or non-empty coolingBlockerIDs as a hard stop before requesting Vifty cooling.",
+  "description": "Machine-readable readiness report emitted by viftyctl diagnose --json. Local agents should treat state=blocked, safeToRequestCooling=false, daemonControlPathReady=false, manualControlActive=true, daemonRuntime.matchRequired=true with daemonRuntime.matchesExpectedDaemon not true, or non-empty coolingBlockerIDs as a hard stop before requesting Vifty cooling. App replacement additionally requires a fresh passing replacementMaintenanceAttestation check and independent validation of its protocol-v2 ownership and complete trusted physical-fan inputs.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -161,6 +161,10 @@
     "agentControl": {
       "$ref": "#/$defs/agentControlStatus"
     },
+    "fanControlOwnership": {
+      "description": "Fresh daemon fan-control ownership and recovery state. Agents must require this state to agree with the fresh snapshot before requesting cooling.",
+      "$ref": "#/$defs/fanControlOwnershipStatus"
+    },
     "daemonSnapshotError": {
       "type": [
         "string",
@@ -168,6 +172,13 @@
       ]
     },
     "agentControlStatusError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fanControlOwnershipStatusError": {
+      "description": "Read failure for the daemon fan-control ownership endpoint. A non-null value blocks cooling.",
       "type": [
         "string",
         "null"
@@ -330,7 +341,8 @@
       "properties": {
         "id": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9
         },
         "name": {
           "type": "string"
@@ -375,6 +387,38 @@
             "null"
           ],
           "minimum": 0
+        },
+        "canApplyFixedRPM": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "canRestoreOSManagedMode": {
+          "description": "True only when the fan belongs to a trusted FNum-derived physical inventory and has valid Auto/System restore telemetry. Replacement preflight requires true for every fan.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "controlIneligibilityReasons": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "enum": [
+              "legacyUnspecified",
+              "missingFanCount",
+              "missingMinimumRPM",
+              "missingMaximumRPM",
+              "missingModeKey",
+              "missingTargetKey",
+              "invalidRPMRange",
+              "invalidFanID"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     },
@@ -432,6 +476,7 @@
       "enum": [
         "daemonSnapshotAvailable",
         "agentControlStatusAvailable",
+        "fanControlOwnershipStatusAvailable",
         "daemonControlPathReady",
         "daemonRuntimeMatchesExpected",
         "supportedHardware",
@@ -444,8 +489,102 @@
         "thermalPressureSafe",
         "activeLeaseClear",
         "manualControlClear",
-        "fanModeTelemetry"
+        "fanModeTelemetry",
+        "fanControlProtocolCurrent",
+        "fanControlOwnershipStateValid",
+        "fanControlRecoveryClear",
+        "fanControlOwnershipClear",
+        "fanControlHardwareConsistent",
+        "replacementMaintenanceAttestation"
       ]
+    },
+    "fanControlOwner": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "manual",
+            "agent",
+            "recovery"
+          ]
+        },
+        "sessionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "leaseID": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "fanControlOwnershipStatus": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "expectedFanIDs",
+        "confirmedOSManagedFanIDs",
+        "recoveryPending",
+        "recoveryAttemptCount"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "owner": {
+          "$ref": "#/$defs/fanControlOwner"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "applying",
+            "active",
+            "restoring",
+            "restorePending"
+          ]
+        },
+        "transactionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedFanIDs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "uniqueItems": true
+        },
+        "confirmedOSManagedFanIDs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "uniqueItems": true
+        },
+        "recoveryPending": {
+          "type": "boolean"
+        },
+        "errorCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "errorMessage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recoveryAttemptCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     },
     "agentControlStatus": {
       "type": "object",

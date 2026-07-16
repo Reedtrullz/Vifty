@@ -2,125 +2,6 @@ import Foundation
 import SwiftUI
 import ViftyCore
 
-enum HelperHealthState: Equatable {
-    case checking
-    case healthy(fanCount: Int)
-    case error
-    case runtimeMismatch
-    case telemetryOnly
-    case unreachable
-    case noFanData
-    case noControllableFans(fanCount: Int)
-    case unsupported
-
-    var needsAttention: Bool {
-        if case .healthy = self {
-            return false
-        }
-        if case .checking = self {
-            return false
-        }
-        return true
-    }
-
-    var repairActionAvailable: Bool {
-        switch self {
-        case .error, .runtimeMismatch, .telemetryOnly, .unreachable:
-            return true
-        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
-            return false
-        }
-    }
-
-    var notifiesAsHelperFailure: Bool {
-        repairActionAvailable
-    }
-
-    var summary: String {
-        switch self {
-        case .checking:
-            return "Checking fan helper"
-        case .healthy(let fanCount):
-            return "Fan helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
-        case .error:
-            return "Fan helper error · repair needed"
-        case .runtimeMismatch:
-            return "Fan helper build mismatch · repair needed"
-        case .telemetryOnly:
-            return "Read-only fan telemetry · repair daemon for writes"
-        case .unreachable:
-            return "Fan helper not responding · repair or approve"
-        case .noFanData:
-            return "Fan helper reachable · waiting for fan data"
-        case .noControllableFans:
-            return "Fan telemetry available · no controllable fans"
-        case .unsupported:
-            return "Unsupported hardware · fan writes blocked"
-        }
-    }
-
-    var menuSummary: String {
-        switch self {
-        case .checking:
-            return "Checking helper"
-        case .healthy(let fanCount):
-            return "Helper healthy · \(fanCount) fan\(fanCount == 1 ? "" : "s")"
-        case .error:
-            return "Helper needs repair"
-        case .runtimeMismatch:
-            return "Helper build mismatch"
-        case .telemetryOnly:
-            return "Fan writes blocked"
-        case .unreachable:
-            return "Helper not responding"
-        case .noFanData:
-            return "Waiting for fan data"
-        case .noControllableFans:
-            return "No controllable fans"
-        case .unsupported:
-            return "Unsupported hardware"
-        }
-    }
-
-    var recoverySuggestion: String? {
-        switch self {
-        case .checking, .healthy:
-            return nil
-        case .error:
-            return "Use Repair Helper, approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds; restore Auto first if fans appear stuck."
-        case .runtimeMismatch:
-            return "Use Repair/Reinstall Helper from this Vifty app, approve Login Items if prompted, then rerun diagnose. Fan writes stay blocked until the installed daemon matches this build."
-        case .telemetryOnly:
-            return "Use Repair/Reinstall Helper or approve Login Items if prompted. Fan telemetry is read-only, and manual or agent cooling stays blocked until the daemon responds."
-        case .unreachable:
-            return "Use Repair/Reinstall Helper or approve Login Items if prompted, then wait for healthy fan status. Fan writes stay blocked until the daemon responds."
-        case .noFanData:
-            return "Keep Auto selected and collect read-only diagnostics. Fan writes stay blocked until controllable fans appear."
-        case .noControllableFans(let fanCount):
-            return "The helper can read \(fanCount) fan\(fanCount == 1 ? "" : "s"), but none are marked controllable. Keep fan writes blocked and collect read-only hardware validation evidence before changing support claims."
-        case .unsupported:
-            return "Vifty supports fan control on Apple Silicon MacBook Pro hardware. Keep this machine on read-only diagnostics; do not retry fan writes."
-        }
-    }
-
-    var menuRecoverySuggestion: String? {
-        switch self {
-        case .checking, .healthy:
-            return nil
-        case .error, .telemetryOnly, .unreachable:
-            return "Repair/Reinstall Helper; approve Login Items if prompted."
-        case .runtimeMismatch:
-            return "Repair/Reinstall Helper from this app before fan control."
-        case .noFanData:
-            return "Keep Auto selected and copy diagnose for read-only evidence."
-        case .noControllableFans:
-            return "Keep Auto selected and collect hardware validation evidence."
-        case .unsupported:
-            return "Read-only diagnostics only on this Mac."
-        }
-    }
-}
-
 @MainActor
 final class AppModel: ObservableObject {
     @Published var snapshot: HardwareSnapshot?
@@ -148,6 +29,7 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var lastError: String?
+    @Published private(set) var curveProfilePersistenceError: String?
     @Published var fanAccessMessage: String?
     @Published var daemonResponding = false
     @Published var daemonReachable = false
@@ -156,7 +38,7 @@ final class AppModel: ObservableObject {
     @Published var thermalPressure: ThermalPressure = .nominal
     @Published var menuBarDisplayMode: MenuBarDisplayMode {
         didSet {
-            let wasDisplayingCodexUsage = Self.menuBarModeDisplaysCodexUsage(
+            let wasDisplayingCodexUsage = MenuBarPresentationProvider.displaysCodexUsage(
                 oldValue,
                 customFields: menuBarCustomFields
             )
@@ -177,7 +59,7 @@ final class AppModel: ObservableObject {
                 menuBarCustomFields = normalized
                 return
             }
-            let wasDisplayingCodexUsage = Self.menuBarModeDisplaysCodexUsage(
+            let wasDisplayingCodexUsage = MenuBarPresentationProvider.displaysCodexUsage(
                 menuBarDisplayMode,
                 customFields: MenuBarField.normalized(oldValue)
             )
@@ -196,11 +78,18 @@ final class AppModel: ObservableObject {
             persistAppPreferences()
         }
     }
+    @Published var textScale: ViftyTextScale {
+        didSet {
+            persistAppPreferences()
+        }
+    }
     @Published var notificationSettings: LocalNotificationSettings {
         didSet {
             persistAppPreferences()
         }
     }
+    @Published private(set) var notificationAuthorization: LocalNotificationAuthorization = .checking
+    @Published private(set) var notificationTestMessage: String?
     @Published var codexUsageSnapshot: CodexUsageSnapshot?
     @Published var codexUsageDisplayStyle: CodexUsageDisplayStyle {
         didSet {
@@ -225,9 +114,12 @@ final class AppModel: ObservableObject {
     }
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
     @Published private(set) var launchAtLoginError: String?
-    var telemetryHistory = TelemetryHistory() {
-        didSet {
-            refreshTelemetrySummaries()
+    private var telemetrySession = TelemetrySession()
+    var telemetryHistory: TelemetryHistory {
+        get { telemetrySession.history }
+        set {
+            telemetrySession.replaceHistory(newValue)
+            publishTelemetrySession()
         }
     }
     @Published var manualRunLimit: ManualRunLimit = .defaultForManualControl
@@ -235,6 +127,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var fanControlApplyState: FanControlApplyState = .applied
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
+    @Published private(set) var fanControlOwnershipStatus: FanControlOwnershipStatus?
+    @Published private(set) var fanControlOwnershipStatusError: String?
     @Published var hasCompletedHardwarePoll = false
     @Published private(set) var menuBarStatusItemPresentation = MenuBarStatusItemPresentation.placeholder
     @Published private(set) var menuBarStatusItemRevision = 0
@@ -248,12 +142,10 @@ final class AppModel: ObservableObject {
     var curveDefaultsSynced = false  // internal, accessible via @testable import
     @Published var savedProfiles: [CurveProfile] = []
     @Published var selectedCurveProfileID: CurveProfile.ID?
+    @Published private(set) var curveProfileRecoveryMessage: String?
     private var isSettingSelectedSensorProgrammatically = false
     private var userSelectedSensorID: String?
-    private var lastAppliedFanControlDraft: FanControlDraft?
-    private var appliedManualRunLimit: ManualRunLimit = .defaultForManualControl
-    private var fanControlOperationGeneration: UInt64 = 0
-    private var manualFanControlApplyAttempt: ManualFanControlApplyAttempt?
+    private var fanControlSessionController: FanControlSessionController
 
     static let menuBarDisplayModeDefaultsKey = AppPreferencesStore.legacyMenuBarDisplayModeDefaultsKey
     static let highTemperatureAttentionThreshold = 90.0
@@ -273,41 +165,27 @@ final class AppModel: ObservableObject {
     private let thermalReader: @Sendable () -> ThermalPressure
     private let codexUsageReader: @Sendable () -> CodexUsageSnapshot?
     private let now: @Sendable () -> Date
-    private let notificationDeliverer: LocalNotificationDelivering
-    private let notificationHistoryStore: LocalNotificationHistoryStore
+    private let localNotificationCoordinator: LocalNotificationCoordinator
     private let launchAtLoginManager: LaunchAtLoginManaging
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
     private let preferencesStore: AppPreferencesStore
-    private var pollingTask: Task<Void, Never>?
-    private var activePollTask: Task<Void, Never>?
+    private let pollingController: AppPollingController
     private var codexUsageRefreshTask: Task<Void, Never>?
     private var codexUsageRefreshGeneration = 0
     private var startupModeApplied = false
-    private var notificationTransitionState = LocalNotificationTransitionState()
     private var manualTargetDriftSampleCounts: [Int: Int] = [:]
     private var manualTargetSettlingFanIDs: Set<Int> = []
-    private var elevatedThermalPressureStartedAt: Date?
     private var lastCodexUsageRefreshAt: Date?
     private var lastPowerTelemetryRefreshAt: Date?
     private var lastDaemonPingAt: Date?
     private var lastAgentStatusRefreshAt: Date?
-    private let notificationMinimumInterval: TimeInterval = 30 * 60
-    private let sustainedThermalPressureInterval: TimeInterval = 60
     private let powerTelemetryRefreshInterval: TimeInterval = 15
     private let daemonPingRefreshInterval: TimeInterval = 30
     private let agentStatusRefreshInterval: TimeInterval = 15
     private let pollSchedulePolicy = PollSchedulePolicy.standard
-
-    private struct ManualFanControlApplyAttempt {
-        let generation: UInt64
-        let draft: FanControlDraft
-        let mode: FanMode
-        let previousManualSessionExpiresAt: Date?
-        var coordinatorConfigured: Bool
-    }
 
     var currentFanControlDraft: FanControlDraft {
         FanControlDraft(
@@ -324,15 +202,39 @@ final class AppModel: ObservableObject {
                 highTemperature: curveMaxTemp,
                 highRPM: curveMaxRPM
             ),
-            selectedSensorID: selectedSensorID,
+            selectedSensorID: resolvedCurveSensorID,
             usePerFanOverrides: usePerFanOverrides,
             fanOverrides: fanOverrides
         )
     }
 
     var hasPendingFanControlChanges: Bool {
-        guard let lastAppliedFanControlDraft else { return selectedMode != .auto }
-        return currentFanControlDraft.isDirty(comparedTo: lastAppliedFanControlDraft)
+        fanControlSessionController.hasPendingChanges(
+            currentDraft: currentFanControlDraft,
+            selectedMode: selectedMode
+        )
+    }
+
+    var currentCurveProfileDraft: CurveProfileDraftSnapshot {
+        CurveProfileDraftSnapshot(
+            sensorID: resolvedCurveSensorID,
+            startTemperature: curveStartTemp,
+            startRPM: Int(curveStartRPM.rounded()),
+            rampTemperature: curveMidTemp,
+            rampRPM: Int(curveMidRPM.rounded()),
+            highTemperature: curveMaxTemp,
+            highRPM: Int(curveMaxRPM.rounded()),
+            fanOverrides: usePerFanOverrides ? fanOverrides : []
+        )
+    }
+
+    var curveProfileEditState: CurveProfileEditState {
+        CurveProfileEditState.resolve(
+            selectedProfile: selectedCurveProfileID.flatMap { selectedID in
+                savedProfiles.first { $0.id == selectedID }
+            },
+            draft: currentCurveProfileDraft
+        )
     }
 
     var controlSessionPresentation: ControlSessionPresentation {
@@ -349,29 +251,25 @@ final class AppModel: ObservableObject {
             manualControlAttentionSummary: manualControlAttentionSummary,
             selectedMode: selectedMode,
             applyState: fanControlPresentationApplyState,
-            manualSessionExpiresAt: manualSessionExpiresAt
+            manualSessionExpiresAt: manualSessionExpiresAt,
+            ownershipStatus: fanControlOwnershipStatus
         ))
     }
 
     private var fanControlPresentationApplyState: FanControlApplyState {
-        if hasPendingFanControlChanges, fanControlApplyState == .applied {
-            return .pending
-        }
-        if !hasPendingFanControlChanges,
-           fanControlApplyState == .pending,
-           manualFanControlApplyAttempt == nil {
-            return .applied
-        }
-        return fanControlApplyState
+        fanControlSessionController.presentationApplyState(
+            currentDraft: currentFanControlDraft,
+            selectedMode: selectedMode,
+            applyState: fanControlApplyState
+        )
     }
 
     var menuBarPanelPresentation: MenuBarPanelPresentation {
         MenuBarPanelPresentation.resolve(input: .init(
             controlSession: controlSessionPresentation,
-            ownerText: compactControlOwnershipSummary,
+            ownershipStatus: fanControlOwnershipStatus,
             attentionText: menuBarPanelAttentionText,
-            fans: snapshot?.fans ?? [],
-            isManualControlActive: controlState.manualControlActive
+            fans: snapshot?.fans ?? []
         ))
     }
 
@@ -382,6 +280,7 @@ final class AppModel: ObservableObject {
         codexUsageReader: @escaping @Sendable () -> CodexUsageSnapshot? = { CodexUsageReader.readDefault() },
         codexUsageRefreshInterval: TimeInterval = AppModel.defaultCodexUsageRefreshInterval,
         now: @escaping @Sendable () -> Date = { Date() },
+        pollingSleeper: any AppPollingSleeping = ContinuousAppPollingSleeper(),
         notificationDeliverer: LocalNotificationDelivering = UserNotificationDeliverer(),
         notificationHistoryStore: LocalNotificationHistoryStore = LocalNotificationHistoryStore(),
         daemonPing: @escaping @Sendable () async -> Bool = { await ViftyDaemonClient().ping() },
@@ -400,8 +299,13 @@ final class AppModel: ObservableObject {
         self.thermalReader = thermalReader
         self.codexUsageReader = codexUsageReader
         self.now = now
-        self.notificationDeliverer = notificationDeliverer
-        self.notificationHistoryStore = notificationHistoryStore
+        fanControlSessionController = FanControlSessionController(now: now)
+        pollingController = AppPollingController(sleeper: pollingSleeper)
+        localNotificationCoordinator = LocalNotificationCoordinator(
+            deliverer: notificationDeliverer,
+            historyStore: notificationHistoryStore,
+            now: now
+        )
         self.launchAtLoginManager = launchAtLoginManager
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
@@ -412,6 +316,7 @@ final class AppModel: ObservableObject {
         menuBarDisplayMode = appPreferences.menuBarDisplayMode
         menuBarCustomFields = MenuBarField.normalized(appPreferences.menuBarCustomFields)
         startupMode = appPreferences.startupMode
+        textScale = appPreferences.textScale
         notificationSettings = appPreferences.notificationSettings
         usePerFanFixedRPM = appPreferences.usePerFanFixedRPM
         fixedFanTargets = appPreferences.fixedFanTargets
@@ -425,26 +330,39 @@ final class AppModel: ObservableObject {
             appPreferences.codexUsageDisplayPreferences.refreshCadence
         }
         launchAtLoginStatus = launchAtLoginManager.status
-        savedProfiles = profileStore.load()
+        do {
+            let profileLoadResult = try profileStore.loadResult()
+            savedProfiles = profileLoadResult.profiles
+            curveProfileRecoveryMessage = profileLoadResult.recoveryMessage
+        } catch {
+            savedProfiles = []
+            curveProfileRecoveryMessage = error.localizedDescription
+        }
         menuBarStatusItemPresentation = currentMenuBarStatusItemPresentation
     }
 
     func start() {
-        guard pollingTask == nil else { return }
+        let started = pollingController.start(
+            initialOperation: { [weak self] in
+                guard let self else { return }
+                await coordinator.recoverIfNeeded()
+                guard pollingController.isRunning else { return }
+                await pollOnce()
+                guard pollingController.isRunning else { return }
+                await applyStartupModePreferenceIfNeeded()
+                guard pollingController.isRunning else { return }
+                await refreshNotificationAuthorization()
+            },
+            interval: { [weak self] in
+                self?.backgroundPollInterval() ?? .seconds(10)
+            },
+            poll: { [weak self] operation in
+                await self?.performPollOnce(operation: operation)
+            }
+        )
+        guard started else { return }
         isRunning = true
         ViftyLog.lifecycle.info("Polling started")
-
-        pollingTask = Task { [self] in
-            await pollOnce()
-            await coordinator.recoverIfNeeded()
-            await applyStartupModePreferenceIfNeeded()
-
-            while !Task.isCancelled {
-                try? await Task.sleep(for: backgroundPollInterval())
-                guard !Task.isCancelled else { return }
-                await pollOnce()
-            }
-        }
     }
 
     func primeMenuBarStatusItemTelemetry(
@@ -457,7 +375,7 @@ final class AppModel: ObservableObject {
             await pollOnce()
             guard menuBarLabelNeedsTelemetryPrime else { return }
             if attempt < attempts {
-                try? await Task.sleep(for: retryDelay)
+                try? await pollingController.wait(for: retryDelay)
             }
         }
     }
@@ -493,7 +411,11 @@ final class AppModel: ObservableObject {
 
     func openLaunchAtLoginSettings() {
         launchAtLoginManager.openLoginItemsSettings()
+    }
+
+    func refreshSystemSettingsStateOnActivation() async {
         refreshLaunchAtLoginStatus()
+        await refreshNotificationAuthorization()
     }
 
     func applyStartupModePreferenceIfNeeded() async {
@@ -504,6 +426,11 @@ final class AppModel: ObservableObject {
         if snapshot == nil {
             await pollOnce()
             selectedMode = startupMode
+        }
+        guard FanControlOwnershipPresentation.resolve(fanControlOwnershipStatus).owner == .macOS else {
+            lastError = "Startup manual mode remains a draft until daemon-confirmed macOS fan ownership is available."
+            markFanControlDraftPending()
+            return
         }
         markFanControlDraftPending()
     }
@@ -517,32 +444,66 @@ final class AppModel: ObservableObject {
         let wasRunning = isRunning
         let stateBeforeStop = await coordinator.state
         let hasAgentLeaseRequiringRestore = agentControlStatus?.activeLease != nil
-        let requiresHardwareRestore = stateBeforeStop.manualControlActive
-            || stateBeforeStop.mode != .auto
-            || hasAgentLeaseRequiringRestore
-        pollingTask?.cancel()
-        pollingTask = nil
+        pollingController.stop()
         codexUsageRefreshGeneration &+= 1
         codexUsageRefreshTask?.cancel()
         codexUsageRefreshTask = nil
         isRunning = false
         selectedMode = .auto
         manualSessionExpiresAt = nil
-        let hardwareRestoreResult: AutoRestoreResult = if requiresHardwareRestore {
-            await coordinator.forceAuto()
-        } else {
-            .restored
-        }
-        let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
-        await syncState()
 
         var failures: [String] = []
-        if case .failed(let message) = hardwareRestoreResult {
+        let ownershipBeforeRestore: FanControlOwnershipStatus?
+        do {
+            let status = try await coordinator.fanControlOwnershipStatus()
+            fanControlOwnershipStatus = status
+            fanControlOwnershipStatusError = nil
+            ownershipBeforeRestore = status
+        } catch {
+            let message = "Could not confirm daemon fan-control ownership before termination: \(error.localizedDescription)"
+            fanControlOwnershipStatus = nil
+            fanControlOwnershipStatusError = error.localizedDescription
+            ownershipBeforeRestore = nil
             failures.append(message)
         }
-        if let agentRestoreError {
-            failures.append(agentRestoreError)
+
+        let requiresHardwareRestore = stateBeforeStop.manualControlActive
+            || stateBeforeStop.mode != .auto
+            || hasAgentLeaseRequiringRestore
+            || ownershipBeforeRestore.map {
+                !FanControlCoordinator.confirmsCleanOSOwnership($0)
+            } == true
+
+        // A failed ownership read must not suppress a restore already required
+        // by local manual state or an agent lease. We still fail termination
+        // closed on that unreadable precondition, but make the best available
+        // safety move back to Auto and then re-read authoritative ownership.
+        if requiresHardwareRestore {
+            let hardwareRestoreResult = await coordinator.forceAuto()
+            if case .failed(let message) = hardwareRestoreResult {
+                failures.append(message)
+            }
+
+            do {
+                let status = try await coordinator.fanControlOwnershipStatus()
+                fanControlOwnershipStatus = status
+                fanControlOwnershipStatusError = nil
+                if !FanControlCoordinator.confirmsCleanOSOwnership(status) {
+                    failures.append(
+                        "Auto restore did not reach clean daemon-confirmed macOS fan ownership."
+                    )
+                }
+            } catch {
+                fanControlOwnershipStatus = nil
+                fanControlOwnershipStatusError = error.localizedDescription
+                failures.append(
+                    "Could not confirm daemon fan-control ownership after Auto restore: \(error.localizedDescription)"
+                )
+            }
         }
+        await refreshAgentControlStatus()
+        await syncState()
+
         guard !failures.isEmpty else {
             recordAutoRestorationApplied()
             ViftyLog.fanControl.notice("Termination restore confirmed")
@@ -570,32 +531,29 @@ final class AppModel: ObservableObject {
     }
 
     private func resumePollingAfterTerminationFailure(wasRunning: Bool) {
-        guard wasRunning, pollingTask == nil else { return }
-        isRunning = true
-        pollingTask = Task { [self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: backgroundPollInterval())
-                guard !Task.isCancelled else { return }
-                await pollOnce()
+        guard wasRunning, !pollingController.isRunning else { return }
+        let started = pollingController.start(
+            interval: { [weak self] in
+                self?.backgroundPollInterval() ?? .seconds(10)
+            },
+            poll: { [weak self] operation in
+                await self?.performPollOnce(operation: operation)
             }
-        }
+        )
+        isRunning = started
     }
 
     func pollOnce() async {
-        if let activePollTask {
-            await activePollTask.value
-            return
+        await pollingController.pollOnce { [weak self] operation in
+            await self?.performPollOnce(operation: operation)
         }
-
-        let task = Task { @MainActor in
-            await performPollOnce()
-        }
-        activePollTask = task
-        await task.value
-        activePollTask = nil
     }
 
-    private func performPollOnce() async {
+    private func performPollOnce(
+        operation: AppPollingOperation,
+        reconcileManualApply: Bool = true
+    ) async {
+        guard pollingController.isCurrent(operation) else { return }
         let pollingIntervalState = ViftyLog.pollingSignposter.beginInterval("Hardware poll")
         defer {
             ViftyLog.pollingSignposter.endInterval("Hardware poll", pollingIntervalState)
@@ -620,30 +578,41 @@ final class AppModel: ObservableObject {
         }
 
         defer {
-            hasCompletedHardwarePoll = true
-            refreshMenuBarStatusItemIfNeeded()
+            if pollingController.isCurrent(operation) {
+                hasCompletedHardwarePoll = true
+                refreshMenuBarStatusItemIfNeeded()
+            }
         }
         refreshCodexUsageIfNeeded()
         let expiredAutoOperationGeneration = await restoreAutoIfManualSessionExpired()
+        guard pollingController.isCurrent(operation) else { return }
         let stateBeforeTick = await coordinator.state
+        guard pollingController.isCurrent(operation) else { return }
         do {
             let nextSnapshot = try await coordinator.tick()
+            guard pollingController.isCurrent(operation) else { return }
             recordHardwareSnapshot(nextSnapshot, power: currentPower, thermalPressure: currentThermalPressure)
             assignIfChanged(\.lastError, nil)
             await refreshDaemonPingIfNeeded(at: pollStartedAt, force: false)
+            guard pollingController.isCurrent(operation) else { return }
             assignIfChanged(\.daemonReachable, daemonResponding || !nextSnapshot.fans.isEmpty)
             await refreshAgentControlStatusIfNeeded(at: pollStartedAt)
+            guard pollingController.isCurrent(operation) else { return }
+            await refreshFanControlOwnershipStatus()
+            guard pollingController.isCurrent(operation) else { return }
             assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: nextSnapshot))
             await syncState()
+            guard pollingController.isCurrent(operation) else { return }
             if let expiredAutoOperationGeneration,
                canCommitAutoRestoration(generation: expiredAutoOperationGeneration) {
                 recordAutoRestorationApplied()
-            } else {
+            } else if reconcileManualApply {
                 reconcileManualApplyAttemptAfterSuccessfulPoll()
             }
             await evaluateLocalNotifications(power: currentPower, thermalPressure: currentThermalPressure)
             ViftyLog.polling.debug("Hardware poll completed")
         } catch {
+            guard pollingController.isCurrent(operation) else { return }
             ViftyLog.polling.warning("Hardware poll failed")
             let preservesManualIntent = shouldPreserveManualIntent(
                 afterTickFailure: error,
@@ -654,8 +623,12 @@ final class AppModel: ObservableObject {
             }
             assignIfChanged(\.lastError, error.localizedDescription)
             await refreshDaemonPingIfNeeded(at: pollStartedAt, force: true)
+            guard pollingController.isCurrent(operation) else { return }
             assignIfChanged(\.daemonReachable, daemonResponding || (preservesManualIntent && snapshot?.fans.isEmpty == false))
             await refreshAgentControlStatusIfNeeded(at: pollStartedAt, force: true)
+            guard pollingController.isCurrent(operation) else { return }
+            await refreshFanControlOwnershipStatus()
+            guard pollingController.isCurrent(operation) else { return }
             if preservesManualIntent, let snapshot {
                 assignIfChanged(\.fanAccessMessage, fanAccessMessage(for: snapshot))
             }
@@ -663,11 +636,21 @@ final class AppModel: ObservableObject {
                 if selectedMode != .auto {
                     let intendedMode: FanMode = stateBeforeTick.mode == .auto ? selectedFanMode() : stateBeforeTick.mode
                     await coordinator.setMode(intendedMode)
+                    guard pollingController.isCurrent(operation) else { return }
                 }
                 assignIfChanged(\.controlState, await coordinator.state)
+            } else if selectedMode == .auto,
+                      expiredAutoOperationGeneration == nil {
+                // The coordinator tick already attempted the current Auto
+                // transaction. Do not double the retry rate with a second
+                // forceAuto request in the same poll; later polls may make one
+                // authority-free safety retry.
+                await syncState()
             } else {
                 let fallbackAutoRestoreResult = await coordinator.forceAuto()
+                guard pollingController.isCurrent(operation) else { return }
                 await syncState()
+                guard pollingController.isCurrent(operation) else { return }
 
                 if let expiredAutoOperationGeneration,
                    fanControlOperationIsCurrent(expiredAutoOperationGeneration) {
@@ -741,6 +724,10 @@ final class AppModel: ObservableObject {
         refreshMenuBarStatusItemIfNeeded()
     }
 
+    func waitForCodexUsageRefresh() async {
+        await codexUsageRefreshTask?.value
+    }
+
     @discardableResult
     private func refreshMenuBarStatusItemIfNeeded() -> Bool {
         let nextPresentation = currentMenuBarStatusItemPresentation
@@ -751,23 +738,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentMenuBarStatusItemPresentation: MenuBarStatusItemPresentation {
-        let statusItemText = ViftyStatusItemPresentation.resolvedText(
-            statusItemText: menuBarStatusItemText,
-            fallbackStatusItemText: menuBarDisplayMode == .fanIcon ? nil : menuBarLabelText,
-            labelNeedsTelemetryPrime: menuBarLabelNeedsTelemetryPrime,
-            allowsPlaceholderText: menuBarAllowsPlaceholderStatusItemText
-        )
-        let content: MenuBarStatusItemPresentation.Content = if let statusItemText {
-            .text(statusItemText)
-        } else {
-            .fanIcon(accessibilityDescription: menuBarLabelText)
-        }
-        return MenuBarStatusItemPresentation(
-            content: content,
-            tooltip: menuTitle,
-            accessibilityLabel: menuBarLabelText,
-            needsTelemetryPrime: menuBarLabelNeedsTelemetryPrime
-        )
+        resolvedMenuBarPresentation.statusItemPresentation
     }
 
     private func shouldRefresh(lastRefreshAt: Date?, interval: TimeInterval, at date: Date) -> Bool {
@@ -825,44 +796,19 @@ final class AppModel: ObservableObject {
         power: PowerSnapshot,
         thermalPressure: ThermalPressure
     ) {
-        let selectedTelemetrySensor = telemetryTemperatureSensor(in: nextSnapshot)
-        let temperatureWasUserSelected = userSelectedSensorID != nil && selectedTelemetrySensor?.id == userSelectedSensorID
         assignIfChanged(\.snapshot, nextSnapshot)
-        telemetryHistory.append(TelemetrySample(
+        telemetrySession.record(
+            snapshot: nextSnapshot,
+            power: power,
+            thermalPressure: thermalPressure,
+            userSelectedSensorID: userSelectedSensorID,
             capturedAt: now(),
-            selectedTemperatureID: selectedTelemetrySensor?.id,
-            selectedTemperatureName: selectedTelemetrySensor?.name,
-            selectedTemperatureCelsius: selectedTelemetrySensor?.celsius,
-            temperatureWasUserSelected: temperatureWasUserSelected,
-            highestTemperatureCelsius: nextSnapshot.highestTemperature?.celsius,
-            firstFanRPM: nextSnapshot.fans.first?.currentRPM,
-            averageFanRPM: averageFanRPM(in: nextSnapshot.fans),
-            batteryPowerWatts: power.batteryPowerWatts,
-            thermalPressure: thermalPressure
-        ))
+        )
+        publishTelemetrySession()
         syncCurveDefaultsIfNeeded(from: nextSnapshot)
         if usePerFanFixedRPM {
             ensureFixedFanTargets(for: nextSnapshot.fans)
         }
-    }
-
-    private func telemetryTemperatureSensor(in snapshot: HardwareSnapshot) -> TemperatureSensor? {
-        if let selectedSensorID,
-           let exact = snapshot.temperatureSensors.first(where: { $0.id == selectedSensorID }) {
-            return exact
-        }
-        return snapshot.temperatureSensors.first { sensor in
-            let lower = sensor.name.lowercased()
-            return lower.contains("cpu") || lower.contains("package") || lower.contains("die")
-        } ?? snapshot.highestTemperature
-    }
-
-    private func averageFanRPM(in fans: [Fan]) -> Double? {
-        guard !fans.isEmpty else { return nil }
-        let totalRPM = fans.reduce(0) { total, fan in
-            total + fan.currentRPM
-        }
-        return Double(totalRPM) / Double(fans.count)
     }
 
     private func fanAccessMessage(for snapshot: HardwareSnapshot) -> String? {
@@ -900,22 +846,18 @@ final class AppModel: ObservableObject {
     }
 
     var canRequestRestoreAuto: Bool {
-        controlSessionPresentation.primaryAction == .restoreAuto
-            || controlState.manualControlActive
-            || controlState.mode != .auto
-            || agentControlStatus?.activeLease != nil
+        FanControlOwnershipPresentation
+            .resolve(fanControlOwnershipStatus)
+            .canRequestRestoreAuto
     }
 
     func markFanControlDraftPending() {
-        guard selectedMode != .auto else { return }
-        if !hasPendingFanControlChanges,
-           manualFanControlApplyAttempt == nil,
-           let lastAppliedFanControlDraft,
-           controlState.mode == fanMode(for: lastAppliedFanControlDraft) {
-            fanControlApplyState = .applied
-        } else if fanControlApplyState != .applying {
-            fanControlApplyState = .pending
-        }
+        fanControlApplyState = fanControlSessionController.draftPendingApplyState(
+            currentDraft: currentFanControlDraft,
+            selectedMode: selectedMode,
+            controlMode: controlState.mode,
+            applyState: fanControlApplyState
+        )
     }
 
     func applyPendingFanControl() {
@@ -935,21 +877,22 @@ final class AppModel: ObservableObject {
         if usePerFanFixedRPM, let fans = snapshot?.fans {
             ensureFixedFanTargets(for: fans)
         }
-        let previousManualSessionExpiresAt = manualFanControlApplyAttempt?.previousManualSessionExpiresAt
-            ?? manualSessionExpiresAt
-        let generation = beginFanControlOperation()
+        let manualOperation = fanControlSessionController.beginManualOperation(
+            currentSessionExpiresAt: manualSessionExpiresAt
+        )
+        let operation = manualOperation.operation
         let draft = currentFanControlDraft
         let mode = fanMode(for: draft)
 
         await refreshManualControlPreflight()
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
         if let blockedReason = manualFanControlBlockedReason {
             lastError = "Manual fan control blocked: \(blockedReason)"
             fanControlApplyState = .blocked(reason: blockedReason)
             await syncState()
-            guard manualFanControlOperationIsCurrent(generation) else {
+            guard manualFanControlOperationIsCurrent(operation) else {
                 return .superseded
             }
             return .blocked(reason: blockedReason)
@@ -957,54 +900,83 @@ final class AppModel: ObservableObject {
 
         fanControlApplyState = .applying
         lastError = nil
-        updateManualDeadline(for: mode, runLimit: draft.manualRunLimit)
-        manualFanControlApplyAttempt = ManualFanControlApplyAttempt(
-            generation: generation,
+        let provisionalSessionExpiresAt = fanControlSessionController.registerManualApply(
+            manualOperation,
             draft: draft,
-            mode: mode,
-            previousManualSessionExpiresAt: previousManualSessionExpiresAt,
-            coordinatorConfigured: false
+            mode: mode
         )
+        manualSessionExpiresAt = provisionalSessionExpiresAt
 
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
         await coordinator.setFixedFanTargets(fixedFanTargetMap(for: draft))
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
         await coordinator.setFanOverrides(draft.usePerFanOverrides ? draft.fanOverrides : [])
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
         await coordinator.setMode(mode)
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
-        if manualFanControlApplyAttempt?.generation == generation {
-            manualFanControlApplyAttempt?.coordinatorConfigured = true
-        }
+        fanControlSessionController.markCoordinatorConfigured(operation)
 
-        guard manualFanControlOperationIsCurrent(generation) else {
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
-        await pollOnce()
-        guard manualFanControlOperationIsCurrent(generation) else {
+        // A successful hardware poll is necessary but not sufficient to commit
+        // the draft or its run limit. The fresh daemon ownership read below is
+        // the final Apply boundary.
+        await pollingController.freshPollOnce { [weak self] pollingOperation in
+            await self?.performPollOnce(
+                operation: pollingOperation,
+                reconcileManualApply: false
+            )
+        }
+        guard manualFanControlOperationIsCurrent(operation) else {
             return .superseded
         }
         if let lastError {
-            restorePreviousManualDeadline(for: generation)
+            restorePreviousManualDeadline(for: manualOperation)
             fanControlApplyState = .failed(message: lastError)
             return .failed(message: lastError)
         }
-        reconcileManualApplyAttemptAfterSuccessfulPoll()
+        do {
+            let confirmedOwnership = try await coordinator.confirmCurrentManualOwnership()
+            guard manualFanControlOperationIsCurrent(operation) else {
+                return .superseded
+            }
+            fanControlOwnershipStatus = confirmedOwnership
+            fanControlOwnershipStatusError = nil
+        } catch {
+            guard manualFanControlOperationIsCurrent(operation) else {
+                return .superseded
+            }
+            let message = "Manual fan control could not be confirmed after Apply: \(error.localizedDescription)"
+            rejectUnconfirmedManualApply(
+                manualOperation,
+                provisionalSessionExpiresAt: provisionalSessionExpiresAt
+            )
+            lastError = message
+            fanControlOwnershipStatus = nil
+            fanControlOwnershipStatusError = error.localizedDescription
+            fanControlApplyState = .failed(message: message)
+            return .failed(message: message)
+        }
         guard controlState.mode == mode, controlState.manualControlActive else {
             let message = "Manual fan control could not be confirmed after Apply."
-            restorePreviousManualDeadline(for: generation)
+            rejectUnconfirmedManualApply(
+                manualOperation,
+                provisionalSessionExpiresAt: provisionalSessionExpiresAt
+            )
             lastError = message
             fanControlApplyState = .failed(message: message)
             return .failed(message: message)
         }
+        reconcileManualApplyAttemptAfterSuccessfulPoll()
         return .applied
     }
 
@@ -1013,52 +985,103 @@ final class AppModel: ObservableObject {
         await performAutoRestore(generation: generation)
     }
 
-    private func performAutoRestore(generation: UInt64) async {
+    private func performAutoRestore(generation: FanControlSessionOperation) async {
         guard fanControlOperationIsCurrent(generation) else { return }
-        await coordinator.setMode(.auto)
+        await coordinator.setMode(
+            .auto,
+            unreadableJournalRecoveryAuthority: .explicitOperator
+        )
         guard fanControlOperationIsCurrent(generation) else { return }
 
-        let agentRestoreError = await clearAgentLeaseForUserAutoIfNeeded()
-        guard fanControlOperationIsCurrent(generation) else { return }
-
-        guard fanControlOperationIsCurrent(generation) else { return }
+        // Auto is a safety-priority operation. Do not coalesce it behind an
+        // in-flight manual poll: invalidate that poll's publication token and
+        // start a concurrent Auto tick so the daemon can preempt at the next
+        // physical fan boundary.
+        pollingController.supersedeActivePoll()
         await pollOnce()
         guard fanControlOperationIsCurrent(generation) else { return }
-        if let agentRestoreError {
-            lastError = agentRestoreError
-            await notifyAutoRestoreFailure(agentRestoreError)
-            guard fanControlOperationIsCurrent(generation) else { return }
-        }
+        // The coordinator's protocol-v2 full-Auto transaction routes through
+        // AgentControlService in the daemon and clears the lease atomically.
+        // Refresh visibility only; never issue a second lease-clear restore.
+        await refreshAgentControlStatus()
+        guard fanControlOperationIsCurrent(generation) else { return }
         if let lastError {
             fanControlApplyState = .failed(message: lastError)
+            await notifyAutoRestoreFailure(lastError)
         } else if controlState.mode != .auto || controlState.manualControlActive {
             let message = "Auto restore could not be confirmed."
             lastError = message
             fanControlApplyState = .failed(message: message)
+            await notifyAutoRestoreFailure(message)
         } else {
             recordAutoRestorationApplied()
         }
     }
 
     func saveCurrentProfile(name: String) {
-        let profile = CurveProfile(
-            name: name,
-            sensorID: selectedSensorID,
-            startTemp: curveStartTemp,
-            startRPM: Int(curveStartRPM.rounded()),
-            midTemp: curveMidTemp,
-            midRPM: Int(curveMidRPM.rounded()),
-            maxTemp: curveMaxTemp,
-            maxRPM: Int(curveMaxRPM.rounded()),
-            fanOverrides: usePerFanOverrides ? fanOverrides : []
-        )
-        if let existingIndex = savedProfiles.firstIndex(where: { $0.name == name }) {
-            savedProfiles[existingIndex] = profile
-        } else {
-            savedProfiles.append(profile)
+        guard let result = saveCurrentProfileAs(name: name, confirmOverwrite: false) else { return }
+        if case .overwriteConfirmationRequired(let existing, _) = result {
+            lastError = "Confirm before replacing the saved profile \(existing.name)."
         }
+    }
+
+    @discardableResult
+    func saveCurrentProfileAs(
+        name: String,
+        confirmOverwrite: Bool
+    ) -> CurveProfileSaveResult? {
+        guard let result = CurveProfileSavePolicy.saveAs(
+            name: name,
+            draft: currentCurveProfileDraft,
+            existingProfiles: savedProfiles,
+            confirmOverwrite: confirmOverwrite
+        ) else { return nil }
+
+        switch result {
+        case .created(let profile):
+            let proposedProfiles = savedProfiles + [profile]
+            guard persistProfiles(proposedProfiles) else {
+                return .persistenceFailed(message: profilePersistenceErrorMessage)
+            }
+            savedProfiles = proposedProfiles
+            selectedCurveProfileID = profile.id
+        case .updated(let profile):
+            guard let index = savedProfiles.firstIndex(where: { $0.id == profile.id }) else {
+                return nil
+            }
+            var proposedProfiles = savedProfiles
+            proposedProfiles[index] = profile
+            guard persistProfiles(proposedProfiles) else {
+                return .persistenceFailed(message: profilePersistenceErrorMessage)
+            }
+            savedProfiles = proposedProfiles
+            selectedCurveProfileID = profile.id
+        case .overwriteConfirmationRequired:
+            break
+        case .persistenceFailed:
+            preconditionFailure("CurveProfileSavePolicy never emits persistence results.")
+        }
+        return result
+    }
+
+    @discardableResult
+    func updateSelectedCurveProfile() -> Bool {
+        let selected = selectedCurveProfileID.flatMap { selectedID in
+            savedProfiles.first { $0.id == selectedID }
+        }
+        guard case .updated(let profile)? = CurveProfileSavePolicy.update(
+            selectedProfile: selected,
+            draft: currentCurveProfileDraft
+        ), let index = savedProfiles.firstIndex(where: { $0.id == profile.id }) else {
+            return false
+        }
+
+        var proposedProfiles = savedProfiles
+        proposedProfiles[index] = profile
+        guard persistProfiles(proposedProfiles) else { return false }
+        savedProfiles = proposedProfiles
         selectedCurveProfileID = profile.id
-        persistProfiles()
+        return true
     }
 
     func loadProfile(_ profile: CurveProfile) {
@@ -1110,23 +1133,41 @@ final class AppModel: ObservableObject {
         markFanControlDraftPending()
     }
 
-    func deleteProfile(_ profile: CurveProfile) {
-        savedProfiles.removeAll { $0.id == profile.id }
+    @discardableResult
+    func deleteProfile(_ profile: CurveProfile) -> Bool {
+        let proposedProfiles = savedProfiles.filter { $0.id != profile.id }
+        guard persistProfiles(proposedProfiles) else { return false }
+        savedProfiles = proposedProfiles
         if selectedCurveProfileID == profile.id {
             selectedCurveProfileID = nil
         }
-        persistProfiles()
+        return true
     }
 
-    private func persistProfiles() {
+    private var profilePersistenceErrorMessage: String {
+        curveProfilePersistenceError ?? "Failed to save profiles."
+    }
+
+    @discardableResult
+    private func persistProfiles(_ profiles: [CurveProfile]) -> Bool {
         do {
-            try profileStore.saveThrowing(savedProfiles)
+            try profileStore.saveThrowing(profiles)
+            curveProfileRecoveryMessage = nil
+            if lastError == curveProfilePersistenceError {
+                lastError = nil
+            }
+            curveProfilePersistenceError = nil
+            return true
         } catch {
-            lastError = "Failed to save profiles: \(error.localizedDescription)"
+            let message = "Failed to save profiles: \(error.localizedDescription)"
+            curveProfilePersistenceError = message
+            lastError = message
+            return false
         }
     }
 
     func targetRPMPreview(for fan: Fan) -> Int? {
+        guard fan.controllable else { return nil }
         switch selectedMode {
         case .auto:
             return nil
@@ -1137,10 +1178,11 @@ final class AppModel: ObservableObject {
             return FanCurve.clamp(Int(fixedRPM.rounded()), fan.minimumRPM, fan.maximumRPM)
         case .curve:
             guard let sensor = selectedSensor else { return nil }
-            return currentCurve().targetRPM(
-                for: sensor.celsius,
-                minimumRPM: fan.minimumRPM,
-                maximumRPM: fan.maximumRPM
+            return FanCurveTargetResolver.targetRPM(
+                baseCurve: currentCurve(),
+                fan: fan,
+                temperature: sensor.celsius,
+                overrides: usePerFanOverrides ? fanOverrides : []
             )
         }
     }
@@ -1156,49 +1198,19 @@ final class AppModel: ObservableObject {
         return draftTargetRPM == appliedTargetRPM(for: fan) ? nil : draftTargetRPM
     }
 
-    private func refreshTelemetrySummaries() {
-        let overview = TelemetryHistorySummary(
-            history: telemetryHistory,
-            sampleLimit: 180,
-            thermalPressureLimit: 36
-        )
-        let compact = TelemetryHistorySummary(
-            history: telemetryHistory,
-            sampleLimit: 90,
-            thermalPressureLimit: 24
-        )
-        assignIfChanged(\.telemetryOverviewSummary, overview)
-        assignIfChanged(\.compactTelemetryOverviewSummary, compact)
-        assignIfChanged(\.recentTelemetryTrendSummary, trendSummary(from: compact))
-    }
-
-    private func trendSummary(from summary: TelemetryHistorySummary) -> String? {
-        guard summary.sampleCount >= 2 else { return nil }
-
-        var parts: [String] = []
-        if let temperatureChangeText = summary.temperatureChangeText {
-            parts.append("Temp \(temperatureChangeText)")
-        }
-        if let fanRPMChangeText = summary.fanRPMChangeText {
-            parts.append("\(summary.fanRPMTrendLabel) \(fanRPMChangeText)")
-        }
-        if let batteryPowerChangeText = summary.batteryPowerChangeText {
-            parts.append("Power \(batteryPowerChangeText)")
-        }
-        if summary.thermalPressureSamples.count >= 2,
-           summary.thermalPressureSummaryText != "Stable Nominal" {
-            parts.append(summary.thermalPressureSummaryText)
-        }
-
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    private func publishTelemetrySession() {
+        assignIfChanged(\.telemetryOverviewSummary, telemetrySession.overviewSummary)
+        assignIfChanged(\.compactTelemetryOverviewSummary, telemetrySession.compactSummary)
+        assignIfChanged(\.recentTelemetryTrendSummary, telemetrySession.recentTrendSummary)
     }
 
     func ensureFixedFanTargets(for fans: [Fan]) {
-        let baseRatio = fixedRPMBaseRangeRatio(for: fixedRPMBaseBounds(for: fans))
+        let controllableFans = fans.filter(\.controllable)
+        let baseRatio = fixedRPMBaseRangeRatio(for: fixedRPMBaseBounds(for: controllableFans))
         let existingByFanID = fixedFanTargets.reduce(into: [Int: FixedFanTarget]()) { targetsByID, target in
             targetsByID[target.fanID] = target
         }
-        let nextTargets = fans.map { fan in
+        let nextTargets = controllableFans.map { fan in
             if let existing = existingByFanID[fan.id] {
                 return FixedFanTarget(
                     fanID: fan.id,
@@ -1251,57 +1263,65 @@ final class AppModel: ObservableObject {
         let existingByFanID = fanOverrides.reduce(into: [Int: FanCurveOverride]()) { overridesByID, override in
             overridesByID[override.fanID] = override
         }
-        fanOverrides = fans.map { fan in
+        fanOverrides = fans.filter(\.controllable).map { fan in
             existingByFanID[fan.id] ?? defaultFanOverride(for: fan)
         }
     }
 
     func fanOverride(for fanID: Int) -> FanCurveOverride? {
-        fanOverrides.first { $0.fanID == fanID }
+        fanOverrides.last { $0.fanID == fanID }
     }
 
     func setOverrideStartRPM(_ rpm: Int, for fan: Fan) {
+        guard fan.controllable else { return }
         updateFanOverride(for: fan) { override in
             override.startRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         }
     }
 
     func setOverrideMidRPM(_ rpm: Int, for fan: Fan) {
+        guard fan.controllable else { return }
         updateFanOverride(for: fan) { override in
             override.midRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         }
     }
 
     func setOverrideMaxRPM(_ rpm: Int, for fan: Fan) {
+        guard fan.controllable else { return }
         updateFanOverride(for: fan) { override in
             override.maxRPM = FanCurve.clamp(rpm, fan.minimumRPM, fan.maximumRPM)
         }
     }
 
     var selectedSensor: TemperatureSensor? {
-        guard let sensors = snapshot?.temperatureSensors, !sensors.isEmpty else { return nil }
-        if let selectedSensorID, let exact = sensors.first(where: { $0.id == selectedSensorID }) {
-            return exact
-        }
-        return sensors.first { sensor in
-            let lower = sensor.name.lowercased()
-            return lower.contains("cpu") || lower.contains("package") || lower.contains("die")
-        } ?? snapshot?.highestTemperature
+        curveTemperatureSelection.curveMetric
     }
 
     var effectiveSelectedSensorID: String? {
         selectedSensor?.id
     }
 
+    var curveTemperatureSelection: TemperatureSensorSelection {
+        TemperatureSensorSelection.resolve(
+            sensors: snapshot?.temperatureSensors ?? [],
+            selectedSensorID: userSelectedSensorID
+        )
+    }
+
+    private var resolvedCurveSensorID: String? {
+        guard snapshot?.temperatureSensors.isEmpty == false else { return selectedSensorID }
+        return effectiveSelectedSensorID
+    }
+
     var temperatureAttentionSummary: String? {
         guard thermalPressure.menuSummary == nil else { return nil }
-        guard let sensor = selectedSensor ?? snapshot?.highestTemperature else { return nil }
+        guard let sensor = snapshot?.highestTemperature else { return nil }
         return sensor.celsius >= Self.highTemperatureAttentionThreshold ? "High temp" : nil
     }
 
     var fanWriteBlockedWhileHotSummary: String? {
         guard helperWritePathBlockedSummary != nil,
-              let sensor = selectedSensor ?? snapshot?.highestTemperature,
+              let sensor = snapshot?.highestTemperature,
               sensor.celsius >= Self.highTemperatureAttentionThreshold else {
             return nil
         }
@@ -1324,132 +1344,76 @@ final class AppModel: ObservableObject {
         return lastError
     }
 
+    private var resolvedMenuBarPresentation: MenuBarPresentation {
+        let currentDate = now()
+        let lease = agentControlStatus?.activeLease
+        return MenuBarPresentationProvider.resolve(MenuBarPresentationInput(
+            displayMode: menuBarDisplayMode,
+            customFields: menuBarCustomFields,
+            snapshotIsAvailable: snapshot != nil,
+            selectedTemperature: selectedSensor ?? snapshot?.highestTemperature,
+            selectedTemperatureLabel: curveTemperatureSelection.curveMetricLabel,
+            fans: snapshot?.fans ?? [],
+            power: powerSnapshot,
+            thermalPressure: thermalPressure,
+            temperatureAttentionSummary: temperatureAttentionSummary,
+            fanWriteBlockedWhileHotSummary: fanWriteBlockedWhileHotSummary,
+            helperState: helperHealthState,
+            hasCompletedHardwarePoll: hasCompletedHardwarePoll,
+            daemonReachable: daemonReachable,
+            daemonResponding: daemonResponding,
+            lastErrorIsPresent: lastError != nil,
+            agentCoolingMenuSummary: agentCoolingMenuSummary,
+            agentStatusIsUnavailable: agentControlStatusError != nil,
+            shouldPreferHelperRecoveryOverAgentStatusError: shouldPreferHelperRecoveryOverAgentStatusError,
+            hasAgentLease: lease != nil,
+            agentLeaseNeedsAttention: agentControlStatusError != nil
+                || lease.map { !$0.isActive(at: currentDate) } == true,
+            fanControlOwnershipStatus: fanControlOwnershipStatus,
+            controlMode: controlState.mode,
+            controlOwnershipNeedsAttention: controlOwnershipNeedsAttention,
+            autoHardwareModeIsUncertain: !autoForcedModeFans.isEmpty
+                || !autoUnknownModeFans.isEmpty
+                || !autoMissingModeFans.isEmpty,
+            codexUsageSnapshot: codexUsageSnapshot,
+            codexUsageDisplayPreferences: codexUsageDisplayPreferences,
+            currentDate: currentDate
+        ))
+    }
+
     private var menuBarPanelAttentionText: String? {
-        fanWriteBlockedWhileHotSummary
-            ?? thermalPressure.menuSummary
-            ?? temperatureAttentionSummary
+        resolvedMenuBarPresentation.panelAttentionText
     }
 
     var menuTitle: String {
-        menuSummary(includePower: true)
+        resolvedMenuBarPresentation.title
     }
 
     var menuPanelTitle: String {
-        menuSummary(includePower: false)
-    }
-
-    private func menuSummary(includePower: Bool) -> String {
-        var parts: [String]
-        if snapshot != nil {
-            parts = [menuBarTemperatureText, menuBarFanText].compactMap(\.self)
-            if parts.isEmpty {
-                parts = ["Vifty"]
-            }
-            if includePower, let powerSnapshot {
-                parts.append(PowerDisplayFormatter.summary(for: powerSnapshot))
-            }
-        } else {
-            parts = if includePower {
-                [powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) } ?? "Vifty"]
-            } else {
-                ["Vifty"]
-            }
-        }
-        if let thermal = thermalPressure.menuSummary {
-            parts.append(thermal)
-        } else if let temperatureAttentionSummary {
-            parts.append(temperatureAttentionSummary)
-        }
-        let hasHotFanWriteBlock = fanWriteBlockedWhileHotSummary != nil
-        if hasHotFanWriteBlock {
-            parts.append("Fan writes blocked")
-        } else if helperHealthAttentionIsActionable {
-            parts.append(helperHealthMenuSummary)
-        }
-        if let agentCoolingMenuSummary {
-            parts.append(agentCoolingMenuSummary)
-        }
-        return parts.joined(separator: " | ")
+        resolvedMenuBarPresentation.panelTitle
     }
 
     var menuBarLabelText: String {
-        switch menuBarDisplayMode {
-        case .fanIcon:
-            return menuTitle
-        case .temperature:
-            return menuBarLabelWithAttention(menuBarTemperatureText ?? "-- C")
-        case .fanRPM:
-            return menuBarLabelWithAttention(menuBarFanText ?? "-- RPM")
-        case .averageFanRPM:
-            return menuBarLabelWithAttention(menuBarAverageFanText ?? "-- RPM avg")
-        case .adapterWattage:
-            return menuBarLabelWithAttention(menuBarPowerText ?? "-- W")
-        case .codexUsage:
-            return CodexUsageFormatter.menuBarText(
-                for: codexUsageSnapshot,
-                options: codexUsageDisplayPreferences,
-                now: now
-            )
-        case .custom:
-            return menuBarLabelWithAttention(menuBarCustomLabelText)
-        case .temperatureAndRPM:
-            return menuBarLabelWithAttention("\(menuBarTemperatureText ?? "-- C") | \(menuBarFanText ?? "-- RPM")")
-        case .ownerTemperatureAndRPM:
-            return menuBarLabelWithAttention([
-                menuBarFanOwnerText,
-                menuBarTemperatureText ?? "-- C",
-                menuBarFanText ?? "-- RPM"
-            ].joined(separator: " | "))
-        case .compactSummary:
-            return menuTitle
-        }
+        resolvedMenuBarPresentation.labelText
     }
 
     var menuBarStatusItemText: String? {
-        guard !menuBarLabelUsesFanIcon else { return nil }
-        let label = menuBarLabelText
-        if menuBarAllowsPlaceholderStatusItemText {
-            return label
-        }
-        guard !label.contains("--") else { return nil }
-        return label
+        resolvedMenuBarPresentation.statusItemText
     }
 
     var menuBarLabelNeedsTelemetryPrime: Bool {
-        if !hasCompletedHardwarePoll {
-            return true
-        }
-        if menuBarDisplayMode == .codexUsage {
-            return false
-        }
-        if menuBarDisplayMode == .custom {
-            return menuBarCustomFields.contains { field in
-                field.requiresHardwareTelemetry && (menuBarText(for: field)?.contains("--") ?? false)
-            }
-        }
-        return menuBarLabelText.contains("--")
+        resolvedMenuBarPresentation.labelNeedsTelemetryPrime
     }
 
     var menuBarDisplaysCodexUsage: Bool {
-        Self.menuBarModeDisplaysCodexUsage(menuBarDisplayMode, customFields: menuBarCustomFields)
-    }
-
-    private static func menuBarModeDisplaysCodexUsage(
-        _ mode: MenuBarDisplayMode,
-        customFields: [MenuBarField]
-    ) -> Bool {
-        switch mode {
-        case .codexUsage:
-            return true
-        case .custom:
-            return customFields.contains(.codexUsage)
-        case .fanIcon, .temperature, .fanRPM, .averageFanRPM, .adapterWattage, .temperatureAndRPM, .ownerTemperatureAndRPM, .compactSummary:
-            return false
-        }
+        MenuBarPresentationProvider.displaysCodexUsage(
+            menuBarDisplayMode,
+            customFields: menuBarCustomFields
+        )
     }
 
     var menuBarAllowsPlaceholderStatusItemText: Bool {
-        menuBarDisplaysCodexUsage && hasCompletedHardwarePoll
+        resolvedMenuBarPresentation.allowsPlaceholderStatusItemText
     }
 
     func isMenuBarCustomFieldEnabled(_ field: MenuBarField) -> Bool {
@@ -1492,114 +1456,11 @@ final class AppModel: ObservableObject {
     }
 
     var menuBarFanOwnerText: String {
-        if let lease = agentControlStatus?.activeLease {
-            let needsAttention = agentControlStatusError != nil || !lease.isActive(at: now())
-            return needsAttention ? "Agent?" : "Agent"
-        }
-
-        switch controlState.mode {
-        case .fixedRPM, .temperatureCurve:
-            return controlOwnershipNeedsAttention ? "Me?" : "Me"
-        case .auto:
-            if agentControlStatusError != nil {
-                return shouldPreferHelperRecoveryOverAgentStatusError ? "Mac?" : "Owner?"
-            }
-            if !autoForcedModeFans.isEmpty || !autoUnknownModeFans.isEmpty || !autoMissingModeFans.isEmpty {
-                return "Owner?"
-            }
-            if helperWritePathBlockedSummary != nil {
-                return "Mac?"
-            }
-            guard let fans = snapshot?.fans, !fans.isEmpty else {
-                return hasCompletedHardwarePoll || daemonReachable ? "Owner?" : "Mac"
-            }
-            return "Mac"
-        }
-    }
-
-    private func menuBarLabelWithAttention(_ label: String) -> String {
-        guard let attention = menuBarMetricAttentionSummary,
-              !label.contains(attention)
-        else {
-            return label
-        }
-        return "\(label) | \(attention)"
-    }
-
-    private var menuBarCustomLabelText: String {
-        let parts = menuBarCustomFields.compactMap { menuBarText(for: $0) }
-        return parts.isEmpty ? menuTitle : parts.joined(separator: " | ")
-    }
-
-    private func menuBarText(for field: MenuBarField) -> String? {
-        switch field {
-        case .owner:
-            return menuBarFanOwnerText
-        case .temperature:
-            return menuBarTemperatureText ?? "-- C"
-        case .fanStrength:
-            return menuBarFanStrengthText ?? "--% fan"
-        case .fanRPM:
-            return menuBarFanText ?? "-- RPM"
-        case .averageFanRPM:
-            return menuBarAverageFanText ?? "-- RPM avg"
-        case .adapterWattage:
-            return menuBarPowerText ?? "-- W"
-        case .codexUsage:
-            return CodexUsageFormatter.menuBarText(
-                for: codexUsageSnapshot,
-                options: codexUsageDisplayPreferences,
-                now: now
-            )
-        }
-    }
-
-    private var menuBarMetricAttentionSummary: String? {
-        if fanWriteBlockedWhileHotSummary != nil {
-            return "Fan writes blocked"
-        }
-        if helperHealthAttentionIsActionable {
-            return helperHealthMenuSummary
-        }
-        return nil
-    }
-
-    private var helperHealthAttentionIsActionable: Bool {
-        helperHealthNeedsAttention &&
-            (hasCompletedHardwarePoll || daemonReachable || daemonResponding || agentControlStatusError != nil || lastError != nil)
+        resolvedMenuBarPresentation.fanOwnerText
     }
 
     var menuBarLabelUsesFanIcon: Bool {
-        menuBarDisplayMode == .fanIcon
-    }
-
-    private var menuBarTemperatureText: String? {
-        (selectedSensor ?? snapshot?.highestTemperature).map { "\(Int($0.celsius.rounded())) C" }
-    }
-
-    private var menuBarFanText: String? {
-        snapshot?.fans.first.map { "\($0.currentRPM) RPM" }
-    }
-
-    private var menuBarFanStrengthText: String? {
-        guard let fans = snapshot?.fans, !fans.isEmpty else { return nil }
-        let averagePercentage = Double(fans.reduce(0) { total, fan in
-            total + fan.percentage
-        }) / Double(fans.count)
-        return "\(Int(averagePercentage.rounded()))% fan"
-    }
-
-    private var menuBarAverageFanText: String? {
-        guard let fans = snapshot?.fans, !fans.isEmpty else { return nil }
-        let totalRPM = fans.reduce(0) { total, fan in
-            total + fan.currentRPM
-        }
-        let averageRPM = Double(totalRPM) / Double(fans.count)
-        return "\(Int(averageRPM.rounded())) RPM avg"
-    }
-
-    private var menuBarPowerText: String? {
-        powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) }
+        resolvedMenuBarPresentation.labelUsesFanIcon
     }
 
     private func persistAppPreferences() {
@@ -1607,6 +1468,7 @@ final class AppModel: ObservableObject {
             menuBarDisplayMode: menuBarDisplayMode,
             menuBarCustomFields: menuBarCustomFields,
             startupMode: startupMode,
+            textScale: textScale,
             notificationSettings: notificationSettings,
             usePerFanFixedRPM: usePerFanFixedRPM,
             fixedFanTargets: fixedFanTargets,
@@ -1631,27 +1493,7 @@ final class AppModel: ObservableObject {
     }
 
     private var helperWritePathBlockedSummary: String? {
-        switch helperHealthState {
-        case .error, .unreachable:
-            return "Fan writes blocked until helper responds"
-        case .runtimeMismatch:
-            return "Fan writes blocked until helper matches this app"
-        case .telemetryOnly:
-            return "Read-only fan telemetry; repair helper for fan writes"
-        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
-            return nil
-        }
-    }
-
-    private var hasHelperRuntimeMismatchError: Bool {
-        guard let lastError else { return false }
-        let normalized = lastError.lowercased()
-        return normalized.contains("daemonruntimematchesexpected")
-            || normalized.contains("daemonruntime")
-            || normalized.contains("does not match this vifty build")
-            || normalized.contains("daemon differs from the installed app")
-            || normalized.contains("helper daemon differs")
-            || normalized.contains("installed privileged fan helper does not match")
+        helperHealthState.writePathBlockedSummary
     }
 
     private func lastErrorIsCoveredByHelperRecovery(_ error: String) -> Bool {
@@ -1868,38 +1710,15 @@ final class AppModel: ObservableObject {
     }
 
     var helperHealthState: HelperHealthState {
-        if let snapshot, !snapshot.isAppleSilicon || !snapshot.isMacBookPro {
-            return .unsupported
-        }
-        if !hasCompletedHardwarePoll, snapshot == nil, !daemonReachable {
-            return .checking
-        }
-        if hasHelperRuntimeMismatchError {
-            return .runtimeMismatch
-        }
-        let fanCount = snapshot?.fans.count ?? 0
-        if fanCount > 0 {
-            guard daemonReachable else {
-                return .unreachable
-            }
-            guard daemonResponding else {
-                return .telemetryOnly
-            }
-            if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
-                return .error
-            }
-            guard snapshot?.fans.contains(where: \.controllable) == true else {
-                return .noControllableFans(fanCount: fanCount)
-            }
-            return .healthy(fanCount: fanCount)
-        }
-        if let lastError, lastError.localizedCaseInsensitiveContains("fan helper") {
-            return .error
-        }
-        guard daemonReachable else {
-            return .unreachable
-        }
-        return .noFanData
+        HelperHealthPresentation.resolve(HelperHealthPresentationInput(
+            hardwareIsSupported: snapshot.map { $0.isAppleSilicon && $0.isMacBookPro },
+            hasCompletedHardwarePoll: hasCompletedHardwarePoll,
+            daemonReachable: daemonReachable,
+            daemonResponding: daemonResponding,
+            fanCount: snapshot?.fans.count ?? 0,
+            hasControllableFan: snapshot?.fans.contains(where: \.controllable) == true,
+            lastError: lastError
+        ))
     }
 
     var helperHealthSummary: String {
@@ -1923,18 +1742,7 @@ final class AppModel: ObservableObject {
     }
 
     var helperInstallRuntimeContext: String? {
-        switch helperHealthState {
-        case .telemetryOnly:
-            return "macOS helper may be installed, but daemon XPC is not responding; fan reads are read-only and writes stay blocked."
-        case .unreachable:
-            return "Install status and daemon response are separate; approve or repair before fan writes."
-        case .error:
-            return "The helper may be installed, but the current daemon path still needs repair."
-        case .runtimeMismatch:
-            return "The installed LaunchDaemon does not match this Vifty app; repair the helper before fan writes."
-        case .checking, .healthy, .noFanData, .noControllableFans, .unsupported:
-            return nil
-        }
+        helperHealthState.installRuntimeContext
     }
 
     var helperFailureNotificationBody: String {
@@ -2034,6 +1842,17 @@ final class AppModel: ObservableObject {
         }
         guard !snapshot.temperatureSensors.isEmpty else {
             return "Temperature sensors are unavailable. Manual fan control stays blocked."
+        }
+        let confirmedOwnership = FanControlOwnershipPresentation.resolve(fanControlOwnershipStatus)
+        switch confirmedOwnership.owner {
+        case .macOS, .viftyManual:
+            break
+        case .agent:
+            return "Agent cooling owns fan control; restore Auto before manual fan control."
+        case .recovery:
+            return "Fan recovery is pending; restore Auto before manual fan control."
+        case .mixedOrUnknown:
+            return "Fan ownership is unconfirmed; manual fan control stays blocked."
         }
         return nil
     }
@@ -2184,7 +2003,7 @@ final class AppModel: ObservableObject {
         if thermalPressure == .serious || thermalPressure == .critical {
             return true
         }
-        guard let sensor = selectedSensor ?? snapshot?.highestTemperature else { return false }
+        guard let sensor = snapshot?.highestTemperature else { return false }
         return sensor.celsius >= Self.highTemperatureAttentionThreshold
     }
 
@@ -2277,7 +2096,7 @@ final class AppModel: ObservableObject {
     }
 
     private func currentCurve() -> FanCurve {
-        FanCurve(sensorID: selectedSensorID, points: [
+        FanCurve(sensorID: resolvedCurveSensorID, points: [
             CurvePoint(temperatureCelsius: curveStartTemp, rpm: Int(curveStartRPM.rounded())),
             CurvePoint(temperatureCelsius: curveMidTemp, rpm: Int(curveMidRPM.rounded())),
             CurvePoint(temperatureCelsius: curveMaxTemp, rpm: Int(curveMaxRPM.rounded()))
@@ -2309,56 +2128,18 @@ final class AppModel: ObservableObject {
     }
 
     private func fanMode(for draft: FanControlDraft) -> FanMode {
-        switch draft.mode {
-        case .auto:
-            .auto
-        case .fixed:
-            .fixedRPM(Int(draft.fixedRPM.rounded()))
-        case .curve:
-            .temperatureCurve(FanCurve(sensorID: draft.selectedSensorID, points: [
-                CurvePoint(
-                    temperatureCelsius: draft.curve.startTemperature,
-                    rpm: Int(draft.curve.startRPM.rounded())
-                ),
-                CurvePoint(
-                    temperatureCelsius: draft.curve.rampTemperature,
-                    rpm: Int(draft.curve.rampRPM.rounded())
-                ),
-                CurvePoint(
-                    temperatureCelsius: draft.curve.highTemperature,
-                    rpm: Int(draft.curve.highRPM.rounded())
-                )
-            ]))
-        }
+        fanControlSessionController.fanMode(for: draft)
     }
 
     func applyCurveOverrides() {
         markFanControlDraftPending()
     }
 
-    private func commitManualRunLimit(for mode: FanMode, runLimit: ManualRunLimit) {
-        appliedManualRunLimit = runLimit
-        updateManualDeadline(for: mode, runLimit: appliedManualRunLimit)
-    }
-
-    private func updateManualDeadline(for mode: FanMode, runLimit: ManualRunLimit) {
-        guard mode != .auto else {
-            manualSessionExpiresAt = nil
-            return
-        }
-
-        switch runLimit {
-        case .indefinitely:
-            manualSessionExpiresAt = nil
-        case .minutes(let minutes):
-            manualSessionExpiresAt = now().addingTimeInterval(TimeInterval(minutes * 60))
-        }
-    }
-
-    private func restoreAutoIfManualSessionExpired() async -> UInt64? {
-        guard selectedMode != .auto,
-              let manualSessionExpiresAt,
-              now() >= manualSessionExpiresAt else {
+    private func restoreAutoIfManualSessionExpired() async -> FanControlSessionOperation? {
+        guard fanControlSessionController.shouldRestoreExpiredManualSession(
+            selectedMode: selectedMode,
+            manualSessionExpiresAt: manualSessionExpiresAt
+        ) else {
             return nil
         }
 
@@ -2370,62 +2151,69 @@ final class AppModel: ObservableObject {
     }
 
     private func recordAutoRestorationApplied() {
-        manualFanControlApplyAttempt = nil
-        lastAppliedFanControlDraft = currentFanControlDraft
+        fanControlSessionController.recordAutoRestorationApplied(currentDraft: currentFanControlDraft)
         fanControlApplyState = .applied
     }
 
-    private func beginFanControlOperation() -> UInt64 {
-        fanControlOperationGeneration &+= 1
-        manualFanControlApplyAttempt = nil
-        return fanControlOperationGeneration
+#if DEBUG
+    func configureReviewFixtureAppliedFanControlDraft() {
+        fanControlSessionController.recordAutoRestorationApplied(currentDraft: currentFanControlDraft)
+        fanControlApplyState = .applied
     }
+#endif
 
-    private func beginAutoRestoreOperation() -> UInt64 {
-        let generation = beginFanControlOperation()
+    private func beginAutoRestoreOperation() -> FanControlSessionOperation {
+        let operation = fanControlSessionController.beginAutoOperation()
         fanControlApplyState = .applying
         lastError = nil
         selectedMode = .auto
         manualSessionExpiresAt = nil
-        return generation
+        return operation
     }
 
-    private func fanControlOperationIsCurrent(_ generation: UInt64) -> Bool {
-        fanControlOperationGeneration == generation
+    private func fanControlOperationIsCurrent(_ operation: FanControlSessionOperation) -> Bool {
+        fanControlSessionController.isCurrent(operation)
     }
 
-    private func manualFanControlOperationIsCurrent(_ generation: UInt64) -> Bool {
-        fanControlOperationIsCurrent(generation) && selectedMode != .auto
+    private func manualFanControlOperationIsCurrent(_ operation: FanControlSessionOperation) -> Bool {
+        fanControlSessionController.isCurrentManual(operation, selectedMode: selectedMode)
     }
 
-    private func canCommitAutoRestoration(generation: UInt64) -> Bool {
-        fanControlOperationIsCurrent(generation)
-            && selectedMode == .auto
-            && controlState.mode == .auto
-            && !controlState.manualControlActive
+    private func canCommitAutoRestoration(generation: FanControlSessionOperation) -> Bool {
+        fanControlSessionController.canCommitAutoRestoration(
+            operation: generation,
+            selectedMode: selectedMode,
+            controlState: controlState
+        )
     }
 
     private func reconcileManualApplyAttemptAfterSuccessfulPoll() {
-        guard let attempt = manualFanControlApplyAttempt,
-              attempt.coordinatorConfigured,
-              manualFanControlOperationIsCurrent(attempt.generation),
-              controlState.mode == attempt.mode,
-              controlState.manualControlActive else {
-            return
-        }
-
-        commitManualRunLimit(for: attempt.mode, runLimit: attempt.draft.manualRunLimit)
-        lastAppliedFanControlDraft = attempt.draft
-        manualFanControlApplyAttempt = nil
-        fanControlApplyState = currentFanControlDraft == attempt.draft ? .applied : .pending
+        guard let reconciliation = fanControlSessionController.reconcileManualApplyAfterSuccessfulPoll(
+            operationSelectedMode: selectedMode,
+            controlState: controlState,
+            currentDraft: currentFanControlDraft
+        ) else { return }
+        manualSessionExpiresAt = reconciliation.manualSessionExpiresAt
+        fanControlApplyState = reconciliation.applyState
     }
 
-    private func restorePreviousManualDeadline(for generation: UInt64) {
-        guard let attempt = manualFanControlApplyAttempt,
-              attempt.generation == generation else {
-            return
-        }
-        manualSessionExpiresAt = attempt.previousManualSessionExpiresAt
+    private func restorePreviousManualDeadline(for operation: FanControlManualOperation) {
+        // Use the operation's immutable capture: the polling path may have
+        // advanced controller reconciliation state before a later check fails.
+        manualSessionExpiresAt = operation.previousSessionExpiresAt
+    }
+
+    private func rejectUnconfirmedManualApply(
+        _ operation: FanControlManualOperation,
+        provisionalSessionExpiresAt: Date?
+    ) {
+        fanControlSessionController.rejectManualApply(operation.operation)
+        // If this was the first finite Apply there is no previous deadline to
+        // restore. Keep the provisional bound because the hardware transaction
+        // completed before its final ownership read failed; never turn that
+        // bounded user request into an indefinite manual session.
+        manualSessionExpiresAt = operation.previousSessionExpiresAt
+            ?? provisionalSessionExpiresAt
     }
 
     private func shouldPreserveManualIntent(afterTickFailure error: Error, attemptedMode: FanMode) -> Bool {
@@ -2444,24 +2232,22 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func clearAgentLeaseForUserAutoIfNeeded() async -> String? {
-        guard agentControlStatus?.activeLease != nil else { return nil }
-        do {
-            agentControlStatus = try await agentRestore("User selected Auto in Vifty")
-            agentControlStatusError = nil
-            return nil
-        } catch {
-            agentControlStatusError = error.localizedDescription
-            return "Failed to clear agent cooling lease after Auto restore: \(error.localizedDescription)"
-        }
-    }
-
     private func refreshAgentControlStatus() async {
         do {
             agentControlStatus = try await agentStatusReader()
             agentControlStatusError = nil
         } catch {
             agentControlStatusError = error.localizedDescription
+        }
+    }
+
+    private func refreshFanControlOwnershipStatus() async {
+        do {
+            fanControlOwnershipStatus = try await coordinator.fanControlOwnershipStatus()
+            fanControlOwnershipStatusError = nil
+        } catch {
+            fanControlOwnershipStatus = nil
+            fanControlOwnershipStatusError = error.localizedDescription
         }
     }
 
@@ -2472,6 +2258,11 @@ final class AppModel: ObservableObject {
         } else {
             daemonReachable = daemonResponding
         }
+
+        // A draft must never infer ownership from its selected mode or from
+        // stale fan telemetry. Refresh the daemon's transaction status as part
+        // of the same preflight that authorizes every manual Apply attempt.
+        await refreshFanControlOwnershipStatus()
 
         guard agentControlStatus?.activeLease == nil || agentControlStatusError != nil else {
             return
@@ -2487,7 +2278,8 @@ final class AppModel: ObservableObject {
     }
 
     private func syncCurveDefaultsIfNeeded(from snapshot: HardwareSnapshot) {
-        guard !curveDefaultsSynced, let fan = snapshot.fans.first else { return }
+        guard !curveDefaultsSynced,
+              let fan = snapshot.fans.first(where: \.controllable) else { return }
         curveStartRPM = Double(fan.minimumRPM)
         curveMaxRPM = Double(fan.maximumRPM)
         if selectedSensorID == nil {
@@ -2581,7 +2373,11 @@ final class AppModel: ObservableObject {
     }
 
     private func updateFanOverride(for fan: Fan, mutate: (inout FanCurveOverride) -> Void) {
-        if let index = fanOverrides.firstIndex(where: { $0.fanID == fan.id }) {
+        // Fan-curve resolution and presentation are deliberately last-wins for
+        // duplicate persisted records. Mutate that same effective record before
+        // canonicalizing, otherwise the untouched final duplicate would erase
+        // the user's edit during the reduction below.
+        if let index = fanOverrides.lastIndex(where: { $0.fanID == fan.id }) {
             mutate(&fanOverrides[index])
         } else {
             var override = defaultFanOverride(for: fan)
@@ -2605,99 +2401,57 @@ final class AppModel: ObservableObject {
     }
 
     private func evaluateLocalNotifications(power: PowerSnapshot, thermalPressure: ThermalPressure) async {
-        let helperNeedsAttention = helperHealthState.notifiesAsHelperFailure
-        if notificationTransitionState.shouldNotify(kind: .helperFailure, isAttention: helperNeedsAttention) {
-            await postNotification(
-                kind: .helperFailure,
-                title: helperFailureNotificationTitle,
-                body: helperFailureNotificationBody
-            )
-        }
-
-        let agentNeedsAttention = agentCoolingNeedsAttention
-        if notificationTransitionState.shouldNotify(kind: .agentCoolingAttention, isAttention: agentNeedsAttention) {
-            await postNotification(
-                kind: .agentCoolingAttention,
-                title: "Vifty agent cooling needs attention",
-                body: agentCoolingRecoverySuggestion
+        if let authorization = await localNotificationCoordinator.evaluate(
+            settings: notificationSettings,
+            input: LocalNotificationEvaluationInput(
+                helperNeedsAttention: helperHealthState.notifiesAsHelperFailure,
+                helperTitle: helperFailureNotificationTitle,
+                helperBody: helperFailureNotificationBody,
+                agentNeedsAttention: agentCoolingNeedsAttention,
+                agentBody: agentCoolingRecoverySuggestion
                     ?? agentCoolingSummary
-                    ?? "Check Vifty before starting another developer workload."
+                    ?? "Check Vifty before starting another developer workload.",
+                power: power,
+                thermalPressure: thermalPressure
             )
-        }
-
-        await evaluateThermalPressureNotification(thermalPressure)
-        await evaluatePluggedInDrainNotification(power)
-    }
-
-    private func evaluateThermalPressureNotification(_ thermalPressure: ThermalPressure) async {
-        let isElevated = thermalPressure == .serious || thermalPressure == .critical
-        guard isElevated else {
-            elevatedThermalPressureStartedAt = nil
-            return
-        }
-
-        let currentDate = now()
-        if elevatedThermalPressureStartedAt == nil {
-            elevatedThermalPressureStartedAt = currentDate
-        }
-
-        guard let startedAt = elevatedThermalPressureStartedAt,
-              currentDate.timeIntervalSince(startedAt) >= sustainedThermalPressureInterval
-        else {
-            return
-        }
-
-        await postNotification(
-            kind: .elevatedThermalPressure,
-            title: "Vifty thermal pressure is \(thermalPressure.displayName)",
-            body: "macOS reports sustained \(thermalPressure.displayName.lowercased()) thermal pressure. Consider reducing workload or restoring Auto."
-        )
-    }
-
-    private func evaluatePluggedInDrainNotification(_ power: PowerSnapshot) async {
-        let isPluggedInDrain = power.isPluggedIn && power.batteryIsActivelyDraining
-        if notificationTransitionState.shouldNotify(kind: .pluggedInBatteryDrain, isAttention: isPluggedInDrain) {
-            let watts = power.batteryPowerWatts.map { PowerDisplayFormatter.watts(abs($0)) } ?? "battery power"
-            await postNotification(
-                kind: .pluggedInBatteryDrain,
-                title: "Vifty sees battery drain while plugged in",
-                body: "Battery is draining at \(watts) even though external power is connected."
-            )
+        ) {
+            notificationAuthorization = authorization
         }
     }
 
     private func notifyAutoRestoreFailure(_ message: String) async {
-        await postNotification(
-            kind: .autoRestoreFailure,
-            title: "Vifty could not confirm Auto restore",
-            body: message
-        )
+        if let authorization = await localNotificationCoordinator.notifyAutoRestoreFailure(
+            message,
+            settings: notificationSettings
+        ) {
+            notificationAuthorization = authorization
+        }
     }
 
-    private func postNotification(kind: LocalNotificationKind, title: String, body: String) async {
-        guard notificationSettings.isEnabled(kind) else { return }
-
-        let currentDate = now()
-        if notificationHistoryStore.isCoolingDown(
-            kind,
-            at: currentDate,
-            minimumInterval: notificationMinimumInterval
-        ) {
-            return
+    func setNotificationEnabled(_ kind: LocalNotificationKind, isEnabled: Bool) {
+        notificationSettings.set(kind, enabled: isEnabled)
+        guard isEnabled else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let status = await localNotificationCoordinator.requestAuthorization()
+            notificationAuthorization = status
         }
+    }
 
-        let delivered = await notificationDeliverer.deliver(
-            LocalNotification(kind: kind, title: title, body: body)
-        )
-        if delivered {
-            do {
-                try notificationHistoryStore.recordDelivery(of: kind, at: currentDate)
-            } catch {
-                ViftyLog.notifications.error(
-                    "Notification cooldown persistence failed kind=\(kind.rawValue, privacy: .public)"
-                )
-            }
-        }
+    func refreshNotificationAuthorization() async {
+        notificationAuthorization = await localNotificationCoordinator.authorizationStatus()
+    }
+
+    func sendTestNotification() async {
+        let result = await localNotificationCoordinator.sendTestNotification()
+        notificationAuthorization = result.authorization
+        notificationTestMessage = result.delivered
+            ? "Test notification sent."
+            : "Test notification was not delivered."
+    }
+
+    func openNotificationSettings() async {
+        notificationAuthorization = await localNotificationCoordinator.openSettings()
     }
 }
 

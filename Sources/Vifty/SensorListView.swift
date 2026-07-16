@@ -9,18 +9,25 @@ struct SensorListView: View {
     var body: some View {
         LazyVStack(spacing: 6) {
             ForEach(sensors) { sensor in
+                let accessibility = SensorAccessibilityPresentation.resolve(
+                    sensor: sensor,
+                    selectedSensorID: selectedSensorID
+                )
                 Button {
                     onSelectSensor(sensor.id)
                 } label: {
                     SensorRowContent(sensor: sensor, selected: sensor.id == selectedSensorID)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(sensor.name)
-                .accessibilityValue("\(sensor.celsius, specifier: "%.1f") degrees Celsius, \(sensor.source.rawValue)")
-                .accessibilityAddTraits(sensor.id == selectedSensorID ? [.isSelected] : [])
+                .accessibilityLabel(accessibility.label)
+                .accessibilityValue(accessibility.value)
+                .accessibilityAddTraits(accessibility.isSelected ? [.isSelected] : [])
+                .accessibilityIdentifier(accessibility.identifier)
                 .help("Use \(sensor.name) for the temperature curve.")
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(ViftyAccessibilityIdentifier.sensorList)
     }
 }
 
@@ -35,13 +42,13 @@ private struct SensorRowContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(sensor.name)
                 Text(sensor.source.rawValue)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Text(TemperatureDisplayFormatter.decimal(sensor.celsius))
+                .viftyFont(.subheadline, weight: .semibold)
                 .monospacedDigit()
-                .font(.subheadline.weight(.semibold))
         }
         .padding(8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))

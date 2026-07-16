@@ -292,7 +292,10 @@
         "autoRestoreAfterChildExit",
         "structuredPreChildFailures",
         "cleanupStateReportedOnLaunchFailure",
-        "resolvedChildExecutableReported"
+        "resolvedChildExecutableReported",
+        "signalScope",
+        "descendantCleanupBeforeAutoRestore",
+        "backgroundProcessesAllowed"
       ],
       "properties": {
         "childCommandPreflightBeforeCooling": {
@@ -325,6 +328,18 @@
         "resolvedChildExecutableReported": {
           "type": "boolean",
           "description": "True when successful completed viftyctl run --json reports include resolvedChildExecutable so agents can audit the absolute child executable selected before cooling was requested."
+        },
+        "signalScope": {
+          "const": "processGroup",
+          "description": "The handled signals are forwarded to the complete child process group rather than only the immediate child PID."
+        },
+        "descendantCleanupBeforeAutoRestore": {
+          "const": true,
+          "description": "Vifty waits for or terminates remaining members of the child process group before attempting Auto restore."
+        },
+        "backgroundProcessesAllowed": {
+          "const": false,
+          "description": "Guarded workloads may not leave background descendants running after their immediate child exits."
         }
       }
     },

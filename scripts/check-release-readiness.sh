@@ -43,7 +43,8 @@ Options:
   --source-sha sha           Override the release tag commit SHA, mainly for tests.
   --require-source-ref ref   Block if the release tag commit does not match this
                              ref or commit SHA, such as origin/main.
-  --secret-list-file path    Read pre-captured `gh secret list` output for tests.
+  --secret-list-file path    Read pre-captured `gh secret list --env release`
+                             output for tests.
   --ci-run-list-file path    Read pre-captured `gh run list --json ...` output.
   --release-run-list-file path
                              Read pre-captured Release workflow `gh run list`
@@ -190,6 +191,38 @@ case "${RELEASE_MODE}" in
 esac
 
 TAG="v${VERSION}"
+MANIFEST_PATH="${ROOT_DIR}/.github/release-manifest.json"
+MANIFEST_RELEASE_SOURCE_SHA=""
+MANIFEST_SOURCE_CI_RUN_ID=""
+MANIFEST_RELEASE_WORKFLOW_RUN_ID=""
+MANIFEST_TAG_TRUST=""
+MANIFEST_RELEASE_FACTS_ERROR=""
+VERIFIED_RELEASE_RUN_ATTEMPT=""
+
+if [ "${RELEASE_MODE}" = "developer-id" ]; then
+  if manifest_release_facts="$(ruby -rjson -e '
+    manifest = JSON.parse(File.read(ARGV.fetch(0)))
+    version = ARGV.fetch(1)
+    releases = Array(manifest["historicalReleases"]) + [manifest["publishedRelease"]].compact
+    matches = releases.select { |release| release["version"] == version }
+    abort("manifest must contain exactly one published or historical release entry for #{version}") unless matches.length == 1
+    release = matches.fetch(0)
+    puts [
+      release.fetch("sourceCommit"),
+      release.fetch("sourceCIRunID"),
+      release.fetch("releaseWorkflowRunID"),
+      release.fetch("tagTrust")
+    ].join("\t")
+  ' "${MANIFEST_PATH}" "${VERSION}" 2>&1)"; then
+    IFS=$'\t' read -r \
+      MANIFEST_RELEASE_SOURCE_SHA \
+      MANIFEST_SOURCE_CI_RUN_ID \
+      MANIFEST_RELEASE_WORKFLOW_RUN_ID \
+      MANIFEST_TAG_TRUST <<< "${manifest_release_facts}"
+  else
+    MANIFEST_RELEASE_FACTS_ERROR="${manifest_release_facts}"
+  fi
+fi
 
 check_names=()
 check_statuses=()
@@ -209,7 +242,7 @@ add_check() {
 }
 
 json_string() {
-  ruby -rjson -e 'print ARGV.fetch(0).to_json' "$1"
+  ruby -rjson -e 'print ARGV.fetch(0).to_json' -- "$1"
 }
 
 emit_json() {
@@ -387,107 +420,208 @@ else
     fi
   fi
 
-  ci_run_json=""
-  ci_output=""
-  if [ -n "${CI_RUN_LIST_FILE}" ]; then
-    if [ ! -f "${CI_RUN_LIST_FILE}" ]; then
-      ci_output="CI run list file does not exist: ${CI_RUN_LIST_FILE}"
+  manifest_source_binding_error=""
+  use_exact_manifest_runs=false
+  if [ "${RELEASE_MODE}" = "developer-id" ] && [ -z "${MANIFEST_RELEASE_FACTS_ERROR}" ]; then
+    if [[ ! "${MANIFEST_RELEASE_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]] ||
+       [[ ! "${MANIFEST_SOURCE_CI_RUN_ID}" =~ ^[1-9][0-9]*$ ]] ||
+       [[ ! "${MANIFEST_RELEASE_WORKFLOW_RUN_ID}" =~ ^[1-9][0-9]*$ ]] ||
+       { [ "${MANIFEST_TAG_TRUST}" != "historical-unsigned" ] && [ "${MANIFEST_TAG_TRUST}" != "signed-verified" ]; }; then
+      manifest_source_binding_error="Published manifest run/source facts for ${VERSION} are malformed."
+    elif [ "${MANIFEST_RELEASE_SOURCE_SHA}" != "$(printf '%s' "${resolved_source_sha}" | tr '[:upper:]' '[:lower:]')" ]; then
+      manifest_source_binding_error="Published manifest sourceCommit ${MANIFEST_RELEASE_SOURCE_SHA} does not match ${TAG} commit ${resolved_source_sha}."
     else
-      ci_run_json="$(cat "${CI_RUN_LIST_FILE}")"
+      use_exact_manifest_runs=true
     fi
-  elif command -v gh >/dev/null 2>&1; then
-    ci_args=(--workflow "CI" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch")
-    if [ -n "${REPO}" ]; then
-      ci_args+=(--repo "${REPO}")
-    fi
-    if ! ci_run_json="$(gh run list "${ci_args[@]}" 2>&1)"; then
-      ci_output="${ci_run_json}"
-      ci_run_json=""
-    fi
-  else
-    ci_output="gh CLI is required unless --ci-run-list-file is supplied"
   fi
 
-  if [ -z "${ci_run_json}" ]; then
-    add_check "source-ci" "blocked" "CI status for ${TAG} (${resolved_source_sha}) is not available: ${ci_output}"
-  elif ci_output="$(ruby -rjson -e '
-    source_sha = ARGV.fetch(0).downcase
-    runs = JSON.parse(STDIN.read)
-    runs = [runs] if runs.is_a?(Hash)
-    matching = Array(runs).select { |run| run["headSha"].to_s.downcase == source_sha }
-    passed = matching.find { |run| run["status"] == "completed" && run["conclusion"] == "success" }
-    if passed
-      detail = passed["url"].to_s
-      detail = "#{passed["workflowName"] || "CI"} on #{passed["headBranch"] || "unknown branch"}" if detail.empty?
-      puts "CI passed for #{source_sha}: #{detail}"
-    else
-      if matching.empty?
-        warn "No CI run found for #{source_sha}"
-      else
-        observed = matching.map do |run|
-          "#{run["workflowName"] || "run"} #{run["status"] || "unknown"}/#{run["conclusion"] || "unknown"}"
-        end.join(", ")
-        warn "No successful completed CI run found for #{source_sha}; observed: #{observed}"
-      end
-      exit 1
-    end
-  ' "${resolved_source_sha}" <<< "${ci_run_json}" 2>&1)"; then
-    add_check "source-ci" "passed" "${ci_output}"
+  ci_run_json=""
+  ci_output=""
+  if [ -n "${manifest_source_binding_error}" ]; then
+    add_check "source-ci" "blocked" "${manifest_source_binding_error}"
   else
-    add_check "source-ci" "blocked" "${ci_output}"
+    if [ -n "${CI_RUN_LIST_FILE}" ]; then
+      if [ ! -f "${CI_RUN_LIST_FILE}" ]; then
+        ci_output="CI run list file does not exist: ${CI_RUN_LIST_FILE}"
+      else
+        ci_run_json="$(cat "${CI_RUN_LIST_FILE}")"
+      fi
+    elif command -v gh >/dev/null 2>&1; then
+      if [ "${use_exact_manifest_runs}" = true ]; then
+        api_repo="${REPO}"
+        if [ -z "${api_repo}" ]; then
+          api_repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+        fi
+        if [ -z "${api_repo}" ]; then
+          ci_output="Could not determine GitHub repository for exact CI run readback; pass --repo owner/name"
+        elif ! ci_run_json="$(gh api "repos/${api_repo}/actions/runs/${MANIFEST_SOURCE_CI_RUN_ID}" 2>&1)"; then
+          ci_output="${ci_run_json}"
+          ci_run_json=""
+        fi
+      else
+        ci_args=(--workflow "CI" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch,databaseId")
+        if [ -n "${REPO}" ]; then
+          ci_args+=(--repo "${REPO}")
+        fi
+        if ! ci_run_json="$(gh run list "${ci_args[@]}" 2>&1)"; then
+          ci_output="${ci_run_json}"
+          ci_run_json=""
+        fi
+      fi
+    else
+      ci_output="gh CLI is required unless --ci-run-list-file is supplied"
+    fi
+
+    if [ -z "${ci_run_json}" ]; then
+      add_check "source-ci" "blocked" "CI status for ${TAG} (${resolved_source_sha}) is not available: ${ci_output}"
+    elif ci_output="$(ruby -rjson -e '
+      source_sha = ARGV.fetch(0).downcase
+      expected_id = ARGV.fetch(1)
+      runs = JSON.parse(STDIN.read)
+      runs = [runs] if runs.is_a?(Hash)
+      runs = Array(runs)
+      if expected_id.empty?
+        matching = runs.select { |run| run["headSha"].to_s.downcase == source_sha }
+        passed = matching.find { |run| run["status"] == "completed" && run["conclusion"] == "success" }
+        if passed
+          detail = passed["url"].to_s
+          detail = "#{passed["workflowName"] || "CI"} on #{passed["headBranch"] || "unknown branch"}" if detail.empty?
+          puts "CI passed for #{source_sha}: #{detail}"
+          exit 0
+        end
+        if matching.empty?
+          warn "No CI run found for #{source_sha}"
+        else
+          observed = matching.map { |run| "#{run["workflowName"] || "run"} #{run["status"] || "unknown"}/#{run["conclusion"] || "unknown"}" }.join(", ")
+          warn "No successful completed CI run found for #{source_sha}; observed: #{observed}"
+        end
+        exit 1
+      end
+
+      matching = runs.select { |run| (run["databaseId"] || run["id"]).to_s == expected_id }
+      abort("Expected exactly one CI run with manifest ID #{expected_id}, found #{matching.length}") unless matching.length == 1
+      run = matching.fetch(0)
+      value = lambda do |camel, snake|
+        run.key?(camel) ? run[camel] : run[snake]
+      end
+      workflow_name = value.call("workflowName", "name")
+      workflow_path = value.call("path", "path")
+      head_branch = value.call("headBranch", "head_branch")
+      event = value.call("event", "event")
+      head_sha = value.call("headSha", "head_sha").to_s.downcase
+      status = value.call("status", "status")
+      conclusion = value.call("conclusion", "conclusion")
+      detail = value.call("url", "html_url").to_s
+      problems = []
+      problems << "workflowName #{workflow_name.inspect} is not CI" unless workflow_name == "CI"
+      problems << "workflow path #{workflow_path.inspect} is not .github/workflows/ci.yml" unless workflow_path == ".github/workflows/ci.yml"
+      problems << "headBranch #{head_branch.inspect} is not main" unless head_branch == "main"
+      problems << "event #{event.inspect} is not push" unless event == "push"
+      problems << "headSha #{head_sha.inspect} does not equal #{source_sha}" unless head_sha == source_sha
+      problems << "status is #{status || "unknown"}/#{conclusion || "unknown"}" unless status == "completed" && conclusion == "success"
+      problems << "url is missing" if detail.empty?
+      abort("Manifest CI run #{expected_id} is invalid: #{problems.join("; ")}") unless problems.empty?
+      puts "CI passed for #{source_sha} using exact manifest run #{expected_id}: #{detail}"
+    ' "${resolved_source_sha}" "$([ "${use_exact_manifest_runs}" = true ] && printf '%s' "${MANIFEST_SOURCE_CI_RUN_ID}")" <<< "${ci_run_json}" 2>&1)"; then
+      add_check "source-ci" "passed" "${ci_output}"
+    else
+      add_check "source-ci" "blocked" "${ci_output}"
+    fi
   fi
 
   if [ "${RELEASE_MODE}" = "developer-id" ]; then
-    release_run_json=""
-    release_run_output=""
-    if [ -n "${RELEASE_RUN_LIST_FILE}" ]; then
-      if [ ! -f "${RELEASE_RUN_LIST_FILE}" ]; then
-        release_run_output="Release workflow run list file does not exist: ${RELEASE_RUN_LIST_FILE}"
+    if [ -n "${MANIFEST_RELEASE_FACTS_ERROR}" ]; then
+      add_check "release-workflow" "blocked" "Cannot bind a Release workflow run until ${VERSION} is a published or historical manifest entry with exact run IDs: ${MANIFEST_RELEASE_FACTS_ERROR}"
+    elif [ -n "${manifest_source_binding_error}" ]; then
+      add_check "release-workflow" "blocked" "${manifest_source_binding_error}"
+    else
+      release_run_json=""
+      release_run_output=""
+      if [ -n "${RELEASE_RUN_LIST_FILE}" ]; then
+        if [ ! -f "${RELEASE_RUN_LIST_FILE}" ]; then
+          release_run_output="Release workflow run file does not exist: ${RELEASE_RUN_LIST_FILE}"
+        else
+          release_run_json="$(cat "${RELEASE_RUN_LIST_FILE}")"
+        fi
+      elif command -v gh >/dev/null 2>&1; then
+        api_repo="${REPO}"
+        if [ -z "${api_repo}" ]; then
+          api_repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+        fi
+        if [ -z "${api_repo}" ]; then
+          release_run_output="Could not determine GitHub repository for exact Release run readback; pass --repo owner/name"
+        elif ! release_run_json="$(gh api "repos/${api_repo}/actions/runs/${MANIFEST_RELEASE_WORKFLOW_RUN_ID}" 2>&1)"; then
+          release_run_output="${release_run_json}"
+          release_run_json=""
+        fi
       else
-        release_run_json="$(cat "${RELEASE_RUN_LIST_FILE}")"
+        release_run_output="gh CLI is required unless --release-run-list-file is supplied"
       fi
-    elif command -v gh >/dev/null 2>&1; then
-      release_run_args=(--workflow "Release" --commit "${resolved_source_sha}" --limit 20 --json "headSha,status,conclusion,event,url,workflowName,headBranch,databaseId,createdAt")
-      if [ -n "${REPO}" ]; then
-        release_run_args+=(--repo "${REPO}")
-      fi
-      if ! release_run_json="$(gh run list "${release_run_args[@]}" 2>&1)"; then
-        release_run_output="${release_run_json}"
-        release_run_json=""
-      fi
-    else
-      release_run_output="gh CLI is required unless --release-run-list-file is supplied"
-    fi
 
-    if [ -z "${release_run_json}" ]; then
-      add_check "release-workflow" "blocked" "Release workflow status for ${TAG} (${resolved_source_sha}) is not available: ${release_run_output}"
-    elif release_run_output="$(ruby -rjson -e '
-    tag = ARGV.fetch(0)
-    source_sha = ARGV.fetch(1).downcase
-    runs = JSON.parse(STDIN.read)
-    runs = [runs] if runs.is_a?(Hash)
-    matching = Array(runs).select do |run|
-      run["headSha"].to_s.downcase == source_sha && run["headBranch"].to_s == tag
-    end
-    latest = matching.first
-    if latest && latest["status"] == "completed" && latest["conclusion"] == "success"
-      detail = latest["url"].to_s
-      detail = "#{latest["workflowName"] || "Release"} run #{latest["databaseId"] || "unknown"}" if detail.empty?
-      puts "Release workflow passed for #{tag} (#{source_sha}): #{detail}"
-    elsif latest
-      observed = "#{latest["workflowName"] || "Release"} #{latest["status"] || "unknown"}/#{latest["conclusion"] || "unknown"}"
-      detail = latest["url"].to_s
-      detail = " #{detail}" unless detail.empty?
-      warn "Latest Release workflow for #{tag} (#{source_sha}) did not pass: #{observed}.#{detail}"
-      exit 1
-    else
-      warn "No Release workflow run found for #{tag} (#{source_sha})"
-      exit 1
-    end
-  ' "${TAG}" "${resolved_source_sha}" <<< "${release_run_json}" 2>&1)"; then
-      add_check "release-workflow" "passed" "${release_run_output}"
-    else
-      add_check "release-workflow" "blocked" "${release_run_output}"
+      if [ -z "${release_run_json}" ]; then
+        add_check "release-workflow" "blocked" "Exact Release workflow run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID} for ${TAG} is not available: ${release_run_output}"
+      elif release_run_facts="$(ruby -rjson -e '
+        tag = ARGV.fetch(0)
+        source_sha = ARGV.fetch(1).downcase
+        expected_id = ARGV.fetch(2)
+        tag_trust = ARGV.fetch(3)
+        runs = JSON.parse(STDIN.read)
+        runs = [runs] if runs.is_a?(Hash)
+        matching = Array(runs).select { |run| (run["databaseId"] || run["id"]).to_s == expected_id }
+        abort("Expected exactly one Release workflow run with manifest ID #{expected_id}, found #{matching.length}") unless matching.length == 1
+        run = matching.fetch(0)
+        value = lambda do |camel, snake|
+          run.key?(camel) ? run[camel] : run[snake]
+        end
+        workflow_name = value.call("workflowName", "name")
+        workflow_path = value.call("path", "path")
+        status = value.call("status", "status")
+        conclusion = value.call("conclusion", "conclusion")
+        event = value.call("event", "event")
+        head_branch = value.call("headBranch", "head_branch")
+        display_title = value.call("displayTitle", "display_title")
+        attempt = value.call("attempt", "run_attempt")
+        detail = value.call("url", "html_url").to_s
+        problems = []
+        problems << "workflowName #{workflow_name.inspect} is not Release" unless workflow_name == "Release"
+        problems << "workflow path #{workflow_path.inspect} is not .github/workflows/release.yml" unless workflow_path == ".github/workflows/release.yml"
+        problems << "status is #{status || "unknown"}/#{conclusion || "unknown"}" unless status == "completed" && conclusion == "success"
+        head_sha = value.call("headSha", "head_sha").to_s.downcase
+        if tag_trust == "signed-verified"
+          problems << "event #{event.inspect} is not workflow_dispatch" unless event == "workflow_dispatch"
+          problems << "headBranch #{head_branch.inspect} is not main" unless head_branch == "main"
+          problems << "displayTitle #{display_title.inspect} does not bind input #{tag}" unless display_title == "Release #{tag}"
+          problems << "headSha #{head_sha.inspect} is not a full commit SHA" unless head_sha.match?(/\A[0-9a-f]{40}\z/)
+          problems << "attempt #{attempt.inspect} is not a positive integer" unless attempt.is_a?(Integer) && attempt.positive?
+        elsif tag_trust == "historical-unsigned"
+          problems << "event #{event.inspect} is not push" unless event == "push"
+          problems << "headBranch #{head_branch.inspect} is not #{tag}" unless head_branch == tag
+          problems << "headSha #{head_sha.inspect} does not equal #{source_sha}" unless head_sha == source_sha
+        else
+          problems << "unsupported manifest tagTrust #{tag_trust.inspect}"
+        end
+        problems << "url is missing" if detail.empty?
+        abort("Manifest Release run #{expected_id} is invalid: #{problems.join("; ")}. #{detail}") unless problems.empty?
+        puts [head_sha, attempt, detail].join("\x1f")
+      ' "${TAG}" "${resolved_source_sha}" "${MANIFEST_RELEASE_WORKFLOW_RUN_ID}" "${MANIFEST_TAG_TRUST}" <<< "${release_run_json}" 2>&1)"; then
+        IFS=$'\x1f' read -r release_run_head_sha VERIFIED_RELEASE_RUN_ATTEMPT release_run_url <<< "${release_run_facts}"
+        release_run_ancestry_valid=true
+        if [ "${MANIFEST_TAG_TRUST}" = "signed-verified" ] && [ "${release_run_head_sha}" != "$(printf '%s' "${resolved_source_sha}" | tr '[:upper:]' '[:lower:]')" ]; then
+          release_run_ancestry_valid=false
+          if command -v git >/dev/null 2>&1 &&
+             git rev-parse --verify "${release_run_head_sha}^{commit}" >/dev/null 2>&1 &&
+             git merge-base --is-ancestor "${resolved_source_sha}" "${release_run_head_sha}"; then
+            release_run_ancestry_valid=true
+          fi
+        fi
+        if [ "${release_run_ancestry_valid}" = true ]; then
+          add_check "release-workflow" "passed" "Release workflow passed for ${TAG} using exact manifest run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID}; dispatch source ${release_run_head_sha}: ${release_run_url}"
+        else
+          add_check "release-workflow" "blocked" "Release workflow run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID} dispatched from ${release_run_head_sha}, but ${TAG} commit ${resolved_source_sha} is not a locally provable ancestor. Fetch the dispatch main commit before retrying."
+        fi
+      else
+        add_check "release-workflow" "blocked" "${release_run_facts}"
+      fi
     fi
   else
     add_check "release-workflow" "passed" "Source-first mode does not require a successful Developer ID Release workflow; keep the workflow strict for future notarized releases."
@@ -543,6 +677,9 @@ else
     version = ARGV.fetch(0)
     mode = ARGV.fetch(1)
     source_sha = ARGV.fetch(2)
+    expected_release_run_id = ARGV.fetch(3)
+    tag_trust = ARGV.fetch(4)
+    expected_release_run_attempt = ARGV.fetch(5)
     tag = "v#{version}"
     data = JSON.parse(STDIN.read)
     assets = Array(data["assets"]).map { |asset| asset["name"].to_s }
@@ -561,6 +698,19 @@ else
       problems << "missing assets: #{missing.join(", ")}" unless missing.empty?
       unsigned_dev_assets = assets.select { |asset| asset == "Vifty-v#{version}-unsigned-dev.zip" || asset == "Vifty-v#{version}-unsigned-dev.zip.sha256" }
       problems << "Developer ID releases must not publish source-first unsigned-dev assets: #{unsigned_dev_assets.join(", ")}" unless unsigned_dev_assets.empty?
+      if tag_trust == "signed-verified"
+        marker_pattern = /\A<!-- vifty-release-owner:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}) -->\z/
+        markers = data["body"].to_s.lines.map { |line| line.strip.match(marker_pattern) }.compact
+        if markers.length != 1
+          problems << "release body must contain exactly one signed-workflow ownership marker"
+        else
+          marker = markers.fetch(0)
+          problems << "release ownership marker run #{marker[1]} does not match manifest run #{expected_release_run_id}" unless marker[1] == expected_release_run_id
+          if !expected_release_run_attempt.empty? && marker[2] != expected_release_run_attempt
+            problems << "release ownership marker attempt #{marker[2]} does not match verified run attempt #{expected_release_run_attempt}"
+          end
+        end
+      end
       if problems.empty?
         puts "GitHub Release #{tag} has required public trust assets: #{required.join(", ")}"
       else
@@ -644,7 +794,7 @@ else
         exit 1
       end
     end
-  ' "${VERSION}" "${RELEASE_MODE}" "${resolved_source_sha}" <<< "${release_json}" 2>&1)"; then
+  ' "${VERSION}" "${RELEASE_MODE}" "${resolved_source_sha}" "${MANIFEST_RELEASE_WORKFLOW_RUN_ID}" "${MANIFEST_TAG_TRUST}" "${VERIFIED_RELEASE_RUN_ATTEMPT}" <<< "${release_json}" 2>&1)"; then
     add_check "github-release" "passed" "${release_output}"
     github_release_check_status="passed"
   else

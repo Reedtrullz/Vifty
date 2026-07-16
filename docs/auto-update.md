@@ -1,8 +1,18 @@
 # Auto-Update Strategy
 
-Auto-update is not enabled for `v1.2.0`, `v1.1.1` source-first, or unsigned-dev builds.
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
 
-That is intentional. Auto-update installs executable code, so it must meet a higher trust bar than a convenience tester zip. Until the project has Apple Developer Program credentials and a trusted binary release lane, Vifty should recommend source builds and clearly marked unsigned tester artifacts instead of a self-updating app.
+Auto-update is not enabled for `v1.3.2`, `v1.1.1` source-first, or unsigned-dev builds.
+
+That is intentional. Auto-update installs executable code, so it must meet a higher trust bar than a convenience tester zip or a one-time notarized download. Vifty now has a trusted Developer ID release lane, but no signed Sparkle appcast/update path has been implemented or verified; source-first and unsigned tester artifacts therefore remain excluded from self-update.
 
 ## Current Policy
 

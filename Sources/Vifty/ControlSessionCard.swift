@@ -8,28 +8,32 @@ struct ControlSessionCard: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: systemImage)
                 .foregroundStyle(accentColor)
-                .font(.title3)
+                .viftyFont(.title3)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(presentation.title)
-                    .font(.subheadline.weight(.semibold))
+                    .viftyFont(.subheadline, weight: .semibold)
+                    .accessibilityLabel(presentation.title)
+                    .accessibilityIdentifier(ViftyAccessibilityIdentifier.controlSessionTitle)
                 Text(presentation.summary)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel(presentation.summary)
+                    .accessibilityIdentifier(ViftyAccessibilityIdentifier.controlSessionSummary)
                 if let detail = presentation.detail {
                     Text(detail)
-                        .font(.caption)
+                        .viftyFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                 }
                 if let expiryText = presentation.expiryText {
                     Text(expiryText)
-                        .font(.caption)
+                        .viftyFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if presentation.primaryAction != .none {
                     Button(action: onPrimaryAction) {
-                        Label(presentation.primaryActionTitle, systemImage: "checkmark.circle")
+                        Label(presentation.primaryActionTitle, systemImage: primaryActionSystemImage)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -41,7 +45,8 @@ struct ControlSessionCard: View {
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(accentColor.opacity(0.35), lineWidth: 1))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(ViftyAccessibilityIdentifier.controlSession)
     }
 
     private var accentColor: Color {
@@ -52,7 +57,7 @@ struct ControlSessionCard: View {
             .orange
         case .agentCooling:
             .blue
-        case .checking, .manual:
+        case .checking, .draft, .manual:
             .accentColor
         }
     }
@@ -65,10 +70,27 @@ struct ControlSessionCard: View {
             "checkmark.shield"
         case .attention, .blocked:
             "exclamationmark.shield"
+        case .draft:
+            "slider.horizontal.3"
         case .manual:
             "fan"
         case .agentCooling:
             "cpu"
+        }
+    }
+
+    private var primaryActionSystemImage: String {
+        switch presentation.primaryAction {
+        case .none:
+            "circle"
+        case .apply:
+            "checkmark.circle"
+        case .restoreAuto:
+            "arrow.counterclockwise.circle"
+        case .repairHelper:
+            "wrench.and.screwdriver"
+        case .copyDiagnostics:
+            "doc.on.doc"
         }
     }
 }

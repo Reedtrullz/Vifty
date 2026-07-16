@@ -95,6 +95,52 @@ public enum FanHardwareMode: Equatable, Sendable {
     }
 }
 
+public enum FanControlProtocolVersion {
+    public static let legacy = 1
+    public static let current = 2
+}
+
+public enum FanControlIneligibilityReason: String, Codable, Hashable, Sendable {
+    case legacyUnspecified
+    case missingFanCount
+    case missingMinimumRPM
+    case missingMaximumRPM
+    case missingModeKey
+    case missingTargetKey
+    case invalidRPMRange
+    case invalidFanID
+}
+
+public struct FanControlEligibility: Equatable, Codable, Sendable {
+    public let canApplyFixedRPM: Bool
+    public let canRestoreOSManagedMode: Bool
+    public let reasons: [FanControlIneligibilityReason]
+
+    public init(
+        canApplyFixedRPM: Bool,
+        canRestoreOSManagedMode: Bool,
+        reasons: [FanControlIneligibilityReason]
+    ) {
+        self.canApplyFixedRPM = canApplyFixedRPM
+        self.canRestoreOSManagedMode = canRestoreOSManagedMode
+        self.reasons = reasons
+    }
+
+    /// Used only by trusted in-process fixtures and callers that already validated
+    /// hardware provenance. XPC decoding never applies this default to legacy data.
+    public static let trusted = FanControlEligibility(
+        canApplyFixedRPM: true,
+        canRestoreOSManagedMode: true,
+        reasons: []
+    )
+
+    public static let legacyUnspecified = FanControlEligibility(
+        canApplyFixedRPM: false,
+        canRestoreOSManagedMode: false,
+        reasons: [.legacyUnspecified]
+    )
+}
+
 public struct Fan: Identifiable, Equatable, Sendable {
     public let id: Int
     public var name: String
@@ -105,6 +151,7 @@ public struct Fan: Identifiable, Equatable, Sendable {
     public var hardwareMode: FanHardwareMode?
     public var hardwareModeKey: String?
     public var targetRPM: Int?
+    public var controlEligibility: FanControlEligibility
 
     public init(
         id: Int,
@@ -115,7 +162,8 @@ public struct Fan: Identifiable, Equatable, Sendable {
         controllable: Bool,
         hardwareMode: FanHardwareMode? = nil,
         hardwareModeKey: String? = nil,
-        targetRPM: Int? = nil
+        targetRPM: Int? = nil,
+        controlEligibility: FanControlEligibility = .trusted
     ) {
         self.id = id
         self.name = name
@@ -126,6 +174,7 @@ public struct Fan: Identifiable, Equatable, Sendable {
         self.hardwareMode = hardwareMode
         self.hardwareModeKey = hardwareModeKey
         self.targetRPM = targetRPM
+        self.controlEligibility = controlEligibility
     }
 
     public var percentage: Int {
@@ -162,6 +211,7 @@ public struct HardwareSnapshot: Equatable, Sendable {
     public var isAppleSilicon: Bool
     public var isMacBookPro: Bool
     public var capturedAt: Date
+    public var fanControlProtocolVersion: Int
 
     public init(
         fans: [Fan],
@@ -169,7 +219,8 @@ public struct HardwareSnapshot: Equatable, Sendable {
         modelIdentifier: String,
         isAppleSilicon: Bool,
         isMacBookPro: Bool,
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        fanControlProtocolVersion: Int = FanControlProtocolVersion.current
     ) {
         self.fans = fans
         self.temperatureSensors = temperatureSensors
@@ -177,6 +228,7 @@ public struct HardwareSnapshot: Equatable, Sendable {
         self.isAppleSilicon = isAppleSilicon
         self.isMacBookPro = isMacBookPro
         self.capturedAt = capturedAt
+        self.fanControlProtocolVersion = fanControlProtocolVersion
     }
 
     public var highestTemperature: TemperatureSensor? {
@@ -298,7 +350,12 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
         self.midRPM    = points[1].rpm
         self.maxTemp   = points[2].temp
         self.maxRPM    = points[2].rpm
-        self.fanOverrides = fanOverrides
+        self.fanOverrides = fanOverrides.sorted { lhs, rhs in
+            if lhs.fanID != rhs.fanID { return lhs.fanID < rhs.fanID }
+            if lhs.startRPM != rhs.startRPM { return lhs.startRPM < rhs.startRPM }
+            if lhs.midRPM != rhs.midRPM { return lhs.midRPM < rhs.midRPM }
+            return lhs.maxRPM < rhs.maxRPM
+        }
     }
 
     public func toFanCurve() -> FanCurve {
@@ -311,16 +368,18 @@ public struct CurveProfile: Codable, Equatable, Identifiable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        sensorID = try container.decodeIfPresent(String.self, forKey: .sensorID)
-        startTemp = try container.decode(Double.self, forKey: .startTemp)
-        startRPM = try container.decode(Int.self, forKey: .startRPM)
-        midTemp = try container.decode(Double.self, forKey: .midTemp)
-        midRPM = try container.decode(Int.self, forKey: .midRPM)
-        maxTemp = try container.decode(Double.self, forKey: .maxTemp)
-        maxRPM = try container.decode(Int.self, forKey: .maxRPM)
-        fanOverrides = try container.decodeIfPresent([FanCurveOverride].self, forKey: .fanOverrides) ?? []
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            name: try container.decode(String.self, forKey: .name),
+            sensorID: try container.decodeIfPresent(String.self, forKey: .sensorID),
+            startTemp: try container.decode(Double.self, forKey: .startTemp),
+            startRPM: try container.decode(Int.self, forKey: .startRPM),
+            midTemp: try container.decode(Double.self, forKey: .midTemp),
+            midRPM: try container.decode(Int.self, forKey: .midRPM),
+            maxTemp: try container.decode(Double.self, forKey: .maxTemp),
+            maxRPM: try container.decode(Int.self, forKey: .maxRPM),
+            fanOverrides: try container.decodeIfPresent([FanCurveOverride].self, forKey: .fanOverrides) ?? []
+        )
     }
 }
 

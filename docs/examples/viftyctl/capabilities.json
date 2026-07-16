@@ -29,9 +29,12 @@
   "policySource": "daemonStatus",
   "runLifecycle": {
     "autoRestoreAfterChildExit": true,
+    "backgroundProcessesAllowed": false,
     "childCommandPreflightBeforeCooling": true,
     "cleanupStateReportedOnLaunchFailure": true,
+    "descendantCleanupBeforeAutoRestore": true,
     "resolvedChildExecutableReported": true,
+    "signalScope": "processGroup",
     "signalsForwardedToChild": [
       "INT",
       "TERM",

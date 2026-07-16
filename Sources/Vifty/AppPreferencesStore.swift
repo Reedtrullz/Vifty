@@ -4,6 +4,7 @@ struct AppPreferences: Codable, Equatable {
     var menuBarDisplayMode: MenuBarDisplayMode
     var menuBarCustomFields: [MenuBarField]
     var startupMode: ModeSelection
+    var textScale: ViftyTextScale
     var notificationSettings: LocalNotificationSettings
     var usePerFanFixedRPM: Bool
     var fixedFanTargets: [FixedFanTarget]
@@ -13,6 +14,7 @@ struct AppPreferences: Codable, Equatable {
         menuBarDisplayMode: .fanIcon,
         menuBarCustomFields: MenuBarField.defaultCustomFields,
         startupMode: .auto,
+        textScale: .standard,
         notificationSettings: .disabled,
         usePerFanFixedRPM: false,
         fixedFanTargets: [],
@@ -23,6 +25,7 @@ struct AppPreferences: Codable, Equatable {
         menuBarDisplayMode: MenuBarDisplayMode,
         menuBarCustomFields: [MenuBarField] = MenuBarField.defaultCustomFields,
         startupMode: ModeSelection = .auto,
+        textScale: ViftyTextScale = .standard,
         notificationSettings: LocalNotificationSettings,
         usePerFanFixedRPM: Bool = false,
         fixedFanTargets: [FixedFanTarget] = [],
@@ -31,6 +34,7 @@ struct AppPreferences: Codable, Equatable {
         self.menuBarDisplayMode = menuBarDisplayMode
         self.menuBarCustomFields = MenuBarField.normalized(menuBarCustomFields)
         self.startupMode = startupMode
+        self.textScale = textScale
         self.notificationSettings = notificationSettings
         self.usePerFanFixedRPM = usePerFanFixedRPM
         self.fixedFanTargets = fixedFanTargets
@@ -44,6 +48,7 @@ struct AppPreferences: Codable, Equatable {
             try container.decodeIfPresent([MenuBarField].self, forKey: .menuBarCustomFields) ?? MenuBarField.defaultCustomFields
         )
         startupMode = try container.decodeIfPresent(ModeSelection.self, forKey: .startupMode) ?? .auto
+        textScale = try container.decodeIfPresent(ViftyTextScale.self, forKey: .textScale) ?? .standard
         notificationSettings = try container.decodeIfPresent(LocalNotificationSettings.self, forKey: .notificationSettings) ?? .disabled
         usePerFanFixedRPM = try container.decodeIfPresent(Bool.self, forKey: .usePerFanFixedRPM) ?? false
         fixedFanTargets = try container.decodeIfPresent([FixedFanTarget].self, forKey: .fixedFanTargets) ?? []

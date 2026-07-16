@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+INVOCATION_DIR="${PWD}"
 ROOT_DIR="${VIFTY_RELEASE_METADATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${ROOT_DIR}"
 
@@ -93,6 +94,10 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [[ -n "${OUTPUT_PATH}" && "${OUTPUT_PATH}" != /* ]]; then
+  OUTPUT_PATH="${INVOCATION_DIR}/${OUTPUT_PATH}"
+fi
 
 if [ -z "${VERSION}" ]; then
   VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
@@ -225,11 +230,12 @@ This checklist is prepended to the GitHub Release notes and uploaded as a releas
 
 ## Verified By The Release Workflow
 
-- [x] Release tag \`v${VERSION}\` matched \`Resources/Info.plist\`.
-- [x] Release metadata matched the Homebrew cask version, artifact name, SHA shape, helper cleanup path, TeamID wiring, notarization gates, verifier checks, and publication assets.
+- [x] Release tag \`v${VERSION}\` matched the non-null manifest candidate and \`Resources/Info.plist\`; its signature passed \`git verify-tag\`.
+- [x] \`CFBundleVersion\` matched the manifest candidate build and was greater than the published build.
+- [x] Candidate bundle metadata matched the manifest while Homebrew remained on the exact published manifest version/SHA; artifact names, helper cleanup, TeamID wiring, notarization gates, verifier checks, and publication assets passed.
 - [x] Required Developer ID and notarization secret names were present in GitHub Actions.
 - [x] Swift tests passed on the release runner.
-- [x] \`Vifty.app\` was built with the configured Developer ID signing identity and \`VIFTY_XPC_ALLOWED_TEAM_ID\`.
+- [x] The release app was assembled ad-hoc with the reviewed \`VIFTY_XPC_ALLOWED_TEAM_ID\`, then the hash-inventoried candidate was re-signed with the configured Developer ID identity in the protected job.
 - [x] Bundle plist files, signing TeamID, \`viftyctl\` signing identifier, and bundled LaunchDaemon TeamID allowlist were verified.
 - [x] Apple notarization completed, the ticket was stapled, stapling was validated, and Gatekeeper assessment passed.
 - [x] \`Vifty-v${VERSION}.zip\` and \`Vifty-v${VERSION}.zip.sha256\` were generated.
@@ -237,7 +243,8 @@ This checklist is prepended to the GitHub Release notes and uploaded as a releas
 
 ## Required Post-Publication Follow-Up
 
-- [ ] Update \`Casks/vifty.rb\` with the published \`Vifty-v${VERSION}.zip.sha256\` using \`scripts/update-cask-checksum.sh --version ${VERSION}\`.
+- [ ] After the exact public artifact/checksum pass, append the prior \`publishedRelease\` unchanged to manifest \`historicalReleases\`, promote the candidate into \`publishedRelease\` with exact source/workflow facts, and clear \`candidate\`.
+- [ ] Atomically advance \`Casks/vifty.rb\` to the promoted manifest version and authorized \`Vifty-v${VERSION}.zip.sha256\` using \`scripts/update-cask-checksum.sh --version ${VERSION}\`, then refresh generated release-fact blocks.
 - [ ] Run \`scripts/verify-release-artifact.sh --team-id "\$APPLE_TEAM_ID"\` against the public cask artifact after the checksum update.
 - [ ] Collect a release-mode evidence bundle with \`scripts/collect-validation-evidence.sh --release-summary ./Vifty-v${VERSION}-artifact-summary.json --release-checklist ./Vifty-v${VERSION}-release-checklist.md\`.
 - [ ] Review that bundle with \`make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=release VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json\`.
