@@ -63,6 +63,13 @@ base = read_manifest(options.fetch(:base), "trusted base")
 base_history = base.fetch("historicalReleases")
 current_history = current.fetch("historicalReleases")
 
+immutable_authority_fields = ["$schema", "schemaVersion", "schemaID", "product", "releasePolicy"]
+immutable_authority_fields.each do |field|
+  unless current[field] == base[field]
+    abort("error: release-manifest authority field #{field} changed; update the trusted checker in an earlier commit before changing this field")
+  end
+end
+
 unless current_history.length >= base_history.length && current_history.first(base_history.length) == base_history
   abort("error: prior historicalReleases prefix changed; deletion, mutation, and reorder are forbidden")
 end
@@ -77,6 +84,53 @@ if current_published == base_published
 else
   unless current_history.length == base_history.length + 1 && current_history.last == base_published
     abort("error: previous publishedRelease must be appended unchanged before publishedRelease changes")
+  end
+
+  base_candidate = base["candidate"]
+  unless base_candidate.is_a?(Hash)
+    abort("error: publishedRelease may change only by promoting the trusted base candidate")
+  end
+
+  identity_fields = [
+    "version",
+    "build",
+    "tag",
+    "artifact",
+    "checksumAsset",
+    "artifactSummary",
+    "releaseChecklist"
+  ]
+  identity_fields.each do |field|
+    unless current_published[field] == base_candidate[field]
+      abort("error: promoted publishedRelease must preserve trusted base candidate field #{field}")
+    end
+  end
+
+  if base_candidate["sha256"] && current_published["sha256"] != base_candidate["sha256"]
+    abort("error: promoted publishedRelease sha256 must preserve the trusted base candidate checksum when present")
+  end
+
+  promotion_facts_valid =
+    current_published["sourceCommit"].is_a?(String) &&
+    current_published["sourceCommit"].match?(/\A[0-9a-f]{40}\z/) &&
+    current_published["sourceCIRunID"].is_a?(Integer) &&
+    current_published["sourceCIRunID"].positive? &&
+    current_published["releaseWorkflowRunID"].is_a?(Integer) &&
+    current_published["releaseWorkflowRunID"].positive? &&
+    current_published["sha256"].is_a?(String) &&
+    current_published["sha256"].match?(/\A[0-9a-f]{64}\z/) &&
+    current_published["artifactTrust"] == "passed" &&
+    current_published["signingTrust"] == "developer-id-notarized" &&
+    current_published["tagTrust"] == "signed-verified" &&
+    current_published["installedReleaseReview"] == base_candidate["installedReleaseReview"] &&
+    current_published["manualCompatibility"] == base_candidate["manualCompatibility"] &&
+    current_published["manualCompatibilityScope"] == base_candidate["manualCompatibilityScope"]
+  unless promotion_facts_valid
+    abort("error: promoted publishedRelease must add complete signed publication facts without fabricating post-release review evidence")
+  end
+
+  unless current["candidate"].nil?
+    abort("error: candidate must be cleared when it is promoted into publishedRelease")
   end
 end
 
