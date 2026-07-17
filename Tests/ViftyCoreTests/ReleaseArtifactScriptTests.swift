@@ -4,6 +4,10 @@ import XCTest
 final class ReleaseArtifactScriptTests: XCTestCase {
     private static let immutableV132SourceCommit = "6a771c2ea10386bf7a0a8369a759930f01d56062"
 
+    func testHarnessArchiveRoundTripsExecutableWorkloadWrappersWithoutAppleDouble() throws {
+        _ = try ReleaseArtifactHarness()
+    }
+
     func testVerifierPinsPublishedInventoryAndEntitlementsToImmutableSourceCommit() throws {
         let historicalSource = try HistoricalReleaseSourceFixture()
         let harness = try ReleaseArtifactHarness(
@@ -1217,9 +1221,14 @@ private final class ReleaseArtifactHarness {
                 expectedScripts: effectiveWorkloadWrappers
             )
         }
+        // Synthetic Foundation writes carry irrelevant xattrs. Keep this fixture focused on
+        // the portable Unix payload instead of OS-version-specific AppleDouble metadata.
         try Self.run(
             executable: URL(fileURLWithPath: "/usr/bin/ditto"),
-            arguments: ["-c", "-k", "--keepParent", appURL.path, artifactURL.path]
+            arguments: [
+                "-c", "-k", "--norsrc", "--noqtn", "--keepParent",
+                appURL.path, artifactURL.path
+            ]
         )
         if includeWorkloadWrappers {
             try Self.validateArchivedWorkloadWrapperFixture(
@@ -1558,10 +1567,24 @@ private final class ReleaseArtifactHarness {
             executable: URL(fileURLWithPath: "/usr/bin/zipinfo"),
             arguments: ["-1", artifactURL.path]
         )
+        let archivePaths = listing.split(separator: "\n").map(String.init)
+        let metadataEntries = archivePaths
+            .filter { $0.hasPrefix("__MACOSX/") || $0.split(separator: "/").last?.hasPrefix("._") == true }
+        guard metadataEntries.isEmpty else {
+            throw fixtureError(
+                "archived workload-wrapper fixture contains AppleDouble metadata: \(metadataEntries.sorted())"
+            )
+        }
+        let unexpectedRootPaths = archivePaths.filter {
+            $0 != "Vifty.app" && $0 != "Vifty.app/" && !$0.hasPrefix("Vifty.app/")
+        }
+        guard unexpectedRootPaths.isEmpty else {
+            throw fixtureError(
+                "archived fixture contains unexpected ZIP-root paths: \(unexpectedRootPaths.sorted())"
+            )
+        }
         let prefix = "Vifty.app/Contents/Resources/viftyctl-wrappers/"
-        let archivedNames = Set(listing
-            .split(separator: "\n")
-            .map(String.init)
+        let archivedNames = Set(archivePaths
             .filter { $0.hasPrefix(prefix) && !$0.hasSuffix("/") }
             .compactMap { path -> String? in
                 let name = String(path.dropFirst(prefix.count))
@@ -1573,6 +1596,30 @@ private final class ReleaseArtifactHarness {
                 "archived workload-wrapper fixture inventory mismatch: expected \(expectedNames.sorted()), got \(archivedNames.sorted())"
             )
         }
+
+        let extractionURL = artifactURL.deletingLastPathComponent()
+            .appendingPathComponent("archive-validation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: extractionURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: extractionURL) }
+        try run(
+            executable: URL(fileURLWithPath: "/usr/bin/ditto"),
+            arguments: ["-x", "-k", artifactURL.path, extractionURL.path]
+        )
+        let extractedAppURL = extractionURL.appendingPathComponent("Vifty.app", isDirectory: true)
+        var extractedAppIsDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(
+            atPath: extractedAppURL.path,
+            isDirectory: &extractedAppIsDirectory
+        ), extractedAppIsDirectory.boolValue else {
+            throw fixtureError("archived fixture did not round-trip Vifty.app at the ZIP root")
+        }
+        try validateWorkloadWrapperFixture(
+            at: extractedAppURL.appendingPathComponent(
+                "Contents/Resources/viftyctl-wrappers",
+                isDirectory: true
+            ),
+            expectedScripts: expectedScripts
+        )
     }
 
     private static let workloadWrapperScripts = [
