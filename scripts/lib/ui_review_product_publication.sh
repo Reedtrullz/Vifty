@@ -73,6 +73,14 @@ ui_review_cleanup_product_transaction_scratch() {
     return 75
   fi
   if [[ -d "$scratch_root" && ! -L "$scratch_root" ]]; then
+    # The isolated source snapshot is deliberately made read-only before the
+    # build. Restore owner traversal/write permission on directories only so
+    # rm can unlink their entries without changing files or following any
+    # symlinks present elsewhere in the transaction tree.
+    if ! /usr/bin/find -x "$scratch_root" -type d -exec /bin/chmod u+rwx {} +; then
+      echo "UI review product scratch permissions could not be restored at $scratch_root" >&2
+      return 75
+    fi
     /bin/rm -rf "$scratch_root" || return 75
   fi
 }

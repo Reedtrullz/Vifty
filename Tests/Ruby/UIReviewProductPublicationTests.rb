@@ -162,6 +162,29 @@ class UIReviewProductPublicationTests < Minitest::Test
     end
   end
 
+  def test_scratch_cleanup_removes_read_only_source_tree_without_following_symlinks
+    Dir.mktmpdir("vifty-ui-publication-parent-") do |parent|
+      scratch = File.join(parent, "transaction")
+      source = File.join(scratch, "source", "Sources", "Vifty")
+      external = File.join(parent, "external")
+      FileUtils.mkdir_p(source)
+      FileUtils.mkdir_p(external)
+      File.binwrite(File.join(source, "ContentView.swift"), "read only source")
+      File.symlink(external, File.join(source, "external-link"))
+      FileUtils.chmod_R(0o500, File.join(scratch, "source"))
+      File.chmod(0o500, external)
+
+      status, stderr = run_scratch_cleanup(scratch: scratch)
+
+      assert_equal 0, status, stderr
+      refute File.exist?(scratch)
+      assert File.directory?(external), "cleanup must not follow archive symlinks"
+      assert_equal 0o500, File.stat(external).mode & 0o777
+    ensure
+      File.chmod(0o700, external) if external && File.directory?(external)
+    end
+  end
+
   def test_build_entrypoint_preserves_publication_failure_status
     script = File.read(BUILD_SCRIPT)
 
@@ -319,6 +342,19 @@ class UIReviewProductPublicationTests < Minitest::Test
     _stdout, stderr, process = Open3.capture3(
       "/bin/bash", "-c", script, "publication-restore-failure-test", HELPER,
       output, previous, stage, scratch
+    )
+    [process.exitstatus, stderr]
+  end
+
+  def run_scratch_cleanup(scratch:)
+    script = <<~BASH
+      set -u
+      . "$1"
+      publication_rollback_failed=0
+      ui_review_cleanup_product_transaction_scratch "$2"
+    BASH
+    _stdout, stderr, process = Open3.capture3(
+      "/bin/bash", "-c", script, "publication-cleanup-test", HELPER, scratch
     )
     [process.exitstatus, stderr]
   end
