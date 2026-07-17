@@ -8,6 +8,24 @@ final class ReleaseArtifactScriptTests: XCTestCase {
         _ = try ReleaseArtifactHarness()
     }
 
+    func testVerifierUsesDeterministicInventoryComparisonsOutsideCLocale() throws {
+        let harness = try ReleaseArtifactHarness()
+
+        let result = try harness.runVerifier(
+            [
+                "--skip-signature-checks",
+                "--skip-notarization-checks"
+            ],
+            environmentOverrides: [
+                "LANG": "en_US.UTF-8",
+                "LC_ALL": "en_US.UTF-8"
+            ]
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Release artifact OK: version 1.2.3"), result.stdout)
+    }
+
     func testVerifierPinsPublishedInventoryAndEntitlementsToImmutableSourceCommit() throws {
         let historicalSource = try HistoricalReleaseSourceFixture()
         let harness = try ReleaseArtifactHarness(
@@ -1302,7 +1320,10 @@ private final class ReleaseArtifactHarness {
         try Self.writeFakeLipo(at: rootURL.appendingPathComponent("fake-lipo.sh"))
     }
 
-    func runVerifier(_ arguments: [String] = []) throws -> ReleaseArtifactProcessResult {
+    func runVerifier(
+        _ arguments: [String] = [],
+        environmentOverrides: [String: String] = [:]
+    ) throws -> ReleaseArtifactProcessResult {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/verify-release-artifact.sh")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
@@ -1313,15 +1334,17 @@ private final class ReleaseArtifactHarness {
             "--cask", caskURL.path,
             "--artifact", artifactURL.path
         ] + arguments
-        let environment = [
+        let harnessEnvironment = [
                 "VIFTY_RELEASE_ARTIFACT_ROOT": rootURL.path,
                 "VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT": sourceRepositoryURL.path,
                 "VIFTY_LIPO_PATH": rootURL.appendingPathComponent("fake-lipo.sh").path
             ]
-        process.environment = ProcessInfo.processInfo.environment.merging(
-            environment,
+        var environment = ProcessInfo.processInfo.environment.merging(
+            harnessEnvironment,
             uniquingKeysWith: { _, new in new }
         )
+        environment.merge(environmentOverrides, uniquingKeysWith: { _, new in new })
+        process.environment = environment
 
         let stdout = Pipe()
         let stderr = Pipe()

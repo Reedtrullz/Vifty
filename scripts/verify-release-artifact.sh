@@ -764,8 +764,8 @@ done
 actual_support_inventory_path="${TMP_DIR}/actual-support-inventory.txt"
 find "${RESOURCES_DIR}" -maxdepth 1 -type f -name '*.sh' -exec basename {} \; \
   | LC_ALL=C sort > "${actual_support_inventory_path}"
-missing_support_scripts="$(comm -23 "${EXPECTED_SUPPORT_INVENTORY_PATH}" "${actual_support_inventory_path}" | paste -sd ' ' -)"
-unexpected_support_scripts="$(comm -13 "${EXPECTED_SUPPORT_INVENTORY_PATH}" "${actual_support_inventory_path}" | paste -sd ' ' -)"
+missing_support_scripts="$(LC_ALL=C comm -23 "${EXPECTED_SUPPORT_INVENTORY_PATH}" "${actual_support_inventory_path}" | paste -sd ' ' -)"
+unexpected_support_scripts="$(LC_ALL=C comm -13 "${EXPECTED_SUPPORT_INVENTORY_PATH}" "${actual_support_inventory_path}" | paste -sd ' ' -)"
 if [[ -n "${missing_support_scripts}" ]]; then
   first_missing_support="${missing_support_scripts%% *}"
   fail_check "support-scripts" "missing executable support script ${RESOURCES_DIR}/${first_missing_support}; ${BUNDLE_CONTRACT_DESCRIPTION} also requires: ${missing_support_scripts}"
@@ -785,9 +785,9 @@ if [[ -d "${WRAPPERS_DIR}" ]]; then
 else
   : > "${actual_wrapper_inventory_path}"
 fi
-missing_workload_wrappers="$(comm -23 "${EXPECTED_WRAPPER_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
-unexpected_workload_wrappers="$(comm -13 "${EXPECTED_WRAPPER_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
-missing_workload_wrapper_scripts="$(comm -23 "${EXPECTED_WRAPPER_SCRIPT_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
+missing_workload_wrappers="$(LC_ALL=C comm -23 "${EXPECTED_WRAPPER_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
+unexpected_workload_wrappers="$(LC_ALL=C comm -13 "${EXPECTED_WRAPPER_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
+missing_workload_wrapper_scripts="$(LC_ALL=C comm -23 "${EXPECTED_WRAPPER_SCRIPT_INVENTORY_PATH}" "${actual_wrapper_inventory_path}" | paste -sd ' ' -)"
 if [[ -n "${missing_workload_wrapper_scripts}" ]]; then
   first_missing_wrapper="${missing_workload_wrapper_scripts%% *}"
   fail_check "workload-wrappers" "missing executable workload wrapper ${WRAPPERS_DIR}/${first_missing_wrapper}; ${BUNDLE_CONTRACT_DESCRIPTION} also requires: ${missing_workload_wrapper_scripts}"
@@ -824,8 +824,8 @@ if [[ ! -s "${expected_schema_names_path}" ]]; then
   fail_check "schema-resources" "${SCHEMA_CONTRACT_DESCRIPTION} contains no reviewed JSON Schemas"
 fi
 
-missing_schema_names="$(comm -23 "${expected_schema_names_path}" "${actual_schema_names_path}" | paste -sd ' ' -)"
-unexpected_schema_names="$(comm -13 "${expected_schema_names_path}" "${actual_schema_names_path}" | paste -sd ' ' -)"
+missing_schema_names="$(LC_ALL=C comm -23 "${expected_schema_names_path}" "${actual_schema_names_path}" | paste -sd ' ' -)"
+unexpected_schema_names="$(LC_ALL=C comm -13 "${expected_schema_names_path}" "${actual_schema_names_path}" | paste -sd ' ' -)"
 if [[ -n "${missing_schema_names}" || -n "${unexpected_schema_names}" ]]; then
   schema_set_message="bundled schema set does not match ${SCHEMA_CONTRACT_DESCRIPTION}"
   if [[ -n "${missing_schema_names}" ]]; then
