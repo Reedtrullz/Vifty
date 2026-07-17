@@ -261,6 +261,22 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(appRecipe.contains("AX evidence tooling must not be bundled in Vifty.app"))
     }
 
+    func testCIHasEnoughTimeAndUsesOnlyExactTreeToolchainScopedSwiftPMCaches() throws {
+        let workflow = try read(".github/workflows/ci.yml")
+
+        XCTAssertTrue(workflow.contains("timeout-minutes: 35"), workflow)
+        XCTAssertTrue(workflow.contains("id: swiftpm"), workflow)
+        XCTAssertTrue(workflow.contains("xcodebuild -version"), workflow)
+        XCTAssertTrue(workflow.contains("swift --version"), workflow)
+        XCTAssertTrue(
+            workflow.contains(
+                "key: ${{ runner.os }}-${{ runner.arch }}-spm-${{ steps.swiftpm.outputs.toolchain_fingerprint }}-${{ github.sha }}"
+            ),
+            workflow
+        )
+        XCTAssertFalse(workflow.contains("restore-keys:"), workflow)
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)

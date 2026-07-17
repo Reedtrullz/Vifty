@@ -44,7 +44,9 @@ final class ReleaseArtifactScriptTests: XCTestCase {
     }
 
     func testVerifierRejectsPublishedTagThatPeelsToDifferentValidCommit() throws {
-        let harness = try ReleaseArtifactHarness(publishedTagCommit: "HEAD")
+        let harness = try ReleaseArtifactHarness(
+            publishedTagCommit: "\(Self.immutableV132SourceCommit)^"
+        )
 
         let result = try harness.runVerifier([
             "--skip-signature-checks",
@@ -1186,8 +1188,10 @@ private final class ReleaseArtifactHarness {
         }
         let effectiveSchemaSourceCommit = schemaSourceCommit
             ?? (candidateVersion == nil ? publishedSourceCommit : nil)
+        let effectiveWorkloadWrappers = workloadWrappers ?? Self.workloadWrapperScripts
+        let appURL = payloadURL.appendingPathComponent("Vifty.app", isDirectory: true)
         try Self.writeFakeApp(
-            at: payloadURL.appendingPathComponent("Vifty.app", isDirectory: true),
+            at: appURL,
             version: bundleVersion,
             build: bundleBuild,
             bundleIdentifier: bundleIdentifier,
@@ -1199,16 +1203,30 @@ private final class ReleaseArtifactHarness {
                 includeAdHocDevelopmentMetadata: includeAdHocDevelopmentMetadata,
                 supportScripts: supportScripts
                     ?? (candidateVersion == nil ? Self.historicalV132SupportScripts : Self.currentSupportScripts),
-                workloadWrappers: workloadWrappers ?? Self.workloadWrapperScripts,
+                workloadWrappers: effectiveWorkloadWrappers,
                 sourceRepositoryURL: effectiveSchemaSourceCommit == nil ? rootURL : repositoryURL,
                 schemaSourceCommit: effectiveSchemaSourceCommit,
                 schemaResourceOverrides: schemaResourceOverrides
             )
+        if includeWorkloadWrappers {
+            try Self.validateWorkloadWrapperFixture(
+                at: appURL.appendingPathComponent(
+                    "Contents/Resources/viftyctl-wrappers",
+                    isDirectory: true
+                ),
+                expectedScripts: effectiveWorkloadWrappers
+            )
+        }
         try Self.run(
             executable: URL(fileURLWithPath: "/usr/bin/ditto"),
-            arguments: ["-c", "-k", "--keepParent", "Vifty.app", artifactURL.path],
-            currentDirectoryURL: payloadURL
+            arguments: ["-c", "-k", "--keepParent", appURL.path, artifactURL.path]
         )
+        if includeWorkloadWrappers {
+            try Self.validateArchivedWorkloadWrapperFixture(
+                artifactURL,
+                expectedScripts: effectiveWorkloadWrappers
+            )
+        }
         sha256 = try Self.sha256(of: artifactURL)
         let effectiveCaskSHA = caskSHA ?? (candidateVersion == nil ? sha256 : String(repeating: "b", count: 64))
         try Self.writeCask(
@@ -1486,12 +1504,73 @@ private final class ReleaseArtifactHarness {
         if includeWorkloadWrappers {
             try FileManager.default.createDirectory(at: wrappersURL, withIntermediateDirectories: true)
             for script in workloadWrappers {
-                try writeExecutable(wrappersURL.appendingPathComponent(script))
+                try writeWorkloadWrapper(wrappersURL.appendingPathComponent(script))
             }
             try "Bundled workload wrappers\n".write(
                 to: wrappersURL.appendingPathComponent("README.md"),
                 atomically: true,
                 encoding: .utf8
+            )
+        }
+    }
+
+    private static func validateWorkloadWrapperFixture(
+        at wrappersURL: URL,
+        expectedScripts: [String]
+    ) throws {
+        let expectedNames = Set(expectedScripts + ["README.md"])
+        guard expectedScripts.count == Set(expectedScripts).count else {
+            throw fixtureError("workload-wrapper fixture contains duplicate script names")
+        }
+
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: wrappersURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        let regularFiles = try entries.filter {
+            try $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+        }
+        let actualNames = Set(regularFiles.map(\.lastPathComponent))
+        guard actualNames == expectedNames else {
+            throw fixtureError(
+                "workload-wrapper fixture inventory mismatch: expected \(expectedNames.sorted()), got \(actualNames.sorted())"
+            )
+        }
+
+        for script in expectedScripts {
+            let scriptURL = wrappersURL.appendingPathComponent(script)
+            guard FileManager.default.isExecutableFile(atPath: scriptURL.path) else {
+                throw fixtureError("workload-wrapper fixture is not executable: \(script)")
+            }
+        }
+        let readmeURL = wrappersURL.appendingPathComponent("README.md")
+        guard (try Data(contentsOf: readmeURL)).isEmpty == false else {
+            throw fixtureError("workload-wrapper fixture README is empty")
+        }
+    }
+
+    private static func validateArchivedWorkloadWrapperFixture(
+        _ artifactURL: URL,
+        expectedScripts: [String]
+    ) throws {
+        let listing = try run(
+            executable: URL(fileURLWithPath: "/usr/bin/zipinfo"),
+            arguments: ["-1", artifactURL.path]
+        )
+        let prefix = "Vifty.app/Contents/Resources/viftyctl-wrappers/"
+        let archivedNames = Set(listing
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.hasPrefix(prefix) && !$0.hasSuffix("/") }
+            .compactMap { path -> String? in
+                let name = String(path.dropFirst(prefix.count))
+                return name.contains("/") || name.hasPrefix("._") ? nil : name
+            })
+        let expectedNames = Set(expectedScripts + ["README.md"])
+        guard archivedNames == expectedNames else {
+            throw fixtureError(
+                "archived workload-wrapper fixture inventory mismatch: expected \(expectedNames.sorted()), got \(archivedNames.sorted())"
             )
         }
     }
@@ -1660,6 +1739,26 @@ private final class ReleaseArtifactHarness {
         )
     }
 
+    private static func writeWorkloadWrapper(_ url: URL) throws {
+        try "#!/usr/bin/env bash\n# Fixture: \(url.lastPathComponent)\nexit 0\n".write(
+            to: url,
+            atomically: true,
+            encoding: .utf8
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: url.path
+        )
+    }
+
+    private static func fixtureError(_ message: String) -> NSError {
+        NSError(
+            domain: "ReleaseArtifactHarness",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
     private static func writeCask(at url: URL, version: String, sha: String) throws {
         let contents = """
         cask "vifty" do
@@ -1794,13 +1893,11 @@ private final class ReleaseArtifactHarness {
     @discardableResult
     private static func run(
         executable: URL,
-        arguments: [String],
-        currentDirectoryURL: URL? = nil
+        arguments: [String]
     ) throws -> String {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
-        process.currentDirectoryURL = currentDirectoryURL
 
         let stdout = Pipe()
         let stderr = Pipe()

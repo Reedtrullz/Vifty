@@ -573,7 +573,7 @@ final class ValidationEvidenceReviewScriptTests: XCTestCase {
         let result = try harness.runReview(mode: "release")
 
         XCTAssertEqual(result.exitCode, 65)
-        XCTAssertTrue(result.stderr.contains("release checklist titleVersion must match release caskVersion"))
+        XCTAssertTrue(result.stderr.contains("release checklist titleVersion must match release version"))
         XCTAssertTrue(result.stderr.contains("release checklist installedAppBundleVersion must match release bundleVersion"))
     }
 
