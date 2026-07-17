@@ -1,4 +1,4 @@
-.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
+.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-initialize-ledger ui-review-start-session ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -72,16 +72,16 @@ AGENT_RUN_SMOKE_SOURCE_SHA ?=
 AGENT_RUN_SMOKE_SOURCE_ARTIFACT ?=
 AGENT_RUN_SMOKE_EXPECTED_DAEMON ?=
 AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH ?= 0
-UI_REVIEW_MANIFEST ?= $(PWD)/docs/ui-review/evidence-manifest.local.json
-UI_REVIEW_EVIDENCE_DIR ?= $(PWD)/.build/ui-review-evidence
-UI_REVIEW_PRODUCTS_DIR ?= $(PWD)/.build/ui-review-products
+UI_REVIEW_MANIFEST ?= $(CURDIR)/docs/ui-review/evidence-manifest.local.json
+UI_REVIEW_EVIDENCE_DIR ?= $(CURDIR)/.build/ui-review-evidence
+UI_REVIEW_PRODUCTS_DIR ?= $(CURDIR)/.build/ui-review-products
 UI_REVIEW_DEBUG_EXECUTABLE ?= $(UI_REVIEW_PRODUCTS_DIR)/debug/Vifty.app/Contents/MacOS/Vifty
 UI_REVIEW_RELEASE_BINARY ?= $(UI_REVIEW_PRODUCTS_DIR)/release/Vifty
 UI_REVIEW_AX_COLLECTOR ?= $(UI_REVIEW_PRODUCTS_DIR)/debug/ViftyAXCollector
 UI_REVIEW_SOURCE_COMMIT ?=
-UI_REVIEW_CHECKPOINT ?= $(PWD)/docs/ui-review/automated-checkpoint.json
-UI_REVIEW_HERO ?= $(PWD)/docs/images/vifty-screenshot.png
-UI_REVIEW_REPOSITORY_ROOT ?= $(PWD)
+UI_REVIEW_CHECKPOINT ?= $(CURDIR)/docs/ui-review/automated-checkpoint.json
+UI_REVIEW_HERO ?= $(CURDIR)/docs/images/vifty-screenshot.png
+UI_REVIEW_REPOSITORY_ROOT ?= $(CURDIR)
 APP_NAME := Vifty
 APP_DIR ?= .build/$(APP_NAME).app
 CONTENTS := $(APP_DIR)/Contents
@@ -216,8 +216,16 @@ agent-run-smoke-evidence-current-build: ## Build current app and collect supervi
 ui-review-build-products: ## Build one clean-tree provenance-bound UI review product transaction
 	./scripts/build-ui-review-products.sh
 
+ui-review-initialize-ledger: ## Initialize a fresh product-bound ignored UI review ledger
+	/usr/bin/ruby ./scripts/initialize-ui-review-ledger.rb --repository-root "$(UI_REVIEW_REPOSITORY_ROOT)"
+
+ui-review-start-session: ## Build exact products and initialize a fresh ignored UI review ledger
+	$(MAKE) ui-review-build-products
+	$(MAKE) ui-review-initialize-ledger
+
 ui-review-ruby-tests: ## Run portable UI review provenance, publication, and archive safety tests
 	/usr/bin/ruby Tests/Ruby/UIReviewBuildProvenanceTests.rb
+	/usr/bin/ruby Tests/Ruby/UIReviewLocalLedgerTests.rb
 	/usr/bin/ruby Tests/Ruby/UIReviewProductPublicationTests.rb
 	/usr/bin/ruby Tests/Ruby/UIReviewSourceArchiveTests.rb
 

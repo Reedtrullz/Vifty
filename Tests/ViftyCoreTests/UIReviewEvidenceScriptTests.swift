@@ -48,7 +48,8 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(gitignore.contains("docs/ui-review/evidence-manifest.local.json"))
-        XCTAssertTrue(makefile.contains("UI_REVIEW_MANIFEST ?= $(PWD)/docs/ui-review/evidence-manifest.local.json"))
+        XCTAssertTrue(makefile.contains("UI_REVIEW_MANIFEST ?= $(CURDIR)/docs/ui-review/evidence-manifest.local.json"))
+        XCTAssertTrue(makefile.contains("UI_REVIEW_REPOSITORY_ROOT ?= $(CURDIR)"))
 
         let ignored = try runProcess(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
@@ -611,6 +612,38 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(script.contains("--release-binary"))
         XCTAssertFalse(script.contains("/usr/bin/open"))
         XCTAssertFalse(script.contains("mode=\"launch\""))
+    }
+
+    func testCaptureRejectsLedgerBoundToDifferentProductTransactionBeforeArtifacts() throws {
+        let fixture = try orchestrationFixture(mode: .successful)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        var manifest = try readJSON(fixture.manifest)
+        var release = try XCTUnwrap(manifest["releaseExclusion"] as? [String: Any])
+        release["buildProvenance"] = try jsonObject(
+            TestBuildProvenance.identity(
+                role: "release-exclusion",
+                transactionID: String(repeating: "e", count: 64)
+            )
+        )
+        manifest["releaseExclusion"] = release
+        try writeJSON(manifest, to: fixture.manifest)
+
+        let result = try runOrchestrator([
+            "--capture",
+            "--row-kind", "fixture",
+            "--row-id", "healthy-auto",
+            "--manifest", fixture.manifest.path,
+            "--evidence-dir", fixture.evidence.path,
+            "--debug-executable", fixture.debugExecutable.path,
+            "--timeout-seconds", "2"
+        ])
+
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.output.contains("PRODUCT_BINDING_MISMATCH"), result.output)
+        XCTAssertTrue(
+            try FileManager.default.subpathsOfDirectory(atPath: fixture.evidence.path).isEmpty,
+            result.output
+        )
     }
 
     func testCaptureModeRetainsDirectExecutablePIDAndCompletesBoundedLifecycle() throws {
@@ -3340,6 +3373,17 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
             executable: debugExecutable,
             role: "debug-fixture-app"
         )
+        var boundManifest = try readJSON(manifest)
+        var releaseExclusion = try XCTUnwrap(
+            boundManifest["releaseExclusion"] as? [String: Any]
+        )
+        releaseExclusion["status"] = "passed"
+        releaseExclusion["sha256"] = String(repeating: "d", count: 64)
+        releaseExclusion["buildProvenance"] = try jsonObject(
+            TestBuildProvenance.identity(role: "release-exclusion")
+        )
+        boundManifest["releaseExclusion"] = releaseExclusion
+        try writeJSON(boundManifest, to: manifest)
         return OrchestrationFixture(
             root: root,
             evidence: evidence,

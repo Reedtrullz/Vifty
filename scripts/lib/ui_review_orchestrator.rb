@@ -11,6 +11,7 @@ require "shellwords"
 require "time"
 require_relative "ui_review_contract"
 require_relative "ui_review_build_provenance"
+require_relative "ui_review_local_ledger"
 
 module ViftyUIReview
   class OrchestrationError < StandardError
@@ -136,6 +137,13 @@ module ViftyUIReview
       raise OrchestrationError.new("INVALID_ROW_KIND", "unknown row kind: #{kind}", exit_code: 64) unless ROW_KINDS.include?(kind)
 
       manifest = parse_json(manifest_path, "manifest")
+      verify_local_ledger_binding!(
+        manifest_path: manifest_path,
+        manifest: manifest,
+        debug_path: debug_path,
+        debug_sha: debug_sha,
+        debug_provenance: debug_provenance
+      )
       row, request = verified_requirement(manifest, kind, options.fetch(:row_id))
       capture_id = generated_capture_id(kind, options.fetch(:row_id))
       captures_root = ensure_directory_within!(File.join(evidence_root, "captures"), evidence_root)
@@ -351,6 +359,16 @@ module ViftyUIReview
       )
       pid = trusted_fixture_pid
       manifest = parse_json(manifest_path, "manifest")
+      verify_local_ledger_binding!(
+        manifest_path: manifest_path,
+        manifest: manifest,
+        debug_path: debug_path,
+        debug_sha: debug_sha,
+        debug_provenance: debug_provenance,
+        collector_path: collector_path,
+        collector_sha: collector_sha,
+        collector_provenance: collector_provenance
+      )
       row, request = verified_requirement(manifest, "accessibility", session.fetch("rowID"))
       unless request == session["request"]
         raise OrchestrationError.new("REQUEST_MISMATCH", "capture request no longer matches the verifier-owned row")
@@ -497,6 +515,7 @@ module ViftyUIReview
     def seal(options)
       manifest_path = verified_file(options.fetch(:manifest), "manifest")
       evidence_root = verified_directory(options.fetch(:evidence_dir))
+      ledger_lock = acquire_local_ledger_lock!(manifest_path, evidence_root)
       debug_path = verified_executable(options.fetch(:debug_executable), "debug executable")
       debug_sha = Digest::SHA256.file(debug_path).hexdigest
       debug_provenance = embedded_provenance!(
@@ -525,6 +544,13 @@ module ViftyUIReview
       end
 
       manifest = parse_json(manifest_path, "manifest")
+      verify_local_ledger_binding!(
+        manifest_path: manifest_path,
+        manifest: manifest,
+        debug_path: debug_path,
+        debug_sha: debug_sha,
+        debug_provenance: debug_provenance
+      )
       kind = session.fetch("rowKind")
       row, request = verified_requirement(manifest, kind, session.fetch("rowID"))
       unless request == session["request"]
@@ -559,6 +585,9 @@ module ViftyUIReview
         "debugBuildProvenance" => debug_provenance,
         "runtimeIdentity" => report.fetch("runtimeIdentity")
       }
+      collector_path = nil
+      collector_sha = nil
+      collector_provenance = nil
 
       if kind == "visual"
         screenshot_path = verified_artifact_path(
@@ -597,6 +626,16 @@ module ViftyUIReview
           label: "AX collector"
         )
         validate_one_build_transaction!(debug_provenance, collector_provenance)
+        verify_local_ledger_binding!(
+          manifest_path: manifest_path,
+          manifest: manifest,
+          debug_path: debug_path,
+          debug_sha: debug_sha,
+          debug_provenance: debug_provenance,
+          collector_path: collector_path,
+          collector_sha: collector_sha,
+          collector_provenance: collector_provenance
+        )
         unless session["collectorExecutablePath"] == collector_path &&
                session["collectorExecutableSHA256"] == collector_sha &&
                session["collectorBuildProvenance"] == collector_provenance
@@ -663,6 +702,16 @@ module ViftyUIReview
         }
       end
 
+      verify_local_ledger_binding!(
+        manifest_path: manifest_path,
+        manifest: manifest,
+        debug_path: debug_path,
+        debug_sha: debug_sha,
+        debug_provenance: debug_provenance,
+        collector_path: collector_path,
+        collector_sha: collector_sha,
+        collector_provenance: collector_provenance
+      )
       install_ledger_entry!(manifest, kind, session.fetch("rowID"), capture_id, entry)
       write_json_atomic(manifest_path, manifest)
       ledger_artifact = File.join(File.dirname(session_path), "sealed-ledger-entry.json")
@@ -673,6 +722,8 @@ module ViftyUIReview
       Outcome.new(document: session, exit_code: 0)
     rescue ViftyUIReview::PNGError => error
       raise OrchestrationError.new("INVALID_PNG", error.message)
+    ensure
+      ViftyUIReview::LocalLedger.release_lock(ledger_lock) if defined?(ledger_lock)
     end
 
     def verified_requirement(manifest, kind, id)
@@ -1254,6 +1305,39 @@ module ViftyUIReview
         "BUILD_PROVENANCE_MISMATCH",
         "UI review products must come from one source commit/tree and one build transaction"
       )
+    end
+
+    def verify_local_ledger_binding!(
+      manifest_path:,
+      manifest:,
+      debug_path:,
+      debug_sha:,
+      debug_provenance:,
+      collector_path: nil,
+      collector_sha: nil,
+      collector_provenance: nil
+    )
+      ViftyUIReview::LocalLedger.verify_actual_product_binding!(
+        manifest_path: manifest_path,
+        manifest: manifest,
+        debug_path: debug_path,
+        debug_sha256: debug_sha,
+        debug_provenance: debug_provenance,
+        collector_path: collector_path,
+        collector_sha256: collector_sha,
+        collector_provenance: collector_provenance
+      )
+    rescue ViftyUIReview::LocalLedger::LedgerError => error
+      raise OrchestrationError.new("PRODUCT_BINDING_MISMATCH", error.message)
+    end
+
+    def acquire_local_ledger_lock!(manifest_path, evidence_root)
+      ViftyUIReview::LocalLedger.acquire_manifest_lock!(
+        manifest_path,
+        fallback_root: evidence_root
+      )
+    rescue ViftyUIReview::LocalLedger::LedgerError => error
+      raise OrchestrationError.new("LEDGER_LOCK_FAILED", error.message)
     end
 
     def ensure_executable_unchanged!(path, expected_sha, code:, label:)

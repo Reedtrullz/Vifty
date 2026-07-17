@@ -8,6 +8,7 @@ require "time"
 require_relative "ui_review_contract"
 require_relative "ui_review_ax_predicates"
 require_relative "ui_review_build_provenance"
+require_relative "ui_review_local_ledger"
 
 module ViftyUIReview
   module Verifier
@@ -36,7 +37,9 @@ module ViftyUIReview
       errors << "schemaVersion must be 3" unless manifest["schemaVersion"] == SCHEMA_VERSION
       expected_status = mode == "matrix" ? "passed" : "pending"
       unless manifest["status"] == expected_status
-        if mode == "contract"
+        if mode == "initialized"
+          errors << "manifest status must remain pending after local-ledger initialization (got #{manifest["status"].inspect})"
+        elsif mode == "contract"
           errors << "manifest status must remain pending for request/ledger contract verification (got #{manifest["status"].inspect})"
         elsif mode == "automated"
           errors << "manifest status must remain pending after autonomous-subset verification (got #{manifest["status"].inspect})"
@@ -44,7 +47,14 @@ module ViftyUIReview
           errors << "manifest status must be passed for full matrix verification (got #{manifest["status"].inspect})"
         end
       end
-      errors << "unknown verifier mode: #{mode}" unless %w[contract automated matrix].include?(mode)
+      errors << "unknown verifier mode: #{mode}" unless %w[initialized contract automated matrix].include?(mode)
+      if mode == "initialized"
+        begin
+          ViftyUIReview::LocalLedger.verify_initialized_document!(manifest)
+        rescue ViftyUIReview::LocalLedger::LedgerError => error
+          errors << "initialized ledger is not the exact empty request: #{error.message}"
+        end
+      end
 
       evidence_root = verified_evidence_root(evidence_dir, errors)
       return finish(errors) unless evidence_root
@@ -73,7 +83,7 @@ module ViftyUIReview
         EXPECTED_FIXTURE_REQUESTS,
         id_key: "state",
         label: "fixture report",
-        allowed_pending_ids: [],
+        allowed_pending_ids: mode == "initialized" ? EXPECTED_FIXTURE_REQUESTS.keys : [],
         errors: errors
       ))
       rows.concat(validate_rows(
@@ -81,7 +91,13 @@ module ViftyUIReview
         EXPECTED_VISUAL_REQUESTS,
         id_key: "id",
         label: "visual cell",
-        allowed_pending_ids: mode == "automated" ? SYSTEM_SETTING_VISUAL_IDS : [],
+        allowed_pending_ids: if mode == "initialized"
+                               EXPECTED_VISUAL_REQUESTS.keys
+                             elsif mode == "automated"
+                               SYSTEM_SETTING_VISUAL_IDS
+                             else
+                               []
+                             end,
         errors: errors
       ))
       rows.concat(validate_rows(
@@ -89,7 +105,7 @@ module ViftyUIReview
         EXPECTED_AX_REQUESTS,
         id_key: "id",
         label: "accessibility check",
-        allowed_pending_ids: [],
+        allowed_pending_ids: mode == "initialized" ? EXPECTED_AX_REQUESTS.keys : [],
         errors: errors
       ))
 
@@ -153,6 +169,8 @@ module ViftyUIReview
       )
       validate_human_attestations(manifest, evidence_root, errors) if mode == "matrix" && evidence_root
       success = case mode
+                when "initialized"
+                  "Initialized UI review ledger passed empty-request and exact product-binding verification."
                 when "automated"
                   "Automated UI review autonomous subset passed. main-increase-contrast and main-reduce-transparency may remain pending for observed macOS setting captures; human visual and VoiceOver attestations remain pending."
                 when "matrix"
@@ -1137,7 +1155,7 @@ end
 
 if $PROGRAM_NAME == __FILE__
   unless [5, 6].include?(ARGV.length)
-    warn "Usage: ui_review_verifier.rb <manifest> <evidence-dir> <release-binary> <debug-executable> <collector-executable> [contract|automated|matrix]"
+    warn "Usage: ui_review_verifier.rb <manifest> <evidence-dir> <release-binary> <debug-executable> <collector-executable> [initialized|contract|automated|matrix]"
     exit 64
   end
   exit ViftyUIReview::Verifier.run(

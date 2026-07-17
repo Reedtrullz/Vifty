@@ -16,7 +16,7 @@ The DEBUG-only PNG path invokes the fixed, root-owned `/usr/sbin/screencapture` 
 
 ```bash
 df -h /System/Volumes/Data
-make ui-review-build-products
+make ui-review-start-session
 ```
 
 Stop if `/System/Volumes/Data` has less than 30 GiB free. The transaction refuses a dirty repository before creating output, archives one exact `HEAD` commit/tree into a bounded read-only source snapshot, and builds all three products from that snapshot. Each Mach-O carries one canonical `__TEXT,__vifty_src` identity with the same source commit, source tree, and build-transaction ID plus its exact role/configuration. Products are published together only after the embedded identities validate:
@@ -31,13 +31,13 @@ Do not substitute ordinary `.build` products or a mutable sidecar. Capture repor
 
 The committed [evidence-manifest.json](evidence-manifest.json) is an empty, pending request template. It deliberately contains no capture IDs, executable paths, process IDs, window numbers, host paths, or completed human attestations. Never seal runtime evidence into that tracked template.
 
-Initialize the ignored machine-local ledger once, then use it for every capture, seal, and verification command:
+Start every exact-product review with the audited initializer. `make ui-review-start-session` builds all three products, verifies their shared embedded source commit, source tree, and transaction identity, then creates the ignored machine-local ledger with the exact release-exclusion SHA and provenance:
 
 ```bash
-test -e "$PWD/docs/ui-review/evidence-manifest.local.json" || \
-  cp "$PWD/docs/ui-review/evidence-manifest.json" \
-     "$PWD/docs/ui-review/evidence-manifest.local.json"
+make ui-review-start-session
 ```
+
+The initializer requires a clean exact Git root and the byte-exact tracked pending template. It rejects symlinks, non-executable or mixed-transaction products, release fixture markers, template drift, and concurrent source/product/output changes. Product building, ledger initialization, and sealing share one private bounded lock; contention fails with a retryable error instead of waiting indefinitely. Every capture phase also rechecks the actual canonical debug, release, and collector bytes against the clean current Git commit/tree, and seal repeats that check immediately before ledger mutation. If a prior local ledger exists, it is preserved byte-for-byte below ignored `.build/ui-review-evidence-archive/local-ledgers/` before a private `0600` replacement is published atomically. It never edits the tracked request template or deletes the prior capture tree. Run `make ui-review-initialize-ledger` only when the canonical products already exist and have not changed.
 
 The full capture tree remains below ignored `.build/ui-review-evidence/`. After a fresh exact-binary local ledger passes `--verify-automated`, write the small tracked checkpoint with:
 

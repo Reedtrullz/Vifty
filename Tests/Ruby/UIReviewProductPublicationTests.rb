@@ -170,6 +170,33 @@ class UIReviewProductPublicationTests < Minitest::Test
     refute_match(/ui_review_publish_products[\s\\\n]+.*\|\|\s+fail/m, script)
   end
 
+  def test_build_entrypoint_holds_the_shared_ledger_lock_for_the_transaction
+    script = File.read(BUILD_SCRIPT)
+
+    wrapper = script.index("with-ui-review-ledger-lock.rb")
+    source_state = script.index("initial_status=")
+    publication = script.index("ui_review_publish_products")
+    refute_nil wrapper
+    refute_nil source_state
+    refute_nil publication
+    assert_operator wrapper, :<, source_state
+    assert_operator wrapper, :<, publication
+    assert_includes script, 'VIFTY_UI_REVIEW_LOCK_HELD:-0'
+  end
+
+  def test_build_entrypoint_installs_cleanup_before_scratch_and_ignores_repeat_signals_during_rollback
+    script = File.read(BUILD_SCRIPT)
+
+    cleanup_trap = script.index("trap cleanup EXIT")
+    scratch_creation = script.index('/bin/mkdir -m 700 "$scratch_root"')
+    refute_nil cleanup_trap
+    refute_nil scratch_creation
+    assert_operator cleanup_trap, :<, scratch_creation
+    assert_includes script, "trap '' HUP INT QUIT TERM"
+    assert_includes script, "trap 'handle_signal 129' HUP"
+    assert_includes script, "trap 'handle_signal 131' QUIT"
+  end
+
   private
 
   def create_product_sets(root)

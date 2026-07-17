@@ -9,6 +9,12 @@ fail() {
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 repository_root="$(CDPATH= cd -- "$script_dir/.." && pwd -P)"
+if [[ "${VIFTY_UI_REVIEW_LOCK_HELD:-0}" != "1" ]]; then
+  exec /usr/bin/ruby \
+    "$repository_root/scripts/with-ui-review-ledger-lock.rb" \
+    --repository-root "$repository_root" \
+    -- "$0" "$@"
+fi
 . "$repository_root/scripts/lib/ui_review_product_publication.sh"
 git_root="$(/usr/bin/git -C "$repository_root" rev-parse --show-toplevel 2>/dev/null)" ||
   fail "repository root is unavailable"
@@ -18,6 +24,42 @@ output_root="$repository_root/.build/ui-review-products"
 build_parent="$repository_root/.build"
 [[ ! -L "$build_parent" ]] || fail ".build must not be a symbolic link"
 [[ ! -L "$output_root" ]] || fail "canonical product output must not be a symbolic link"
+scratch_root=""
+previous=""
+publication_started=0
+publication_committed=0
+publication_rollback_failed=0
+publication_restore_in_progress=0
+had_previous_output=0
+cleanup() {
+  local status=$?
+  trap - EXIT
+  trap '' HUP INT QUIT TERM
+  local rollback_status=0
+  local scratch_status=0
+  ui_review_rollback_product_publication || rollback_status=$?
+  if (( rollback_status == 0 )) && [[ -n "$scratch_root" ]]; then
+    ui_review_cleanup_product_transaction_scratch "$scratch_root" || scratch_status=$?
+  fi
+  if (( status == 0 )); then
+    if (( rollback_status != 0 )); then
+      status="$rollback_status"
+    elif (( scratch_status != 0 )); then
+      status="$scratch_status"
+    fi
+  fi
+  return "$status"
+}
+handle_signal() {
+  local status="$1"
+  trap '' HUP INT QUIT TERM
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'handle_signal 129' HUP
+trap 'handle_signal 130' INT
+trap 'handle_signal 131' QUIT
+trap 'handle_signal 143' TERM
 
 verify_source_state() {
   local phase="$1"
@@ -47,38 +89,7 @@ transaction_id="$(/usr/bin/ruby -rsecurerandom -e 'STDOUT.write(SecureRandom.hex
 scratch_root="$build_parent/ui-review-transaction-$transaction_id"
 [[ ! -e "$scratch_root" && ! -L "$scratch_root" ]] || fail "transaction scratch path already exists"
 /bin/mkdir -m 700 "$scratch_root"
-publication_started=0
-publication_committed=0
-publication_rollback_failed=0
-publication_restore_in_progress=0
-had_previous_output=0
 previous="$scratch_root/previous-products"
-cleanup() {
-  local status=$?
-  trap - EXIT INT TERM
-  local rollback_status=0
-  local scratch_status=0
-  ui_review_rollback_product_publication || rollback_status=$?
-  if (( rollback_status == 0 )); then
-    ui_review_cleanup_product_transaction_scratch "$scratch_root" || scratch_status=$?
-  fi
-  if (( status == 0 )); then
-    if (( rollback_status != 0 )); then
-      status="$rollback_status"
-    elif (( scratch_status != 0 )); then
-      status="$scratch_status"
-    fi
-  fi
-  return "$status"
-}
-handle_signal() {
-  local status="$1"
-  trap - INT TERM
-  exit "$status"
-}
-trap cleanup EXIT
-trap 'handle_signal 130' INT
-trap 'handle_signal 143' TERM
 
 source_archive="$scratch_root/source.tar"
 source_root="$scratch_root/source"
