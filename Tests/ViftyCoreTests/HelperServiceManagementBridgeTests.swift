@@ -33,6 +33,19 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
         XCTAssertFalse(fixedEvidencePath.contains("/Vifty/Maintenance/"))
     }
 
+    func testSystemBackendKeepsServiceAccessOnMainActorWhileAwaitingUnregister() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "Sources/Vifty/HelperServiceManagementBridge.swift"
+            ),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("service.unregister { error in"), source)
+        XCTAssertTrue(source.contains("withCheckedThrowingContinuation"), source)
+        XCTAssertFalse(source.contains("try await service.unregister()"), source)
+    }
+
     func testRegisterRequiresEnabledReadbackAndSurfacesApproval() async throws {
         let enabled = HelperServiceBackendFixture(state: .notRegistered, stateAfterRegister: .enabled)
         let enabledReport = try await performRegister(backend: enabled)
@@ -238,6 +251,13 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
                 .init(phase: "remove-legacy-helper-plist-and-logs", attempted: true, succeeded: true)
             ]
         )
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
 }

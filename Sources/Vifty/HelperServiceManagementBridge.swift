@@ -226,7 +226,15 @@ final class SystemHelperServiceManagementBackend: HelperServiceManagementBackend
     }
 
     func unregister() async throws {
-        try await service.unregister()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            service.unregister { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
     }
 
     static func validateMainBundle(_ bundle: Bundle) throws {
