@@ -437,6 +437,41 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("secret-reference allowlists"))
     }
 
+    func testWorkflowContractUsesKeywordSafeLoadWithStrictModernPsychAPI() throws {
+        let strictPsychShim = #"""
+        module Psych
+          class << self
+            alias_method :vifty_original_safe_load, :safe_load
+
+            def safe_load(yaml, permitted_classes:, permitted_symbols:, aliases:, **keywords)
+              vifty_original_safe_load(
+                yaml,
+                permitted_classes: permitted_classes,
+                permitted_symbols: permitted_symbols,
+                aliases: aliases,
+                **keywords
+              )
+            end
+          end
+        end
+
+        load ARGV.fetch(0)
+        """#
+        let result = try run(
+            URL(fileURLWithPath: "/usr/bin/ruby"),
+            arguments: [
+                "-ryaml",
+                "-e",
+                strictPsychShim,
+                "--",
+                repositoryRoot.appendingPathComponent("scripts/check-workflow-contract.rb").path
+            ]
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Workflow contract OK"), result.stdout)
+    }
+
     func testWorkflowContractRejectsShallowCICheckout() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateCIWorkflow { workflow in

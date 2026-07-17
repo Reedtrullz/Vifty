@@ -29,6 +29,41 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "codeowners-support", in: checks), "passed")
     }
 
+    func testCheckerUsesKeywordSafeLoadWithStrictModernPsychAPI() throws {
+        let harness = try CommunityStandardsHarness()
+        let strictPsychShimURL = harness.rootURL.appendingPathComponent("strict-modern-psych.rb")
+        let strictPsychShim = #"""
+        require "yaml"
+
+        module Psych
+          class << self
+            alias_method :vifty_original_safe_load, :safe_load
+
+            def safe_load(yaml, permitted_classes:, permitted_symbols:, aliases:, **keywords)
+              vifty_original_safe_load(
+                yaml,
+                permitted_classes: permitted_classes,
+                permitted_symbols: permitted_symbols,
+                aliases: aliases,
+                **keywords
+              )
+            end
+          end
+        end
+        """#
+        try strictPsychShim.write(to: strictPsychShimURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runChecker(
+            root: harness.repositoryRoot,
+            json: true,
+            environment: ["RUBYOPT": "-r\(strictPsychShimURL.path)"]
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try result.json()
+        XCTAssertEqual(summary["status"] as? String, "passed")
+    }
+
     func testCheckerRejectsMissingSupportFile() throws {
         let harness = try CommunityStandardsHarness()
         try harness.copyCommunitySurface()
@@ -172,11 +207,19 @@ private final class CommunityStandardsHarness {
         }
     }
 
-    func runChecker(root: URL, json: Bool) throws -> CommunityStandardsProcessResult {
+    func runChecker(
+        root: URL,
+        json: Bool,
+        environment: [String: String] = [:]
+    ) throws -> CommunityStandardsProcessResult {
         let script = repositoryRoot.appendingPathComponent("scripts/check-community-standards.sh")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.currentDirectoryURL = repositoryRoot
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            environment,
+            uniquingKeysWith: { _, new in new }
+        )
         process.arguments = [
             script.path,
             "--root",

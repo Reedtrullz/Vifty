@@ -94,8 +94,18 @@ if [[ -f "${ROOT_DIR}/.github/release-manifest.json" &&
   if ! structured_templates_error="$(ruby -rjson -ryaml -e '
     root = ARGV.fetch(0)
     manifest = JSON.parse(File.read(File.join(root, ".github/release-manifest.json")))
-    release = YAML.safe_load(File.read(File.join(root, ".github/ISSUE_TEMPLATE/release-trust.yml")), [], [], false)
-    hardware = YAML.safe_load(File.read(File.join(root, ".github/ISSUE_TEMPLATE/hardware-validation.yml")), [], [], false)
+    release = YAML.safe_load(
+      File.read(File.join(root, ".github/ISSUE_TEMPLATE/release-trust.yml")),
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false
+    )
+    hardware = YAML.safe_load(
+      File.read(File.join(root, ".github/ISSUE_TEMPLATE/hardware-validation.yml")),
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false
+    )
     published = manifest.fetch("publishedRelease")
     architecture = manifest.dig("product", "architectures").join(" + ")
 

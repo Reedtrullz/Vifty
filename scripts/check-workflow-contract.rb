@@ -61,7 +61,12 @@ workflow_paths.each do |path|
   relative_path = path.delete_prefix("#{root}/")
   text = File.read(path)
   begin
-    workflow = YAML.safe_load(text, [], [], false)
+    workflow = YAML.safe_load(
+      text,
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false
+    )
   rescue StandardError => error
     errors << "#{relative_path} is not valid YAML: #{error.message}"
     next
