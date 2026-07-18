@@ -1,4 +1,4 @@
-.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-initialize-ledger ui-review-start-session ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
+.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-public-release install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-initialize-ledger ui-review-start-session ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -39,6 +39,7 @@ VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0
 VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1
 REPAIR_HELPER_APP ?= /Applications/Vifty.app
 UNINSTALL_HELPER_APP ?= /Applications/Vifty.app
+PUBLIC_RELEASE_ARCHIVE ?=
 CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 VALIDATION_EVIDENCE_BUNDLE ?=
@@ -159,6 +160,10 @@ run-app: ## Build and open the local app bundle
 
 install: ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
+
+install-public-release: ## Verify and install the exact current published release archive
+	@if [ -z "$(PUBLIC_RELEASE_ARCHIVE)" ]; then echo "PUBLIC_RELEASE_ARCHIVE is required and must be an absolute path to the canonical public release zip" >&2; exit 64; fi
+	CONFIGURATION=release ./scripts/install-vifty.sh --public-release-archive "$(PUBLIC_RELEASE_ARCHIVE)"
 
 install-dev-adhoc: ## Explicit debug-only install with exact UID/path XPC allowlist
 	CONFIGURATION=debug VIFTY_ENABLE_ADHOC_XPC=1 ./scripts/install-vifty.sh

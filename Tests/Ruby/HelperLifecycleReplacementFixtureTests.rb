@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "digest"
 require "json"
 require "minitest/autorun"
 require "open3"
@@ -312,7 +313,192 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
     refute File.exist?(File.join(@root, "launchctl-disabled"))
   end
 
+  def test_public_candidate_binding_matches_root_snapshot_and_is_preserved_as_evidence
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    assert system("/usr/bin/ditto", @app, candidate)
+    FileUtils.mkdir_p(File.join(candidate, "A"))
+    File.binwrite(File.join(candidate, "A", "child"), "child\n")
+    File.binwrite(File.join(candidate, "A.foo"), "sibling\n")
+    content_sha = content_manifest_sha256(candidate)
+    previous_content_sha = content_manifest_sha256(@app)
+    archive_sha = "a" * 64
+
+    prepared = run_lifecycle(
+      script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+      args: public_replacement_prepare_args(candidate, content_sha: content_sha, archive_sha: archive_sha)
+    )
+
+    assert_equal 0, prepared[:status], prepared[:output]
+    record = JSON.parse(File.read(@ledger))
+    assert_equal content_sha, record.dig("replacementCandidateBinding", "contentManifestSHA256")
+    assert_equal(
+      {
+        "contentManifestSHA256" => content_sha,
+        "previousContentManifestSHA256" => previous_content_sha,
+        "version" => "1.4.0",
+        "build" => "8",
+        "teamID" => "X88J3853S2",
+        "reportedArchiveSHA256" => archive_sha
+      },
+      record.fetch("replacementPublicCandidateExpectation")
+    )
+    assert File.exist?(File.join(@root, "launchctl-disabled"))
+
+    FileUtils.rm_rf(@app)
+    assert system("/usr/bin/ditto", candidate, @app)
+    finished = run_lifecycle(script: @staged_lifecycle, args: replacement_finish_args)
+    assert_equal 0, finished[:status], finished[:output]
+    completed = JSON.parse(File.read(@ledger))
+    assert_equal "completed", completed.fetch("status")
+    assert_equal archive_sha,
+                 completed.dig("replacementPublicCandidateExpectation", "reportedArchiveSHA256")
+  end
+
+  def test_public_candidate_content_mismatch_fails_before_helper_teardown
+    assert_public_binding_mismatch_before_teardown(content_sha: "f" * 64)
+  end
+
+  def test_public_candidate_version_mismatch_fails_before_helper_teardown
+    assert_public_binding_mismatch_before_teardown(version: "1.4.1")
+  end
+
+  def test_public_candidate_build_mismatch_fails_before_helper_teardown
+    assert_public_binding_mismatch_before_teardown(build: "9")
+  end
+
+  def test_public_previous_content_mismatch_fails_before_helper_teardown
+    assert_public_binding_mismatch_before_teardown(previous_content_sha: "f" * 64)
+  end
+
+  def test_public_candidate_binding_requires_complete_release_identity
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    assert system("/usr/bin/ditto", @app, candidate)
+    args = replacement_prepare_args(candidate) + [
+      "--replacement-public-content-manifest-sha256", content_manifest_sha256(candidate)
+    ]
+
+    prepared = run_lifecycle(
+      script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+      args: args
+    )
+
+    assert_equal 64, prepared[:status], prepared[:output]
+    assert_includes prepared[:output], "complete candidate/previous content manifests, version, build, and TeamID"
+    refute File.exist?(File.join(@root, "launchctl-disabled"))
+  end
+
+  def test_finish_and_release_lock_reject_prepare_only_public_binding_arguments
+    public_args = [
+      "--replacement-public-content-manifest-sha256", "a" * 64,
+      "--replacement-public-previous-content-manifest-sha256", "c" * 64,
+      "--replacement-public-version", "1.4.0",
+      "--replacement-public-build", "8",
+      "--replacement-public-team-id", "X88J3853S2",
+      "--replacement-public-archive-sha256", "b" * 64
+    ]
+
+    [replacement_finish_args, replacement_release_args].each do |base_args|
+      result = run_lifecycle(
+        script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+        args: base_args + public_args
+      )
+      assert_equal 64, result[:status], result[:output]
+      assert_includes result[:output], "takes bundle identity only from the root prepare record"
+    end
+    refute File.exist?(File.join(@root, "launchctl-disabled"))
+  end
+
   private
+
+  def assert_public_binding_mismatch_before_teardown(
+    content_sha: nil,
+    previous_content_sha: nil,
+    version: "1.4.0",
+    build: "8"
+  )
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    legacy_helper = File.join(@root, "Library/PrivilegedHelperTools/tech.reidar.vifty.daemon")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    FileUtils.mkdir_p(File.dirname(legacy_helper))
+    File.write(legacy_helper, "legacy-helper\n")
+    assert system("/usr/bin/ditto", @app, candidate)
+    prepared = run_lifecycle(
+      script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+      args: public_replacement_prepare_args(
+        candidate,
+        content_sha: content_sha || content_manifest_sha256(candidate),
+        previous_content_sha: previous_content_sha || content_manifest_sha256(@app),
+        version: version,
+        build: build
+      )
+    )
+
+    assert_equal 76, prepared[:status], prepared[:output]
+    assert_includes prepared[:output], "active or unknown"
+    refute File.exist?(@ledger)
+    refute File.exist?(File.join(@root, "launchctl-disabled"))
+    assert File.exist?(legacy_helper)
+  end
+
+  def public_replacement_prepare_args(
+    candidate,
+    content_sha: content_manifest_sha256(candidate),
+    previous_content_sha: content_manifest_sha256(@app),
+    version: "1.4.0",
+    build: "8",
+    team_id: "X88J3853S2",
+    archive_sha: nil
+  )
+    args = replacement_prepare_args(candidate) + [
+      "--replacement-public-content-manifest-sha256", content_sha,
+      "--replacement-public-previous-content-manifest-sha256", previous_content_sha,
+      "--replacement-public-version", version,
+      "--replacement-public-build", build,
+      "--replacement-public-team-id", team_id
+    ]
+    args += ["--replacement-public-archive-sha256", archive_sha] if archive_sha
+    args
+  end
+
+  def content_manifest_sha256(app)
+    root = File.realpath(app)
+    entries = [{"path" => ".", "type" => "directory", "mode" => File.lstat(root).mode & 0o7777}]
+    walk = nil
+    walk = lambda do |directory, prefix|
+      Dir.children(directory).sort.each do |name|
+        path = File.join(directory, name)
+        relative = prefix.empty? ? name : File.join(prefix, name)
+        stat = File.lstat(path)
+        mode = stat.mode & 0o7777
+        if stat.directory? && !stat.symlink?
+          entries << {"path" => relative, "type" => "directory", "mode" => mode}
+          walk.call(path, relative)
+        elsif stat.file? && !stat.symlink?
+          entries << {
+            "path" => relative,
+            "type" => "file",
+            "mode" => mode,
+            "size" => stat.size,
+            "sha256" => Digest::SHA256.file(path).hexdigest
+          }
+        elsif stat.symlink?
+          entries << {
+            "path" => relative,
+            "type" => "symlink",
+            "mode" => mode,
+            "linkTarget" => File.readlink(path)
+          }
+        else
+          raise "unsupported fixture entry: #{path}"
+        end
+      end
+    end
+    walk.call(root, "")
+    entries.sort_by! { |entry| entry.fetch("path").b }
+    Digest::SHA256.hexdigest(JSON.generate(entries))
+  end
 
   def replacement_prepare_args(candidate, transaction_id: TRANSACTION_ID)
     lifecycle = File.join(candidate, "Contents/Resources/vifty-helper-lifecycle.sh")
@@ -385,6 +571,8 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
         <key>CFBundleIdentifier</key><string>tech.reidar.vifty</string>
         <key>CFBundleExecutable</key><string>Vifty</string>
         <key>CFBundlePackageType</key><string>APPL</string>
+        <key>CFBundleShortVersionString</key><string>1.4.0</string>
+        <key>CFBundleVersion</key><string>8</string>
         </dict></plist>
       PLIST
     )
