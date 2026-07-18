@@ -9,6 +9,15 @@ module ViftyReleaseArtifactContract
   SUMMARY_SCHEMA_ID = "https://vifty.local/schemas/release-artifact-summary.schema.json"
   SHA256_PATTERN = /\A[0-9a-f]{64}\z/
   COMMIT_PATTERN = /\A[0-9a-f]{40}\z/
+  HERMETIC_GIT_ENV = {
+    "HOME" => "/var/empty",
+    "LANG" => "C",
+    "LC_ALL" => "C",
+    "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin",
+    "GIT_CONFIG_NOSYSTEM" => "1",
+    "GIT_CONFIG_GLOBAL" => "/dev/null",
+    "GIT_NO_REPLACE_OBJECTS" => "1"
+  }.freeze
 
   class SHAPolicyError < StandardError; end
 
@@ -132,7 +141,9 @@ module ViftyReleaseArtifactContract
 
   def tag_commit(repository, tag, errors)
     stdout, stderr, status = Open3.capture3(
-      "git", "-C", repository, "rev-parse", "--verify", "#{tag}^{commit}"
+      HERMETIC_GIT_ENV,
+      "/usr/bin/git", "-C", repository, "rev-parse", "--verify", "refs/tags/#{tag}^{commit}",
+      unsetenv_others: true
     )
     commit = stdout.strip
     unless status.success? && commit.match?(COMMIT_PATTERN)
@@ -148,7 +159,9 @@ module ViftyReleaseArtifactContract
 
   def tagged_manifest_snapshot(repository, commit, errors)
     stdout, stderr, status = Open3.capture3(
-      "git", "-C", repository, "show", "#{commit}:.github/release-manifest.json"
+      HERMETIC_GIT_ENV,
+      "/usr/bin/git", "-C", repository, "show", "#{commit}:.github/release-manifest.json",
+      unsetenv_others: true
     )
     unless status.success?
       detail = stderr.strip
@@ -201,6 +214,50 @@ module ViftyReleaseArtifactContract
     errors << "release artifact summary status must be passed" unless summary["status"] == "passed"
     errors << "release evidence must not skip signature checks" unless summary["signatureChecksSkipped"] == false
     errors << "release evidence must not skip notarization checks" unless summary["notarizationChecksSkipped"] == false
+  end
+
+  def validate_published_install_boundary(summary, manifest, errors)
+    unless summary["schemaVersion"] == 2
+      errors << "published release installation requires schemaVersion 2 verifier evidence"
+      return
+    end
+
+    published = manifest["publishedRelease"]
+    unless published.is_a?(Hash)
+      errors << "authoritative release manifest must contain a publishedRelease object"
+      return
+    end
+
+    version = summary["releaseVersion"].to_s
+    selected = selected_release(manifest, version, errors)
+    if selected
+      current_kind, current_release = selected
+      unless current_kind == "published" && current_release.equal?(published)
+        errors << "release evidence must select the current publishedRelease, not a candidate or historical release"
+      end
+    end
+    unless version == published["version"]
+      errors << "releaseVersion must match the current publishedRelease version"
+    end
+
+    unless published["artifactTrust"] == "passed"
+      errors << "current publishedRelease artifactTrust must be passed"
+    end
+    unless published["signingTrust"] == "developer-id-notarized"
+      errors << "current publishedRelease signingTrust must be developer-id-notarized"
+    end
+
+    pinned_sha = published["sha256"]
+    unless pinned_sha.is_a?(String) && pinned_sha.match?(SHA256_PATTERN)
+      errors << "current publishedRelease must pin a lowercase 64-character SHA-256 checksum"
+      return
+    end
+
+    errors << "expectedSHA must exactly match current publishedRelease sha256" unless summary["expectedSHA"] == pinned_sha
+    errors << "actualSHA must exactly match current publishedRelease sha256" unless summary["actualSHA"] == pinned_sha
+    unless summary["expectedSHASource"] == "manifest sha256"
+      errors << "published release installation requires manifest sha256 evidence"
+    end
   end
 
   def validate_grandfathered_v1(summary, manifest, source_repository, errors)
@@ -441,7 +498,8 @@ module ViftyReleaseArtifactContract
     manifest_path:,
     source_repository:,
     allow_unpinned_candidate_sha: false,
-    allow_legacy_v132_verifier_v2: false
+    allow_legacy_v132_verifier_v2: false,
+    require_current_published_install: false
   )
     errors = []
     summary = read_json(summary_path, "release artifact summary", errors)
@@ -449,6 +507,7 @@ module ViftyReleaseArtifactContract
     return errors unless summary.is_a?(Hash) && manifest.is_a?(Hash)
 
     validate_common_summary(summary, errors)
+    validate_published_install_boundary(summary, manifest, errors) if require_current_published_install
     case summary["schemaVersion"]
     when 1
       validate_grandfathered_v1(summary, manifest, source_repository, errors)
@@ -466,6 +525,17 @@ module ViftyReleaseArtifactContract
       errors << "release artifact summary schemaVersion must be 1 or 2"
     end
     errors.uniq
+  end
+
+  def validate_published_install_summary(summary_path:, manifest_path:, source_repository:)
+    validate_summary(
+      summary_path: summary_path,
+      manifest_path: manifest_path,
+      source_repository: source_repository,
+      allow_unpinned_candidate_sha: false,
+      allow_legacy_v132_verifier_v2: true,
+      require_current_published_install: true
+    )
   end
 end
 
@@ -499,7 +569,18 @@ if __FILE__ == $PROGRAM_NAME
       errors.each { |error| warn "error: #{error}" }
       exit 1
     end
+  when "validate-published-install-summary"
+    abort("usage: release_artifact_contract.rb validate-published-install-summary SUMMARY MANIFEST SOURCE_REPOSITORY") unless ARGV.length == 3
+    errors = ViftyReleaseArtifactContract.validate_published_install_summary(
+      summary_path: ARGV.fetch(0),
+      manifest_path: ARGV.fetch(1),
+      source_repository: ARGV.fetch(2)
+    )
+    unless errors.empty?
+      errors.each { |error| warn "error: #{error}" }
+      exit 1
+    end
   else
-    abort("usage: release_artifact_contract.rb checks | validate-summary SUMMARY MANIFEST SOURCE_REPOSITORY | validate-verifier-summary SUMMARY MANIFEST SOURCE_REPOSITORY")
+    abort("usage: release_artifact_contract.rb checks | validate-summary SUMMARY MANIFEST SOURCE_REPOSITORY | validate-verifier-summary SUMMARY MANIFEST SOURCE_REPOSITORY | validate-published-install-summary SUMMARY MANIFEST SOURCE_REPOSITORY")
   end
 end

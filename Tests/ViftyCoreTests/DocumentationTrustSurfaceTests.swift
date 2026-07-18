@@ -604,13 +604,13 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("active GitHub ruleset `18940029` (`Immutable Vifty release tags`)"))
         XCTAssertTrue(
             releaseStatus.contains(
-                "The live `release` environment still has no required-reviewer rule"
+                "The live `release` environment has no required-reviewer rule and administrator bypass is disabled"
             )
         )
-        XCTAssertTrue(releaseStatus.contains("explicit next-release blocker"))
+        XCTAssertTrue(releaseStatus.contains("This readback resolves the prior protected-branch-only blocker"))
         XCTAssertTrue(
             releaseStatus.contains(
-                "exactly one custom policy with type `tag` and pattern `v*`"
+                "exactly one custom policy (`54991885`) with type `tag` and pattern `v*`"
             )
         )
         XCTAssertTrue(releaseStatus.contains("strict Actions-owned `SwiftPM checks` for administrators"))
@@ -1022,6 +1022,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(autoUpdate.contains("no account, fan, sensor, power, Codex, profile, or analytics payload"))
         XCTAssertTrue(autoUpdate.contains("software-update.json"))
         XCTAssertTrue(autoUpdate.contains("only one running Vifty instance owns this state and request lane"))
+        XCTAssertTrue(autoUpdate.contains("## Manual Verified Public-Archive Install Bridge"))
+        XCTAssertTrue(autoUpdate.contains("--public-release-archive /absolute/path/Vifty-vX.Y.Z.zip"))
+        XCTAssertTrue(autoUpdate.contains("selects only `.github/release-manifest.json` `publishedRelease`"))
+        XCTAssertTrue(autoUpdate.contains("performs no network request and never chooses or downloads a release"))
+        XCTAssertTrue(readme.contains("make install-public-release PUBLIC_RELEASE_ARCHIVE=/absolute/path/Vifty-vX.Y.Z.zip"))
+        XCTAssertTrue(readme.contains("manual operator bridge, not an updater or download command"))
     }
 
     func testReleaseDocsIncludeFutureAutoUpdateReadinessChecks() throws {
@@ -1029,7 +1035,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let trustModel = try read("docs/trust-model.md")
 
         XCTAssertTrue(release.contains("[auto-update.md](auto-update.md)"))
-        XCTAssertTrue(release.contains("Release-availability checking and in-place installation are separate trusted-release work"))
+        XCTAssertTrue(release.contains("Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes"))
         XCTAssertTrue(release.contains("checker is absent from the current `v1.3.2` artifact"))
         XCTAssertTrue(release.contains("SUFeedURL"))
         XCTAssertTrue(release.contains("SUPublicEDKey"))
@@ -1039,6 +1045,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(trustModel.contains("[auto-update.md](auto-update.md)"))
         XCTAssertTrue(trustModel.contains("Current source separates advisory checking from executable installation"))
         XCTAssertTrue(trustModel.contains("Any Sparkle signed-appcast implementation must enter the App Replacement Boundary"))
+        XCTAssertTrue(release.contains("## Manual Published-Archive Install"))
+        XCTAssertTrue(release.contains("same Auto/System replacement preflight, authority freeze, exact root snapshot, post-swap verification, and rollback transaction"))
+        XCTAssertTrue(trustModel.contains("The public-archive lane is an explicit operator bridge, not an app-controlled downloader"))
+        XCTAssertTrue(trustModel.contains("requires the exact manifest-pinned SHA-256"))
+        XCTAssertTrue(trustModel.contains("a no-skip public verifier result and independent extracted-bundle checks"))
     }
 
     func testSourceFirstInfoPlistDoesNotAdvertiseSparkleFeed() throws {

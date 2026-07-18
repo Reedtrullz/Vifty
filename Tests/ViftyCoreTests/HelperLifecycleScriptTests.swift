@@ -1544,6 +1544,44 @@ final class HelperLifecycleScriptTests: XCTestCase {
         XCTAssertFalse(lifecycle.contains("if ! root_worker"))
     }
 
+    func testPublicReplacementBindingUsesCanonicalRootSnapshotContentBeforeTeardown() throws {
+        let lifecycle = try read("scripts/vifty-helper-lifecycle.sh")
+        for option in [
+            "--replacement-public-content-manifest-sha256",
+            "--replacement-public-previous-content-manifest-sha256",
+            "--replacement-public-version",
+            "--replacement-public-build",
+            "--replacement-public-team-id",
+            "--replacement-public-archive-sha256"
+        ] {
+            XCTAssertTrue(lifecycle.contains(option), option)
+        }
+        XCTAssertTrue(lifecycle.contains("\"contentManifestSHA256\""))
+        XCTAssertTrue(lifecycle.contains("[\"uid\", \"gid\", \"nlink\"].include?(key)"))
+        XCTAssertTrue(lifecycle.contains("row[\"type\"] == \"symlink\" && key == \"size\""))
+        XCTAssertTrue(lifecycle.contains("replacementPublicCandidateExpectation"))
+        XCTAssertTrue(lifecycle.contains("previousContentManifestSHA256"))
+        XCTAssertTrue(lifecycle.contains("bind_replacement_public_previous_snapshot"))
+
+        let rootWorker = try XCTUnwrap(
+            lifecycle.range(of: "root_worker() {").flatMap { start in
+                lifecycle.range(of: "\nbuild_root_program()", range: start.upperBound..<lifecycle.endIndex)
+                    .map { String(lifecycle[start.lowerBound..<$0.lowerBound]) }
+            }
+        )
+        let snapshot = try XCTUnwrap(rootWorker.range(of: "stage_replacement_candidate_snapshot || root_fail"))
+        let teardown = try XCTUnwrap(rootWorker.range(of: "disable_and_confirm_service || root_fail"))
+        XCTAssertLessThan(snapshot.lowerBound, teardown.lowerBound)
+        XCTAssertTrue(lifecycle.contains("bind_replacement_public_candidate_snapshot \"${snapshot_binding}\" || return 1"))
+        XCTAssertTrue(lifecycle.contains("identity[\"bundleVersion\"] == expected_version"))
+        XCTAssertTrue(lifecycle.contains("identity[\"bundleBuild\"] == expected_build"))
+        XCTAssertTrue(lifecycle.contains("identity[\"kind\"] == \"developer-id\" && identity[\"teamID\"] == expected_team"))
+        XCTAssertTrue(lifecycle.contains("if ! bundle_version=\"$(/usr/bin/plutil -extract CFBundleShortVersionString"))
+        XCTAssertTrue(lifecycle.contains("if ! bundle_build=\"$(/usr/bin/plutil -extract CFBundleVersion"))
+        XCTAssertFalse(lifecycle.contains("CFBundleShortVersionString raw -o - \"${app}/Contents/Info.plist\" 2>/dev/null || true"))
+        XCTAssertFalse(lifecycle.contains("CFBundleVersion raw -o - \"${app}/Contents/Info.plist\" 2>/dev/null || true"))
+    }
+
     private func read(_ path: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(path), encoding: .utf8)
     }

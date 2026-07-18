@@ -554,6 +554,178 @@ class ReleaseCandidateInventoryTests < Minitest::Test
     )
   end
 
+  def test_extract_public_stages_the_exact_sha_and_extracts_only_vifty_app
+    extraction = empty_extraction_directory
+    expected_sha = Digest::SHA256.file(@archive).hexdigest
+
+    stdout, stderr, status = inventory_command(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", expected_sha,
+      "--extract-to", extraction
+    )
+
+    assert status.success?, stderr
+    extracted_app = File.join(extraction, "Vifty.app")
+    assert_equal "Public release archive verified and extracted: #{extracted_app}\n", stdout
+    assert_equal File.binread(@binary),
+                 File.binread(File.join(extracted_app, "Contents", "MacOS", "Vifty"))
+  end
+
+  def test_extract_public_rejects_sha_drift_before_unpacking
+    extraction = empty_extraction_directory
+
+    assert_inventory_failure(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", "0" * 64,
+      "--extract-to", extraction,
+      message: /candidate archive SHA-256 mismatch/
+    )
+    assert_empty Dir.children(extraction)
+  end
+
+  def test_extract_public_rejects_a_malformed_expected_sha
+    assert_inventory_failure(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", "ABC123",
+      "--extract-to", empty_extraction_directory,
+      message: /--expected-sha must be a lowercase SHA-256 digest/
+    )
+  end
+
+  def test_extract_public_rejects_a_symlink_archive
+    archive_link = File.join(@root, "public-release.zip")
+    File.symlink(@archive, archive_link)
+
+    assert_inventory_failure(
+      "extract-public",
+      "--archive", archive_link,
+      "--expected-sha", Digest::SHA256.file(@archive).hexdigest,
+      "--extract-to", empty_extraction_directory,
+      message: /candidate archive must be a regular non-symlink file/
+    )
+  end
+
+  def test_extract_public_rejects_an_extra_archive_root
+    write_empty_stored_zip!(["Vifty.app/", "outside.txt"])
+    extraction = empty_extraction_directory
+
+    assert_inventory_failure(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", Digest::SHA256.file(@archive).hexdigest,
+      "--extract-to", extraction,
+      message: /candidate archive contains an unexpected top-level entry/
+    )
+    assert_empty Dir.children(extraction)
+  end
+
+  def test_extract_public_rejects_case_colliding_archive_entries
+    write_empty_stored_zip!(["Vifty.app/Contents/Thing", "Vifty.app/Contents/thing"])
+    extraction = empty_extraction_directory
+
+    assert_inventory_failure(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", Digest::SHA256.file(@archive).hexdigest,
+      "--extract-to", extraction,
+      message: /candidate archive contains case-colliding entries/
+    )
+    assert_empty Dir.children(extraction)
+  end
+
+  def test_stage_public_copies_exact_bytes_to_the_requested_canonical_name
+    stage = File.join(@root, "stage")
+    FileUtils.mkdir(stage, mode: 0o700)
+    output = File.join(stage, "Vifty-v9.9.9.zip")
+    expected_sha = Digest::SHA256.file(@archive).hexdigest
+
+    stdout, stderr, status = inventory_command(
+      "stage-public",
+      "--archive", @archive,
+      "--expected-sha", expected_sha,
+      "--output", output
+    )
+
+    assert status.success?, stderr
+    assert_equal "Public release archive verified and staged: #{output}\n", stdout
+    assert_equal File.binread(@archive), File.binread(output)
+    assert_equal 0o400, File.stat(output).mode & 0o777
+  end
+
+  def test_stage_public_binds_the_final_path_to_the_created_output_inode
+    source = File.read(SCRIPT)
+
+    assert_includes source, "staged_identity = stable_stat_identity(output.stat)"
+    assert_includes source, 'fail_inventory("staged candidate archive path changed after creation")'
+    assert_includes source, "stable_stat_identity(staged) == staged_identity"
+  end
+
+  def test_extract_public_can_return_a_stable_complete_tree_digest
+    extraction = empty_extraction_directory
+    expected_sha = Digest::SHA256.file(@archive).hexdigest
+
+    stdout, stderr, status = inventory_command(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", expected_sha,
+      "--extract-to", extraction,
+      "--print-content-manifest-sha256"
+    )
+
+    assert status.success?, stderr
+    digest = stdout.strip
+    assert_match(/\A[0-9a-f]{64}\z/, digest)
+    verify_stdout, verify_stderr, verify_status = inventory_command(
+      "verify-public-tree",
+      "--app", File.join(extraction, "Vifty.app"),
+      "--expected-content-manifest-sha256", digest
+    )
+    assert verify_status.success?, verify_stderr
+    assert_equal "Candidate tree matches exact public archive content binding.\n", verify_stdout
+  end
+
+  def test_public_tree_sha256_uses_the_same_globally_sorted_content_contract
+    FileUtils.mkdir_p(File.join(@app, "A"))
+    File.binwrite(File.join(@app, "A", "child"), "child\n")
+    File.binwrite(File.join(@app, "A.foo"), "sibling\n")
+
+    stdout, stderr, status = inventory_command("public-tree-sha256", "--app", @app)
+
+    assert status.success?, stderr
+    assert_match(/\A[0-9a-f]{64}\n\z/, stdout)
+    verify_stdout, verify_stderr, verify_status = inventory_command(
+      "verify-public-tree",
+      "--app", @app,
+      "--expected-content-manifest-sha256", stdout.strip
+    )
+    assert verify_status.success?, verify_stderr
+    assert_equal "Candidate tree matches exact public archive content binding.\n", verify_stdout
+  end
+
+  def test_verify_public_tree_rejects_post_extraction_mutation
+    extraction = empty_extraction_directory
+    expected_sha = Digest::SHA256.file(@archive).hexdigest
+    stdout, stderr, status = inventory_command(
+      "extract-public",
+      "--archive", @archive,
+      "--expected-sha", expected_sha,
+      "--extract-to", extraction,
+      "--print-content-manifest-sha256"
+    )
+    assert status.success?, stderr
+    File.binwrite(File.join(extraction, "Vifty.app", "Contents", "MacOS", "Vifty"), "mutated")
+
+    assert_inventory_failure(
+      "verify-public-tree",
+      "--app", File.join(extraction, "Vifty.app"),
+      "--expected-content-manifest-sha256", stdout.strip,
+      message: /candidate tree does not match the exact public archive content binding/
+    )
+  end
+
   private
 
   def build_archive!

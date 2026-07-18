@@ -11,6 +11,13 @@ REPLACEMENT_PREVIOUS_APP=""
 REPLACEMENT_RESULT=""
 REPLACEMENT_LIFECYCLE_SOURCE=""
 REPLACEMENT_LIFECYCLE_EXPECTED_SHA256=""
+REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256=""
+REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256=""
+REPLACEMENT_PUBLIC_VERSION=""
+REPLACEMENT_PUBLIC_BUILD=""
+REPLACEMENT_PUBLIC_TEAM_ID=""
+REPLACEMENT_PUBLIC_ARCHIVE_SHA256=""
+REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION=""
 REPLACEMENT_LIFECYCLE_STAGED_PATH=""
 REPLACEMENT_LIFECYCLE_STAGED_SHA256=""
 REPLACEMENT_CANDIDATE_SNAPSHOT_APP=""
@@ -118,6 +125,12 @@ Usage:
                              --replacement-transaction-id UUID
                              --replacement-candidate /path/Vifty.app
                              --replacement-previous /Applications/Vifty.app
+                             [--replacement-public-content-manifest-sha256 SHA256
+                              --replacement-public-previous-content-manifest-sha256 SHA256
+                              --replacement-public-version X.Y.Z
+                              --replacement-public-build INTEGER
+                              --replacement-public-team-id TEAMID
+                              [--replacement-public-archive-sha256 SHA256]]
                              --replacement-result installed|rolled-back]
 
 Protocol-v2 teardown requires a short-lived root-owned receipt written by the
@@ -157,6 +170,12 @@ while [[ "$#" -gt 0 ]]; do
     --replacement-result) require_value "$1" "${2:-}"; REPLACEMENT_RESULT="$2"; shift 2 ;;
     --replacement-lifecycle-source) require_value "$1" "${2:-}"; REPLACEMENT_LIFECYCLE_SOURCE="${2%/}"; shift 2 ;;
     --replacement-lifecycle-sha256) require_value "$1" "${2:-}"; REPLACEMENT_LIFECYCLE_EXPECTED_SHA256="$2"; shift 2 ;;
+    --replacement-public-content-manifest-sha256) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256="$2"; shift 2 ;;
+    --replacement-public-previous-content-manifest-sha256) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256="$2"; shift 2 ;;
+    --replacement-public-version) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_VERSION="$2"; shift 2 ;;
+    --replacement-public-build) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_BUILD="$2"; shift 2 ;;
+    --replacement-public-team-id) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_TEAM_ID="$2"; shift 2 ;;
+    --replacement-public-archive-sha256) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_ARCHIVE_SHA256="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "helper-lifecycle: unknown argument: $1" >&2; usage; exit 64 ;;
@@ -213,6 +232,35 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
       echo "helper-lifecycle: replacement prepare requires candidate, previous, and exact lifecycle source bindings without a result." >&2
       exit 64
     }
+    public_binding_count=0
+    for public_binding_value in \
+      "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" \
+      "${REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" \
+      "${REPLACEMENT_PUBLIC_VERSION}" \
+      "${REPLACEMENT_PUBLIC_BUILD}" \
+      "${REPLACEMENT_PUBLIC_TEAM_ID}"; do
+      [[ -n "${public_binding_value}" ]] && public_binding_count=$((public_binding_count + 1))
+    done
+    if [[ "${public_binding_count}" -ne 0 && "${public_binding_count}" -ne 5 ]]; then
+      echo "helper-lifecycle: replacement public candidate binding requires complete candidate/previous content manifests, version, build, and TeamID." >&2
+      exit 64
+    fi
+    if [[ "${public_binding_count}" -eq 0 ]]; then
+      [[ -z "${REPLACEMENT_PUBLIC_ARCHIVE_SHA256}" ]] || {
+        echo "helper-lifecycle: replacement public archive evidence requires the complete public candidate binding." >&2
+        exit 64
+      }
+    else
+      [[ "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" =~ ^[a-f0-9]{64}$ &&
+         "${REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" =~ ^[a-f0-9]{64}$ &&
+         "${REPLACEMENT_PUBLIC_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ &&
+         "${REPLACEMENT_PUBLIC_BUILD}" =~ ^[1-9][0-9]*$ &&
+         "${REPLACEMENT_PUBLIC_TEAM_ID}" == "X88J3853S2" &&
+         ( -z "${REPLACEMENT_PUBLIC_ARCHIVE_SHA256}" || "${REPLACEMENT_PUBLIC_ARCHIVE_SHA256}" =~ ^[a-f0-9]{64}$ ) ]] || {
+        echo "helper-lifecycle: replacement public candidate binding is malformed or does not name Vifty's release TeamID." >&2
+        exit 64
+      }
+    fi
     candidate_parent="$(cd "$(/usr/bin/dirname "${REPLACEMENT_CANDIDATE_APP}")" 2>/dev/null && pwd -P)" || exit 66
     previous_parent="$(cd "$(/usr/bin/dirname "${REPLACEMENT_PREVIOUS_APP}")" 2>/dev/null && pwd -P)" || exit 66
     REPLACEMENT_CANDIDATE_APP="${candidate_parent}/$(/usr/bin/basename "${REPLACEMENT_CANDIDATE_APP}")"
@@ -225,7 +273,11 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
     }
   else
     [[ -z "${REPLACEMENT_CANDIDATE_APP}" && -z "${REPLACEMENT_PREVIOUS_APP}" &&
-       -z "${REPLACEMENT_LIFECYCLE_SOURCE}" && -z "${REPLACEMENT_LIFECYCLE_EXPECTED_SHA256}" ]] || {
+       -z "${REPLACEMENT_LIFECYCLE_SOURCE}" && -z "${REPLACEMENT_LIFECYCLE_EXPECTED_SHA256}" &&
+       -z "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" && -z "${REPLACEMENT_PUBLIC_VERSION}" &&
+       -z "${REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" &&
+       -z "${REPLACEMENT_PUBLIC_BUILD}" && -z "${REPLACEMENT_PUBLIC_TEAM_ID}" &&
+       -z "${REPLACEMENT_PUBLIC_ARCHIVE_SHA256}" ]] || {
       echo "helper-lifecycle: replacement finish takes bundle identity only from the root prepare record." >&2
       exit 64
     }
@@ -651,6 +703,73 @@ unlock_replacement_tree() {
   return 0
 }
 
+bind_replacement_public_candidate_snapshot() {
+  local snapshot_binding="$1"
+  if [[ -z "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" ]]; then
+    REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION=""
+    return 0
+  fi
+  REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION="$(/usr/bin/ruby -rjson -rdigest -e '
+    binding = JSON.parse(ARGV.fetch(0))
+    expected_content_sha, expected_version, expected_build, expected_team, archive_sha,
+      snapshot_path, test_root, release_team = ARGV.drop(1)
+    manifest = binding["manifest"]
+    exit 75 unless manifest.is_a?(Array) && !manifest.empty?
+    content_manifest = manifest.map do |row|
+      exit 75 unless row.is_a?(Hash)
+      row.reject do |key, _|
+        ["uid", "gid", "nlink"].include?(key) || (row["type"] == "symlink" && key == "size")
+      end
+    end
+    content_sha = Digest::SHA256.hexdigest(JSON.generate(content_manifest))
+    identity = binding["identity"]
+    exit 75 unless binding["sourcePath"] == snapshot_path &&
+      binding["contentManifestSHA256"] == content_sha && content_sha == expected_content_sha &&
+      identity.is_a?(Hash) && identity["bundleVersion"] == expected_version &&
+      identity["bundleBuild"] == expected_build && expected_team == release_team
+    if test_root.empty?
+      exit 75 unless identity["kind"] == "developer-id" && identity["teamID"] == expected_team
+    else
+      exit 75 unless identity["kind"] == "adhoc" && identity["teamID"].nil?
+    end
+    expectation = {
+      "contentManifestSHA256" => content_sha,
+      "version" => expected_version,
+      "build" => expected_build,
+      "teamID" => expected_team
+    }
+    expectation["reportedArchiveSHA256"] = archive_sha unless archive_sha.empty?
+    print JSON.generate(expectation)
+  ' "${snapshot_binding}" "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" "${REPLACEMENT_PUBLIC_VERSION}" \
+    "${REPLACEMENT_PUBLIC_BUILD}" "${REPLACEMENT_PUBLIC_TEAM_ID}" "${REPLACEMENT_PUBLIC_ARCHIVE_SHA256}" \
+    "${REPLACEMENT_CANDIDATE_SNAPSHOT_APP}" "${TEST_ROOT}" "${RELEASE_TEAM_ID}")" || return 1
+  [[ -n "${REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION}" ]] || return 1
+}
+
+bind_replacement_public_previous_snapshot() {
+  local previous_binding="$1"
+  [[ -n "${REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256}" ]] || return 0
+  REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION="$(/usr/bin/ruby -rjson -rdigest -e '
+    binding = JSON.parse(ARGV.fetch(0))
+    expectation = JSON.parse(ARGV.fetch(1))
+    expected_sha, expected_path = ARGV.drop(2)
+    manifest = binding["manifest"]
+    exit 75 unless binding["sourcePath"] == expected_path && manifest.is_a?(Array) && !manifest.empty?
+    content_manifest = manifest.map do |row|
+      exit 75 unless row.is_a?(Hash)
+      row.reject do |key, _|
+        ["uid", "gid", "nlink"].include?(key) || (row["type"] == "symlink" && key == "size")
+      end
+    end
+    content_sha = Digest::SHA256.hexdigest(JSON.generate(content_manifest))
+    exit 75 unless binding["contentManifestSHA256"] == content_sha && content_sha == expected_sha
+    expectation["previousContentManifestSHA256"] = content_sha
+    print JSON.generate(expectation)
+  ' "${previous_binding}" "${REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION}" \
+    "${REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" "${REPLACEMENT_PREVIOUS_APP}")" || return 1
+  [[ -n "${REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION}" ]] || return 1
+}
+
 stage_replacement_candidate_snapshot() {
   [[ "${REPLACEMENT_PHASE}" == "prepare" &&
      "${REPLACEMENT_LIFECYCLE_SOURCE}" == "${REPLACEMENT_CANDIDATE_APP}/Contents/Resources/vifty-helper-lifecycle.sh" &&
@@ -696,8 +815,10 @@ stage_replacement_candidate_snapshot() {
       signing_identity(before) == signing_identity(snapshot)
     exit(stable_source && exact_snapshot ? 0 : 75)
   ' "${source_before}" "${source_after}" "${snapshot_binding}" || return 1
+  bind_replacement_public_candidate_snapshot "${snapshot_binding}" || return 1
   REPLACEMENT_CANDIDATE_BINDING="${snapshot_binding}"
   REPLACEMENT_PREVIOUS_BINDING="$(capture_bundle_binding "${REPLACEMENT_PREVIOUS_APP}")" || return 1
+  bind_replacement_public_previous_snapshot "${REPLACEMENT_PREVIOUS_BINDING}" || return 1
   local snapshot_lifecycle="${REPLACEMENT_CANDIDATE_SNAPSHOT_APP}/Contents/Resources/vifty-helper-lifecycle.sh"
   /usr/bin/ruby -e '
     source, destination, owner_text = ARGV; owner = Integer(owner_text, 10)
@@ -894,6 +1015,8 @@ capture_bundle_binding() {
   local app="$1"
   local kind="adhoc"
   local team_id=""
+  local bundle_version=""
+  local bundle_build=""
   local main_id="tech.reidar.vifty"
   local ctl_id="tech.reidar.vifty.ctl"
   local daemon_id="tech.reidar.vifty.daemon"
@@ -931,8 +1054,14 @@ capture_bundle_binding() {
       team_id=""
     fi
   fi
+  if ! bundle_version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "${app}/Contents/Info.plist" 2>/dev/null)"; then
+    bundle_version=""
+  fi
+  if ! bundle_build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "${app}/Contents/Info.plist" 2>/dev/null)"; then
+    bundle_build=""
+  fi
   /usr/bin/ruby -rjson -rdigest -e '
-    root, kind, team_id, main_id, ctl_id, daemon_id, helper_id = ARGV
+    root, kind, team_id, main_id, ctl_id, daemon_id, helper_id, bundle_version, bundle_build = ARGV
     components = {
       "Vifty" => main_id,
       "viftyctl" => ctl_id,
@@ -1008,7 +1137,10 @@ capture_bundle_binding() {
         exit 75 unless unchanged?(dst, final)
       end
       walk.call(root, "")
-      entries
+      # This ordering is part of the user/root public-candidate contract and
+      # must match release-candidate-inventory.rb exactly, including prefix
+      # cases such as A.foo sorting before A/child.
+      entries.sort_by { |entry| entry.fetch("path").b }
     end
 
     first = snapshot.call
@@ -1027,17 +1159,25 @@ capture_bundle_binding() {
       "kind" => kind,
       "ownerUID" => rst.uid,
       "teamID" => (kind == "developer-id" ? team_id : nil),
+      "bundleVersion" => (bundle_version.empty? ? nil : bundle_version),
+      "bundleBuild" => (bundle_build.empty? ? nil : bundle_build),
       "componentIdentifiers" => components,
       "componentSHA256" => component_hashes
     }
+    content_manifest = first.map do |row|
+      row.reject do |key, _|
+        ["uid", "gid", "nlink"].include?(key) || (row["type"] == "symlink" && key == "size")
+      end
+    end
     payload = {
       "sourcePath" => root,
       "manifest" => first,
       "manifestSHA256" => Digest::SHA256.hexdigest(JSON.generate(first)),
+      "contentManifestSHA256" => Digest::SHA256.hexdigest(JSON.generate(content_manifest)),
       "identity" => identity
     }
     print JSON.generate(payload)
-  ' "${app}" "${kind}" "${team_id}" "${main_id}" "${ctl_id}" "${daemon_id}" "${helper_id}"
+  ' "${app}" "${kind}" "${team_id}" "${main_id}" "${ctl_id}" "${daemon_id}" "${helper_id}" "${bundle_version}" "${bundle_build}"
 }
 
 persist_root_record() {
@@ -1045,7 +1185,7 @@ persist_root_record() {
   local record_blocker="${2:-}"
   ensure_privileged_execution_directory
   /usr/bin/ruby -rjson -e '
-    path, replacement_record_path, owner_text, operation, status, blocker, phases_path, authority_mode, requesting_uid_text, requesting_pid_text, replacement_path, requesting_start_id, transaction_id, replacement_result, candidate_binding_json, previous_binding_json, lifecycle_path, lifecycle_sha, locked_binding_json = ARGV
+    path, replacement_record_path, owner_text, operation, status, blocker, phases_path, authority_mode, requesting_uid_text, requesting_pid_text, replacement_path, requesting_start_id, transaction_id, replacement_result, candidate_binding_json, previous_binding_json, lifecycle_path, lifecycle_sha, locked_binding_json, public_candidate_expectation_json = ARGV
     owner = Integer(owner_text, 10)
     requesting_uid = Integer(requesting_uid_text, 10)
     requesting_pid = Integer(requesting_pid_text, 10)
@@ -1089,6 +1229,7 @@ persist_root_record() {
       payload["replacementLifecyclePath"] = lifecycle_path unless lifecycle_path.empty?
       payload["replacementLifecycleSHA256"] = lifecycle_sha unless lifecycle_sha.empty?
       payload["replacementLockedBinding"] = JSON.parse(locked_binding_json) unless locked_binding_json.empty?
+      payload["replacementPublicCandidateExpectation"] = JSON.parse(public_candidate_expectation_json) unless public_candidate_expectation_json.empty?
       if status == "replacement-prepared"
         abort "missing immutable replacement bindings" unless payload["replacementCandidateBinding"].is_a?(Hash) &&
           payload["replacementPreviousBinding"].is_a?(Hash) && payload["replacementLifecyclePath"].is_a?(String) &&
@@ -1111,7 +1252,7 @@ persist_root_record() {
       atomic_write.call(replacement_record_path, 0600)
     end
     atomic_write.call(path, 0644)
-  ' "${ROOT_EXECUTION_RECORD}" "${ROOT_REPLACEMENT_RECORD}" "${EXPECTED_OWNER_UID}" "${OPERATION}" "${record_status}" "${record_blocker}" "${ROOT_PHASE_LOG}" "${ROOT_AUTHORITY_MODE:-undetermined}" "${REQUESTING_USER_UID}" "${REQUESTING_PROCESS_ID}" "${REPLACEMENT_DESTINATION}" "${REQUESTING_PROCESS_START_ID}" "${REPLACEMENT_TRANSACTION_ID}" "${REPLACEMENT_RESULT}" "${REPLACEMENT_CANDIDATE_BINDING}" "${REPLACEMENT_PREVIOUS_BINDING}" "${REPLACEMENT_LIFECYCLE_STAGED_PATH}" "${REPLACEMENT_LIFECYCLE_STAGED_SHA256}" "${REPLACEMENT_LOCKED_BINDING}"
+  ' "${ROOT_EXECUTION_RECORD}" "${ROOT_REPLACEMENT_RECORD}" "${EXPECTED_OWNER_UID}" "${OPERATION}" "${record_status}" "${record_blocker}" "${ROOT_PHASE_LOG}" "${ROOT_AUTHORITY_MODE:-undetermined}" "${REQUESTING_USER_UID}" "${REQUESTING_PROCESS_ID}" "${REPLACEMENT_DESTINATION}" "${REQUESTING_PROCESS_START_ID}" "${REPLACEMENT_TRANSACTION_ID}" "${REPLACEMENT_RESULT}" "${REPLACEMENT_CANDIDATE_BINDING}" "${REPLACEMENT_PREVIOUS_BINDING}" "${REPLACEMENT_LIFECYCLE_STAGED_PATH}" "${REPLACEMENT_LIFECYCLE_STAGED_SHA256}" "${REPLACEMENT_LOCKED_BINDING}" "${REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION}"
 }
 
 record_root_phase() {
@@ -1552,7 +1693,9 @@ build_root_program() {
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
   builtin declare -f unlock_replacement_tree
+  builtin declare -f bind_replacement_public_candidate_snapshot
   builtin declare -f stage_replacement_candidate_snapshot
+  builtin declare -f bind_replacement_public_previous_snapshot
   builtin declare -f snapshot_prior_replacement_record
   builtin declare -f remove_replacement_ledger_durably
   builtin declare -f remove_replacement_transaction_durably
@@ -1575,7 +1718,7 @@ build_root_program() {
   builtin declare -f stage_verified_legacy_v132_daemon
   builtin declare -f root_worker
   local variable
-  for variable in TEST_ROOT APP_PATH OPERATION REPLACEMENT_PHASE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_CANDIDATE_APP REPLACEMENT_PREVIOUS_APP REPLACEMENT_RESULT REPLACEMENT_CANDIDATE_SNAPSHOT_APP REPLACEMENT_CANDIDATE_BINDING REPLACEMENT_PREVIOUS_BINDING REPLACEMENT_LOCKED_BINDING REPLACEMENT_LIFECYCLE_SOURCE REPLACEMENT_LIFECYCLE_EXPECTED_SHA256 REPLACEMENT_LIFECYCLE_STAGED_PATH REPLACEMENT_LIFECYCLE_STAGED_SHA256 REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR LAUNCHCTL PRIVILEGED_HELPER LEGACY_PLIST STDOUT_LOG STDERR_LOG SERVICE_LABEL MAINTENANCE_DIR EXECUTION_DIR AUTHORITY_PATH CLAIMED_AUTHORITY_PATH ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD ROOT_SCRATCH_PARENT EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE EXPECTED_BOOT_SESSION_ID HELPER_SNAPSHOT HELPER_SNAPSHOT_SHA256 RELEASE_TEAM_ID HELPER_SIGNING_ID DAEMON_SIGNING_ID V132_DAEMON_SHA256 V132_DAEMON_CDHASH V132_FIXTURE_DAEMON_SHA256 ROOT_AUTHORITY_EXPECTATION ROOT_FIXTURE_SIGNAL ROOT_FIXTURE_RETURN_INCOMPLETE ROOT_FIXTURE_SWAP_CANDIDATE_AFTER_SNAPSHOT ROOT_FIXTURE_SWAP_CANDIDATE_DURING_SNAPSHOT ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK; do
+  for variable in TEST_ROOT APP_PATH OPERATION REPLACEMENT_PHASE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_CANDIDATE_APP REPLACEMENT_PREVIOUS_APP REPLACEMENT_RESULT REPLACEMENT_CANDIDATE_SNAPSHOT_APP REPLACEMENT_CANDIDATE_BINDING REPLACEMENT_PREVIOUS_BINDING REPLACEMENT_LOCKED_BINDING REPLACEMENT_LIFECYCLE_SOURCE REPLACEMENT_LIFECYCLE_EXPECTED_SHA256 REPLACEMENT_PUBLIC_CONTENT_MANIFEST_SHA256 REPLACEMENT_PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256 REPLACEMENT_PUBLIC_VERSION REPLACEMENT_PUBLIC_BUILD REPLACEMENT_PUBLIC_TEAM_ID REPLACEMENT_PUBLIC_ARCHIVE_SHA256 REPLACEMENT_PUBLIC_CANDIDATE_EXPECTATION REPLACEMENT_LIFECYCLE_STAGED_PATH REPLACEMENT_LIFECYCLE_STAGED_SHA256 REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR LAUNCHCTL PRIVILEGED_HELPER LEGACY_PLIST STDOUT_LOG STDERR_LOG SERVICE_LABEL MAINTENANCE_DIR EXECUTION_DIR AUTHORITY_PATH CLAIMED_AUTHORITY_PATH ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD ROOT_SCRATCH_PARENT EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE EXPECTED_BOOT_SESSION_ID HELPER_SNAPSHOT HELPER_SNAPSHOT_SHA256 RELEASE_TEAM_ID HELPER_SIGNING_ID DAEMON_SIGNING_ID V132_DAEMON_SHA256 V132_DAEMON_CDHASH V132_FIXTURE_DAEMON_SHA256 ROOT_AUTHORITY_EXPECTATION ROOT_FIXTURE_SIGNAL ROOT_FIXTURE_RETURN_INCOMPLETE ROOT_FIXTURE_SWAP_CANDIDATE_AFTER_SNAPSHOT ROOT_FIXTURE_SWAP_CANDIDATE_DURING_SNAPSHOT ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK; do
     builtin printf '%s=%q\n' "${variable}" "${!variable}"
   done
   if [[ -n "${TEST_ROOT}" ]]; then
@@ -1623,7 +1766,7 @@ validate_bound_replacement_record() {
   /usr/bin/ruby -rjson -rdigest -e '
     path, record_mode_text, dir, owner_text, requesting_uid_text, requesting_pid_text, requesting_start_id,
       replacement_path, transaction_id, replacement_result, expected_status, current_binding_json,
-      lifecycle_path, lifecycle_sha = ARGV
+      lifecycle_path, lifecycle_sha, test_root, release_team = ARGV
     owner = Integer(owner_text, 10); record_mode = Integer(record_mode_text, 8)
     requesting_uid = Integer(requesting_uid_text, 10); requesting_pid = Integer(requesting_pid_text, 10)
     dst = File.lstat(dir); pst = File.lstat(path); app = File.lstat(replacement_path)
@@ -1645,6 +1788,16 @@ validate_bound_replacement_record() {
         manifest.count { |row| row.is_a?(Hash) && row["path"] == "." && row["type"] == "directory" } == 1 &&
         manifest.map { |row| row.is_a?(Hash) ? row["path"] : nil }.uniq.length == manifest.length &&
         Digest::SHA256.hexdigest(JSON.generate(manifest)) == binding["manifestSHA256"]
+      content_manifest = manifest.map do |row|
+        next false unless row.is_a?(Hash)
+        row.reject do |key, _|
+          ["uid", "gid", "nlink"].include?(key) || (row["type"] == "symlink" && key == "size")
+        end
+      end
+      next false if content_manifest.include?(false)
+      next false unless binding["contentManifestSHA256"].is_a?(String) &&
+        binding["contentManifestSHA256"].match?(/\A[a-f0-9]{64}\z/) &&
+        Digest::SHA256.hexdigest(JSON.generate(content_manifest)) == binding["contentManifestSHA256"]
       manifest_valid = manifest.all? do |row|
         next false unless row.is_a?(Hash) && row["path"].is_a?(String) && !row["path"].empty? &&
           !row["path"].start_with?("/") && !row["path"].match?(/[\x00-\x1f]/) &&
@@ -1670,6 +1823,10 @@ validate_bound_replacement_record() {
       identity = binding["identity"]
       next false unless identity.is_a?(Hash) && ["developer-id", "adhoc"].include?(identity["kind"]) &&
         identity["ownerUID"].is_a?(Integer) && identity["ownerUID"] >= 0 &&
+        (identity["bundleVersion"].nil? || (identity["bundleVersion"].is_a?(String) &&
+          identity["bundleVersion"].match?(/\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/))) &&
+        (identity["bundleBuild"].nil? || (identity["bundleBuild"].is_a?(String) &&
+          identity["bundleBuild"].match?(/\A[1-9][0-9]*\z/))) &&
         identity["componentIdentifiers"] == expected_components && identity["componentSHA256"].is_a?(Hash) &&
         identity["componentSHA256"].keys.sort == expected_components.keys.sort &&
         identity["componentSHA256"].values.all? { |digest| digest.is_a?(String) && digest.match?(/\A[a-f0-9]{64}\z/) }
@@ -1687,6 +1844,40 @@ validate_bound_replacement_record() {
       candidate = record["replacementCandidateBinding"]; previous = record["replacementPreviousBinding"]
       current = JSON.parse(current_binding_json)
       expected = replacement_result == "installed" ? candidate : previous
+      public_expectation = record["replacementPublicCandidateExpectation"]
+      public_expectation_valid = if public_expectation.nil?
+        true
+      else
+        required_public_keys = %w[contentManifestSHA256 previousContentManifestSHA256 version build teamID]
+        optional_public_keys = %w[reportedArchiveSHA256]
+        identity = candidate.is_a?(Hash) ? candidate["identity"] : nil
+        keys_valid = (public_expectation.keys - required_public_keys - optional_public_keys).empty? &&
+          required_public_keys.all? { |key| public_expectation.key?(key) }
+        values_valid = public_expectation["contentManifestSHA256"].is_a?(String) &&
+          public_expectation["contentManifestSHA256"].match?(/\A[a-f0-9]{64}\z/) &&
+          public_expectation["previousContentManifestSHA256"].is_a?(String) &&
+          public_expectation["previousContentManifestSHA256"].match?(/\A[a-f0-9]{64}\z/) &&
+          public_expectation["version"].is_a?(String) &&
+          public_expectation["version"].match?(/\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/) &&
+          public_expectation["build"].is_a?(String) && public_expectation["build"].match?(/\A[1-9][0-9]*\z/) &&
+          public_expectation["teamID"] == release_team &&
+          (!public_expectation.key?("reportedArchiveSHA256") ||
+            (public_expectation["reportedArchiveSHA256"].is_a?(String) &&
+             public_expectation["reportedArchiveSHA256"].match?(/\A[a-f0-9]{64}\z/)))
+        candidate_valid = candidate.is_a?(Hash) && identity.is_a?(Hash) &&
+          candidate["contentManifestSHA256"] == public_expectation["contentManifestSHA256"] &&
+          previous.is_a?(Hash) &&
+          previous["contentManifestSHA256"] == public_expectation["previousContentManifestSHA256"] &&
+          identity["bundleVersion"] == public_expectation["version"] &&
+          identity["bundleBuild"] == public_expectation["build"]
+        signing_valid = if test_root.empty?
+          identity.is_a?(Hash) && identity["kind"] == "developer-id" &&
+            identity["teamID"] == public_expectation["teamID"]
+        else
+          identity.is_a?(Hash) && identity["kind"] == "adhoc" && identity["teamID"].nil?
+        end
+        keys_valid && values_valid && candidate_valid && signing_valid
+      end
       succeeded = phases.is_a?(Array) ? phases.select { |phase| phase["attempted"] == true && phase["succeeded"] == true }.map { |phase| phase["phase"] } : []
       required = ["verify-privileged-authority", "disable-service-and-confirm-offline", "post-freeze-offline-auto-confirm", "remove-legacy-helper-plist-and-logs"]
       if expected_status == "completed"
@@ -1703,17 +1894,19 @@ validate_bound_replacement_record() {
         record["replacementAppPath"] == replacement_path && record["updatedAt"].is_a?(Numeric) &&
         (Time.now.to_f - record["updatedAt"]).between?(-5, 300) && required.all? { |phase| succeeded.include?(phase) } &&
         (expected_status == "completed" || !succeeded.include?("reenable-service-after-cleanup")) &&
+        public_expectation_valid &&
         valid_binding.call(candidate) && valid_binding.call(previous) && valid_binding.call(current) &&
         candidate["sourcePath"] == File.join(File.dirname(lifecycle_path), "CandidateSnapshot", "Vifty.app") &&
         previous["sourcePath"] == replacement_path && current["sourcePath"] == replacement_path &&
-        current["manifest"] == expected["manifest"] && current["manifestSHA256"] == expected["manifestSHA256"] && current["identity"] == expected["identity"] &&
+        current["manifest"] == expected["manifest"] && current["manifestSHA256"] == expected["manifestSHA256"] &&
+        current["contentManifestSHA256"] == expected["contentManifestSHA256"] && current["identity"] == expected["identity"] &&
         record["replacementLifecyclePath"] == lifecycle_path && record["replacementLifecycleSHA256"] == lifecycle_sha &&
         record["replacementFlagTransition"].nil? &&
         (expected_status == "replacement-prepared" ? record["replacementLockedBinding"].nil? : record["replacementLockedBinding"] == current)
       final = file.stat
       exit 75 unless final.dev == opened.dev && final.ino == opened.ino && final.size == opened.size
     end
-  ' "${record_path}" "${record_mode}" "${EXECUTION_DIR}" "${EXPECTED_OWNER_UID}" "${REQUESTING_USER_UID}" "${REQUESTING_PROCESS_ID}" "${REQUESTING_PROCESS_START_ID}" "${REPLACEMENT_DESTINATION}" "${REPLACEMENT_TRANSACTION_ID}" "${REPLACEMENT_RESULT}" "${expected_status}" "${current_binding}" "${REPLACEMENT_LIFECYCLE_STAGED_PATH}" "${lifecycle_sha}"
+  ' "${record_path}" "${record_mode}" "${EXECUTION_DIR}" "${EXPECTED_OWNER_UID}" "${REQUESTING_USER_UID}" "${REQUESTING_PROCESS_ID}" "${REQUESTING_PROCESS_START_ID}" "${REPLACEMENT_DESTINATION}" "${REPLACEMENT_TRANSACTION_ID}" "${REPLACEMENT_RESULT}" "${expected_status}" "${current_binding}" "${REPLACEMENT_LIFECYCLE_STAGED_PATH}" "${lifecycle_sha}" "${TEST_ROOT}" "${RELEASE_TEAM_ID}"
 }
 
 validate_replacement_prepared_record() {
@@ -1951,7 +2144,7 @@ build_replacement_release_lock_root_program() {
   builtin declare -f replacement_authority_is_proven_disabled_offline
   builtin declare -f replacement_release_lock_root_worker
   local variable
-  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK ROOT_FIXTURE_EXIT_AFTER_UNLOCK ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
+  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH RELEASE_TEAM_ID ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK ROOT_FIXTURE_EXIT_AFTER_UNLOCK ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
     builtin printf '%s=%q\n' "${variable}" "${!variable}"
   done
   if [[ -n "${TEST_ROOT}" ]]; then
@@ -2028,7 +2221,7 @@ build_replacement_lock_root_program() {
   builtin declare -f replacement_authority_is_proven_disabled_offline
   builtin declare -f replacement_lock_root_worker
   local variable
-  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH ROOT_FIXTURE_LOCK_RECORD_FAILURE ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK ROOT_FIXTURE_EXIT_AFTER_LOCK ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
+  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH RELEASE_TEAM_ID ROOT_FIXTURE_LOCK_RECORD_FAILURE ROOT_FIXTURE_PARTIAL_LOCK ROOT_FIXTURE_PARTIAL_UNLOCK ROOT_FIXTURE_EXIT_AFTER_LOCK ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
     builtin printf '%s=%q\n' "${variable}" "${!variable}"
   done
   if [[ -n "${TEST_ROOT}" ]]; then
@@ -2095,7 +2288,7 @@ build_replacement_finish_root_program() {
   builtin declare -f stop_and_confirm_offline
   builtin declare -f replacement_finish_root_worker
   local variable
-  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH ROOT_FIXTURE_CORRUPT_COMPLETION ROOT_FIXTURE_SWAP_BEFORE_ENABLE ROOT_FIXTURE_ALTERNATE_APP ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
+  for variable in TEST_ROOT LAUNCHCTL SERVICE_LABEL EXECUTION_DIR ROOT_EXECUTION_RECORD ROOT_REPLACEMENT_RECORD EXPECTED_OWNER_UID REQUESTING_USER_UID REQUESTING_PROCESS_ID REQUESTING_PROCESS_START_ID FIXTURE_PARENT_START_SOURCE REPLACEMENT_DESTINATION REPLACEMENT_TRANSACTION_ID REPLACEMENT_RESULT REPLACEMENT_TRANSACTION_ROOT REPLACEMENT_TRANSACTION_DIR REPLACEMENT_LIFECYCLE_STAGED_PATH RELEASE_TEAM_ID ROOT_FIXTURE_CORRUPT_COMPLETION ROOT_FIXTURE_SWAP_BEFORE_ENABLE ROOT_FIXTURE_ALTERNATE_APP ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE; do
     builtin printf '%s=%q\n' "${variable}" "${!variable}"
   done
   if [[ -n "${TEST_ROOT}" ]]; then

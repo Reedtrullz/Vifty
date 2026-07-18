@@ -1,7 +1,53 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
 APP_NAME="Vifty"
+INSTALL_MODE="source"
+PUBLIC_RELEASE_ARCHIVE=""
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  scripts/install-vifty.sh
+  scripts/install-vifty.sh --public-release-archive /absolute/path/Vifty-vX.Y.Z.zip
+
+With no arguments, Vifty builds and installs the current source checkout.
+The public-release mode installs only the exact current publishedRelease archive
+pinned by .github/release-manifest.json; it accepts no caller-supplied version,
+checksum, TeamID, verifier, or trust-skip override.
+USAGE
+}
+
+case "$#" in
+  0) ;;
+  1)
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+      usage
+      exit 0
+    fi
+    echo "error: unsupported or incomplete installer arguments." >&2
+    usage >&2
+    exit 64
+    ;;
+  2)
+    if [[ "$1" != "--public-release-archive" || -z "$2" || "$2" == --* ]]; then
+      echo "error: expected --public-release-archive followed by one absolute zip path." >&2
+      usage >&2
+      exit 64
+    fi
+    INSTALL_MODE="public-release"
+    PUBLIC_RELEASE_ARCHIVE="$2"
+    ;;
+  *)
+    echo "error: unexpected installer arguments." >&2
+    usage >&2
+    exit 64
+    ;;
+esac
+
 CONFIGURATION="${CONFIGURATION:-release}"
 INSTALL_DIR="${VIFTY_INSTALL_DIR:-/Applications}"
 OPEN_AFTER_INSTALL="${OPEN_AFTER_INSTALL:-0}"
@@ -25,6 +71,24 @@ FIXTURE_CONTEXT_VALID=0
 MAKE_COMMAND="${VIFTY_MAKE:-make}"
 DITTO_COMMAND="${VIFTY_DITTO:-/usr/bin/ditto}"
 WAS_RUNNING=0
+PUBLIC_RELEASE_VERSION=""
+PUBLIC_RELEASE_BUILD=""
+PUBLIC_RELEASE_TAG=""
+PUBLIC_RELEASE_SOURCE_COMMIT=""
+PUBLIC_RELEASE_ARTIFACT_NAME=""
+PUBLIC_RELEASE_SHA256=""
+PUBLIC_RELEASE_TEAM_ID=""
+PUBLIC_RELEASE_ARCHITECTURES=""
+PUBLIC_CONTENT_MANIFEST_SHA256=""
+PUBLIC_HELPER_SHA256=""
+PUBLIC_LIFECYCLE_SHA256=""
+PUBLIC_QUARANTINE_HEX=""
+PUBLIC_QUARANTINE_STATE=""
+PUBLIC_INSTALL_LOCK=""
+PUBLIC_INSTALL_LOCK_ROOT=""
+PUBLIC_DESTINATION_EXPECTATION=""
+PUBLIC_PRECHECK_DESTINATION_EXPECTATION=""
+PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256=""
 
 PUBLISHED_V132_VERSION="1.3.2"
 PUBLISHED_V132_BUILD="7"
@@ -46,8 +110,8 @@ DAEMON_BUNDLE_ID="tech.reidar.vifty.daemon"
 HELPER_BUNDLE_ID="tech.reidar.vifty.helper"
 CTL_BUNDLE_ID="tech.reidar.vifty.ctl"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(/usr/bin/dirname "${BASH_SOURCE[0]}")" && /bin/pwd -P)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && /bin/pwd -P)"
 APP_DIR="${VIFTY_BUILD_APP_PATH:-${ROOT_DIR}/.build/${APP_NAME}.app}"
 DEST_APP="${INSTALL_DIR}/${APP_NAME}.app"
 HELPER_LIFECYCLE_SOURCE="${VIFTY_HELPER_LIFECYCLE:-${APP_DIR}/Contents/Resources/vifty-helper-lifecycle.sh}"
@@ -103,6 +167,23 @@ for fixture_value in \
     fixture_requested=1
   fi
 done
+if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+  if [[ "${PUBLIC_RELEASE_ARCHIVE}" != /* ]]; then
+    echo "error: --public-release-archive requires an absolute path." >&2
+    exit 64
+  fi
+  if [[ "${CONFIGURATION}" != "release" || "${ENABLE_ADHOC_XPC}" != "0" ]]; then
+    echo "error: public release archives require CONFIGURATION=release and VIFTY_ENABLE_ADHOC_XPC=0." >&2
+    exit 65
+  fi
+  if [[ "${fixture_requested}" == "1" || -n "${VIFTY_BUILD_APP_PATH+x}" ||
+        -n "${VIFTY_MAKE+x}" || -n "${VIFTY_DITTO+x}" || -n "${SWIFT_BUILD_PATH+x}" ||
+        -n "${VIFTY_HELPER_LIFECYCLE+x}" || -n "${VIFTY_HELPER_TARGET+x}" ||
+        -n "${VIFTY_REPLACEMENT_LIFECYCLE_ROOT+x}" ]]; then
+    echo "error: public release archives reject build, helper, copy-tool, lifecycle, and fixture overrides." >&2
+    exit 65
+  fi
+fi
 if [[ "${fixture_requested}" == "1" ]]; then
   if ! validate_fixture_context; then
     echo "error: install fixtures require a canonical owner-private VIFTY_INSTALL_FIXTURE_ROOT under the macOS temporary area, with all fixture paths contained inside it." >&2
@@ -126,6 +207,8 @@ ERR_LOG="${RUN_DIR}/copy-error.log"
 BUILD_LOG="${RUN_DIR}/build.log"
 COPY_ROLLBACK_ACTIVE=0
 COPY_ROLLBACK_HAD_PREVIOUS=0
+COPY_ROLLBACK_NEW_INSTALLED=0
+COPY_ROLLBACK_SOURCE=""
 COPY_ROLLBACK_DEST=""
 COPY_ROLLBACK_PREVIOUS=""
 COPY_ROLLBACK_STAGE=""
@@ -149,27 +232,53 @@ rollback_interrupted_copy() {
     echo "HARD FAILURE: invalid rollback paths; refusing destructive cleanup." >&2
     return 1
   fi
+  local rejected_app="${COPY_ROLLBACK_STAGE}/rejected-${APP_NAME}.app"
   if [[ "${COPY_ROLLBACK_HAD_PREVIOUS}" == "1" ]]; then
+    local rejected_matches_candidate=1
     if ! path_exists_without_following "${COPY_ROLLBACK_PREVIOUS}"; then
       echo "HARD FAILURE: staged previous app is missing; refusing to accept any destination bundle as a successful rollback. Recovery material and helper authority are preserved at ${COPY_ROLLBACK_STAGE}" >&2
       return 1
     fi
-    local rejected_app="${COPY_ROLLBACK_STAGE}/rejected-${APP_NAME}.app"
     if path_exists_without_following "${COPY_ROLLBACK_DEST}"; then
-      if path_exists_without_following "${rejected_app}" || ! /bin/mv "${COPY_ROLLBACK_DEST}" "${rejected_app}"; then
+      if path_exists_without_following "${rejected_app}" || ! rename_exclusive "${COPY_ROLLBACK_DEST}" "${rejected_app}"; then
         echo "HARD FAILURE: could not isolate the rejected app; previous app preserved at ${COPY_ROLLBACK_PREVIOUS}" >&2
         return 1
       fi
+      if [[ "${COPY_ROLLBACK_NEW_INSTALLED}" != "1" || -z "${COPY_ROLLBACK_SOURCE}" ]] ||
+         ! verify_candidate_bundle "${rejected_app}" ||
+         ! bundles_have_identical_file_bytes "${COPY_ROLLBACK_SOURCE}" "${rejected_app}"; then
+        rejected_matches_candidate=0
+      fi
     fi
     if [[ "${FIXTURE_ROLLBACK_RESTORE_FAILURE}" == "1" ]] ||
-       ! /bin/mv "${COPY_ROLLBACK_PREVIOUS}" "${COPY_ROLLBACK_DEST}"; then
+       ! rename_exclusive "${COPY_ROLLBACK_PREVIOUS}" "${COPY_ROLLBACK_DEST}"; then
       echo "HARD FAILURE: could not restore the previous app; recover it from ${COPY_ROLLBACK_PREVIOUS}" >&2
       return 1
     fi
-  elif [[ "${COPY_ROLLBACK_HAD_PREVIOUS}" == "0" && -n "${COPY_ROLLBACK_DEST}" ]]; then
-    if path_exists_without_following "${COPY_ROLLBACK_DEST}" && ! /bin/rm -rf "${COPY_ROLLBACK_DEST}"; then
-      echo "HARD FAILURE: could not remove rejected new app at ${COPY_ROLLBACK_DEST}; stage preserved at ${COPY_ROLLBACK_STAGE}" >&2
+    if [[ "${rejected_matches_candidate}" != "1" ]]; then
+      COPY_ROLLBACK_ACTIVE=0
+      echo "HARD FAILURE: the previous app was restored, but an unexpected destination bundle is preserved at ${rejected_app}; refusing transaction-stage cleanup." >&2
       return 1
+    fi
+  elif [[ "${COPY_ROLLBACK_HAD_PREVIOUS}" == "0" &&
+          "${COPY_ROLLBACK_NEW_INSTALLED}" == "1" &&
+          -n "${COPY_ROLLBACK_DEST}" ]]; then
+    if path_exists_without_following "${COPY_ROLLBACK_DEST}"; then
+      if path_exists_without_following "${rejected_app}" ||
+         ! rename_exclusive "${COPY_ROLLBACK_DEST}" "${rejected_app}"; then
+        echo "HARD FAILURE: could not atomically isolate the rejected fresh-install destination; preserving the transaction stage at ${COPY_ROLLBACK_STAGE}" >&2
+        return 1
+      fi
+      if [[ -z "${COPY_ROLLBACK_SOURCE}" ]] ||
+         ! verify_candidate_bundle "${rejected_app}" ||
+         ! bundles_have_identical_file_bytes "${COPY_ROLLBACK_SOURCE}" "${rejected_app}"; then
+        echo "HARD FAILURE: isolated fresh-install destination no longer matches the verified candidate; preserving it at ${rejected_app}" >&2
+        return 1
+      fi
+      if ! /bin/rm -rf "${rejected_app}"; then
+        echo "HARD FAILURE: could not remove isolated rejected app at ${rejected_app}; stage preserved at ${COPY_ROLLBACK_STAGE}" >&2
+        return 1
+      fi
     fi
   fi
   COPY_ROLLBACK_ACTIVE=0
@@ -181,6 +290,8 @@ clear_copy_transaction_paths() {
   COPY_ROLLBACK_PREVIOUS=""
   COPY_ROLLBACK_STAGE=""
   COPY_ROLLBACK_HAD_PREVIOUS=0
+  COPY_ROLLBACK_NEW_INSTALLED=0
+  COPY_ROLLBACK_SOURCE=""
 }
 
 remove_completed_copy_stage() {
@@ -221,6 +332,14 @@ cleanup_install_run() {
       fi
     fi
   fi
+  if [[ -n "${PUBLIC_INSTALL_LOCK}" && -n "${PUBLIC_INSTALL_LOCK_ROOT}" &&
+        "${PUBLIC_INSTALL_LOCK}" == "${PUBLIC_INSTALL_LOCK_ROOT}/"*.lock ]]; then
+    /bin/rmdir "${PUBLIC_INSTALL_LOCK}" 2>/dev/null ||
+      echo "warning: public-release install lock remains at ${PUBLIC_INSTALL_LOCK}" >&2
+  fi
+  if [[ -d "${RUN_DIR}/public-archive" && ! -L "${RUN_DIR}/public-archive" ]]; then
+    /bin/chmod 700 "${RUN_DIR}/public-archive" 2>/dev/null || true
+  fi
   /bin/rm -rf "${RUN_DIR}" || true
   exit "${status}"
 }
@@ -250,10 +369,376 @@ verify_install_bundle() {
   /usr/bin/codesign --verify --deep --strict "${app}" >/dev/null 2>&1
 }
 
+system_tool_environment() {
+  /usr/bin/env -i \
+    HOME="${HOME}" \
+    USER="$(/usr/bin/id -un)" \
+    LOGNAME="$(/usr/bin/id -un)" \
+    LANG=C \
+    LC_ALL=C \
+    PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+    TMPDIR="${RUN_DIR}" \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    "$@"
+}
+
+rename_exclusive() {
+  local source="$1"
+  local destination="$2"
+  system_tool_environment /usr/bin/ruby -rfiddle/import -e '
+    module DarwinRename
+      extend Fiddle::Importer
+      dlload Fiddle.dlopen(nil)
+      extern "int renameatx_np(int, const char*, int, const char*, unsigned int)"
+    end
+    at_fdcwd = -2
+    rename_exclusive = 0x00000004
+    exit(DarwinRename.renameatx_np(at_fdcwd, ARGV.fetch(0), at_fdcwd, ARGV.fetch(1), rename_exclusive).zero? ? 0 : 75)
+  ' "${source}" "${destination}"
+}
+
+load_public_release_contract() {
+  local manifest="${ROOT_DIR}/.github/release-manifest.json"
+  local facts
+
+  system_tool_environment /bin/bash "${ROOT_DIR}/scripts/check-release-manifest.sh" --manifest-only >/dev/null || {
+    echo "error: the checked-in release manifest is not a valid install authority." >&2
+    return 1
+  }
+  facts="$(system_tool_environment /usr/bin/ruby -rjson -e '
+    manifest = JSON.parse(File.binread(ARGV.fetch(0)))
+    release = manifest.fetch("publishedRelease")
+    product = manifest.fetch("product")
+    policy = manifest.fetch("releasePolicy")
+    values = [
+      release.fetch("version"), release.fetch("build"), release.fetch("tag"),
+      release.fetch("sourceCommit"), release.fetch("artifact"), release.fetch("sha256"),
+      release.fetch("artifactTrust"), release.fetch("signingTrust"), release.fetch("tagTrust"),
+      policy.fetch("developerTeamID"), product.fetch("bundleID"), product.fetch("daemonID"),
+      product.fetch("helperID"), product.fetch("ctlID"), product.fetch("architectures").join(" ")
+    ]
+    abort "published release contract contains an unsafe scalar" unless values.all? do |value|
+      (value.is_a?(String) || value.is_a?(Integer)) && !value.to_s.match?(/[\t\r\n]/)
+    end
+    STDOUT.write(values.join("\t"))
+  ' "${manifest}")" || return 1
+  IFS=$'\t' read -r \
+    PUBLIC_RELEASE_VERSION \
+    PUBLIC_RELEASE_BUILD \
+    PUBLIC_RELEASE_TAG \
+    PUBLIC_RELEASE_SOURCE_COMMIT \
+    PUBLIC_RELEASE_ARTIFACT_NAME \
+    PUBLIC_RELEASE_SHA256 \
+    public_artifact_trust \
+    public_signing_trust \
+    public_tag_trust \
+    PUBLIC_RELEASE_TEAM_ID \
+    public_app_id \
+    public_daemon_id \
+    public_helper_id \
+    public_ctl_id \
+    PUBLIC_RELEASE_ARCHITECTURES <<<"${facts}"
+
+  [[ "${public_artifact_trust}" == "passed" &&
+     "${public_signing_trust}" == "developer-id-notarized" &&
+     "${PUBLIC_RELEASE_BUILD}" =~ ^[1-9][0-9]*$ &&
+     "${PUBLIC_RELEASE_SHA256}" =~ ^[0-9a-f]{64}$ &&
+     "${PUBLIC_RELEASE_SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ &&
+     "${PUBLIC_RELEASE_TEAM_ID}" =~ ^[A-Z0-9]{10}$ &&
+     "${public_app_id}" == "${APP_BUNDLE_ID}" &&
+     "${public_daemon_id}" == "${DAEMON_BUNDLE_ID}" &&
+     "${public_helper_id}" == "${HELPER_BUNDLE_ID}" &&
+     "${public_ctl_id}" == "${CTL_BUNDLE_ID}" ]] || {
+    echo "error: current publishedRelease is not an immutable Developer ID install authority." >&2
+    return 1
+  }
+  if ! system_tool_environment /usr/bin/ruby -e '
+    version = ARGV.fetch(0)
+    parts = version.split(".")
+    exit 75 unless parts.length == 3 && parts.all? { |part| part.match?(/\A(?:0|[1-9][0-9]*)\z/) }
+    exit((parts.map(&:to_i) <=> [1, 4, 0]) >= 0 ? 0 : 75)
+  ' "${PUBLIC_RELEASE_VERSION}"; then
+    echo "error: safe public-archive replacement requires a published Vifty v1.4.0 or newer bundle carrying the root snapshot binding contract." >&2
+    return 1
+  fi
+  [[ "${public_tag_trust}" == "signed-verified" ]] || {
+    echo "error: published Vifty ${PUBLIC_RELEASE_VERSION} lacks the required signed-verified tag trust state." >&2
+    return 1
+  }
+}
+
+verify_public_release_tag() {
+  local tag_object tag_commit parent_commit
+  local tagged_signers="${RUN_DIR}/tagged-release-signers.allowed"
+  local parent_signers="${RUN_DIR}/parent-release-signers.allowed"
+  local current_signers="${ROOT_DIR}/.github/release-signers.allowed"
+
+  tag_object="$(system_tool_environment /usr/bin/git -C "${ROOT_DIR}" rev-parse --verify "refs/tags/${PUBLIC_RELEASE_TAG}^{tag}" 2>/dev/null)" || return 1
+  tag_commit="$(system_tool_environment /usr/bin/git -C "${ROOT_DIR}" rev-parse --verify "refs/tags/${PUBLIC_RELEASE_TAG}^{commit}" 2>/dev/null)" || return 1
+  [[ "${tag_object}" =~ ^[0-9a-f]{40}$ && "${tag_commit}" == "${PUBLIC_RELEASE_SOURCE_COMMIT}" ]] || return 1
+  system_tool_environment /usr/bin/git -C "${ROOT_DIR}" cat-file tag "${tag_object}" \
+    | system_tool_environment /usr/bin/ruby -e '
+        expected = ARGV.fetch(0)
+        data = STDIN.read(1_048_577)
+        exit 75 if data.bytesize > 1_048_576
+        headers, separator, = data.partition("\n\n")
+        exit 75 if separator.empty?
+        tag_headers = headers.lines(chomp: true).grep(/\Atag /)
+        exit(tag_headers == ["tag #{expected}"] ? 0 : 75)
+      ' "${PUBLIC_RELEASE_TAG}" || return 1
+  parent_commit="$(system_tool_environment /usr/bin/git -C "${ROOT_DIR}" rev-parse --verify "${tag_commit}^" 2>/dev/null)" || return 1
+  system_tool_environment /usr/bin/git -C "${ROOT_DIR}" show "${tag_commit}:.github/release-signers.allowed" >"${tagged_signers}" || return 1
+  system_tool_environment /usr/bin/git -C "${ROOT_DIR}" show "${parent_commit}:.github/release-signers.allowed" >"${parent_signers}" || return 1
+  /usr/bin/cmp -s "${current_signers}" "${tagged_signers}" || return 1
+  /usr/bin/cmp -s "${tagged_signers}" "${parent_signers}" || return 1
+  system_tool_environment /usr/bin/git -C "${ROOT_DIR}" \
+    -c gpg.format=ssh \
+    -c gpg.ssh.program=/usr/bin/ssh-keygen \
+    -c "gpg.ssh.allowedSignersFile=${tagged_signers}" \
+    verify-tag "${tag_object}" >/dev/null 2>&1
+}
+
+public_release_component_matches() {
+  local path="$1"
+  local expected_identifier="$2"
+  local requirement details
+  requirement="anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"${PUBLIC_RELEASE_TEAM_ID}\" and identifier \"${expected_identifier}\""
+  /usr/bin/codesign --verify --strict -R="${requirement}" "${path}" >/dev/null 2>&1 || return 1
+  details="$(/usr/bin/codesign -dv --verbose=4 "${path}" 2>&1)" || return 1
+  /usr/bin/grep -Fqx "Identifier=${expected_identifier}" <<<"${details}" || return 1
+  /usr/bin/grep -Fqx "TeamIdentifier=${PUBLIC_RELEASE_TEAM_ID}" <<<"${details}" || return 1
+  /usr/bin/grep -Eq '^Authority=Developer ID Application:' <<<"${details}" || return 1
+  /usr/bin/grep -Fq '(runtime)' <<<"${details}" || return 1
+}
+
+verify_public_release_bundle() {
+  local app="$1"
+  local info_plist="${app}/Contents/Info.plist"
+  local daemon_plist="${app}/Contents/Library/LaunchDaemons/${DAEMON_BUNDLE_ID}.plist"
+  local executable expected_identifier actual_architectures
+
+  system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" verify-public-tree \
+    --app "${app}" \
+    --expected-content-manifest-sha256 "${PUBLIC_CONTENT_MANIFEST_SHA256}" >/dev/null || return 1
+  verify_public_quarantine_state "${app}" || return 1
+  verify_install_bundle "${app}" || return 1
+  /usr/bin/plutil -lint "${info_plist}" >/dev/null || return 1
+  /usr/bin/plutil -lint "${daemon_plist}" >/dev/null || return 1
+  [[ "$(plist_raw_value "${info_plist}" CFBundleIdentifier)" == "${APP_BUNDLE_ID}" &&
+     "$(plist_raw_value "${info_plist}" CFBundleShortVersionString)" == "${PUBLIC_RELEASE_VERSION}" &&
+     "$(plist_raw_value "${info_plist}" CFBundleVersion)" == "${PUBLIC_RELEASE_BUILD}" &&
+     "$(plist_raw_value "${daemon_plist}" Label)" == "${DAEMON_BUNDLE_ID}" &&
+     "$(/usr/libexec/PlistBuddy -c "Print :MachServices:${DAEMON_BUNDLE_ID}" "${daemon_plist}" 2>/dev/null)" == "true" &&
+     "$(plist_raw_value "${daemon_plist}" EnvironmentVariables.VIFTY_XPC_ALLOWED_TEAM_ID)" == "${PUBLIC_RELEASE_TEAM_ID}" ]] || return 1
+  if /usr/bin/plutil -convert json -o - -- "${daemon_plist}" | system_tool_environment /usr/bin/ruby -rjson -e '
+    keys = Hash(JSON.parse(STDIN.read)["EnvironmentVariables"]).keys.grep(/\AVIFTY_XPC_ADHOC_/)
+    exit(keys.empty? ? 1 : 0)
+  '; then
+    return 1
+  fi
+  for executable in Vifty viftyctl ViftyDaemon ViftyHelper; do
+    case "${executable}" in
+      Vifty) expected_identifier="${APP_BUNDLE_ID}" ;;
+      viftyctl) expected_identifier="${CTL_BUNDLE_ID}" ;;
+      ViftyDaemon) expected_identifier="${DAEMON_BUNDLE_ID}" ;;
+      ViftyHelper) expected_identifier="${HELPER_BUNDLE_ID}" ;;
+    esac
+    public_release_component_matches "${app}/Contents/MacOS/${executable}" "${expected_identifier}" || return 1
+    actual_architectures="$(/usr/bin/lipo -archs "${app}/Contents/MacOS/${executable}" 2>/dev/null | /usr/bin/tr ' ' '\n' | /usr/bin/sed '/^$/d' | LC_ALL=C /usr/bin/sort | /usr/bin/xargs)" || return 1
+    [[ "${actual_architectures}" == "${PUBLIC_RELEASE_ARCHITECTURES}" ]] || return 1
+  done
+  public_release_component_matches "${app}" "${APP_BUNDLE_ID}" || return 1
+  /usr/bin/xcrun stapler validate "${app}" >/dev/null 2>&1 || return 1
+  /usr/sbin/spctl --assess --type execute --verbose "${app}" >/dev/null 2>&1
+}
+
+verify_candidate_bundle() {
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    verify_public_release_bundle "$1"
+  else
+    verify_install_bundle "$1"
+  fi
+}
+
+acquire_public_install_lock() {
+  local lock_path
+  lock_path="$(system_tool_environment /usr/bin/ruby -e '
+    destination, owner_text = ARGV
+    owner = Integer(owner_text, 10)
+    destination_parent = File.dirname(File.expand_path(destination))
+    destination_parent_stat = File.lstat(destination_parent)
+    abort "unsafe destination parent" unless destination_parent_stat.directory? && !destination_parent_stat.symlink? &&
+      File.realpath(destination_parent) == destination_parent
+    lock = File.join(destination_parent, ".vifty-public-install.lock")
+    Dir.mkdir(lock, 0700)
+    lock_stat = File.lstat(lock)
+    abort "unsafe public installer lock" unless lock_stat.directory? && !lock_stat.symlink? &&
+      lock_stat.uid == owner && (lock_stat.mode & 0777) == 0700
+    STDOUT.write(lock)
+  ' "${DEST_APP}" "$(/usr/bin/id -u)" 2>/dev/null)" || {
+    echo "error: another public-release install is active, a stale lock requires review, or the private lock directory is unsafe." >&2
+    return 1
+  }
+  PUBLIC_INSTALL_LOCK="${lock_path}"
+  PUBLIC_INSTALL_LOCK_ROOT="${lock_path%/*}"
+  [[ -d "${PUBLIC_INSTALL_LOCK}" && ! -L "${PUBLIC_INSTALL_LOCK}" ]] || return 1
+}
+
+validate_public_install_destination() {
+  system_tool_environment /usr/bin/ruby -e '
+    path = ARGV.fetch(0)
+    stat = File.lstat(path)
+    exit 75 unless stat.directory? && !stat.symlink? && File.realpath(path) == File.expand_path(path)
+  ' "${INSTALL_DIR}"
+}
+
+read_public_quarantine_state() {
+  local path="$1"
+  local names raw hex
+  names="$(/usr/bin/xattr "${path}" 2>/dev/null)" || return 1
+  if ! /usr/bin/grep -Fqx 'com.apple.quarantine' <<<"${names}"; then
+    /usr/bin/printf 'absent'
+    return 0
+  fi
+  raw="$(/usr/bin/xattr -px com.apple.quarantine "${path}" 2>/dev/null)" || return 1
+  hex="$(/usr/bin/printf '%s' "${raw}" | /usr/bin/tr -d '[:space:]' | /usr/bin/tr '[:upper:]' '[:lower:]')"
+  [[ -n "${hex}" && ${#hex} -le 8192 &&
+     $(( ${#hex} % 2 )) -eq 0 &&
+     "${hex}" =~ ^[0-9a-f]+$ ]] || return 1
+  /usr/bin/printf 'present:%s' "${hex}"
+}
+
+capture_public_archive_quarantine() {
+  PUBLIC_QUARANTINE_STATE="$(read_public_quarantine_state "${PUBLIC_RELEASE_ARCHIVE}")" || {
+    echo "error: source archive quarantine state could not be read safely." >&2
+    return 1
+  }
+  case "${PUBLIC_QUARANTINE_STATE}" in
+    absent) PUBLIC_QUARANTINE_HEX="" ;;
+    present:*) PUBLIC_QUARANTINE_HEX="${PUBLIC_QUARANTINE_STATE#present:}" ;;
+    *) return 1 ;;
+  esac
+}
+
+apply_public_archive_quarantine() {
+  local path="$1"
+  [[ -n "${PUBLIC_QUARANTINE_HEX}" ]] || return 0
+  /usr/bin/xattr -wx com.apple.quarantine "${PUBLIC_QUARANTINE_HEX}" "${path}"
+}
+
+verify_public_quarantine_state() {
+  local actual
+  [[ -n "${PUBLIC_QUARANTINE_STATE}" ]] || return 1
+  actual="$(read_public_quarantine_state "$1")" || return 1
+  [[ "${actual}" == "${PUBLIC_QUARANTINE_STATE}" ]]
+}
+
+public_tree_sha256() {
+  local digest
+  digest="$(system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" \
+    public-tree-sha256 --app "$1")" || return 1
+  [[ "${digest}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  /usr/bin/printf '%s' "${digest}"
+}
+
+prepare_public_release_candidate() {
+  local archive_dir="${RUN_DIR}/public-archive"
+  local extract_dir="${RUN_DIR}/public-candidate"
+  local staged_archive summary
+
+  load_public_release_contract || return 1
+  verify_public_release_tag || {
+    echo "error: current publishedRelease tag/signature/signer-policy continuity verification failed." >&2
+    return 1
+  }
+  [[ "$(/usr/bin/basename "${PUBLIC_RELEASE_ARCHIVE}")" == "${PUBLIC_RELEASE_ARTIFACT_NAME}" ]] || {
+    echo "error: public archive must use the canonical name ${PUBLIC_RELEASE_ARTIFACT_NAME}." >&2
+    return 1
+  }
+  capture_public_archive_quarantine || return 1
+  /bin/mkdir "${archive_dir}" "${extract_dir}"
+  /bin/chmod 700 "${archive_dir}" "${extract_dir}"
+  staged_archive="${archive_dir}/${PUBLIC_RELEASE_ARTIFACT_NAME}"
+  system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" stage-public \
+    --archive "${PUBLIC_RELEASE_ARCHIVE}" \
+    --expected-sha "${PUBLIC_RELEASE_SHA256}" \
+    --output "${staged_archive}" >/dev/null || return 1
+  [[ "$(read_public_quarantine_state "${PUBLIC_RELEASE_ARCHIVE}")" == "${PUBLIC_QUARANTINE_STATE}" ]] || {
+    echo "error: source archive quarantine state changed while its bytes were staged." >&2
+    return 1
+  }
+  if [[ -n "${PUBLIC_QUARANTINE_HEX}" ]]; then
+    /bin/chmod 600 "${staged_archive}"
+    apply_public_archive_quarantine "${staged_archive}" || return 1
+    /bin/chmod 400 "${staged_archive}"
+  fi
+  verify_public_quarantine_state "${staged_archive}" || return 1
+  /bin/chmod 500 "${archive_dir}"
+  PUBLIC_CONTENT_MANIFEST_SHA256="$(system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" extract-public \
+    --archive "${staged_archive}" \
+    --expected-sha "${PUBLIC_RELEASE_SHA256}" \
+    --extract-to "${extract_dir}" \
+    --print-content-manifest-sha256)" || return 1
+  [[ "${PUBLIC_CONTENT_MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  apply_public_archive_quarantine "${extract_dir}/${APP_NAME}.app" || return 1
+  verify_public_quarantine_state "${extract_dir}/${APP_NAME}.app" || return 1
+
+  summary="${RUN_DIR}/public-release-verifier-summary.json"
+  system_tool_environment /bin/bash "${ROOT_DIR}/scripts/verify-release-artifact.sh" \
+    --artifact "${staged_archive}" \
+    --release-version "${PUBLIC_RELEASE_VERSION}" \
+    --summary "${summary}" >/dev/null || {
+    echo "error: the exact public archive failed the complete release artifact verifier." >&2
+    return 1
+  }
+  system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/lib/release_artifact_contract.rb" \
+    validate-published-install-summary \
+    "${summary}" \
+    "${ROOT_DIR}/.github/release-manifest.json" \
+    "${ROOT_DIR}" || {
+    echo "error: public archive verifier evidence is not valid for the current publishedRelease." >&2
+    return 1
+  }
+
+  APP_DIR="${extract_dir}/${APP_NAME}.app"
+  HELPER_LIFECYCLE_SOURCE="${APP_DIR}/Contents/Resources/vifty-helper-lifecycle.sh"
+  PUBLIC_HELPER_SHA256="$(sha256_file "${APP_DIR}/Contents/MacOS/ViftyHelper")" || return 1
+  PUBLIC_LIFECYCLE_SHA256="$(sha256_file "${HELPER_LIFECYCLE_SOURCE}")" || return 1
+  [[ "${PUBLIC_HELPER_SHA256}" =~ ^[0-9a-f]{64}$ && "${PUBLIC_LIFECYCLE_SHA256}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  verify_public_release_bundle "${APP_DIR}" || {
+    echo "error: safely extracted public bundle failed exact identity, content, Developer ID, notarization, or Gatekeeper verification." >&2
+    return 1
+  }
+  echo "==> Verified exact published Vifty ${PUBLIC_RELEASE_VERSION} build ${PUBLIC_RELEASE_BUILD} archive, signed tag, complete content binding, Developer ID identity, stapling, and Gatekeeper acceptance."
+}
+
+public_release_is_not_a_downgrade() {
+  [[ -d "${DEST_APP}" && ! -L "${DEST_APP}" ]] || return 0
+  existing_developer_id_source_is_authenticated || return 0
+  local installed_version installed_build
+  installed_version="$(plist_raw_value "${DEST_APP}/Contents/Info.plist" CFBundleShortVersionString)" || return 1
+  installed_build="$(plist_raw_value "${DEST_APP}/Contents/Info.plist" CFBundleVersion)" || return 1
+  system_tool_environment /usr/bin/ruby -e '
+    installed_version, installed_build, candidate_version, candidate_build = ARGV
+    parse = lambda do |value|
+      parts = value.split(".")
+      exit 75 unless parts.length == 3 && parts.all? { |part| part.match?(/\A(?:0|[1-9][0-9]*)\z/) }
+      parts.map(&:to_i)
+    end
+    exit 75 unless installed_build.match?(/\A(?:0|[1-9][0-9]*)\z/) && candidate_build.match?(/\A(?:0|[1-9][0-9]*)\z/)
+    installed = parse.call(installed_version)
+    candidate = parse.call(candidate_version)
+    comparison = installed <=> candidate
+    exit(comparison.negative? || (comparison.zero? && installed_build.to_i <= candidate_build.to_i) ? 0 : 75)
+  ' "${installed_version}" "${installed_build}" "${PUBLIC_RELEASE_VERSION}" "${PUBLIC_RELEASE_BUILD}"
+}
+
 bundles_have_identical_file_bytes() {
   local source_app="$1"
   local copied_app="$2"
-  /usr/bin/ruby -rdigest -rfind -e '
+  system_tool_environment /usr/bin/ruby -rdigest -rfind -e '
     def manifest(root)
       entries = []
       Find.find(root) do |path|
@@ -285,7 +770,14 @@ copy_app_bundle() {
   local staged_app
   local previous_app
 
-  verify_install_bundle "${source_app}" || return 1
+  verify_candidate_bundle "${source_app}" || return 1
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    case "${PUBLIC_DESTINATION_EXPECTATION}" in
+      absent) ! path_exists_without_following "${dest_app}" || return 1 ;;
+      present) path_exists_without_following "${dest_app}" || return 1 ;;
+      *) return 1 ;;
+    esac
+  fi
   if path_exists_without_following "${dest_app}"; then
     [[ -d "${dest_app}" && ! -L "${dest_app}" ]] || return 1
   fi
@@ -305,31 +797,57 @@ copy_app_bundle() {
   staged_app="${stage_dir}/${APP_NAME}.app"
   previous_app="${stage_dir}/previous-${APP_NAME}.app"
 
-  if ! COPYFILE_DISABLE=1 "${DITTO_COMMAND}" --norsrc --noextattr --noqtn "${source_app}" "${staged_app}"; then
-    /bin/rm -rf "${stage_dir}"
-    return 1
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    if ! "${DITTO_COMMAND}" --rsrc --extattr --acl "${source_app}" "${staged_app}"; then
+      /bin/rm -rf "${stage_dir}"
+      return 1
+    fi
+  else
+    if ! COPYFILE_DISABLE=1 "${DITTO_COMMAND}" --norsrc --noextattr --noqtn "${source_app}" "${staged_app}"; then
+      /bin/rm -rf "${stage_dir}"
+      return 1
+    fi
+    /usr/bin/xattr -cr "${staged_app}" 2>/dev/null || true
   fi
-  /usr/bin/xattr -cr "${staged_app}" 2>/dev/null || true
-  if ! verify_install_bundle "${staged_app}" || ! bundles_have_identical_file_bytes "${source_app}" "${staged_app}"; then
+  if ! verify_candidate_bundle "${staged_app}" || ! bundles_have_identical_file_bytes "${source_app}" "${staged_app}"; then
     /bin/rm -rf "${stage_dir}"
     return 1
   fi
 
   COPY_ROLLBACK_ACTIVE=1
+  COPY_ROLLBACK_SOURCE="${source_app}"
   COPY_ROLLBACK_DEST="${dest_app}"
   COPY_ROLLBACK_PREVIOUS="${previous_app}"
   COPY_ROLLBACK_STAGE="${stage_dir}"
-  if path_exists_without_following "${dest_app}"; then
+  COPY_ROLLBACK_NEW_INSTALLED=0
+  if [[ "${INSTALL_MODE}" == "public-release" && "${PUBLIC_DESTINATION_EXPECTATION}" == "absent" ]]; then
+    COPY_ROLLBACK_HAD_PREVIOUS=0
+  elif [[ "${INSTALL_MODE}" == "public-release" && "${PUBLIC_DESTINATION_EXPECTATION}" == "present" ]] &&
+       ! path_exists_without_following "${dest_app}"; then
+    COPY_ROLLBACK_ACTIVE=0
+    /bin/rm -rf "${stage_dir}"
+    return 1
+  elif path_exists_without_following "${dest_app}"; then
     COPY_ROLLBACK_HAD_PREVIOUS=1
-    if ! /bin/mv "${dest_app}" "${previous_app}"; then
+    if ! rename_exclusive "${dest_app}" "${previous_app}"; then
       COPY_ROLLBACK_ACTIVE=0
       /bin/rm -rf "${stage_dir}"
+      return 1
+    fi
+    if [[ "${INSTALL_MODE}" == "public-release" ]] &&
+       { [[ "${PUBLIC_DESTINATION_EXPECTATION}" != "present" ]] ||
+         [[ -z "${PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" ]] ||
+         ! system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" verify-public-tree \
+           --app "${previous_app}" \
+           --expected-content-manifest-sha256 "${PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" >/dev/null; }; then
+      COPY_ROLLBACK_ACTIVE=0
+      echo "HARD FAILURE: atomically isolated previous app does not match the exact preflighted public destination; preserving it at ${previous_app} while helper authority remains frozen." >&2
       return 1
     fi
   else
     COPY_ROLLBACK_HAD_PREVIOUS=0
   fi
-  if ! /bin/mv "${staged_app}" "${dest_app}"; then
+  if ! rename_exclusive "${staged_app}" "${dest_app}"; then
     if rollback_interrupted_copy; then
       /bin/rm -rf "${stage_dir}"
     else
@@ -337,11 +855,12 @@ copy_app_bundle() {
     fi
     return 1
   fi
+  COPY_ROLLBACK_NEW_INSTALLED=1
   if [[ "${FIXTURE_HIDE_PREVIOUS_BEFORE_ROLLBACK}" == "1" && "${COPY_ROLLBACK_HAD_PREVIOUS}" == "1" ]]; then
-    /bin/mv "${previous_app}" "${stage_dir}/displaced-previous-${APP_NAME}.app"
+    rename_exclusive "${previous_app}" "${stage_dir}/displaced-previous-${APP_NAME}.app"
   fi
   if [[ "${FIXTURE_POST_SWAP_VERIFICATION_FAILURE}" == "1" ]] ||
-     ! verify_install_bundle "${dest_app}" ||
+     ! verify_candidate_bundle "${dest_app}" ||
      ! bundles_have_identical_file_bytes "${source_app}" "${dest_app}"; then
     if rollback_interrupted_copy; then
       /bin/rm -rf "${stage_dir}"
@@ -375,7 +894,7 @@ wait_for_app_exit() {
     if [[ -z "$(running_app_pids)" ]]; then
       return 0
     fi
-    sleep 0.2
+    /bin/sleep 0.2
     attempts=$((attempts - 1))
   done
   return 1
@@ -383,7 +902,7 @@ wait_for_app_exit() {
 
 sha256_file() {
   [[ "${FIXTURE_SHA256_FAILURE}" != "1" ]] || return 1
-  /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print $1}'
+  system_tool_environment /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print $1}'
 }
 
 plist_raw_value() {
@@ -542,7 +1061,7 @@ existing_adhoc_development_source_is_authenticated() {
 
 shell_quote() {
   printf "'"
-  printf "%s" "$1" | sed "s/'/'\\\\''/g"
+  /usr/bin/printf "%s" "$1" | /usr/bin/sed "s/'/'\\\\''/g"
   printf "'"
 }
 
@@ -605,6 +1124,9 @@ report_helper_daemon_status() {
 
   if [[ ! -f "${HELPER_TARGET}" ]]; then
     echo "==> Fan helper is not installed yet."
+    if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+      echo "    RESULT: App installed; helper installation or repair is required before manual fan control."
+    fi
     echo "    Open Vifty and choose Install Helper before manual fan control or current-build smoke evidence."
     return 0
   fi
@@ -620,6 +1142,9 @@ report_helper_daemon_status() {
   fi
 
   echo "==> Fan helper daemon differs from the installed app bundle."
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    echo "    RESULT: App installed; helper repair is required before manual fan control."
+  fi
   echo "    Bundled daemon:   ${bundled_sha}"
   echo "    Installed helper: ${installed_sha}"
   echo "    Open Vifty and choose Reinstall Helper or Repair Helper, or run: ${repair_command}"
@@ -908,7 +1433,7 @@ prepared_lifecycle_source_is_unchanged() {
 
 prepare_replacement_authority_freeze() {
   [[ -n "${REPLACEMENT_LIFECYCLE_APP}" ]] || return 0
-  if ! verify_install_bundle "${APP_DIR}"; then
+  if ! verify_candidate_bundle "${APP_DIR}"; then
     echo "error: candidate app identity changed after the initial build verification; refusing to execute its lifecycle or replace the existing app." >&2
     exit 75
   fi
@@ -921,6 +1446,11 @@ prepare_replacement_authority_freeze() {
     exit 75
   fi
   REPLACEMENT_PREPARE_LIFECYCLE_SHA256="$(sha256_file "${REPLACEMENT_PREPARE_LIFECYCLE}")" || exit 75
+  if [[ "${INSTALL_MODE}" == "public-release" &&
+        "${REPLACEMENT_PREPARE_LIFECYCLE_SHA256}" != "${PUBLIC_LIFECYCLE_SHA256}" ]]; then
+    echo "error: isolated public-release lifecycle does not match the exact verified archive binding." >&2
+    exit 75
+  fi
   # This is a public correlation ID, not an authorization nonce. The durable
   # replacement ledger is root-private (0600); last-execution is only a 0644
   # operator-evidence mirror and is never replacement authority.
@@ -931,16 +1461,28 @@ prepare_replacement_authority_freeze() {
   [[ "${REPLACEMENT_TRANSACTION_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || exit 75
   local prepare_status=0
   REPLACEMENT_STAGED_LIFECYCLE="${REPLACEMENT_LIFECYCLE_ROOT}/${REPLACEMENT_TRANSACTION_ID}/vifty-helper-lifecycle.sh"
-  if "${REPLACEMENT_PREPARE_LIFECYCLE}" \
-    --operation repair \
-    --app "${REPLACEMENT_LIFECYCLE_APP}" \
-    --replacement-phase prepare \
-    --replacement-destination "${DEST_APP}" \
-    --replacement-transaction-id "${REPLACEMENT_TRANSACTION_ID}" \
-    --replacement-candidate "${APP_DIR}" \
-    --replacement-previous "${DEST_APP}" \
-    --replacement-lifecycle-source "${HELPER_LIFECYCLE_SOURCE}" \
-    --replacement-lifecycle-sha256 "${REPLACEMENT_PREPARE_LIFECYCLE_SHA256}"; then
+  local prepare_arguments=(
+    --operation repair
+    --app "${REPLACEMENT_LIFECYCLE_APP}"
+    --replacement-phase prepare
+    --replacement-destination "${DEST_APP}"
+    --replacement-transaction-id "${REPLACEMENT_TRANSACTION_ID}"
+    --replacement-candidate "${APP_DIR}"
+    --replacement-previous "${DEST_APP}"
+    --replacement-lifecycle-source "${HELPER_LIFECYCLE_SOURCE}"
+    --replacement-lifecycle-sha256 "${REPLACEMENT_PREPARE_LIFECYCLE_SHA256}"
+  )
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    prepare_arguments+=(
+      --replacement-public-content-manifest-sha256 "${PUBLIC_CONTENT_MANIFEST_SHA256}"
+      --replacement-public-previous-content-manifest-sha256 "${PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}"
+      --replacement-public-version "${PUBLIC_RELEASE_VERSION}"
+      --replacement-public-build "${PUBLIC_RELEASE_BUILD}"
+      --replacement-public-team-id "${PUBLIC_RELEASE_TEAM_ID}"
+      --replacement-public-archive-sha256 "${PUBLIC_RELEASE_SHA256}"
+    )
+  fi
+  if "${REPLACEMENT_PREPARE_LIFECYCLE}" "${prepare_arguments[@]}"; then
     prepare_status=0
   else
     prepare_status=$?
@@ -1122,7 +1664,22 @@ preflight_existing_install_before_replacement() {
     echo "error: existing Vifty app root is a symbolic link; refusing replacement before executing or copying anything." >&2
     exit 75
   fi
-  [[ -e "${DEST_APP}" ]] || return 0
+  if ! path_exists_without_following "${DEST_APP}"; then
+    if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+      local daemon_plist_target="/Library/LaunchDaemons/${DAEMON_BUNDLE_ID}.plist"
+      if path_exists_without_following "${HELPER_TARGET}" ||
+         path_exists_without_following "${daemon_plist_target}" ||
+         /bin/launchctl print "system/${DAEMON_BUNDLE_ID}" >/dev/null 2>&1; then
+        echo "error: no destination app exists, but privileged Vifty helper authority or registration remains; repair or uninstall it before a fresh public-release install." >&2
+        exit 75
+      fi
+      PUBLIC_DESTINATION_EXPECTATION="absent"
+    fi
+    return 0
+  fi
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    PUBLIC_DESTINATION_EXPECTATION="present"
+  fi
   [[ -d "${DEST_APP}" ]] || {
     echo "error: existing Vifty app root is not a directory; refusing replacement." >&2
     exit 75
@@ -1190,6 +1747,15 @@ preflight_existing_install_before_replacement() {
     if ! copy_stable_executable_to_run_dir "${migration_probe_source}" "${migration_probe}"; then
       echo "error: exact new app bundle has no stable regular executable ViftyHelper read-only probe; refusing published-v1.3.2 migration." >&2
       exit 75
+    fi
+    if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+      local isolated_probe_sha
+      isolated_probe_sha="$(sha256_file "${migration_probe}")" || exit 75
+      if [[ "${isolated_probe_sha}" != "${PUBLIC_HELPER_SHA256}" ]] ||
+         ! public_release_component_matches "${migration_probe}" "${HELPER_BUNDLE_ID}"; then
+        echo "error: isolated helper probe does not match the exact verified public archive Developer ID binding." >&2
+        exit 75
+      fi
     fi
 
     local migration_probe_sha_before
@@ -1366,14 +1932,31 @@ if [[ "${ENABLE_ADHOC_XPC}" == "1" && "${CONFIGURATION}" == "release" ]]; then
 fi
 
 if ! /bin/mkdir -p "${INSTALL_DIR}" 2>/dev/null || [[ ! -w "${INSTALL_DIR}" ]]; then
+  if [[ "${INSTALL_MODE}" == "public-release" ]] && path_exists_without_following "${DEST_APP}"; then
+    echo "error: the existing public-release destination ${DEST_APP} cannot be replaced in place; refusing to create a second installation." >&2
+    exit 75
+  fi
   echo "==> ${INSTALL_DIR} is not writable; installing to ~/Applications instead"
   fallback_to_user_applications
 fi
 ADHOC_UID="$(/usr/bin/id -u)"
 
-echo "==> Building ${APP_NAME}.app (${CONFIGURATION})"
-cd "${ROOT_DIR}"
-build_app_bundle
+if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+  validate_public_install_destination || {
+    echo "error: public-release install destination must be a canonical non-symlink Applications directory." >&2
+    exit 75
+  }
+  acquire_public_install_lock || exit 75
+  prepare_public_release_candidate || exit 75
+  public_release_is_not_a_downgrade || {
+    echo "error: refusing to replace an authenticated newer installed Vifty with published ${PUBLIC_RELEASE_VERSION} build ${PUBLIC_RELEASE_BUILD}." >&2
+    exit 75
+  }
+else
+  echo "==> Building ${APP_NAME}.app (${CONFIGURATION})"
+  cd "${ROOT_DIR}"
+  build_app_bundle
+fi
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "error: expected app bundle was not created: ${APP_DIR}" >&2
@@ -1385,13 +1968,38 @@ if [[ ! -x "${APP_DIR}/Contents/MacOS/${APP_NAME}" ]]; then
   exit 1
 fi
 
-if ! verify_install_bundle "${APP_DIR}"; then
-  echo "error: built app bundle failed required-executable or deep code-signature verification before replacement preflight." >&2
+if ! verify_candidate_bundle "${APP_DIR}"; then
+  echo "error: candidate app bundle failed the required install verification before replacement preflight." >&2
   exit 1
 fi
 
 quit_running_app_if_needed
+if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+  if path_exists_without_following "${DEST_APP}"; then
+    PUBLIC_PRECHECK_DESTINATION_EXPECTATION="present"
+    PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256="$(public_tree_sha256 "${DEST_APP}")" || {
+      echo "error: existing public destination could not be bound before replacement preflight." >&2
+      exit 75
+    }
+  else
+    PUBLIC_PRECHECK_DESTINATION_EXPECTATION="absent"
+  fi
+fi
 preflight_existing_install_before_replacement
+if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+  [[ "${PUBLIC_DESTINATION_EXPECTATION}" == "${PUBLIC_PRECHECK_DESTINATION_EXPECTATION}" ]] || {
+    echo "error: public destination presence changed during replacement preflight." >&2
+    exit 75
+  }
+  if [[ "${PUBLIC_DESTINATION_EXPECTATION}" == "present" ]]; then
+    system_tool_environment /usr/bin/ruby "${ROOT_DIR}/scripts/release-candidate-inventory.rb" verify-public-tree \
+      --app "${DEST_APP}" \
+      --expected-content-manifest-sha256 "${PUBLIC_PREVIOUS_CONTENT_MANIFEST_SHA256}" >/dev/null || {
+      echo "error: public destination content changed during replacement preflight." >&2
+      exit 75
+    }
+  fi
+fi
 prepare_replacement_authority_freeze
 if [[ "${REPLACEMENT_AUTHORITY_STATE}" == "frozen" ]] &&
    { ! prepared_lifecycle_source_is_unchanged ||
@@ -1430,7 +2038,11 @@ if ! copy_app_bundle "${APP_DIR}" "${DEST_APP}" 2>"${ERR_LOG}"; then
     echo "error: ad-hoc XPC trust is bound to ${DEST_APP}; refusing path fallback after copy failure." >&2
     exit 1
   fi
-  if [[ "${INSTALL_DIR}" == "/Applications" || "${FIXTURE_SYSTEM_FALLBACK}" == "1" ]]; then
+  if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+    /bin/cat "${ERR_LOG}" >&2 || true
+    echo "error: verified public-release replacement failed; refusing a second destination, fallback, or retry." >&2
+    exit 1
+  elif [[ "${INSTALL_DIR}" == "/Applications" || "${FIXTURE_SYSTEM_FALLBACK}" == "1" ]]; then
     echo "==> Could not write /Applications; installing to ~/Applications instead"
     fallback_to_user_applications
     preflight_existing_install_before_replacement
@@ -1458,14 +2070,18 @@ if ! copy_app_bundle "${APP_DIR}" "${DEST_APP}" 2>"${ERR_LOG}"; then
       exit 1
     fi
   else
-    cat "${ERR_LOG}" >&2 || true
+    /bin/cat "${ERR_LOG}" >&2 || true
     exit 1
   fi
 fi
 
 complete_replacement_after_successful_copy
 
-echo "==> Source, staged, and installed app bundles passed byte-identity and deep code-signature verification"
+if [[ "${INSTALL_MODE}" == "public-release" ]]; then
+  echo "==> Public archive, extracted candidate, staged copy, and installed app passed exact content, Developer ID, notarization, Gatekeeper, and byte-identity verification"
+else
+  echo "==> Source, staged, and installed app bundles passed byte-identity and deep code-signature verification"
+fi
 report_helper_daemon_status
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"

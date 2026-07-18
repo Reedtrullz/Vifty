@@ -40,6 +40,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_INCLUDE_PROBE_LOCAL ?= 0"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_CURRENT_BUILD_INCLUDE_PROBE_LOCAL ?= 1"))
         XCTAssertTrue(makefile.contains("REPAIR_HELPER_APP ?= /Applications/Vifty.app"))
+        XCTAssertTrue(makefile.contains("PUBLIC_RELEASE_ARCHIVE ?="))
         XCTAssertTrue(makefile.contains("CURRENT_BUILD_SOURCE_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)"))
         XCTAssertTrue(makefile.contains("CURRENT_BUILD_SOURCE_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)"))
         XCTAssertTrue(makefile.contains("VALIDATION_EVIDENCE_BUNDLE ?="))
@@ -163,6 +164,9 @@ final class MakefileTrustGateTests: XCTestCase {
 
         XCTAssertTrue(makefile.contains("install-dev-adhoc repair-helper uninstall-helper"))
         XCTAssertTrue(makefile.contains("run-app: ## Build and open the local app bundle"))
+        XCTAssertTrue(makefile.contains("install-public-release: ## Verify and install the exact current published release archive"))
+        XCTAssertTrue(makefile.contains("PUBLIC_RELEASE_ARCHIVE is required and must be an absolute path to the canonical public release zip"))
+        XCTAssertTrue(makefile.contains("CONFIGURATION=release ./scripts/install-vifty.sh --public-release-archive \"$(PUBLIC_RELEASE_ARCHIVE)\""))
         XCTAssertTrue(makefile.contains("verify: ## Run fast local trust gates without installing"))
         XCTAssertTrue(makefile.contains("verify-full: verify release-contract-ruby-tests installer-lifecycle-ruby-tests ui-review-ruby-tests ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
         XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))

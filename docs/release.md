@@ -17,11 +17,23 @@ Vifty has two release modes:
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
 
+Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. The checker is absent from the current `v1.3.2` artifact. The manual bridge takes only an operator-supplied archive selected as the reviewed checkout's current `publishedRelease`, performs no download, verifies the manifest-pinned SHA plus Developer ID/notarization evidence, and enters the existing fail-closed replacement transaction. Do not enable Sparkle for those artifacts; the checker, manual bridge, and future installer requirements live in [auto-update.md](auto-update.md).
+
+## Manual Published-Archive Install
+
+After publication, manifest promotion, and review of the exact public archive, an operator can install that current published release without rebuilding it:
+
+```sh
+scripts/install-vifty.sh --public-release-archive /absolute/path/Vifty-vX.Y.Z.zip
+# or
+make install-public-release PUBLIC_RELEASE_ARCHIVE=/absolute/path/Vifty-vX.Y.Z.zip
+```
+
+Use a reviewed checkout whose `.github/release-manifest.json` has already promoted the intended version to `publishedRelease`. The bridge starts at `v1.4.0`, when the public bundle includes the root snapshot binding contract. The command refuses a candidate, historical entry, direct `.app`, URL, relative path, noncanonical name, or SHA override. It first requires the exact pinned archive checksum and verified signed tag/signer-policy continuity, then performs bounded private extraction and complete content binding. A no-skip verifier result plus independent extracted-bundle checks must then pass version/build, bundle identities, Developer ID TeamID, deep signing, notarization/stapling, and Gatekeeper before installation begins. Installation uses a private per-destination lock and the same Auto/System replacement preflight, authority freeze, exact root snapshot, post-swap verification, and rollback transaction as the source-build lane; it refuses authenticated downgrades and never retries at a second destination after replacement starts. This command does not fetch GitHub, is not invoked by **Update to latest version**, and is not a Sparkle or automatic-update path.
+
 ## Source-First Release Mode
 
 Use this mode when Apple Developer Program credentials are unavailable. It does not create a trusted public binary and must not claim Developer ID signing, notarization, stapling, Gatekeeper approval, or Homebrew trust.
-
-Release-availability checking and in-place installation are separate trusted-release work. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. This checker is absent from the current `v1.3.2` artifact. Do not enable Sparkle for those artifacts; the checker and future installer requirements live in [auto-update.md](auto-update.md).
 
 The required source-first release-note warning is:
 

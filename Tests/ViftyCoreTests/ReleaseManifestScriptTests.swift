@@ -16,7 +16,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Release manifest OK"))
     }
 
-    func testPublishedReleaseFactsRemainHistoricalAndFutureTagsFailClosed() throws {
+    func testPublishedReleaseFactsRemainHistoricalAndAnyCandidateFailsClosed() throws {
         let manifest = try readJSON(
             repositoryRoot.appendingPathComponent(".github/release-manifest.json")
         )
@@ -54,7 +54,18 @@ final class ReleaseManifestScriptTests: XCTestCase {
             compatibilityScope["attestation"] as? String,
             "docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md"
         )
-        XCTAssertEqual(manifest["candidate"] as? NSNull, NSNull())
+        if manifest["candidate"] is NSNull {
+            XCTAssertEqual(manifest["candidate"] as? NSNull, NSNull())
+        } else {
+            let candidate = try XCTUnwrap(manifest["candidate"] as? [String: Any])
+            XCTAssertEqual(candidate["sha256"] as? NSNull, NSNull())
+            XCTAssertEqual(candidate["artifactTrust"] as? String, "pending")
+            XCTAssertEqual(candidate["signingTrust"] as? String, "pending")
+            XCTAssertEqual(candidate["tagTrust"] as? String, "signed-required")
+            XCTAssertEqual(candidate["installedReleaseReview"] as? String, "pending")
+            XCTAssertEqual(candidate["manualCompatibility"] as? String, "pending")
+            XCTAssertEqual(candidate["manualCompatibilityScope"] as? NSNull, NSNull())
+        }
     }
 
     func testCheckerRejectsPassedManualCompatibilityWithoutScope() throws {

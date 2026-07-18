@@ -31,6 +31,20 @@ An eligible build's automatic or manual check sends an ordinary HTTPS request to
 
 The request uses an ephemeral session with no persistent cookie, URL cache, or credential store. Vifty stores only the opt-out preference, timestamps, an HTTP ETag, and the last validated release version in the private `~/Library/Application Support/Vifty/software-update.json` file. An empty private owner-lock file in the same directory ensures only one running Vifty instance owns this state and request lane. The lock is acquired atomically, keyed by its filesystem identity rather than a path spelling, and held by its open descriptor; an instance that loses ownership remains fail-closed until relaunch. Both files use descriptor-anchored, no-follow, crash-durable storage. Turning automatic checking off cancels scheduled automatic checks; it does not enable a different update channel.
 
+## Manual Verified Public-Archive Install Bridge
+
+Current source includes an operator-invoked bridge for a public archive that has already been downloaded manually. From a reviewed source checkout whose manifest has promoted that release to the single current `publishedRelease`, run:
+
+```sh
+scripts/install-vifty.sh --public-release-archive /absolute/path/Vifty-vX.Y.Z.zip
+# or
+make install-public-release PUBLIC_RELEASE_ARCHIVE=/absolute/path/Vifty-vX.Y.Z.zip
+```
+
+This bridge is deliberately narrower than a general installer and starts with `v1.4.0`; the historical `v1.3.2` bundle lacks its root snapshot binding contract. It selects only `.github/release-manifest.json` `publishedRelease`, requires the exact canonical filename, pinned SHA-256, and verified signed tag, and rejects a candidate, historical release, direct `.app`, relative path, URL, or other archive. After that archive-level authority passes, safe bounded private extraction establishes a complete candidate-content binding. The public release verifier and independent extracted-bundle checks must then confirm the exact version/build, bundle identities, Developer ID TeamID, deep signature, notarization/stapling, and Gatekeeper result without skip flags before the candidate feeds the unchanged fail-closed app-replacement transaction, including a private per-destination lock, existing Auto/System preflight, authority freeze, post-swap verification, authenticated downgrade refusal, and rollback behavior without a second-destination fallback.
+
+The bridge performs no network request and never chooses or downloads a release. The in-app advisory checker still opens only the locally constructed GitHub tag page; the user separately downloads the canonical archive and explicitly invokes the bridge from a trusted checkout. This is a manual/operator migration path for the first checker-aware public release and later recovery or verification work. It is not automatic update, silent installation, Sparkle, or evidence that API filename/size metadata authenticated an archive.
+
 ## Future Trusted In-Place Update Lane
 
 Use [Sparkle 2](https://sparkle-project.org/documentation/) only if Vifty later adds an in-place installer. That work is separate from the advisory checker above. It must enter Vifty's documented app-replacement transaction rather than replacing the bundle independently, and it should be enabled only after the release flow can produce and verify all of these:

@@ -182,9 +182,14 @@ make source-first-readiness
 # Install the release app bundle
 make install
 
+# Verify and install a manually downloaded exact published release archive
+make install-public-release PUBLIC_RELEASE_ARCHIVE=/absolute/path/Vifty-vX.Y.Z.zip
+
 # Optional: build an unsigned local installer package in .build/
 make pkg
 ```
+
+`install-public-release` is a manual operator bridge, not an updater or download command. It accepts only an absolute path to the canonical archive named by the current checkout's `.github/release-manifest.json` `publishedRelease`; it does not select a candidate, historical entry, arbitrary app bundle, URL, or API-supplied asset. The lane begins with `v1.4.0`, whose lifecycle carries the root snapshot binding contract; the historical `v1.3.2` artifact remains a manual Finder/Homebrew install and is not accepted by this bridge. After the signed tag and manifest-pinned archive SHA-256 pass, bounded private extraction establishes the complete candidate-content binding. The no-skip release verifier and independent extracted-bundle checks must then pass the exact version/build, bundle identities, Developer ID TeamID, deep code seal, notarization/stapling, and Gatekeeper requirements before the candidate enters the same fail-closed app-replacement transaction, Auto/System preflight, post-swap verification, and rollback boundary as the source installer. It holds a private per-destination lock, rejects authenticated downgrades, propagates a valid source-archive quarantine marker, avoids blanket-clearing public candidate extended attributes, and never falls back to a second destination after replacement starts. The command never downloads an archive, does not turn the advisory **Update to latest version** action into executable installation, and is not Sparkle. After a newly published release is promoted to `publishedRelease`, use a reviewed checkout containing that promotion and pass the archive downloaded manually from its fixed GitHub tag page.
 
 If SwiftPM's local `.build/build.db` becomes unhealthy, the local installer retries once in a bounded `.build/vifty-install.*` run directory and removes that directory on success, failure, or handled termination. A caller-provided `SWIFT_BUILD_PATH` is never removed or replaced. Set `SWIFT_BUILD_PATH` yourself when you want a stable reusable build-product path. For other trust gates, keep the build reproducible by moving SwiftPM products to a fresh path:
 

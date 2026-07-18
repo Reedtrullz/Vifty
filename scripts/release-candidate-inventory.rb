@@ -26,6 +26,7 @@ module ViftyCandidateInventory
   MAX_FILE_BYTES = 256 * 1024 * 1024
   MAX_TOTAL_EXPANDED_BYTES = 1024 * 1024 * 1024
   MAX_COMMAND_OUTPUT_BYTES = 64 * 1024
+  SHA256_PATTERN = /\A[0-9a-f]{64}\z/
 
   def fail_inventory(message)
     raise CandidateInventoryError, message
@@ -240,6 +241,10 @@ module ViftyCandidateInventory
     second = snapshot_tree(root)
     fail_inventory("candidate tree changed between inventory passes") unless first == second
     first
+  end
+
+  def content_manifest_sha256(root)
+    Digest::SHA256.hexdigest(JSON.generate(stable_tree(root)))
   end
 
   def canonical_json(value)
@@ -468,6 +473,9 @@ module ViftyCandidateInventory
       name
     end
     fail_inventory("candidate archive contains duplicate entries") unless normalized.uniq.length == normalized.length
+    casefolded = normalized.map(&:downcase)
+    fail_inventory("candidate archive contains case-colliding entries") unless
+      casefolded.uniq.length == casefolded.length
 
     verbose, verbose_stderr, verbose_status, verbose_exceeded, verbose_stderr_exceeded =
       run_bounded_command(
@@ -499,15 +507,21 @@ module ViftyCandidateInventory
     end
   end
 
-  def stage_verified_archive(source, record, staging_directory)
+  def stage_verified_archive(source, record, staging_directory, target_name: "candidate-archive.zip")
     source = File.expand_path(source)
-    target = File.join(staging_directory, "candidate-archive.zip")
+    target_name = target_name.dup.force_encoding(Encoding::UTF_8)
+    fail_inventory("staged candidate archive name must be valid UTF-8") unless target_name.valid_encoding?
+    validate_relative_path!(target_name, "staged candidate archive name")
+    fail_inventory("staged candidate archive name must be a basename") unless
+      File.basename(target_name) == target_name
+    target = File.join(staging_directory, target_name)
     before = regular_file!(source, "candidate archive")
     fail_inventory("candidate archive exceeds #{MAX_ARCHIVE_BYTES} bytes") if before.size > MAX_ARCHIVE_BYTES
     nofollow = File.const_defined?(:NOFOLLOW) ? File::NOFOLLOW : 0
     digest = Digest::SHA256.new
     copied = 0
     completed = false
+    staged_identity = nil
 
     File.open(source, File::RDONLY | File::BINARY | nofollow) do |input|
       opened = input.stat
@@ -529,6 +543,7 @@ module ViftyCandidateInventory
         output.flush
         output.fsync
         output.chmod(0o400)
+        staged_identity = stable_stat_identity(output.stat)
       end
       fail_inventory("candidate archive changed while staging") unless
         stable_stat_identity(input.stat) == stable_stat_identity(opened)
@@ -540,6 +555,8 @@ module ViftyCandidateInventory
     fail_inventory("candidate archive size mismatch") unless copied == record.fetch("size")
     fail_inventory("candidate archive SHA-256 mismatch") unless digest.hexdigest == record.fetch("sha256")
     staged = regular_file!(target, "staged candidate archive")
+    fail_inventory("staged candidate archive path changed after creation") unless
+      stable_stat_identity(staged) == staged_identity
     fail_inventory("staged candidate archive has unsafe permissions") unless
       (staged.mode & 0o777) == 0o400
     fail_inventory("staged candidate archive size mismatch") unless staged.size == copied
@@ -588,6 +605,58 @@ module ViftyCandidateInventory
     File.join(destination, "Vifty.app")
   rescue Errno::ENOENT, Errno::ENOTDIR
     fail_inventory("candidate extraction destination is missing: #{destination}")
+  end
+
+  def stage_public_archive(archive:, expected_sha:, output:)
+    fail_inventory("--expected-sha must be a lowercase SHA-256 digest") unless
+      expected_sha.is_a?(String) && expected_sha.match?(SHA256_PATTERN)
+    archive = File.expand_path(archive)
+    output = File.expand_path(output)
+    source_stat = regular_file!(archive, "candidate archive")
+    fail_inventory("candidate archive exceeds #{MAX_ARCHIVE_BYTES} bytes") if
+      source_stat.size > MAX_ARCHIVE_BYTES
+    parent = File.dirname(output)
+    parent_stat = File.lstat(parent)
+    fail_inventory("public archive staging parent must be a real directory") unless
+      parent_stat.directory? && !parent_stat.symlink?
+    fail_inventory("public archive staging output already exists") if File.exist?(output) || File.symlink?(output)
+    record = {
+      "size" => source_stat.size,
+      "sha256" => expected_sha
+    }
+    staged = stage_verified_archive(archive, record, parent, target_name: File.basename(output))
+    fail_inventory("public archive staging path mismatch") unless staged == output
+    staged
+  rescue Errno::ENOENT, Errno::ENOTDIR
+    fail_inventory("public archive staging parent is missing: #{File.dirname(output)}")
+  end
+
+  def extract_public_archive(archive:, expected_sha:, destination:)
+    fail_inventory("--expected-sha must be a lowercase SHA-256 digest") unless
+      expected_sha.is_a?(String) && expected_sha.match?(SHA256_PATTERN)
+    archive = File.expand_path(archive)
+    source_stat = regular_file!(archive, "candidate archive")
+    fail_inventory("candidate archive exceeds #{MAX_ARCHIVE_BYTES} bytes") if
+      source_stat.size > MAX_ARCHIVE_BYTES
+    record = {
+      "size" => source_stat.size,
+      "sha256" => expected_sha
+    }
+    app = with_staged_verified_archive(archive, record) do |staged_archive|
+      extracted_app = extract_archive(archive: staged_archive, destination: destination)
+      stable_tree(extracted_app)
+      extracted_app
+    end
+    [app, content_manifest_sha256(app)]
+  end
+
+  def verify_public_tree(app:, expected_content_manifest_sha256:)
+    fail_inventory("--expected-content-manifest-sha256 must be a lowercase SHA-256 digest") unless
+      expected_content_manifest_sha256.is_a?(String) &&
+      expected_content_manifest_sha256.match?(SHA256_PATTERN)
+    actual = content_manifest_sha256(app)
+    fail_inventory("candidate tree does not match the exact public archive content binding") unless
+      actual == expected_content_manifest_sha256
   end
 
   def verify_tree(app:, inventory:)
@@ -645,7 +714,7 @@ end
 options = {}
 command = ARGV.shift
 parser = OptionParser.new do |opts|
-  opts.banner = "Usage: scripts/release-candidate-inventory.rb <create|extract|verify-tree> [options]"
+  opts.banner = "Usage: scripts/release-candidate-inventory.rb <create|extract|stage-public|extract-public|public-tree-sha256|verify-public-tree|verify-tree> [options]"
   opts.on("--app PATH") { |value| options[:app] = value }
   opts.on("--archive PATH") { |value| options[:archive] = value }
   opts.on("--supplemental PATH") { |value| options[:supplemental] = value }
@@ -653,6 +722,11 @@ parser = OptionParser.new do |opts|
   opts.on("--inventory PATH") { |value| options[:inventory] = value }
   opts.on("--handoff-dir PATH") { |value| options[:handoff_dir] = value }
   opts.on("--extract-to PATH") { |value| options[:extract_to] = value }
+  opts.on("--expected-sha SHA256") { |value| options[:expected_sha] = value }
+  opts.on("--expected-content-manifest-sha256 SHA256") do |value|
+    options[:expected_content_manifest_sha256] = value
+  end
+  opts.on("--print-content-manifest-sha256") { options[:print_content_manifest_sha256] = true }
 end
 
 begin
@@ -692,6 +766,42 @@ begin
       extract_to: options[:extract_to]
     )
     puts "Candidate handoff verified and extracted: #{app}"
+  when "extract-public"
+    %i[archive expected_sha extract_to].each do |key|
+      ViftyCandidateInventory.fail_inventory("--#{key.to_s.tr('_', '-')} is required") if options[key].to_s.empty?
+    end
+    app, content_manifest_sha256 = ViftyCandidateInventory.extract_public_archive(
+      archive: options[:archive],
+      expected_sha: options[:expected_sha],
+      destination: options[:extract_to]
+    )
+    if options[:print_content_manifest_sha256]
+      puts content_manifest_sha256
+    else
+      puts "Public release archive verified and extracted: #{app}"
+    end
+  when "stage-public"
+    %i[archive expected_sha output].each do |key|
+      ViftyCandidateInventory.fail_inventory("--#{key.to_s.tr('_', '-')} is required") if options[key].to_s.empty?
+    end
+    staged = ViftyCandidateInventory.stage_public_archive(
+      archive: options[:archive],
+      expected_sha: options[:expected_sha],
+      output: options[:output]
+    )
+    puts "Public release archive verified and staged: #{staged}"
+  when "verify-public-tree"
+    %i[app expected_content_manifest_sha256].each do |key|
+      ViftyCandidateInventory.fail_inventory("--#{key.to_s.tr('_', '-')} is required") if options[key].to_s.empty?
+    end
+    ViftyCandidateInventory.verify_public_tree(
+      app: options[:app],
+      expected_content_manifest_sha256: options[:expected_content_manifest_sha256]
+    )
+    puts "Candidate tree matches exact public archive content binding."
+  when "public-tree-sha256"
+    ViftyCandidateInventory.fail_inventory("--app is required") if options[:app].to_s.empty?
+    puts ViftyCandidateInventory.content_manifest_sha256(options[:app])
   when "verify-tree"
     %i[app inventory].each do |key|
       ViftyCandidateInventory.fail_inventory("--#{key} is required") if options[key].to_s.empty?
@@ -700,7 +810,9 @@ begin
     ViftyCandidateInventory.verify_tree(app: options[:app], inventory: inventory)
     puts "Candidate tree matches complete inventory."
   else
-    ViftyCandidateInventory.fail_inventory("command must be create, extract, or verify-tree")
+    ViftyCandidateInventory.fail_inventory(
+      "command must be create, extract, stage-public, extract-public, public-tree-sha256, verify-public-tree, or verify-tree"
+    )
   end
 rescue OptionParser::ParseError, CandidateInventoryError, JSON::ParserError => error
   warn "error: #{error.message}"
