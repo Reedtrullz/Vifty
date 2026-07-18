@@ -184,17 +184,24 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     }
 
     func testAgentInstructionsTrackCurrentReleaseBoundary() throws {
+        let manifest = try releaseManifest()
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
+        let publishedTag = try XCTUnwrap(published["tag"] as? String)
         let agents = try read("AGENTS.md")
 
         XCTAssertTrue(agents.contains("`v1.1.1` remains the immutable source-first hotfix and `v1.1.0` is superseded"))
-        XCTAssertTrue(agents.contains("`v1.3.2` is the published Developer ID release; its exact public artifact"))
+        XCTAssertTrue(agents.contains("`\(publishedTag)` is the published Developer ID release; its exact public artifact"))
         XCTAssertTrue(agents.contains("notarization, stapling, TeamID, and Gatekeeper checks passed"))
-        XCTAssertTrue(agents.contains("Signed-helper parity, installed release-mode review, explicit Auto restoration, and manual Fixed/Curve hardware compatibility remain separate claims for the exact `v1.3.2` binary"))
+        XCTAssertTrue(agents.contains("Signed-helper parity, installed release-mode review, explicit Auto restoration, and manual Fixed/Curve hardware compatibility remain separate claims for the exact `\(publishedTag)` binary"))
         XCTAssertTrue(agents.contains("Trusted binary releases use `.github/workflows/release.yml`"))
         XCTAssertFalse(agents.contains("`v1.1.0` is source-first because Apple Developer Program credentials are unavailable"))
     }
 
     func testSupportTriageGuideCoversEvidenceBuckets() throws {
+        let manifest = try releaseManifest()
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
+        let publishedVersion = try XCTUnwrap(published["version"] as? String)
+        let publishedTag = try XCTUnwrap(published["tag"] as? String)
         let agentCoolingTemplate = try read(".github/ISSUE_TEMPLATE/agent-cooling.yml")
         let releaseTrustTemplate = try read(".github/ISSUE_TEMPLATE/release-trust.yml")
         let contributing = try read("CONTRIBUTING.md")
@@ -259,7 +266,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseTrustTemplate.contains("name: Release Trust Report"))
         XCTAssertTrue(releaseTrustTemplate.contains("labels: [\"release-trust\"]"))
         XCTAssertTrue(releaseTrustTemplate.contains("scripts/check-release-readiness.sh --mode source-first --version 1.1.1 --repo Reedtrullz/Vifty --json"))
-        XCTAssertTrue(releaseTrustTemplate.contains("scripts/check-release-readiness.sh --mode developer-id --version 1.3.2 --repo Reedtrullz/Vifty --require-source-ref v1.3.2 --json"))
+        XCTAssertTrue(
+            releaseTrustTemplate.contains(
+                "scripts/check-release-readiness.sh --mode developer-id --version \(publishedVersion) --repo Reedtrullz/Vifty --require-source-ref \(publishedTag) --json"
+            )
+        )
         XCTAssertTrue(releaseTrustTemplate.contains("after publication, prefer the immutable tag or release commit SHA"))
         XCTAssertTrue(releaseTrustTemplate.contains("Vifty-v<version>-unsigned-dev.zip"))
         XCTAssertTrue(releaseTrustTemplate.contains("Unsigned-dev checksum missing or mismatched"))
@@ -452,30 +463,76 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     }
 
     func testReleaseStatusKeepsHomebrewInstallClaimsHonest() throws {
-        let manifestData = try Data(
-            contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent(".github/release-manifest.json")
-        )
-        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
+        let manifest = try releaseManifest()
         let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
         let publishedVersion = try XCTUnwrap(published["version"] as? String)
         let publishedTag = try XCTUnwrap(published["tag"] as? String)
         let publishedBuild = try XCTUnwrap(published["build"] as? Int)
         let publishedSHA = try XCTUnwrap(published["sha256"] as? String)
         let publishedArtifact = try XCTUnwrap(published["artifact"] as? String)
+        let publishedChecksumAsset = try XCTUnwrap(published["checksumAsset"] as? String)
+        let publishedArtifactTrust = try XCTUnwrap(published["artifactTrust"] as? String)
+        let publishedSigningTrust = try XCTUnwrap(published["signingTrust"] as? String)
+        let publishedTagTrust = try XCTUnwrap(published["tagTrust"] as? String)
+        let publishedSourceCommit = try XCTUnwrap(published["sourceCommit"] as? String)
+        let publishedSourceCIRunID = try XCTUnwrap(published["sourceCIRunID"] as? Int)
+        let publishedReleaseWorkflowRunID = try XCTUnwrap(published["releaseWorkflowRunID"] as? Int)
+        let publishedInstalledReview = try XCTUnwrap(published["installedReleaseReview"] as? String)
+        let publishedManualCompatibility = try XCTUnwrap(published["manualCompatibility"] as? String)
+        let releasePolicy = try XCTUnwrap(manifest["releasePolicy"] as? [String: Any])
+        let developerTeamID = try XCTUnwrap(releasePolicy["developerTeamID"] as? String)
+        let signedTagsRequiredFromVersion = try XCTUnwrap(releasePolicy["signedTagsRequiredFromVersion"] as? String)
         let candidate = manifest["candidate"] as? [String: Any]
+        let allReleaseEntries =
+            (manifest["historicalReleases"] as? [[String: Any]] ?? []) + [published]
+        let immutableV132 = try XCTUnwrap(
+            allReleaseEntries.first { ($0["version"] as? String) == "1.3.2" },
+            "The immutable v1.3.2 publication record must remain present after later promotions."
+        )
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")
         let release = try read("docs/release.md")
+        let autoUpdate = try read("docs/auto-update.md")
         let uiReview = try read("docs/ui-review/README.md")
         let cask = try read("Casks/vifty.rb")
         let sourceFirstNotes = try read("docs/release-notes/v1.1.0.md")
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
         let unsignedDigestBoundary = "The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes."
 
+        XCTAssertEqual(immutableV132["build"] as? Int, 7)
+        XCTAssertEqual(immutableV132["tag"] as? String, "v1.3.2")
+        XCTAssertEqual(immutableV132["sourceCommit"] as? String, "6a771c2ea10386bf7a0a8369a759930f01d56062")
+        XCTAssertEqual(immutableV132["sourceCIRunID"] as? Int, 29_284_751_837)
+        XCTAssertEqual(immutableV132["releaseWorkflowRunID"] as? Int, 29_285_576_026)
+        XCTAssertEqual(immutableV132["artifact"] as? String, "Vifty-v1.3.2.zip")
+        XCTAssertEqual(immutableV132["sha256"] as? String, "8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0")
+        XCTAssertEqual(immutableV132["artifactTrust"] as? String, "passed")
+        XCTAssertEqual(immutableV132["signingTrust"] as? String, "developer-id-notarized")
+        XCTAssertEqual(immutableV132["installedReleaseReview"] as? String, "passed")
+        XCTAssertEqual(immutableV132["manualCompatibility"] as? String, "passed-auto-restored")
+
         XCTAssertTrue(cask.contains("version \"\(publishedVersion)\""))
         XCTAssertTrue(cask.contains("sha256 \"\(publishedSHA)\""))
         XCTAssertFalse(cask.contains("disable!"))
+        for document in [readme, releaseStatus, release, autoUpdate] {
+            XCTAssertTrue(document.contains("> Published: `\(publishedTag)` (version `\(publishedVersion)`, build `\(publishedBuild)`),"))
+            XCTAssertTrue(document.contains("> Canonical artifact: `\(publishedArtifact)` with checksum asset `\(publishedChecksumAsset)` and SHA-256 `\(publishedSHA)`."))
+            XCTAssertTrue(
+                document.contains(
+                    "> Public artifact trust: `\(publishedArtifactTrust)` / `\(publishedSigningTrust)` for TeamID `\(developerTeamID)`; source `\(publishedSourceCommit)`, CI run `\(publishedSourceCIRunID)`, Release run `\(publishedReleaseWorkflowRunID)`."
+                )
+            )
+            XCTAssertTrue(
+                document.contains(
+                    "> Tag policy: `\(publishedTag)` remains recorded as `\(publishedTagTrust)` evidence; signed tags are mandatory from version `\(signedTagsRequiredFromVersion)` onward."
+                )
+            )
+            XCTAssertTrue(document.contains("> Separate exact-build claims: installed release review `\(publishedInstalledReview)`; manual Fixed/Curve/Auto compatibility `\(publishedManualCompatibility)`"))
+        }
+        XCTAssertTrue(readme.contains("The lane begins with `v1.4.0`"))
+        XCTAssertTrue(autoUpdate.contains("starts with `v1.4.0`"))
+        XCTAssertTrue(release.contains("The bridge starts at `v1.4.0`"))
+        XCTAssertTrue(releaseStatus.contains("for promoted `v1.4.0` and newer releases"))
         XCTAssertTrue(readme.contains("Vifty `\(publishedTag)` is the current published Developer ID release."))
         XCTAssertTrue(readme.contains("`v1.1.1` remains the published source-first fallback"))
         XCTAssertTrue(readme.contains("**Three fan modes** — Auto, Fixed RPM with optional percentage-aware per-fan targets, and a 3-point Temperature Curve."))
@@ -501,7 +558,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(uiReview.contains("not current-source UI evidence"))
         XCTAssertTrue(uiReview.contains("not the full evidence bundle, a human visual or VoiceOver attestation"))
         XCTAssertFalse(uiReview.contains("no portable automated checkpoint exists yet"))
-        XCTAssertTrue(readme.contains("The exact installed public `\(publishedTag)` build also passed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`"))
+        XCTAssertTrue(readme.contains("The exact installed public `v1.3.2` build also passed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`"))
         XCTAssertTrue(readme.contains("Installed-binary parity, explicit Auto restoration, and manual hardware compatibility are now separately reviewed for that exact build on `MacBookPro18,1`"))
         XCTAssertFalse(readme.contains("brew install --cask vifty"))
         XCTAssertTrue(release.contains("[release-status.md](release-status.md)"))
@@ -593,12 +650,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         )
         XCTAssertTrue(releaseStatus.contains("`\(publishedTag)` is the current published Developer ID release."))
         XCTAssertTrue(releaseStatus.contains("`v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
-        XCTAssertTrue(releaseStatus.contains("Developer ID publication evidence for immutable `\(publishedTag)`: at publication time"))
+        XCTAssertTrue(releaseStatus.contains("Developer ID publication evidence for immutable `v1.3.2`: at publication time"))
         XCTAssertTrue(releaseStatus.contains("The published workflow summary and prior independent downloaded-artifact verification record passes for the exact public zip and cask."))
         XCTAssertTrue(releaseStatus.contains("The public `\(publishedArtifact)` and checked-in cask both resolve to SHA-256 `\(publishedSHA)`"))
         XCTAssertTrue(releaseStatus.contains("Do not use another organization's team or certificate for Vifty."))
         XCTAssertTrue(releaseStatus.contains("Published Developer ID release:** `\(publishedTag)` public artifact and cask trust checks passed"))
-        XCTAssertTrue(releaseStatus.contains("The exact installed public `\(publishedTag)` build `\(publishedBuild)` passed release-mode review on `MacBookPro18,1`."))
+        XCTAssertTrue(releaseStatus.contains("The exact installed public `v1.3.2` build `7` passed release-mode review on `MacBookPro18,1`."))
         XCTAssertTrue(releaseStatus.contains("validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json"))
         XCTAssertTrue(releaseStatus.contains("The separate supported-hardware review also passed with `manualSmokeTestResult: \"passed-auto-restored\"`."))
         XCTAssertTrue(releaseStatus.contains("active GitHub ruleset `18940029` (`Immutable Vifty release tags`)"))
@@ -650,6 +707,54 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
                     "The manifest candidate remains `null` until a separate release-prep pull request passes exact-main CI"
                 )
             )
+        }
+        if publishedInstalledReview == "passed" {
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "The exact installed public `\(publishedTag)` build `\(publishedBuild)` passed release-mode review"
+                )
+            )
+        } else {
+            XCTAssertEqual(publishedInstalledReview, "pending")
+            XCTAssertFalse(
+                releaseStatus.contains(
+                    "The exact installed public `\(publishedTag)` build `\(publishedBuild)` passed release-mode review"
+                ),
+                "A newly promoted release must not inherit the prior binary's installed-review claim."
+            )
+        }
+        if publishedManualCompatibility == "passed-auto-restored" {
+            let scope = try XCTUnwrap(published["manualCompatibilityScope"] as? [String: Any])
+            let models = try XCTUnwrap(scope["modelIdentifiers"] as? [String])
+            let reviewReport = try XCTUnwrap(scope["reviewReport"] as? String)
+            let attestation = try XCTUnwrap(scope["attestation"] as? String)
+            for model in models {
+                XCTAssertTrue(releaseStatus.contains("`\(model)`"))
+            }
+            XCTAssertTrue(releaseStatus.contains(reviewReport))
+            XCTAssertTrue(releaseStatus.contains(attestation))
+        } else {
+            XCTAssertEqual(publishedManualCompatibility, "pending")
+            XCTAssertNil(published["manualCompatibilityScope"] as? [String: Any])
+            XCTAssertFalse(
+                releaseStatus.contains(
+                    "manual Fixed/Curve compatibility also passed as separately reviewed claims for exact build \(publishedBuild)"
+                ),
+                "A newly promoted release must not inherit prior-version supervised hardware evidence."
+            )
+        }
+
+        let newestManifestVersion = try XCTUnwrap(
+            candidate?["version"] as? String ?? published["version"] as? String
+        )
+        if isVersion(newestManifestVersion, atLeast: "1.4.1") {
+            XCTAssertTrue(releaseStatus.contains("`v1.4.0`"))
+            XCTAssertTrue(releaseStatus.lowercased().contains("retired without publication"))
+            XCTAssertTrue(releaseStatus.contains("29658220561"))
+            XCTAssertTrue(releaseStatus.contains("08259da0ad43b720938246848a5dae3bfc2221e0"))
+            XCTAssertTrue(releaseStatus.contains("8b39f8701ec3ea3d3e946de335f7cf95ee0b1908"))
+            XCTAssertTrue(releaseStatus.contains("Do not rerun"))
+            XCTAssertTrue(releaseStatus.contains("delete, move, or reuse"))
         }
         XCTAssertTrue(releaseStatus.contains(publishedSHA))
         XCTAssertTrue(releaseStatus.contains("`v1.1.1` remains the published source-first fallback."))
@@ -996,14 +1101,42 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     }
 
     func testAutoUpdateDocsKeepSourceFirstBuildsOutOfSelfUpdatingLane() throws {
+        let manifest = try releaseManifest()
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
+        let publishedVersion = try XCTUnwrap(published["version"] as? String)
+        let publishedTag = try XCTUnwrap(published["tag"] as? String)
+        let publishedContainsAdvisoryChecker = isVersion(publishedVersion, atLeast: "1.4.1")
         let autoUpdate = try read("docs/auto-update.md")
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")
 
         XCTAssertTrue(readme.contains("[docs/auto-update.md](docs/auto-update.md)"))
         XCTAssertTrue(releaseStatus.contains("[auto-update.md](auto-update.md)"))
-        XCTAssertTrue(autoUpdate.contains("Auto-update is not enabled for `v1.3.2`"))
-        XCTAssertTrue(autoUpdate.contains("exact public binary does not contain update checking"))
+        XCTAssertTrue(autoUpdate.contains("Auto-update is not enabled for `\(publishedTag)`"))
+        if publishedContainsAdvisoryChecker {
+            XCTAssertTrue(
+                autoUpdate.contains(
+                    "its exact public binary contains the advisory release-availability checker but no executable downloader or in-place installer"
+                )
+            )
+            XCTAssertTrue(
+                readme.contains(
+                    "The exact public `\(publishedTag)` binary contains the advisory release-availability checker"
+                )
+            )
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "Update status: the exact public `\(publishedTag)` binary contains the advisory release-availability checker"
+                )
+            )
+        } else {
+            XCTAssertTrue(autoUpdate.contains("exact public binary does not contain update checking"))
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "Update status: the exact public `\(publishedTag)` binary has no update checker and cannot gain one retroactively"
+                )
+            )
+        }
         XCTAssertTrue(autoUpdate.contains("other ineligible builds make zero update requests"))
         XCTAssertTrue(autoUpdate.contains("https://api.github.com/repos/Reedtrullz/Vifty/releases/latest"))
         XCTAssertTrue(autoUpdate.contains("exactly four uploaded, nonempty canonical assets"))
@@ -1031,12 +1164,20 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
     }
 
     func testReleaseDocsIncludeFutureAutoUpdateReadinessChecks() throws {
+        let manifest = try releaseManifest()
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
+        let publishedVersion = try XCTUnwrap(published["version"] as? String)
+        let publishedTag = try XCTUnwrap(published["tag"] as? String)
         let release = try read("docs/release.md")
         let trustModel = try read("docs/trust-model.md")
 
         XCTAssertTrue(release.contains("[auto-update.md](auto-update.md)"))
         XCTAssertTrue(release.contains("Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes"))
-        XCTAssertTrue(release.contains("checker is absent from the current `v1.3.2` artifact"))
+        if isVersion(publishedVersion, atLeast: "1.4.1") {
+            XCTAssertTrue(release.contains("checker is present in the current `\(publishedTag)` artifact"))
+        } else {
+            XCTAssertTrue(release.contains("checker is absent from the current `\(publishedTag)` artifact"))
+        }
         XCTAssertTrue(release.contains("SUFeedURL"))
         XCTAssertTrue(release.contains("SUPublicEDKey"))
         XCTAssertTrue(release.contains("generate_appcast"))
@@ -1926,6 +2067,26 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertFalse(workplan.contains("439 XCTest cases"))
         XCTAssertFalse(workplan.contains("401 XCTest cases"))
         XCTAssertFalse(workplan.contains("Review the full dirty tree"))
+    }
+
+    private func releaseManifest() throws -> [String: Any] {
+        let data = try Data(
+            contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                .appendingPathComponent(".github/release-manifest.json")
+        )
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func isVersion(_ version: String, atLeast minimum: String) -> Bool {
+        let versionComponents = version.split(separator: ".").compactMap { Int($0) }
+        let minimumComponents = minimum.split(separator: ".").compactMap { Int($0) }
+        guard versionComponents.count == 3, minimumComponents.count == 3 else {
+            return false
+        }
+        for index in 0..<3 where versionComponents[index] != minimumComponents[index] {
+            return versionComponents[index] > minimumComponents[index]
+        }
+        return true
     }
 
     private func read(_ relativePath: String) throws -> String {

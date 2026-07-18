@@ -16,7 +16,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Release manifest OK"))
     }
 
-    func testPublishedReleaseFactsRemainHistoricalAndAnyCandidateFailsClosed() throws {
+    func testReleaseManifestPreservesImmutableV132AndCurrentReleaseTrust() throws {
         let manifest = try readJSON(
             repositoryRoot.appendingPathComponent(".github/release-manifest.json")
         )
@@ -32,15 +32,98 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertEqual(product["architectures"] as? [String], ["arm64"])
         XCTAssertEqual(policy["developerTeamID"] as? String, "X88J3853S2")
         XCTAssertEqual(policy["signedTagsRequiredFromVersion"] as? String, "1.3.3")
-        XCTAssertTrue(history.isEmpty)
-        XCTAssertEqual(published["version"] as? String, "1.3.2")
-        XCTAssertEqual(published["build"] as? Int, 7)
-        XCTAssertEqual(published["tagTrust"] as? String, "historical-unsigned")
+
+        let publishedVersion = try XCTUnwrap(published["version"] as? String)
+        XCTAssertEqual(published["tag"] as? String, "v\(publishedVersion)")
+        XCTAssertEqual(published["artifact"] as? String, "Vifty-v\(publishedVersion).zip")
+        XCTAssertEqual(
+            published["checksumAsset"] as? String,
+            "Vifty-v\(publishedVersion).zip.sha256"
+        )
+        XCTAssertEqual(
+            published["artifactSummary"] as? String,
+            "Vifty-v\(publishedVersion)-artifact-summary.json"
+        )
+        XCTAssertEqual(
+            published["releaseChecklist"] as? String,
+            "Vifty-v\(publishedVersion)-release-checklist.md"
+        )
+        XCTAssertNotNil(
+            (published["sha256"] as? String)?.range(
+                of: "^[0-9a-f]{64}$",
+                options: .regularExpression
+            )
+        )
+        XCTAssertNotNil(
+            (published["sourceCommit"] as? String)?.range(
+                of: "^[0-9a-f]{40}$",
+                options: .regularExpression
+            )
+        )
+        XCTAssertGreaterThan(try XCTUnwrap(published["sourceCIRunID"] as? Int), 0)
+        XCTAssertGreaterThan(try XCTUnwrap(published["releaseWorkflowRunID"] as? Int), 0)
         XCTAssertEqual(published["artifactTrust"] as? String, "passed")
-        XCTAssertEqual(published["installedReleaseReview"] as? String, "passed")
-        XCTAssertEqual(published["manualCompatibility"] as? String, "passed-auto-restored")
+        XCTAssertEqual(published["signingTrust"] as? String, "developer-id-notarized")
+        XCTAssertEqual(
+            published["tagTrust"] as? String,
+            publishedVersion == "1.3.2" ? "historical-unsigned" : "signed-verified"
+        )
+        let publishedInstalledReleaseReview = try XCTUnwrap(
+            published["installedReleaseReview"] as? String
+        )
+        XCTAssertTrue(["pending", "passed"].contains(publishedInstalledReleaseReview))
+
+        let publishedManualCompatibility = try XCTUnwrap(
+            published["manualCompatibility"] as? String
+        )
+        XCTAssertTrue(["pending", "passed-auto-restored"].contains(publishedManualCompatibility))
+        if publishedManualCompatibility == "pending" {
+            XCTAssertEqual(published["manualCompatibilityScope"] as? NSNull, NSNull())
+        } else {
+            let scope = try XCTUnwrap(published["manualCompatibilityScope"] as? [String: Any])
+            XCTAssertFalse(try XCTUnwrap(scope["modelIdentifiers"] as? [String]).isEmpty)
+            XCTAssertFalse(try XCTUnwrap(scope["reviewReport"] as? String).isEmpty)
+            XCTAssertFalse(try XCTUnwrap(scope["attestation"] as? String).isEmpty)
+        }
+
+        let releases = history + [published]
+        XCTAssertEqual(
+            releases.filter { $0["version"] as? String == "1.3.2" }.count,
+            1,
+            "the immutable v1.3.2 boundary must appear exactly once across history and current"
+        )
+        let immutableV132 = try XCTUnwrap(
+            releases.first { $0["version"] as? String == "1.3.2" }
+        )
+        XCTAssertEqual(immutableV132["build"] as? Int, 7)
+        XCTAssertEqual(immutableV132["tag"] as? String, "v1.3.2")
+        XCTAssertEqual(
+            immutableV132["sourceCommit"] as? String,
+            "6a771c2ea10386bf7a0a8369a759930f01d56062"
+        )
+        XCTAssertEqual(immutableV132["sourceCIRunID"] as? Int, 29284751837)
+        XCTAssertEqual(immutableV132["releaseWorkflowRunID"] as? Int, 29285576026)
+        XCTAssertEqual(immutableV132["artifact"] as? String, "Vifty-v1.3.2.zip")
+        XCTAssertEqual(immutableV132["checksumAsset"] as? String, "Vifty-v1.3.2.zip.sha256")
+        XCTAssertEqual(
+            immutableV132["artifactSummary"] as? String,
+            "Vifty-v1.3.2-artifact-summary.json"
+        )
+        XCTAssertEqual(
+            immutableV132["releaseChecklist"] as? String,
+            "Vifty-v1.3.2-release-checklist.md"
+        )
+        XCTAssertEqual(
+            immutableV132["sha256"] as? String,
+            "8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0"
+        )
+        XCTAssertEqual(immutableV132["artifactTrust"] as? String, "passed")
+        XCTAssertEqual(immutableV132["signingTrust"] as? String, "developer-id-notarized")
+        XCTAssertEqual(immutableV132["tagTrust"] as? String, "historical-unsigned")
+        XCTAssertEqual(immutableV132["installedReleaseReview"] as? String, "passed")
+        XCTAssertEqual(immutableV132["manualCompatibility"] as? String, "passed-auto-restored")
         let compatibilityScope = try XCTUnwrap(
-            published["manualCompatibilityScope"] as? [String: Any]
+            immutableV132["manualCompatibilityScope"] as? [String: Any]
         )
         XCTAssertEqual(
             compatibilityScope["modelIdentifiers"] as? [String],
@@ -526,29 +609,93 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Release fact blocks OK"))
     }
 
-    func testReleaseFactBlocksScopeManualCompatibilityToValidatedModelAndEvidence() throws {
+    func testReleaseFactBlockReflectsCurrentPublishedReviewAndCompatibilityState() throws {
+        let manifest = try readJSON(
+            repositoryRoot.appendingPathComponent(".github/release-manifest.json")
+        )
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
         let readme = try String(
             contentsOf: repositoryRoot.appendingPathComponent("README.md"),
             encoding: .utf8
         )
+        let facts = try generatedReleaseFacts(in: readme)
+        let installedReleaseReview = try XCTUnwrap(
+            published["installedReleaseReview"] as? String
+        )
+        let manualCompatibility = try XCTUnwrap(
+            published["manualCompatibility"] as? String
+        )
 
+        let manualCompatibilityFact: String
+        if manualCompatibility == "passed-auto-restored" {
+            let scope = try XCTUnwrap(published["manualCompatibilityScope"] as? [String: Any])
+            let models = try XCTUnwrap(scope["modelIdentifiers"] as? [String])
+            let modelList = models.map { "`\($0)`" }.joined(separator: ", ")
+            manualCompatibilityFact =
+                "manual Fixed/Curve/Auto compatibility `passed-auto-restored` on " +
+                "\(modelList) only (review " +
+                "`\(try XCTUnwrap(scope["reviewReport"] as? String))`; attestation " +
+                "`\(try XCTUnwrap(scope["attestation"] as? String))`)"
+        } else {
+            XCTAssertEqual(manualCompatibility, "pending")
+            XCTAssertEqual(published["manualCompatibilityScope"] as? NSNull, NSNull())
+            manualCompatibilityFact = "manual Fixed/Curve/Auto compatibility `pending`"
+        }
+        let expectedLine =
+            "> Separate exact-build claims: installed release review " +
+            "`\(installedReleaseReview)`; \(manualCompatibilityFact)."
         XCTAssertTrue(
-            readme.contains(
-                "manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only"
-            ),
-            readme
+            facts.split(separator: "\n").contains(Substring(expectedLine)),
+            "missing exact generated review line:\n\(expectedLine)\n\n\(facts)"
+        )
+    }
+
+    func testRendererUsesSyntheticV141PublishedPendingFactsWithoutHistoricalScopeLeakage() throws {
+        let fixture = try ReleaseFactsFixture(repositoryRoot: repositoryRoot)
+
+        let result = try fixture.render()
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Updated generated release fact blocks"), result.stdout)
+        let generatedFactsByPath = try fixture.generatedReleaseFactsByPath()
+        let expectedFacts = try XCTUnwrap(generatedFactsByPath["README.md"])
+        for (relativePath, facts) in generatedFactsByPath {
+            XCTAssertEqual(facts, expectedFacts, "generated facts differ in \(relativePath)")
+        }
+        XCTAssertTrue(
+            expectedFacts.contains("Published: `v1.4.1` (version `1.4.1`, build `9`)"),
+            expectedFacts
         )
         XCTAssertTrue(
-            readme.contains(
-                "review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`"
+            expectedFacts.contains(
+                "Canonical artifact: `Vifty-v1.4.1.zip` with checksum asset " +
+                "`Vifty-v1.4.1.zip.sha256` and SHA-256 `\(String(repeating: "e", count: 64))`."
             ),
-            readme
+            expectedFacts
         )
         XCTAssertTrue(
-            readme.contains(
-                "attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`"
+            expectedFacts.contains(
+                "Public artifact trust: `passed` / `developer-id-notarized` for TeamID " +
+                "`X88J3853S2`; source `\(String(repeating: "d", count: 40))`, " +
+                "CI run `30000001`, Release run `30000002`."
             ),
-            readme
+            expectedFacts
+        )
+        XCTAssertTrue(
+            expectedFacts.contains("Tag policy: `v1.4.1` remains recorded as `signed-verified` evidence"),
+            expectedFacts
+        )
+        XCTAssertTrue(
+            expectedFacts.contains(
+                "installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`"
+            ),
+            expectedFacts
+        )
+        XCTAssertFalse(expectedFacts.contains("passed-auto-restored"), expectedFacts)
+        XCTAssertFalse(expectedFacts.contains("MacBookPro18,1"), expectedFacts)
+        XCTAssertFalse(
+            expectedFacts.contains("2026-07-14-v1.3.2-macbookpro18-supported"),
+            expectedFacts
         )
     }
 
@@ -1436,6 +1583,200 @@ final class ReleaseManifestScriptTests: XCTestCase {
             stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             exitCode: process.terminationStatus
         )
+    }
+}
+
+private let generatedReleaseFactsStartMarker = "<!-- BEGIN GENERATED RELEASE FACTS -->"
+private let generatedReleaseFactsEndMarker = "<!-- END GENERATED RELEASE FACTS -->"
+
+private func generatedReleaseFacts(in text: String) throws -> String {
+    let start = try XCTUnwrap(text.range(of: generatedReleaseFactsStartMarker))
+    let end = try XCTUnwrap(
+        text.range(
+            of: generatedReleaseFactsEndMarker,
+            range: start.upperBound..<text.endIndex
+        )
+    )
+    XCTAssertNil(
+        text.range(
+            of: generatedReleaseFactsStartMarker,
+            range: start.upperBound..<text.endIndex
+        ),
+        "generated release facts must contain exactly one start marker"
+    )
+    XCTAssertNil(
+        text.range(
+            of: generatedReleaseFactsEndMarker,
+            range: end.upperBound..<text.endIndex
+        ),
+        "generated release facts must contain exactly one end marker"
+    )
+    return String(text[start.lowerBound..<end.upperBound])
+}
+
+private final class ReleaseFactsFixture {
+    private static let renderedDocumentationPaths = [
+        "README.md",
+        "SECURITY.md",
+        "SUPPORT.md",
+        "docs/release-status.md",
+        "docs/trust-model.md",
+        "docs/competitive-analysis.md",
+        "docs/compatibility.md",
+        "docs/release.md",
+        "docs/auto-update.md"
+    ]
+
+    let rootURL: URL
+    private let repositoryRoot: URL
+
+    init(repositoryRoot: URL) throws {
+        self.repositoryRoot = repositoryRoot
+        rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-release-facts-\(UUID().uuidString)", isDirectory: true)
+
+        let fixturePaths = [
+            ".github/release-manifest.json",
+            "docs/schemas/release-manifest.schema.json",
+            "Resources/Info.plist",
+            "Resources/tech.reidar.vifty.daemon.plist",
+            "Casks/vifty.rb",
+            "Package.swift"
+        ] + Self.renderedDocumentationPaths
+        for relativePath in fixturePaths {
+            let destination = rootURL.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(
+                at: repositoryRoot.appendingPathComponent(relativePath),
+                to: destination
+            )
+        }
+
+        try writeSyntheticPublishedManifest()
+        try writeSyntheticInfoPlist()
+        try writeSyntheticCask()
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    func render() throws -> ReleaseManifestProcessResult {
+        let process = Process()
+        process.executableURL = repositoryRoot.appendingPathComponent("scripts/render-release-facts.sh")
+        process.arguments = ["--write"]
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["VIFTY_RELEASE_FACTS_ROOT": rootURL.path],
+            uniquingKeysWith: { _, new in new }
+        )
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        return ReleaseManifestProcessResult(
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            exitCode: process.terminationStatus
+        )
+    }
+
+    func generatedReleaseFactsByPath() throws -> [String: String] {
+        try Dictionary(uniqueKeysWithValues: Self.renderedDocumentationPaths.map { relativePath in
+            let text = try String(
+                contentsOf: rootURL.appendingPathComponent(relativePath),
+                encoding: .utf8
+            )
+            return (relativePath, try generatedReleaseFacts(in: text))
+        })
+    }
+
+    private func writeSyntheticPublishedManifest() throws {
+        let manifestURL = rootURL.appendingPathComponent(".github/release-manifest.json")
+        var manifest = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any]
+        )
+        let currentPublished = try XCTUnwrap(
+            manifest["publishedRelease"] as? [String: Any]
+        )
+        let historical = try XCTUnwrap(
+            manifest["historicalReleases"] as? [[String: Any]]
+        )
+        let immutableV132 = try XCTUnwrap(
+            (historical + [currentPublished]).first { $0["version"] as? String == "1.3.2" },
+            "renderer fixture requires the immutable v1.3.2 release boundary"
+        )
+        var syntheticPublished = immutableV132
+        syntheticPublished["version"] = "1.4.1"
+        syntheticPublished["build"] = 9
+        syntheticPublished["tag"] = "v1.4.1"
+        syntheticPublished["sourceCommit"] = String(repeating: "d", count: 40)
+        syntheticPublished["sourceCIRunID"] = 30_000_001
+        syntheticPublished["releaseWorkflowRunID"] = 30_000_002
+        syntheticPublished["artifact"] = "Vifty-v1.4.1.zip"
+        syntheticPublished["checksumAsset"] = "Vifty-v1.4.1.zip.sha256"
+        syntheticPublished["artifactSummary"] = "Vifty-v1.4.1-artifact-summary.json"
+        syntheticPublished["releaseChecklist"] = "Vifty-v1.4.1-release-checklist.md"
+        syntheticPublished["sha256"] = String(repeating: "e", count: 64)
+        syntheticPublished["artifactTrust"] = "passed"
+        syntheticPublished["signingTrust"] = "developer-id-notarized"
+        syntheticPublished["tagTrust"] = "signed-verified"
+        syntheticPublished["installedReleaseReview"] = "pending"
+        syntheticPublished["manualCompatibility"] = "pending"
+        syntheticPublished["manualCompatibilityScope"] = NSNull()
+
+        manifest["historicalReleases"] = [immutableV132]
+        manifest["publishedRelease"] = syntheticPublished
+        manifest["candidate"] = NSNull()
+        let data = try JSONSerialization.data(
+            withJSONObject: manifest,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: manifestURL)
+    }
+
+    private func writeSyntheticInfoPlist() throws {
+        let plistURL = rootURL.appendingPathComponent("Resources/Info.plist")
+        var format = PropertyListSerialization.PropertyListFormat.xml
+        var plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(
+                from: Data(contentsOf: plistURL),
+                options: [],
+                format: &format
+            ) as? [String: Any]
+        )
+        plist["CFBundleShortVersionString"] = "1.4.1"
+        plist["CFBundleVersion"] = "9"
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: plist,
+            format: .xml,
+            options: 0
+        )
+        try data.write(to: plistURL)
+    }
+
+    private func writeSyntheticCask() throws {
+        let caskURL = rootURL.appendingPathComponent("Casks/vifty.rb")
+        let cask = try String(contentsOf: caskURL, encoding: .utf8)
+        let versionPattern = #"version "[^"]+""#
+        let checksumPattern = #"sha256 "[0-9a-f]{64}""#
+        XCTAssertNotNil(cask.range(of: versionPattern, options: .regularExpression))
+        XCTAssertNotNil(cask.range(of: checksumPattern, options: .regularExpression))
+        let versioned = cask.replacingOccurrences(
+            of: versionPattern,
+            with: #"version "1.4.1""#,
+            options: .regularExpression
+        )
+        let updated = versioned.replacingOccurrences(
+            of: checksumPattern,
+            with: "sha256 \"\(String(repeating: "e", count: 64))\"",
+            options: .regularExpression
+        )
+        try updated.write(to: caskURL, atomically: true, encoding: .utf8)
     }
 }
 
