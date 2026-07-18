@@ -42,5 +42,20 @@
       "attestation": "docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md"
     }
   },
-  "candidate": null
+  "candidate": {
+    "version": "1.4.0",
+    "build": 8,
+    "tag": "v1.4.0",
+    "artifact": "Vifty-v1.4.0.zip",
+    "checksumAsset": "Vifty-v1.4.0.zip.sha256",
+    "artifactSummary": "Vifty-v1.4.0-artifact-summary.json",
+    "releaseChecklist": "Vifty-v1.4.0-release-checklist.md",
+    "sha256": null,
+    "artifactTrust": "pending",
+    "signingTrust": "pending",
+    "tagTrust": "signed-required",
+    "installedReleaseReview": "pending",
+    "manualCompatibility": "pending",
+    "manualCompatibilityScope": null
+  }
 }
