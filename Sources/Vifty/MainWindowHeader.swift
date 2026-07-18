@@ -17,12 +17,12 @@ struct MainWindowHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "fan")
-                .font(.title2)
+                .viftyFont(.title2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(appName)
-                    .font(.title3.weight(.semibold))
+                    .viftyFont(.title3, weight: .semibold)
                 Text(modelIdentifier)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -30,12 +30,12 @@ struct MainWindowHeader: View {
             Spacer()
             if let powerText {
                 Label(powerText, systemImage: "battery.50")
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
             Label(thermalText, systemImage: "speedometer")
-                .font(.caption)
+                .viftyFont(.caption)
                 .foregroundStyle(thermalIsElevated ? .orange : .secondary)
             if let helperActionTitle {
                 Button(action: onHelperAction) {
@@ -48,18 +48,18 @@ struct MainWindowHeader: View {
                 .help(helperActionHelp ?? "Repair or approve the helper before fan writes.")
             } else if showsDiagnosticsOnly {
                 Label("Diagnostics only", systemImage: "doc.text.magnifyingglass")
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
             if let visibleError {
                 Label(visibleError, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .lineLimit(2)
                     .frame(maxWidth: 340, alignment: .trailing)
             } else {
                 Text(statusText)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }

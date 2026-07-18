@@ -5,7 +5,8 @@ final class RealMacHardwareServiceTests: XCTestCase {
     func testLocalSnapshotReturnsEmptyFansWhenSMCFails() {
         let service = RealMacHardwareService(
             preferDaemon: false,
-            smcFactory: { throw ViftyError.smcUnavailable }
+            smcFactory: { throw ViftyError.smcUnavailable },
+            hidTemperatureReader: { [] }
         )
         let snapshot = try! service.localSnapshot()
 
@@ -16,7 +17,8 @@ final class RealMacHardwareServiceTests: XCTestCase {
     func testLocalSnapshotReturnsMetadataOnUnsupportedHardware() {
         let service = RealMacHardwareService(
             preferDaemon: false,
-            smcFactory: { throw ViftyError.smcUnavailable }
+            smcFactory: { throw ViftyError.smcUnavailable },
+            hidTemperatureReader: { [] }
         )
         let snapshot = try! service.localSnapshot()
 
@@ -27,16 +29,11 @@ final class RealMacHardwareServiceTests: XCTestCase {
     }
 
     func testApplyDoesNotFallbackToUnprivilegedLocalSMCWritesWhenDaemonFails() async {
-        let localFallback = SendableFlag()
         let service = RealMacHardwareService(
             preferDaemon: true,
             daemonApply: { _, _ in
                 throw ViftyError.helperRejected("Daemon connection invalidated.")
-            },
-            localApply: { _, _ in
-                localFallback.mark()
-            },
-            allowsLocalFanWriteFallback: { false }
+            }
         )
 
         do {
@@ -48,21 +45,14 @@ final class RealMacHardwareServiceTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
-
-        XCTAssertFalse(localFallback.value, "App must not attempt direct AppleSMC fan writes as an unprivileged user")
     }
 
     func testRestoreAutoDoesNotFallbackToUnprivilegedLocalSMCWritesWhenDaemonFails() async {
-        let localFallback = SendableFlag()
         let service = RealMacHardwareService(
             preferDaemon: true,
             daemonRestoreAuto: { _ in
                 throw ViftyError.helperRejected("Daemon request timed out.")
-            },
-            localRestoreAuto: { _ in
-                localFallback.mark()
-            },
-            allowsLocalFanWriteFallback: { false }
+            }
         )
 
         do {
@@ -74,25 +64,91 @@ final class RealMacHardwareServiceTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
-
-        XCTAssertFalse(localFallback.value, "App must not attempt direct AppleSMC Auto restore as an unprivileged user")
     }
 
-    func testLocalSMCWriteFallbackStillWorksWhenCallerIsPrivileged() async throws {
-        let localFallback = SendableFlag()
+    func testManualBatchDaemonFailureNeverFallsBackToLocalTransactionWriter() async {
         let service = RealMacHardwareService(
             preferDaemon: true,
-            daemonApply: { _, _ in
-                throw ViftyError.helperRejected("Daemon connection invalidated.")
-            },
-            localApply: { _, _ in
-                localFallback.mark()
-            },
-            allowsLocalFanWriteFallback: { true }
+            daemonApplyManual: { _ in
+                throw ViftyError.helperRejected("Legacy daemon does not support protocol v2.")
+            }
         )
 
-        try await service.apply(FanCommand(fanID: 0, mode: .fixedRPM(2400)), fan: testFan)
-        XCTAssertTrue(localFallback.value, "Root/daemon callers may still use the direct LocalFanHelperClient fallback")
+        do {
+            _ = try await service.applyManualFanControl(ManualFanControlRequest(
+                transactionID: "manual-1",
+                sessionID: "manual-1",
+                expectedFanIDs: [0],
+                targetRPMByFanID: [0: 2_400],
+                reason: "Fixed"
+            ))
+            XCTFail("Expected daemon transaction failure")
+        } catch ViftyError.helperRejected(let message) {
+            XCTAssertTrue(message.contains("Fan helper is unavailable"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testFullAutoDaemonFailureNeverFallsBackToLocalTransactionWriter() async {
+        let service = RealMacHardwareService(
+            preferDaemon: true,
+            daemonRestoreAll: { _, _ in
+                throw ViftyError.helperRejected("Daemon request timed out.")
+            }
+        )
+
+        do {
+            _ = try await service.restoreAllAuto(AutoRestoreRequest(
+                transactionID: "restore-1",
+                expectedFanIDs: [0],
+                reason: "Auto"
+            ))
+            XCTFail("Expected daemon restore transaction failure")
+        } catch ViftyError.helperRejected(let message) {
+            XCTAssertTrue(message.contains("Fan helper is unavailable"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testDaemonDisabledServiceIsReadOnlyForEveryWriteEntryPoint() async {
+        let service = RealMacHardwareService(preferDaemon: false)
+        let manual = ManualFanControlRequest(
+            transactionID: "manual-1",
+            sessionID: "session-1",
+            expectedFanIDs: [0],
+            targetRPMByFanID: [0: 2_400],
+            reason: "Fixed"
+        )
+
+        do { try await service.apply(FanCommand(fanID: 0, mode: .fixedRPM(2_400)), fan: testFan); XCTFail() }
+        catch { XCTAssertTrue(error.localizedDescription.contains("read-only")) }
+        do { try await service.restoreAuto(fan: testFan); XCTFail() }
+        catch { XCTAssertTrue(error.localizedDescription.contains("read-only")) }
+        do { _ = try await service.applyManualFanControl(manual); XCTFail() }
+        catch { XCTAssertTrue(error.localizedDescription.contains("read-only")) }
+        do { _ = try await service.restoreAllAuto(AutoRestoreRequest(transactionID: "restore", reason: "Auto")); XCTFail() }
+        catch { XCTAssertTrue(error.localizedDescription.contains("read-only")) }
+    }
+
+    func testSourceExposesNoInjectableLocalWriteClosures() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/ViftyCore/RealMacHardwareService.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        for forbidden in [
+            "localApply:",
+            "localRestoreAuto:",
+            "localApplyManual:",
+            "localApplyAgent:",
+            "localRestoreAll:"
+        ] {
+            XCTAssertFalse(source.contains(forbidden), forbidden)
+        }
     }
 
     func testNotPrivilegedSMCErrorNamesIOReturnAndMentionsHelper() {
@@ -112,22 +168,5 @@ final class RealMacHardwareServiceTests: XCTestCase {
             maximumRPM: 6000,
             controllable: true
         )
-    }
-}
-
-private final class SendableFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage = false
-
-    var value: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
-    }
-
-    func mark() {
-        lock.lock()
-        storage = true
-        lock.unlock()
     }
 }

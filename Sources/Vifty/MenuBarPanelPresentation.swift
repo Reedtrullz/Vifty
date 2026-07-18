@@ -15,10 +15,9 @@ enum MenuBarPanelAction: Equatable {
 struct MenuBarPanelPresentation: Equatable {
     struct Input: Equatable {
         let controlSession: ControlSessionPresentation
-        let ownerText: String
+        let ownershipStatus: FanControlOwnershipStatus?
         let attentionText: String?
         let fans: [Fan]
-        let isManualControlActive: Bool
     }
 
     let stateTitle: String
@@ -36,8 +35,9 @@ struct MenuBarPanelPresentation: Equatable {
     }
 
     static func resolve(input: Input) -> MenuBarPanelPresentation {
+        let ownership = FanControlOwnershipPresentation.resolve(input.ownershipStatus)
         let stateTitle = input.controlSession.title
-        let headline = headline(for: input.controlSession)
+        let headline = headline(for: ownership.owner)
         var attentionText = input.attentionText ?? attentionText(for: input.controlSession)
         if attentionText == stateTitle || attentionText == headline {
             attentionText = nil
@@ -46,7 +46,7 @@ struct MenuBarPanelPresentation: Equatable {
         return MenuBarPanelPresentation(
             stateTitle: stateTitle,
             headline: headline,
-            ownerText: input.ownerText,
+            ownerText: ownership.ownerText,
             attentionText: attentionText,
             fanLines: input.fans.map {
                 MenuBarFanLine(
@@ -57,27 +57,22 @@ struct MenuBarPanelPresentation: Equatable {
             primaryAction: .openMainWindow,
             primaryActionTitle: "Open Vifty",
             primaryActionHelp: "Open the main Vifty window.",
-            showsRestoreAuto: input.controlSession.primaryAction == .restoreAuto
-                || (input.isManualControlActive && input.controlSession.state != .blocked)
+            showsRestoreAuto: ownership.canRequestRestoreAuto
         )
     }
 
-    private static func headline(for controlSession: ControlSessionPresentation) -> String {
-        switch controlSession.state {
-        case .checking:
-            "Checking helper status"
-        case .ready:
+    private static func headline(for owner: ConfirmedFanControlOwner) -> String {
+        switch owner {
+        case .macOS:
             "macOS controls fans"
-        case .attention:
-            "Check Vifty before changing control"
-        case .blocked:
-            "Open Vifty for recovery"
-        case .manual:
+        case .viftyManual:
             "Vifty controls fans"
-        case .agentCooling:
-            controlSession.title == "Agent cooling active"
-                ? "Bounded workload cooling"
-                : "Cooling ownership needs review"
+        case .agent:
+            "Bounded workload cooling"
+        case .recovery:
+            "Auto recovery pending"
+        case .mixedOrUnknown:
+            "Fan ownership needs confirmation"
         }
     }
 

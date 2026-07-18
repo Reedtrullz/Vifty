@@ -32,6 +32,7 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 320)
+        .viftyTextScale(model.textScale)
     }
 
     private func perform(_ action: MenuBarPanelAction) {
@@ -51,11 +52,11 @@ struct MenuBarView: View {
         var body: some View {
             VStack(alignment: .leading, spacing: 3) {
                 Label(presentation.stateTitle, systemImage: "fan")
-                    .font(.headline)
+                    .viftyFont(.headline)
                 Text(presentation.headline)
-                    .font(.caption)
+                    .viftyFont(.caption)
                 Text(presentation.ownerText)
-                    .font(.caption)
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -66,7 +67,7 @@ struct MenuBarView: View {
 
         var body: some View {
             Label(text, systemImage: "exclamationmark.triangle")
-                .font(.caption.weight(.semibold))
+                .viftyFont(.caption, weight: .semibold)
                 .foregroundStyle(.orange)
                 .lineLimit(2)
         }
@@ -84,7 +85,7 @@ struct MenuBarView: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                .font(.caption)
+                .viftyFont(.caption)
             }
         }
     }

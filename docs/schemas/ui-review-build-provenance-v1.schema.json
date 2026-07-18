@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json",
+  "title": "Vifty UI review embedded build provenance v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "sourceCommit",
+    "sourceTree",
+    "productRole",
+    "configuration",
+    "buildTransactionID"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sourceTree": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "productRole": {
+      "type": "string"
+    },
+    "configuration": {
+      "type": "string"
+    },
+    "buildTransactionID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "productRole": {
+          "const": "debug-fixture-app"
+        },
+        "configuration": {
+          "const": "debug"
+        }
+      }
+    },
+    {
+      "properties": {
+        "productRole": {
+          "const": "release-exclusion"
+        },
+        "configuration": {
+          "const": "release"
+        }
+      }
+    },
+    {
+      "properties": {
+        "productRole": {
+          "const": "ax-collector"
+        },
+        "configuration": {
+          "const": "debug"
+        }
+      }
+    }
+  ]
+}

@@ -3,10 +3,23 @@ import ViftyCore
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @StateObject private var daemonInstaller = DaemonInstaller()
+    @StateObject private var daemonInstaller: DaemonInstaller
+    @StateObject private var helperDiagnosticsFeedbackScheduler: CopyFeedbackScheduler
+    private let helperRefreshSleeper: any AppPollingSleeping
     @State private var helperRefreshTask: Task<Void, Never>?
-    @State private var helperDiagnosticsFeedbackTask: Task<Void, Never>?
     @State private var helperDiagnosticsCopied = false
+
+    init(
+        daemonInstaller: DaemonInstaller = DaemonInstaller(),
+        helperDiagnosticsFeedbackScheduler: CopyFeedbackScheduler = CopyFeedbackScheduler(),
+        helperRefreshSleeper: any AppPollingSleeping = ContinuousAppPollingSleeper()
+    ) {
+        _daemonInstaller = StateObject(wrappedValue: daemonInstaller)
+        _helperDiagnosticsFeedbackScheduler = StateObject(
+            wrappedValue: helperDiagnosticsFeedbackScheduler
+        )
+        self.helperRefreshSleeper = helperRefreshSleeper
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,10 +29,10 @@ struct ContentView: View {
                 powerText: model.powerSnapshot.map { PowerDisplayFormatter.summary(for: $0) },
                 thermalText: "Thermal \(model.thermalPressure.displayName)",
                 thermalIsElevated: model.thermalPressure == .serious || model.thermalPressure == .critical,
-                helperActionTitle: model.helperRepairActionAvailable ? daemonInstaller.actionTitle : nil,
-                helperActionHelp: model.helperRepairActionAvailable ? daemonInstaller.actionHelp : nil,
-                helperActionDisabled: !daemonInstaller.canInstall,
-                showsDiagnosticsOnly: !model.helperRepairActionAvailable && model.helperHealthNeedsAttention,
+                helperActionTitle: helperActionIsAvailable ? helperActionPresentation.title : nil,
+                helperActionHelp: helperActionIsAvailable ? helperActionPresentation.help : nil,
+                helperActionDisabled: !helperActionPresentation.isAvailable,
+                showsDiagnosticsOnly: !helperActionIsAvailable && model.helperHealthNeedsAttention,
                 visibleError: model.visibleLastError,
                 statusText: model.controlState.statusMessage,
                 onHelperAction: performHelperAction
@@ -29,8 +42,7 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
-            helperDiagnosticsFeedbackTask?.cancel()
-            helperDiagnosticsFeedbackTask = nil
+            helperDiagnosticsFeedbackScheduler.cancel()
         }
     }
 
@@ -56,10 +68,14 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
                                     .background(Color.secondary.opacity(0.035))
                             }
+                            ViftyAccessibilityScrollEndAnchor(
+                                identifier: ViftyAccessibilityIdentifier.mainScrollEnd
+                            )
                         }
                         .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                     }
                     .scrollIndicators(.visible)
+                    .accessibilityIdentifier(ViftyAccessibilityIdentifier.mainScroll)
                 case .split:
                     let controlSections = placement.sections(in: .splitControl)
                     let telemetrySections = placement.sections(in: .splitTelemetry)
@@ -198,57 +214,17 @@ struct ContentView: View {
                 manualControlAttentionSummary: model.manualControlAttentionSummary,
                 manualControlAttentionRecoverySuggestion: model.manualControlAttentionRecoverySuggestion,
                 manualFanControlBlockedReason: model.manualFanControlBlockedReason,
-                presentation: model.controlSessionPresentation,
+                presentation: controlSessionPresentation,
                 onModeChange: handleModeChange,
                 onManualRunLimitChange: model.markFanControlDraftPending,
-                onPrimaryAction: { performControlSessionPrimaryAction(model.controlSessionPresentation) }
+                onPrimaryAction: { performControlSessionPrimaryAction(controlSessionPresentation) }
             )
         case .fanControl:
             FanControlPanel(
-                snapshot: model.snapshot,
-                selectedMode: model.selectedMode,
-                fixedRPM: $model.fixedRPM,
-                usePerFanFixedRPM: $model.usePerFanFixedRPM,
-                curveStartTemp: $model.curveStartTemp,
-                curveMidTemp: $model.curveMidTemp,
-                curveMaxTemp: $model.curveMaxTemp,
-                curveStartRPM: $model.curveStartRPM,
-                curveMidRPM: $model.curveMidRPM,
-                curveMaxRPM: $model.curveMaxRPM,
-                selectedSensorID: $model.selectedSensorID,
-                effectiveSensor: model.selectedSensor,
-                effectiveSensorID: model.effectiveSelectedSensorID,
-                usePerFanOverrides: $model.usePerFanOverrides,
-                savedProfiles: model.savedProfiles,
-                selectedCurveProfileID: $model.selectedCurveProfileID,
-                fanRange: model.fanRange,
-                fanOverrides: model.fanOverrides,
-                manualFanControlAvailable: model.manualFanControlAvailable,
-                helperRecoverySuggestion: model.helperRecoverySuggestion,
-                fanAccessMessage: model.fanAccessMessage,
-                helperActionTitle: model.helperRepairActionAvailable ? daemonInstaller.actionTitle : nil,
-                helperActionHelp: model.helperRepairActionAvailable ? daemonInstaller.actionHelp : nil,
-                helperActionDisabled: !daemonInstaller.canInstall,
-                helperStatusText: daemonInstaller.statusText,
-                helperDiagnosticsCopied: helperDiagnosticsCopied,
-                appliedTargetRPM: model.appliedTargetRPM,
-                draftTargetRPMPreview: model.draftTargetRPMPreview,
-                fixedFanSliderRPM: model.fixedFanSliderRPM,
-                fixedFanTargetRPM: model.fixedFanTargetRPM,
-                fixedFanTargetPercent: model.fixedFanTargetPercent,
-                ensureFixedFanTargets: model.ensureFixedFanTargets,
-                setFixedFanRPM: { rpm, fan in model.setFixedFanRPM(rpm, for: fan, persist: false) },
-                commitFixedFanTargets: model.commitFixedFanTargetsAndApply,
-                loadDeveloperPreset: model.loadDeveloperPreset,
-                selectCurveProfile: { _ = model.selectCurveProfile(id: $0) },
-                deleteProfile: model.deleteProfile,
-                ensureFanOverrides: model.ensureFanOverrides,
-                fanOverride: model.fanOverride,
-                setOverrideStartRPM: model.setOverrideStartRPM,
-                setOverrideMidRPM: model.setOverrideMidRPM,
-                setOverrideMaxRPM: model.setOverrideMaxRPM,
-                saveProfile: model.saveCurrentProfile,
-                markDraftPending: model.markFanControlDraftPending,
+                presentation: fanControlPanelPresentation,
+                dispatcher: FanControlPanelActionDispatcher { action in
+                    handleFanControlPanelAction(action)
+                },
                 onHelperAction: performHelperAction,
                 onCopyDiagnostics: copyHelperDiagnosticsCommand
             )
@@ -266,14 +242,81 @@ struct ContentView: View {
         }
     }
 
+    private var fanControlPanelPresentation: FanControlPanelPresentation {
+        let fans = model.snapshot?.fans ?? []
+        let effectiveSensor = model.selectedSensor
+        let metrics = fans.map { fan in
+            FanControlPanelFanMetrics(
+                fanID: fan.id,
+                appliedTargetRPM: model.appliedTargetRPM(for: fan),
+                draftTargetRPM: model.draftTargetRPMPreview(for: fan),
+                fixedSliderRPM: model.fixedFanSliderRPM(for: fan),
+                fixedTargetRPM: model.fixedFanTargetRPM(for: fan),
+                fixedTargetPercent: model.fixedFanTargetPercent(for: fan)
+            )
+        }
+
+        return FanControlPanelPresentation.resolve(FanControlPanelPresentation.Input(
+            selectedMode: model.selectedMode,
+            fixedRPM: model.fixedRPM,
+            usesPerFanFixedRPM: model.usePerFanFixedRPM,
+            curveStartTemperature: model.curveStartTemp,
+            curveRampTemperature: model.curveMidTemp,
+            curveHighTemperature: model.curveMaxTemp,
+            curveStartRPM: model.curveStartRPM,
+            curveRampRPM: model.curveMidRPM,
+            curveHighRPM: model.curveMaxRPM,
+            sensors: model.snapshot?.temperatureSensors ?? [],
+            effectiveSensorID: model.effectiveSelectedSensorID,
+            effectiveTemperature: effectiveSensor?.celsius,
+            usesPerFanOverrides: model.usePerFanOverrides,
+            savedProfiles: model.savedProfiles,
+            selectedCurveProfileID: model.selectedCurveProfileID,
+            curveProfileEditState: model.curveProfileEditState,
+            curveProfileRecoveryMessage: model.curveProfileRecoveryMessage,
+            fanRange: model.fanRange,
+            fans: fans,
+            fanOverrides: model.fanOverrides,
+            fanMetrics: metrics,
+            manualFanControlAvailable: model.manualFanControlAvailable,
+            helperRecoverySuggestion: model.helperRepairActionAvailable
+                ? helperActionPresentation.description
+                : model.helperRecoverySuggestion,
+            fanAccessMessage: model.fanAccessMessage,
+            helperActionTitle: helperActionIsAvailable ? helperActionPresentation.title : nil,
+            helperActionHelp: helperActionIsAvailable ? helperActionPresentation.help : nil,
+            helperActionDisabled: !helperActionPresentation.isAvailable,
+            helperStatusText: daemonInstaller.statusText,
+            helperDiagnosticsCopied: helperDiagnosticsCopied
+        ))
+    }
+
+    private var helperActionPresentation: HelperActionPresentation {
+        daemonInstaller.actionPresentation
+    }
+
+    private var helperActionIsAvailable: Bool {
+        model.helperRepairActionAvailable && helperActionPresentation.isAvailable
+    }
+
+    private var controlSessionPresentation: ControlSessionPresentation {
+        model.controlSessionPresentation.resolvingHelperAction(helperActionPresentation)
+    }
+
+    private func handleFanControlPanelAction(
+        _ action: FanControlPanelAction
+    ) -> FanControlPanelActionResult {
+        FanControlPanelActionHandler(model: model).handle(action)
+    }
+
     private var settingsAndToolsLauncher: some View {
         SettingsLink {
             HStack(spacing: 8) {
                 Label("Settings & Tools", systemImage: "gearshape")
-                    .font(.headline)
+                    .viftyFont(.headline)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .viftyFont(.caption, weight: .semibold)
                     .foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
@@ -299,10 +342,12 @@ struct ContentView: View {
 
     private func performHelperAction() {
         helperRefreshTask?.cancel()
-        daemonInstaller.installOrOpenApproval()
         helperRefreshTask = Task { @MainActor in
+            let actionResult = await daemonInstaller.installOrOpenApproval()
+            guard !Task.isCancelled else { return }
             await model.pollOnce()
-            try? await Task.sleep(for: .milliseconds(750))
+            guard actionResult.shouldRefreshHelperState else { return }
+            try? await helperRefreshSleeper.sleep(for: .milliseconds(750))
             guard !Task.isCancelled else { return }
             daemonInstaller.refresh()
             await model.pollOnce()
@@ -312,12 +357,8 @@ struct ContentView: View {
     private func copyHelperDiagnosticsCommand() {
         HelperDiagnosticsSupport.copySupportEvidenceCommand(context: model.helperSupportEvidenceContext)
         helperDiagnosticsCopied = true
-        helperDiagnosticsFeedbackTask?.cancel()
-        helperDiagnosticsFeedbackTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+        helperDiagnosticsFeedbackScheduler.schedule {
             helperDiagnosticsCopied = false
-            helperDiagnosticsFeedbackTask = nil
         }
     }
 

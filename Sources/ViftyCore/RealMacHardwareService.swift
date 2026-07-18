@@ -1,19 +1,25 @@
-import Darwin
 import Foundation
 
 public final class RealMacHardwareService: HardwareService, @unchecked Sendable {
     private let smcFactory: @Sendable () throws -> SMCClient
+    private let hidTemperatureReader: @Sendable () -> [TemperatureSensor]
     private let preferDaemon: Bool
     private let daemonSnapshot: @Sendable () async throws -> HardwareSnapshot
     private let daemonApply: @Sendable (FanCommand, Fan) async throws -> Void
     private let daemonRestoreAuto: @Sendable (Fan) async throws -> Void
-    private let localApply: @Sendable (FanCommand, Fan) throws -> Void
-    private let localRestoreAuto: @Sendable (Fan) throws -> Void
-    private let allowsLocalFanWriteFallback: @Sendable () -> Bool
+    private let daemonOwnershipStatus: @Sendable () async throws -> FanControlOwnershipStatus
+    private let daemonApplyManual: @Sendable (ManualFanControlRequest) async throws -> FanControlTransactionResult
+    private let daemonRestoreAll: @Sendable (
+        AutoRestoreRequest,
+        @escaping @Sendable () throws -> Void
+    ) async throws -> FanControlTransactionResult
 
     public init(
         preferDaemon: Bool = true,
         smcFactory: @escaping @Sendable () throws -> SMCClient = { try SMCClient() },
+        hidTemperatureReader: @escaping @Sendable () -> [TemperatureSensor] = {
+            HIDTemperatureReader.readTemperatures()
+        },
         daemonSnapshot: @escaping @Sendable () async throws -> HardwareSnapshot = {
             try await ViftyDaemonClient().snapshot()
         },
@@ -23,22 +29,30 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
         daemonRestoreAuto: @escaping @Sendable (Fan) async throws -> Void = { fan in
             try await ViftyDaemonClient().restoreAuto(fan: fan)
         },
-        localApply: @escaping @Sendable (FanCommand, Fan) throws -> Void = { command, fan in
-            try LocalFanHelperClient().apply(command, fan: fan)
+        daemonOwnershipStatus: @escaping @Sendable () async throws -> FanControlOwnershipStatus = {
+            try await ViftyDaemonClient().fanControlOwnershipStatus()
         },
-        localRestoreAuto: @escaping @Sendable (Fan) throws -> Void = { fan in
-            try LocalFanHelperClient().restoreAuto(fan: fan)
+        daemonApplyManual: @escaping @Sendable (ManualFanControlRequest) async throws -> FanControlTransactionResult = { request in
+            try await ViftyDaemonClient().applyManualFanControl(request)
         },
-        allowsLocalFanWriteFallback: @escaping @Sendable () -> Bool = { geteuid() == 0 }
+        daemonRestoreAll: @escaping @Sendable (
+            AutoRestoreRequest,
+            @escaping @Sendable () throws -> Void
+        ) async throws -> FanControlTransactionResult = { request, beforeOwnershipClear in
+            let result = try await ViftyDaemonClient().restoreAllAuto(request)
+            try beforeOwnershipClear()
+            return result
+        }
     ) {
         self.preferDaemon = preferDaemon
         self.smcFactory = smcFactory
+        self.hidTemperatureReader = hidTemperatureReader
         self.daemonSnapshot = daemonSnapshot
         self.daemonApply = daemonApply
         self.daemonRestoreAuto = daemonRestoreAuto
-        self.localApply = localApply
-        self.localRestoreAuto = localRestoreAuto
-        self.allowsLocalFanWriteFallback = allowsLocalFanWriteFallback
+        self.daemonOwnershipStatus = daemonOwnershipStatus
+        self.daemonApplyManual = daemonApplyManual
+        self.daemonRestoreAll = daemonRestoreAll
     }
 
     public func snapshot() async throws -> HardwareSnapshot {
@@ -69,7 +83,7 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
         var sensors = smc.map(Self.readTemperatureSensors) ?? []
 
         if sensors.isEmpty {
-            sensors = HIDTemperatureReader.readTemperatures()
+            sensors = hidTemperatureReader()
         }
 
         return HardwareSnapshot(
@@ -87,12 +101,10 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
                 try await daemonApply(command, fan)
                 return
             } catch {
-                guard allowsLocalFanWriteFallback() else {
-                    throw helperUnavailable(after: error)
-                }
+                throw helperUnavailable(after: error)
             }
         }
-        try localApply(command, fan)
+        throw localWriteUnavailable()
     }
 
     public func restoreAuto(fan: Fan) async throws {
@@ -101,17 +113,73 @@ public final class RealMacHardwareService: HardwareService, @unchecked Sendable 
                 try await daemonRestoreAuto(fan)
                 return
             } catch {
-                guard allowsLocalFanWriteFallback() else {
-                    throw helperUnavailable(after: error)
-                }
+                throw helperUnavailable(after: error)
             }
         }
-        try localRestoreAuto(fan)
+        throw localWriteUnavailable()
+    }
+
+    public func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus {
+        if preferDaemon {
+            do {
+                let status = try await daemonOwnershipStatus()
+                guard status.protocolVersion >= FanControlProtocolVersion.current else {
+                    throw ViftyError.helperRejected("Daemon fan-control protocol v2 is required for writes.")
+                }
+                return status
+            } catch {
+                throw helperUnavailable(after: error)
+            }
+        }
+        throw localWriteUnavailable()
+    }
+
+    public func applyManualFanControl(
+        _ request: ManualFanControlRequest
+    ) async throws -> FanControlTransactionResult {
+        if preferDaemon {
+            do {
+                return try await daemonApplyManual(request)
+            } catch {
+                throw helperUnavailable(after: error)
+            }
+        }
+        throw localWriteUnavailable()
+    }
+
+    public func applyAgentFanControl(
+        _ request: AgentFanControlRequest
+    ) async throws -> FanControlTransactionResult {
+        throw ViftyError.helperRejected(
+            preferDaemon
+                ? "Agent cooling must use the daemon-owned prepare contract, not a direct fan transaction."
+                : "Daemon-disabled RealMacHardwareService is read-only and cannot issue fan transactions."
+        )
+    }
+
+    public func restoreAllAuto(
+        _ request: AutoRestoreRequest,
+        beforeOwnershipClear: @escaping @Sendable () throws -> Void
+    ) async throws -> FanControlTransactionResult {
+        if preferDaemon {
+            do {
+                return try await daemonRestoreAll(request, beforeOwnershipClear)
+            } catch {
+                throw helperUnavailable(after: error)
+            }
+        }
+        throw localWriteUnavailable()
     }
 
     private func helperUnavailable(after daemonError: Error) -> ViftyError {
         .helperRejected(
             "Fan helper is unavailable or not responding. Click Reinstall Helper, then approve it if macOS asks. Direct AppleSMC fan writes require root, so Vifty will not fall back to unprivileged local writes. Daemon error: \(daemonError.localizedDescription)"
+        )
+    }
+
+    private func localWriteUnavailable() -> ViftyError {
+        .helperRejected(
+            "Daemon-disabled RealMacHardwareService is read-only; fan writes require the daemon-owned safety target."
         )
     }
 

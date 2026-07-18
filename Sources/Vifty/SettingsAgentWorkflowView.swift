@@ -3,52 +3,71 @@ import ViftyCore
 
 struct SettingsAgentWorkflowView: View {
     @ObservedObject var model: AppModel
+    @StateObject private var copiedFeedbackScheduler: CopyFeedbackScheduler
     @State private var agentRuleCopied = false
     @State private var agentCommandCopied = false
-    @State private var copiedFeedbackTask: Task<Void, Never>?
+
+    init(
+        model: AppModel,
+        copiedFeedbackScheduler: CopyFeedbackScheduler = CopyFeedbackScheduler()
+    ) {
+        self.model = model
+        _copiedFeedbackScheduler = StateObject(wrappedValue: copiedFeedbackScheduler)
+    }
 
     var body: some View {
-        SettingsCategorySection(title: "Agent Workflows", systemImage: "terminal") {
-            Text("Copy guarded workload commands and the Vifty agent rule. These commands request bounded cooling leases; they do not expose direct fan controls.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        SettingsPane(accessibilityPane: .agentWorkflows) {
+            SettingsCategorySection(title: "Agent Workflows", systemImage: "terminal") {
+                Text("Guarded commands request bounded cooling leases; they never expose direct fan controls.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            Menu {
-                ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
-                    Section(mode.menuTitle) {
-                        ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
-                            Button(template.title) {
-                                copyAgentWorkflowCommand(template, mode)
+            Section("Commands") {
+                Menu {
+                    ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
+                        Section(mode.menuTitle) {
+                            ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
+                                Button(template.title) {
+                                    copyAgentWorkflowCommand(template, mode)
+                                }
                             }
                         }
                     }
+                } label: {
+                    Label("Copy Command", systemImage: "terminal")
                 }
-            } label: {
-                Label("Copy Command", systemImage: "terminal")
-            }
-            .help(AgentWorkflowSupport.copyCommandHelp)
+                .help(AgentWorkflowSupport.copyCommandHelp)
 
-            Button {
-                copyAgentWorkflowRule()
-            } label: {
-                Label("Copy Agent Rule", systemImage: "doc.on.doc")
+                if agentCommandCopied {
+                    Label(AgentWorkflowSupport.copiedCommandMessage, systemImage: "checkmark.circle")
+                        .viftyFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .help(AgentWorkflowSupport.copyHelp)
 
-            if agentRuleCopied {
-                Text(AgentWorkflowSupport.copiedMessage)
-                    .font(.caption)
+            Section("Agent Rule") {
+                Text("Copy the safety contract into an agent's project instructions before running guarded workloads.")
+                    .viftyFont(.caption)
                     .foregroundStyle(.secondary)
-            }
-            if agentCommandCopied {
-                Text(AgentWorkflowSupport.copiedCommandMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    copyAgentWorkflowRule()
+                } label: {
+                    Label("Copy Agent Rule", systemImage: "doc.on.doc")
+                }
+                .help(AgentWorkflowSupport.copyHelp)
+
+                if agentRuleCopied {
+                    Label(AgentWorkflowSupport.copiedMessage, systemImage: "checkmark.circle")
+                        .viftyFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .onDisappear {
-            copiedFeedbackTask?.cancel()
-            copiedFeedbackTask = nil
+            copiedFeedbackScheduler.cancel()
         }
     }
 
@@ -70,13 +89,9 @@ struct SettingsAgentWorkflowView: View {
     }
 
     private func scheduleCopiedFeedbackReset() {
-        copiedFeedbackTask?.cancel()
-        copiedFeedbackTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+        copiedFeedbackScheduler.schedule {
             agentRuleCopied = false
             agentCommandCopied = false
-            copiedFeedbackTask = nil
         }
     }
 }

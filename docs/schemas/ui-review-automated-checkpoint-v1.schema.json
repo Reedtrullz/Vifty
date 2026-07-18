@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-automated-checkpoint-v1.schema.json",
+  "title": "Vifty portable automated UI review checkpoint v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "status",
+    "evidenceKind",
+    "source",
+    "products",
+    "counts",
+    "rows",
+    "safetyAggregate",
+    "hero",
+    "reviewGates",
+    "nonClaims"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "schemaID": {
+      "const": "https://vifty.app/schemas/ui-review-automated-checkpoint-v1.schema.json"
+    },
+    "status": {
+      "const": "automated-passed"
+    },
+    "evidenceKind": {
+      "const": "hardware-free-native-container-debug-fixture"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "manifestSHA256"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifestSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "products": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buildTransactionID",
+        "debugFixtureSHA256",
+        "debugFixtureProvenance",
+        "debugFixtureProvenanceSHA256",
+        "releaseExclusionSHA256",
+        "releaseExclusionProvenance",
+        "releaseExclusionProvenanceSHA256",
+        "axCollectorSHA256",
+        "axCollectorProvenance",
+        "axCollectorProvenanceSHA256"
+      ],
+      "properties": {
+        "buildTransactionID": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugFixtureSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugFixtureProvenance": {
+          "$ref": "#/$defs/debugBuildProvenance"
+        },
+        "debugFixtureProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "releaseExclusionSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "releaseExclusionProvenance": {
+          "$ref": "#/$defs/releaseBuildProvenance"
+        },
+        "releaseExclusionProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "axCollectorSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "axCollectorProvenance": {
+          "$ref": "#/$defs/collectorBuildProvenance"
+        },
+        "axCollectorProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture",
+        "visual",
+        "accessibility",
+        "total"
+      ],
+      "properties": {
+        "fixture": {
+          "const": 9
+        },
+        "visual": {
+          "const": 28
+        },
+        "accessibility": {
+          "const": 13
+        },
+        "total": {
+          "const": 50
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 50,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/fixtureRow"
+          },
+          {
+            "$ref": "#/$defs/visualRow"
+          },
+          {
+            "$ref": "#/$defs/accessibilityRow"
+          }
+        ]
+      }
+    },
+    "safetyAggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finalReportsPassed",
+        "modelStartSkipped",
+        "attemptedHardwareCommands",
+        "attemptedExternalMutations",
+        "realControlPathConstructions"
+      ],
+      "properties": {
+        "finalReportsPassed": {
+          "const": 50
+        },
+        "modelStartSkipped": {
+          "const": 50
+        },
+        "attemptedHardwareCommands": {
+          "const": 0
+        },
+        "attemptedExternalMutations": {
+          "const": 0
+        },
+        "realControlPathConstructions": {
+          "const": 0
+        }
+      }
+    },
+    "hero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rowID",
+        "captureIDHash",
+        "screenshotSHA256",
+        "canonicalPixelSHA256",
+        "heroArtifactSHA256"
+      ],
+      "properties": {
+        "rowID": {
+          "const": "main-1180x820-light"
+        },
+        "captureIDHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "screenshotSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonicalPixelSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "heroArtifactSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "reviewGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visual",
+        "voiceOver"
+      ],
+      "properties": {
+        "visual": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "priorEvidence",
+            "claims"
+          ],
+          "properties": {
+            "status": {
+              "const": "pending"
+            },
+            "priorEvidence": {
+              "const": "superseded"
+            },
+            "claims": {
+              "$ref": "#/$defs/noClaims"
+            }
+          }
+        },
+        "voiceOver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "decision",
+            "claims"
+          ],
+          "properties": {
+            "status": {
+              "const": "pending"
+            },
+            "decision": {
+              "const": "skipped-by-owner"
+            },
+            "claims": {
+              "$ref": "#/$defs/noClaims"
+            }
+          }
+        }
+      }
+    },
+    "nonClaims": {
+      "const": [
+        "full-evidence-bundle-not-committed",
+        "hardware-compatibility-not-claimed",
+        "release-readiness-not-claimed"
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "debugBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "sourceCommit",
+        "sourceTree",
+        "productRole",
+        "configuration",
+        "buildTransactionID"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "schemaID": {
+          "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceTree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "productRole": {
+          "const": "debug-fixture-app"
+        },
+        "configuration": {
+          "const": "debug"
+        },
+        "buildTransactionID": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "releaseBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "sourceCommit",
+        "sourceTree",
+        "productRole",
+        "configuration",
+        "buildTransactionID"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "schemaID": {
+          "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceTree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "productRole": {
+          "const": "release-exclusion"
+        },
+        "configuration": {
+          "const": "release"
+        },
+        "buildTransactionID": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "collectorBuildProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "schemaID",
+        "sourceCommit",
+        "sourceTree",
+        "productRole",
+        "configuration",
+        "buildTransactionID"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "schemaID": {
+          "const": "https://vifty.app/schemas/ui-review-build-provenance-v1.schema.json"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceTree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "productRole": {
+          "const": "ax-collector"
+        },
+        "configuration": {
+          "const": "debug"
+        },
+        "buildTransactionID": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rowID": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "noClaims": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "baseRowProperties": {
+      "kind": {},
+      "id": {
+        "$ref": "#/$defs/rowID"
+      },
+      "captureIDHash": {
+        "$ref": "#/$defs/sha256"
+      },
+      "requestSHA256": {
+        "$ref": "#/$defs/sha256"
+      },
+      "fixtureReportSHA256": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "fixtureRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "captureIDHash",
+        "requestSHA256",
+        "fixtureReportSHA256",
+        "debugFixtureSHA256",
+        "debugBuildProvenanceSHA256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "fixture"
+        },
+        "id": {
+          "$ref": "#/$defs/rowID"
+        },
+        "captureIDHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureReportSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugFixtureSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugBuildProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "visualRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "captureIDHash",
+        "requestSHA256",
+        "fixtureReportSHA256",
+        "debugFixtureSHA256",
+        "debugBuildProvenanceSHA256",
+        "screenshotSHA256",
+        "canonicalPixelSHA256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "visual"
+        },
+        "id": {
+          "$ref": "#/$defs/rowID"
+        },
+        "captureIDHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureReportSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugFixtureSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugBuildProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "screenshotSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonicalPixelSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "accessibilityRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "captureIDHash",
+        "requestSHA256",
+        "fixtureReportSHA256",
+        "debugFixtureSHA256",
+        "debugBuildProvenanceSHA256",
+        "accessibilityRawSHA256",
+        "accessibilitySealedSHA256",
+        "axCollectorSHA256",
+        "axCollectorBuildProvenanceSHA256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "accessibility"
+        },
+        "id": {
+          "$ref": "#/$defs/rowID"
+        },
+        "captureIDHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureReportSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugFixtureSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugBuildProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "accessibilityRawSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "accessibilitySealedSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "axCollectorSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "axCollectorBuildProvenanceSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

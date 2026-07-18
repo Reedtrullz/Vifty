@@ -31,13 +31,14 @@ public enum AgentControlDefaultScheduler {
 public actor AgentControlService {
     private let hardware: HardwareService
     private let policy: AgentControlPolicy
-    private let store: AgentControlStore
+    private let store: any AgentControlPersisting
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
     private let leaseID: @Sendable () -> String
     private let expiryScheduler: AgentControlExpiryScheduler
 
     private var activeLease: AgentCoolingLease?
+    private var persistenceLoadErrorMessage: String?
     private var lastDecision: AgentControlDecision?
     private var lastErrorCode: AgentControlErrorCode?
     private var operationInProgress = false
@@ -50,11 +51,12 @@ public actor AgentControlService {
     public init(
         hardware: HardwareService,
         policy: AgentControlPolicy,
-        store: AgentControlStore = AgentControlStore(),
+        store: any AgentControlPersisting = AgentControlStore(),
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
         leaseID: @escaping @Sendable () -> String = { UUID().uuidString },
-        expiryScheduler: @escaping AgentControlExpiryScheduler = AgentControlDefaultScheduler.schedule(after:operation:)
+        expiryScheduler: @escaping AgentControlExpiryScheduler = AgentControlDefaultScheduler.schedule(after:operation:),
+        automaticallySchedulePersistedLeaseMonitor: Bool = true
     ) {
         self.hardware = hardware
         self.policy = policy
@@ -63,9 +65,15 @@ public actor AgentControlService {
         self.now = now
         self.leaseID = leaseID
         self.expiryScheduler = expiryScheduler
-        self.activeLease = try? store.loadActiveLease()
+        do {
+            self.activeLease = try store.loadActiveLease()
+            self.persistenceLoadErrorMessage = nil
+        } catch {
+            self.activeLease = nil
+            self.persistenceLoadErrorMessage = error.localizedDescription
+        }
         self.scheduledExpiry = nil
-        if let activeLease {
+        if automaticallySchedulePersistedLeaseMonitor, let activeLease {
             Task { [weak self] in
                 await self?.scheduleMonitor(for: activeLease)
             }
@@ -87,9 +95,50 @@ public actor AgentControlService {
         try store.loadRecentAuditEvents(limit: limit)
     }
 
+    /// Daemon startup barrier. Any durable lease, unresolved fan journal, or
+    /// unreadable lease state is reconciled through one full-set Auto
+    /// transaction before the XPC listener exposes write operations.
+    public func recoverOnStartup() async throws -> AgentControlStatus {
+        let ownership = try await hardware.fanControlOwnershipStatus()
+        let needsRecovery = activeLease != nil
+            || persistenceLoadErrorMessage != nil
+            || ownership.owner != nil
+            || ownership.recoveryPending
+        guard needsRecovery else { return status() }
+
+        let durableExpectedFanIDs = Array(
+            Set(ownership.expectedFanIDs)
+                .union(activeLease?.targetRPMByFanID.keys ?? Dictionary<Int, Int>().keys)
+        ).sorted()
+        guard !durableExpectedFanIDs.isEmpty else {
+            throw ViftyError.helperRejected(
+                "STARTUP_RECOVERY_REQUIRES_OPERATOR: durable lease state is unreadable and no trusted journal fan set exists; daemon writes remain read-only until one explicit operator-approved restore-all."
+            )
+        }
+
+        markRestoreRequested()
+        restoreOperationCount += 1
+        defer { restoreOperationCount -= 1 }
+        _ = try await performFullAutoRestore(AutoRestoreRequest(
+            transactionID: ownership.transactionID
+                ?? activeLease?.id
+                ?? "startup-recovery-\(UUID().uuidString)",
+            expectedFanIDs: durableExpectedFanIDs,
+            reason: "Daemon startup recovery",
+            allowRestoreAllTrustedFans: false,
+            unreadableJournalRecoveryAuthority: .durableState
+        ))
+        return status()
+    }
+
     public func prepare(_ request: AgentControlRequest) async throws -> AgentControlStatus {
         try beginOperation()
         defer { endOperation() }
+        if let persistenceLoadErrorMessage {
+            throw ViftyError.helperRejected(
+                "Agent-control ownership state is unreadable; startup Auto recovery is required before prepare: \(persistenceLoadErrorMessage)"
+            )
+        }
         let prepareRestoreGeneration = restoreRequestGeneration
         guard let request = request.normalizedMetadata else {
             let decision = AgentControlDecision.denied(
@@ -140,9 +189,21 @@ public actor AgentControlService {
 
         let snapshot = try await hardware.snapshot()
         if restoreWasRequested(since: prepareRestoreGeneration) {
-            await cancelPrepareBecauseRestoreWasRequested(appliedFans: [], leaseID: nil)
+            try cancelPrepareBecauseRestoreWasRequested(leaseID: nil)
             return status()
         }
+        let expectedFanIDs = snapshot.fans
+            .filter { $0.controlEligibility.canApplyFixedRPM }
+            .map(\.id)
+            .sorted()
+        if let blocker = prepareHardwareBlocker(snapshot, expectedFanIDs: expectedFanIDs) {
+            let hardwareDecision = AgentControlDecision.denied(.policyDenied, message: blocker)
+            lastDecision = hardwareDecision
+            lastErrorCode = hardwareDecision.errorCode
+            appendAudit(action: "prepare-denied", leaseID: nil, message: hardwareDecision.message)
+            return status()
+        }
+
         let decision = policy.evaluate(request, snapshot: snapshot, thermalPressure: thermalReader())
         lastDecision = decision
         lastErrorCode = decision.errorCode
@@ -152,50 +213,156 @@ public actor AgentControlService {
             return status()
         }
 
-        var appliedFans: [Fan] = []
-        var rollbackLeaseID: String?
+        let ownership = try await hardware.fanControlOwnershipStatus()
+        if ownership.owner != nil || ownership.recoveryPending {
+            let ownershipDecision = AgentControlDecision.denied(
+                .policyDenied,
+                message: "Fan control is already owned by another transaction or requires Auto recovery."
+            )
+            lastDecision = ownershipDecision
+            lastErrorCode = ownershipDecision.errorCode
+            appendAudit(action: "prepare-denied", leaseID: nil, message: ownershipDecision.message)
+            return status()
+        }
+
+        guard !expectedFanIDs.isEmpty,
+              Set(decision.targetRPMByFanID.keys) == Set(expectedFanIDs) else {
+            throw ViftyError.noControllableFans
+        }
+        let createdAt = now()
+        let lease = AgentCoolingLease(
+            id: leaseID(),
+            request: request,
+            createdAt: createdAt,
+            expiresAt: createdAt.addingTimeInterval(TimeInterval(request.durationSeconds)),
+            targetRPMByFanID: decision.targetRPMByFanID
+        )
+        activeLease = lease
 
         do {
-            for fan in snapshot.fans where fan.controllable {
-                guard let target = decision.targetRPMByFanID[fan.id] else { continue }
-                let command = FanCommand(fanID: fan.id, mode: .fixedRPM(target))
-                try await hardware.apply(command, fan: fan)
-                appliedFans.append(fan)
-                if restoreWasRequested(since: prepareRestoreGeneration) {
-                    await cancelPrepareBecauseRestoreWasRequested(appliedFans: appliedFans, leaseID: rollbackLeaseID)
-                    return status()
-                }
-            }
-
-            let createdAt = now()
-            let lease = AgentCoolingLease(
-                id: leaseID(),
-                request: request,
-                createdAt: createdAt,
-                expiresAt: createdAt.addingTimeInterval(TimeInterval(request.durationSeconds)),
-                targetRPMByFanID: decision.targetRPMByFanID
+            _ = try await hardware.applyAgentFanControl(
+                AgentFanControlRequest(
+                    transactionID: lease.id,
+                    leaseID: lease.id,
+                    expectedFanIDs: expectedFanIDs,
+                    targetRPMByFanID: decision.targetRPMByFanID
+                )
             )
-            rollbackLeaseID = lease.id
-            activeLease = lease
-            try store.saveActiveLease(lease)
-            scheduleMonitor(for: lease)
-            lastPrepareCompletedAt = now()
-            appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
-            return status()
         } catch {
-            for fan in appliedFans {
-                do {
-                    try await hardware.restoreAuto(fan: fan)
-                } catch {
-                    appendAudit(action: "prepare-rollback-failure", leaseID: rollbackLeaseID,
-                                 message: "Failed to restore fan \(fan.id) during rollback: \(error.localizedDescription)")
-                }
-            }
             activeLease = nil
             try? store.saveActiveLease(nil)
-            appendAudit(action: "prepare-rollback", leaseID: rollbackLeaseID, message: "Prepare rolled back: \(error.localizedDescription)")
+            appendAudit(
+                action: "prepare-apply-failed",
+                leaseID: lease.id,
+                message: "Transactional fan apply failed; the arbiter owns rollback: \(error.localizedDescription)"
+            )
             throw error
         }
+
+        if restoreWasRequested(since: prepareRestoreGeneration) {
+            _ = try await restoreAuto(
+                reason: "Prepare cancelled because Auto restore was requested",
+                snapshot: snapshot
+            )
+            let restoreDecision = AgentControlDecision.denied(
+                .restoreRequested,
+                message: "Prepare cancelled because Auto restore was requested."
+            )
+            lastDecision = restoreDecision
+            lastErrorCode = restoreDecision.errorCode
+            appendAudit(action: "prepare-cancelled", leaseID: lease.id, message: restoreDecision.message)
+            return status()
+        }
+
+        do {
+            try store.saveActiveLease(lease)
+        } catch {
+            let persistenceError = error
+            let durableLeaseCleared = AgentControlSendableFlag()
+            let rollbackResult: FanControlTransactionResult?
+            do {
+                rollbackResult = try await hardware.restoreFanControlIfOwned(
+                    transactionID: lease.id,
+                    owner: .agent(leaseID: lease.id),
+                    reason: "Prepare persistence rollback",
+                    beforeOwnershipClear: { [store] in
+                        try store.saveActiveLease(nil)
+                        durableLeaseCleared.mark()
+                    }
+                )
+            } catch {
+                if durableLeaseCleared.value {
+                    activeLease = nil
+                    persistenceLoadErrorMessage = nil
+                } else {
+                    scheduleMonitor(for: lease)
+                }
+                appendAudit(
+                    action: "prepare-rollback-failure",
+                    leaseID: lease.id,
+                    message: "Atomic owner-conditional Auto rollback failed: \(error.localizedDescription)"
+                )
+                throw ViftyError.helperRejected(
+                    "Lease persistence failed (\(persistenceError.localizedDescription)); atomic full-set Auto rollback remains pending (\(error.localizedDescription))."
+                )
+            }
+
+            guard rollbackResult != nil else {
+                activeLease = nil
+                try? store.saveActiveLease(nil)
+                appendAudit(
+                    action: "prepare-persistence-foreign-owner",
+                    leaseID: lease.id,
+                    message: "Lease persistence failed but the atomic arbiter check found different ownership; no foreign ownership was cleared."
+                )
+                throw persistenceError
+            }
+
+            activeLease = nil
+            persistenceLoadErrorMessage = nil
+            appendAudit(
+                action: "prepare-rollback",
+                leaseID: lease.id,
+                message: "Lease persistence failed and the atomic arbiter restored its exact owned fan transaction: \(persistenceError.localizedDescription)"
+            )
+            throw persistenceError
+        }
+
+        scheduleMonitor(for: lease)
+        lastPrepareCompletedAt = now()
+        appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
+        return status()
+    }
+
+    private func prepareHardwareBlocker(
+        _ snapshot: HardwareSnapshot,
+        expectedFanIDs: [Int]
+    ) -> String? {
+        guard snapshot.fanControlProtocolVersion >= FanControlProtocolVersion.current else {
+            return "Agent prepare requires fan-control protocol v2."
+        }
+        let physicalFans = snapshot.fans
+        guard !physicalFans.isEmpty,
+              physicalFans.map(\.id).count == Set(physicalFans.map(\.id)).count,
+              physicalFans.allSatisfy({
+                  SMCFanControlKeys.isValidFanID($0.id)
+                      && $0.controlEligibility.canRestoreOSManagedMode
+              }) else {
+            return "Agent prepare requires one complete, unique physical fan inventory with trusted restore telemetry."
+        }
+        let fixedEligibleFanIDs = physicalFans
+            .filter { $0.controlEligibility.canApplyFixedRPM }
+            .map(\.id)
+            .sorted()
+        guard !expectedFanIDs.isEmpty, expectedFanIDs == fixedEligibleFanIDs else {
+            return "Agent prepare requires an exact target for every Fixed-eligible physical fan."
+        }
+        guard physicalFans.allSatisfy({
+            $0.hardwareMode == .automatic || $0.hardwareMode == .system
+        }) else {
+            return "Agent prepare is blocked because a physical fan is Forced/Unknown without an active owner; restore Auto explicitly first."
+        }
+        return nil
     }
 
     public func restoreAuto(reason: String) async throws -> AgentControlStatus {
@@ -208,57 +375,97 @@ public actor AgentControlService {
         return try await restoreAuto(reason: normalizedReason, snapshot: snapshot)
     }
 
+    public func restoreAllAuto(
+        _ request: AutoRestoreRequest
+    ) async throws -> FanControlTransactionResult {
+        markRestoreRequested()
+        restoreOperationCount += 1
+        defer { restoreOperationCount -= 1 }
+        let leaseFanIDs = activeLease?.targetRPMByFanID.keys.sorted()
+        let explicitOperatorRecovery = request.unreadableJournalRecoveryAuthority == .explicitOperator
+        let authoritativeRequest = AutoRestoreRequest(
+            transactionID: request.transactionID,
+            expectedFanIDs: explicitOperatorRecovery ? [] : (leaseFanIDs ?? []),
+            reason: request.reason,
+            allowRestoreAllTrustedFans: explicitOperatorRecovery || leaseFanIDs == nil,
+            unreadableJournalRecoveryAuthority: explicitOperatorRecovery
+                ? .explicitOperator
+                : (leaseFanIDs == nil ? nil : .durableState)
+        )
+        return try await performFullAutoRestore(authoritativeRequest)
+    }
+
     private func restoreAuto(reason: String, snapshot: HardwareSnapshot) async throws -> AgentControlStatus {
         let lease = activeLease
+        _ = snapshot
+        let expectedFanIDs = lease?.targetRPMByFanID.keys.sorted() ?? []
+        _ = try await performFullAutoRestore(
+            AutoRestoreRequest(
+                transactionID: lease?.id ?? "restore-\(UUID().uuidString)",
+                expectedFanIDs: expectedFanIDs,
+                reason: reason,
+                allowRestoreAllTrustedFans: lease == nil,
+                unreadableJournalRecoveryAuthority: lease == nil ? nil : .durableState
+            )
+        )
+        return status()
+    }
 
-        for fan in snapshot.fans where fan.controllable {
-            try await hardware.restoreAuto(fan: fan)
+    private func performFullAutoRestore(
+        _ request: AutoRestoreRequest
+    ) async throws -> FanControlTransactionResult {
+        let lease = activeLease
+        let durableLeaseCleared = AgentControlSendableFlag()
+        let result: FanControlTransactionResult
+        do {
+            result = try await hardware.restoreAllAuto(
+                request,
+                beforeOwnershipClear: { [store] in
+                    try store.saveActiveLease(nil)
+                    durableLeaseCleared.mark()
+                }
+            )
+        } catch {
+            if durableLeaseCleared.value {
+                cancelScheduledExpiry()
+                activeLease = nil
+                persistenceLoadErrorMessage = nil
+            }
+            throw error
         }
 
         if let lease {
-            appendAudit(action: "restore-auto", leaseID: lease.id, message: reason)
+            appendAudit(action: "restore-auto", leaseID: lease.id, message: request.reason)
         }
         cancelScheduledExpiry()
         activeLease = nil
-        try store.saveActiveLease(nil)
+        persistenceLoadErrorMessage = nil
         lastDecision = nil
         lastErrorCode = nil
-        return status()
+        return result
     }
 
-    public func clearActiveLease(reason: String) throws -> AgentControlStatus {
-        markRestoreRequested()
+    /// Compatibility entry point for callers that previously cleared lease
+    /// metadata after a per-fan Auto write. It now performs authoritative
+    /// full-set Auto restoration and cannot clear ownership independently.
+    public func clearActiveLease(reason: String) async throws -> AgentControlStatus {
+        let lease = activeLease
         let normalizedReason = Self.normalizedAuditReason(reason, fallback: "lease cleared")
-
-        cancelScheduledExpiry()
-        if let lease = activeLease {
+        let restored = try await restoreAuto(reason: normalizedReason)
+        if let lease {
             appendAudit(action: "clear-lease", leaseID: lease.id, message: normalizedReason)
         }
-        activeLease = nil
-        try store.saveActiveLease(nil)
-        lastDecision = nil
-        lastErrorCode = nil
-        return status()
+        return restored
     }
 
-    private func cancelPrepareBecauseRestoreWasRequested(appliedFans: [Fan], leaseID: String?) async {
-        for fan in appliedFans {
-            do {
-                try await hardware.restoreAuto(fan: fan)
-            } catch {
-                appendAudit(
-                    action: "prepare-cancel-restore-failure",
-                    leaseID: leaseID,
-                    message: "Failed to restore fan \(fan.id) after Auto preempted prepare: \(error.localizedDescription)"
-                )
-            }
-        }
+    private func cancelPrepareBecauseRestoreWasRequested(leaseID: String?) throws {
         let decision = AgentControlDecision.denied(
             .restoreRequested,
             message: "Prepare cancelled because Auto restore was requested."
         )
         activeLease = nil
-        try? store.saveActiveLease(nil)
+        try store.saveActiveLease(nil)
+        persistenceLoadErrorMessage = nil
         lastDecision = decision
         lastErrorCode = decision.errorCode
         appendAudit(action: "prepare-cancelled", leaseID: leaseID, message: decision.message)
@@ -371,5 +578,18 @@ public actor AgentControlService {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmed.isEmpty ? fallback : trimmed
         return String(normalized.prefix(AgentControlRequest.maximumReasonLength))
+    }
+}
+
+private final class AgentControlSendableFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = false
+
+    var value: Bool {
+        lock.withLock { storage }
+    }
+
+    func mark() {
+        lock.withLock { storage = true }
     }
 }

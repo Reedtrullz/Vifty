@@ -35,8 +35,11 @@ Run success examples include the stable run schema ID,
 `https://vifty.local/schemas/viftyctl-run.schema.json`, matching
 `capabilities.schemaIDs.run` before agents trust child-exit or Auto-restore
 status from a completed `viftyctl run --json` workload. Current examples also
-show `resolvedChildExecutableSHA256Status` so agents can distinguish computed,
-unavailable, and legacy digest provenance.
+show `signalScope: processGroup`, `descendantCleanupBeforeAutoRestore: true`,
+and `backgroundProcessesAllowed: false` alongside
+`resolvedChildExecutableSHA256Status`, so agents can distinguish the current
+descendant-cleanup contract from legacy immediate-child behavior and digest
+provenance.
 
 Files:
 

@@ -8,8 +8,15 @@ cask "vifty" do
   homepage "https://github.com/Reedtrullz/Vifty"
 
   depends_on macos: :sequoia
+  depends_on arch: :arm64
 
   app "Vifty.app"
+
+  uninstall script: {
+    executable: "#{appdir}/Vifty.app/Contents/Resources/uninstall-vifty.sh",
+    args:       ["--app", "#{appdir}/Vifty.app"],
+    sudo:       false,
+  }
 
   caveats <<~EOS
     Vifty uses a privileged XPC helper (LaunchDaemon) for fan SMC writes.
@@ -19,10 +26,9 @@ cask "vifty" do
     The bundled viftyctl agent CLI is at:
       #{appdir}/Vifty.app/Contents/MacOS/viftyctl
 
-    To uninstall the privileged helper alongside the app:
-      sudo launchctl bootout system /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
-      sudo rm /Library/LaunchDaemons/tech.reidar.vifty.daemon.plist
-      sudo rm /Library/PrivilegedHelperTools/tech.reidar.vifty.daemon
+    Homebrew invokes Vifty's bundled safe-uninstall preflight before removing
+    the app. Helper teardown remains blocked unless Vifty can prove every fan
+    is back under Auto/System ownership with a valid maintenance token.
   EOS
 
   zap trash: "~/Library/Application Support/Vifty"

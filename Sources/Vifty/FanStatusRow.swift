@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FanStatusRow: View {
+    let fanID: Int
     let fanName: String
     let presentation: FanStatusPresentation
 
@@ -8,14 +9,14 @@ struct FanStatusRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(fanName)
-                    .font(.subheadline.weight(.semibold))
+                    .viftyFont(.subheadline, weight: .semibold)
                 Spacer()
                 Text(presentation.currentText)
                     .monospacedDigit()
             }
 
             Text(presentation.ownershipText)
-                .font(.caption)
+                .viftyFont(.caption)
                 .foregroundStyle(presentation.needsAttention ? .orange : .secondary)
 
             rpmIndicator
@@ -30,21 +31,27 @@ struct FanStatusRow: View {
                         .foregroundStyle(presentation.needsAttention ? .orange : .secondary)
                 }
             }
-            .font(.caption)
+            .viftyFont(.caption)
             .monospacedDigit()
 
-            if let draftTargetText = presentation.draftTargetText {
-                Text(draftTargetText)
-                    .font(.caption)
+            if let draft = FanDraftTargetAccessibilityPresentation.resolve(
+                fanID: fanID,
+                fanName: fanName,
+                draftTargetText: presentation.draftTargetText
+            ) {
+                Text(draft.value)
+                    .viftyFont(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.tint)
+                    .accessibilityLabel(draft.label)
+                    .accessibilityValue(draft.value)
+                    .accessibilityIdentifier(draft.identifier)
             }
         }
         .padding(10)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(fanName)
-        .accessibilityValue(accessibilityValue)
     }
 
     private var rpmIndicator: some View {
@@ -73,17 +80,5 @@ struct FanStatusRow: View {
         }
         .frame(height: 8)
         .accessibilityHidden(true)
-    }
-
-    private var accessibilityValue: String {
-        [
-            presentation.currentText,
-            presentation.targetText,
-            presentation.draftTargetText,
-            presentation.ownershipText,
-            presentation.deltaText
-        ]
-        .compactMap { $0 }
-        .joined(separator: ", ")
     }
 }

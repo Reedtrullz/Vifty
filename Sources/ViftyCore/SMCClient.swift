@@ -140,7 +140,7 @@ public final class SMCClient: @unchecked Sendable {
         )
     }
 
-    public func write(_ key: String, dataType: String, bytes: [UInt8]) throws {
+    package func write(_ key: String, dataType: String, bytes: [UInt8]) throws {
         guard Self.isAllowedWriteKey(key) else {
             throw ViftyError.smcWriteRejected(key)
         }
@@ -152,17 +152,48 @@ public final class SMCClient: @unchecked Sendable {
         guard infoOutput.result == 0, infoOutput.keyInfo.dataSize > 0 else {
             throw ViftyError.smcKeyUnavailable(key)
         }
+        let discoveredDataType = Self.string(from: infoOutput.keyInfo.dataType)
+        try Self.validateWriteLayout(
+            key: key,
+            requestedDataType: dataType,
+            bytes: bytes,
+            discoveredDataType: discoveredDataType,
+            discoveredSize: Int(infoOutput.keyInfo.dataSize)
+        )
 
         var input = infoInput
         input.keyInfo = infoOutput.keyInfo
-        input.keyInfo.dataSize = UInt32(min(bytes.count, Int(infoOutput.keyInfo.dataSize), 32))
         input.data8 = 6
-        for (index, byte) in bytes.prefix(32).enumerated() {
+        for (index, byte) in bytes.enumerated() {
             input.bytes[index] = byte
         }
 
         let output = try call(input)
         guard output.result == 0 else { throw ViftyError.smcKeyUnavailable(key) }
+    }
+
+    package static func validateWriteLayout(
+        key: String,
+        requestedDataType: String,
+        bytes: [UInt8],
+        discoveredDataType: String,
+        discoveredSize: Int
+    ) throws {
+        guard discoveredSize > 0, discoveredSize <= 32 else {
+            throw ViftyError.helperRejected(
+                "SMC write layout for \(key) has unsupported size \(discoveredSize)."
+            )
+        }
+        guard requestedDataType == discoveredDataType else {
+            throw ViftyError.helperRejected(
+                "SMC write layout for \(key) changed type from \(requestedDataType) to \(discoveredDataType)."
+            )
+        }
+        guard bytes.count == discoveredSize else {
+            throw ViftyError.helperRejected(
+                "SMC write layout for \(key) requires exactly \(discoveredSize) bytes; received \(bytes.count)."
+            )
+        }
     }
 
     public static func isAllowedWriteKey(_ key: String) -> Bool {
@@ -328,5 +359,92 @@ public enum SMCDecoding {
         }
 
         return encodeFPE2(value)
+    }
+
+    /// Strict encoding used by privileged fan-control preflight. Unlike the
+    /// display-oriented helpers above, an unknown type/size returns nil instead
+    /// of guessing bytes that could later be written to hardware.
+    public static func encodeFanControlByte(
+        _ value: UInt8,
+        dataType: String,
+        size: Int
+    ) -> [UInt8]? {
+        switch (dataType, size) {
+        case ("ui8 ", 1):
+            return [value]
+        case ("ui16", 2):
+            return [0, value]
+        case ("flt ", 4):
+            var float = Float(value)
+            return withUnsafeBytes(of: &float) { Array($0) }
+        default:
+            return nil
+        }
+    }
+
+    public static func decodeFanControlByte(_ value: SMCValue) -> UInt8? {
+        switch (value.dataType, value.bytes.count) {
+        case ("ui8 ", 1):
+            return value.bytes[0]
+        case ("ui16", 2):
+            let decoded = UInt16(value.bytes[0]) << 8 | UInt16(value.bytes[1])
+            guard decoded <= UInt16(UInt8.max) else { return nil }
+            return UInt8(decoded)
+        case ("flt ", 4):
+            let decoded = value.bytes.withUnsafeBytes { rawBuffer in
+                rawBuffer.loadUnaligned(as: Float.self)
+            }
+            guard decoded.isFinite,
+                  decoded >= 0,
+                  decoded <= Float(UInt8.max),
+                  decoded.rounded() == decoded else {
+                return nil
+            }
+            return UInt8(decoded)
+        default:
+            return nil
+        }
+    }
+
+    /// Strict target encoding for write preflight. Fan target keys are known to
+    /// use FPE2 or Float on supported machines; other layouts fail closed.
+    public static func encodeFanTargetRPM(
+        _ value: Int,
+        dataType: String,
+        size: Int
+    ) -> [UInt8]? {
+        switch (dataType, size) {
+        case ("fpe2", 2):
+            guard value >= 0, value <= Int(UInt16.max) / 4 else { return nil }
+            return encodeFPE2(value)
+        case ("flt ", 4):
+            guard value >= 0, value <= Int(Int32.max) else { return nil }
+            var float = Float(value)
+            return withUnsafeBytes(of: &float) { Array($0) }
+        default:
+            return nil
+        }
+    }
+
+    public static func decodeFanTargetRPM(_ value: SMCValue) -> Int? {
+        switch (value.dataType, value.bytes.count) {
+        case ("fpe2", 2):
+            let raw = UInt16(value.bytes[0]) << 8 | UInt16(value.bytes[1])
+            guard raw.isMultiple(of: 4) else { return nil }
+            return Int(raw / 4)
+        case ("flt ", 4):
+            let decoded = value.bytes.withUnsafeBytes { rawBuffer in
+                rawBuffer.loadUnaligned(as: Float.self)
+            }
+            guard decoded.isFinite,
+                  decoded >= 0,
+                  decoded <= Float(Int32.max),
+                  decoded.rounded() == decoded else {
+                return nil
+            }
+            return Int(decoded)
+        default:
+            return nil
+        }
     }
 }

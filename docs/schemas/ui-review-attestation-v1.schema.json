@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/ui-review-attestation-v1.schema.json",
+  "title": "Vifty UI review human attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "voiceover-session"
+          }
+        },
+        "required": [
+          "method"
+        ]
+      },
+      "then": {
+        "required": [
+          "actionSequence",
+          "inspectOnlyControlGroups",
+          "disallowedActionsPerformed"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "actionSequence"
+              ]
+            },
+            {
+              "required": [
+                "inspectOnlyControlGroups"
+              ]
+            },
+            {
+              "required": [
+                "disallowedActionsPerformed"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "method",
+    "reviewer",
+    "reviewedAt",
+    "coveredRowIDs",
+    "captureBindings",
+    "steps",
+    "overallStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "method": {
+      "enum": [
+        "visual-inspection",
+        "voiceover-session"
+      ]
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "const": "REPLACE_WITH_REVIEWER_NAME"
+      }
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time",
+      "not": {
+        "const": "1970-01-01T00:00:00Z"
+      }
+    },
+    "coveredRowIDs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/rowID"
+      }
+    },
+    "captureBindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/captureBinding"
+      }
+    },
+    "actionSequence": {
+      "$ref": "#/$defs/voiceOverActionSequence"
+    },
+    "inspectOnlyControlGroups": {
+      "$ref": "#/$defs/voiceOverInspectOnlyControlGroups"
+    },
+    "disallowedActionsPerformed": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "overallStatus": {
+      "$ref": "#/$defs/status"
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "passed",
+        "failed"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sha256OrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rowID": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "voiceOverActionSequence": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "settings-general"
+        },
+        {
+          "const": "settings-menu-bar"
+        },
+        {
+          "const": "settings-notifications"
+        },
+        {
+          "const": "settings-agent-workflows"
+        },
+        {
+          "const": "settings-general"
+        }
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "voiceOverInspectOnlyControlGroups": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "curve-point-adjustables"
+        },
+        {
+          "const": "notification-actions"
+        },
+        {
+          "const": "sensor-buttons"
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "captureBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rowID",
+        "captureID",
+        "requestSHA256",
+        "debugExecutableSHA256",
+        "fixtureReportSHA256",
+        "screenshotSHA256",
+        "screenshotCanonicalPixelSHA256",
+        "accessibilityRawSHA256",
+        "accessibilitySealedSHA256"
+      ],
+      "properties": {
+        "rowID": {
+          "$ref": "#/$defs/rowID"
+        },
+        "captureID": {
+          "$ref": "#/$defs/rowID"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "debugExecutableSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureReportSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "screenshotSHA256": {
+          "$ref": "#/$defs/sha256OrNull"
+        },
+        "screenshotCanonicalPixelSHA256": {
+          "$ref": "#/$defs/sha256OrNull"
+        },
+        "accessibilityRawSHA256": {
+          "$ref": "#/$defs/sha256OrNull"
+        },
+        "accessibilitySealedSHA256": {
+          "$ref": "#/$defs/sha256OrNull"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "coveredRowIDs",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/rowID"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "coveredRowIDs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/rowID"
+          }
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 24,
+          "not": {
+            "anyOf": [
+              {
+                "pattern": "^REPLACE_WITH_OBSERVED_RESULT:"
+              },
+              {
+                "pattern": "^Completed the scripted (visual-inspection|voiceover-session) check\\.?$"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

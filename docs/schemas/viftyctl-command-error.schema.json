@@ -99,6 +99,28 @@
         }
       ]
     },
+    "childProcessFailurePhase": {
+      "description": "Present when the child supervisor can identify whether launch, leader wait, or descendant cleanup failed.",
+      "enum": [
+        "launch",
+        "wait",
+        "descendantCleanup"
+      ]
+    },
+    "childExitCode": {
+      "description": "The leader's shell-style exit code when it was known before a later lifecycle failure.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "descendantCleanupCompleted": {
+      "description": "False when the process group could not be confirmed gone before the Auto restore attempt.",
+      "type": "boolean"
+    },
+    "backgroundProcessesMayRemain": {
+      "description": "True when bounded TERM/KILL escalation could not prove the child process group exited.",
+      "type": "boolean"
+    },
     "retryAfterSeconds": {
       "description": "Present for PREPARE_RATE_LIMITED errors when Vifty can tell an agent how long to wait before retrying.",
       "type": "integer",

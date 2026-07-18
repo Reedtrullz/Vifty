@@ -39,6 +39,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(capabilities.runLifecycle.structuredPreChildFailures, true)
         XCTAssertEqual(capabilities.runLifecycle.cleanupStateReportedOnLaunchFailure, true)
         XCTAssertEqual(capabilities.runLifecycle.resolvedChildExecutableReported, true)
+        XCTAssertEqual(capabilities.runLifecycle.signalScope, .processGroup)
+        XCTAssertTrue(capabilities.runLifecycle.descendantCleanupBeforeAutoRestore)
+        XCTAssertFalse(capabilities.runLifecycle.backgroundProcessesAllowed)
         XCTAssertEqual(capabilities.directControlLifecycle.prepareUsesIdempotencyKey, true)
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoAcceptsIdempotencyKey, false)
         XCTAssertEqual(capabilities.directControlLifecycle.restoreAutoScopedByIdempotencyKey, false)
@@ -143,6 +146,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         var payload = try readJSON(fixtureURL("capabilities.json"))
         var runLifecycle = try XCTUnwrap(payload["runLifecycle"] as? [String: Any])
         runLifecycle.removeValue(forKey: "resolvedChildExecutableReported")
+        runLifecycle.removeValue(forKey: "signalScope")
+        runLifecycle.removeValue(forKey: "descendantCleanupBeforeAutoRestore")
+        runLifecycle.removeValue(forKey: "backgroundProcessesAllowed")
         payload["runLifecycle"] = runLifecycle
         let data = try JSONSerialization.data(withJSONObject: payload)
 
@@ -150,6 +156,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
 
         XCTAssertTrue(capabilities.runLifecycle.childCommandPreflightBeforeCooling)
         XCTAssertFalse(capabilities.runLifecycle.resolvedChildExecutableReported)
+        XCTAssertEqual(capabilities.runLifecycle.signalScope, .immediateChild)
+        XCTAssertFalse(capabilities.runLifecycle.descendantCleanupBeforeAutoRestore)
+        XCTAssertTrue(capabilities.runLifecycle.backgroundProcessesAllowed)
     }
 
     func testDiagnoseReadyExampleDecodesAgainstCurrentModel() throws {
@@ -467,6 +476,23 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(report.resolvedChildExecutable, "/usr/bin/true")
         XCTAssertNil(report.resolvedChildExecutableSHA256)
         XCTAssertEqual(report.resolvedChildExecutableSHA256Status, .unavailable)
+        XCTAssertEqual(report.signalScope, .processGroup)
+        XCTAssertTrue(report.descendantCleanupBeforeAutoRestore)
+        XCTAssertFalse(report.backgroundProcessesAllowed)
+    }
+
+    func testLegacyRunReportDecodesWithConservativeProcessDefaults() throws {
+        var payload = try readJSON(fixtureURL("run-success.json"))
+        payload.removeValue(forKey: "signalScope")
+        payload.removeValue(forKey: "descendantCleanupBeforeAutoRestore")
+        payload.removeValue(forKey: "backgroundProcessesAllowed")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        let report = try JSONDecoder().decode(ViftyCtlRunReport.self, from: data)
+
+        XCTAssertEqual(report.signalScope, .immediateChild)
+        XCTAssertFalse(report.descendantCleanupBeforeAutoRestore)
+        XCTAssertTrue(report.backgroundProcessesAllowed)
     }
 
     func testAuditExampleDecodesAgainstCurrentModel() throws {
@@ -609,6 +635,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(readinessCheckID["enum"] as? [String], [
             "daemonSnapshotAvailable",
             "agentControlStatusAvailable",
+            "fanControlOwnershipStatusAvailable",
             "daemonControlPathReady",
             "daemonRuntimeMatchesExpected",
             "supportedHardware",
@@ -621,7 +648,22 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "thermalPressureSafe",
             "activeLeaseClear",
             "manualControlClear",
-            "fanModeTelemetry"
+            "fanModeTelemetry",
+            "fanControlProtocolCurrent",
+            "fanControlOwnershipStateValid",
+            "fanControlRecoveryClear",
+            "fanControlOwnershipClear",
+            "fanControlHardwareConsistent",
+            "replacementMaintenanceAttestation"
+        ])
+
+        let ownershipStatus = try XCTUnwrap(definitions["fanControlOwnershipStatus"] as? [String: Any])
+        XCTAssertEqual(ownershipStatus["required"] as? [String], [
+            "protocolVersion",
+            "expectedFanIDs",
+            "confirmedOSManagedFanIDs",
+            "recoveryPending",
+            "recoveryAttemptCount"
         ])
 
         let fanRequired = try requiredFields(for: "fanReport", in: definitions)
@@ -802,6 +844,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNotNil(runProperties["childSignal"] as? [String: Any])
         XCTAssertNotNil(runProperties["childSignalName"] as? [String: Any])
         XCTAssertNotNil(runProperties["resolvedChildExecutable"] as? [String: Any])
+        XCTAssertEqual((runProperties["signalScope"] as? [String: Any])?["const"] as? String, "processGroup")
+        XCTAssertEqual((runProperties["descendantCleanupBeforeAutoRestore"] as? [String: Any])?["const"] as? Bool, true)
+        XCTAssertEqual((runProperties["backgroundProcessesAllowed"] as? [String: Any])?["const"] as? Bool, false)
         let executableDigest = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256"] as? [String: Any])
         XCTAssertEqual(executableDigest["pattern"] as? String, "^[a-f0-9]{64}$")
         let executableDigestStatus = try XCTUnwrap(runProperties["resolvedChildExecutableSHA256Status"] as? [String: Any])
@@ -817,6 +862,9 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(runExample["childTerminationReason"] as? String, "exited")
         XCTAssertEqual(runExample["resolvedChildExecutableSHA256Status"] as? String, "unavailable")
         XCTAssertEqual(runExample["resolvedChildExecutable"] as? String, "/usr/bin/true")
+        XCTAssertEqual(runExample["signalScope"] as? String, "processGroup")
+        XCTAssertEqual(runExample["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(runExample["backgroundProcessesAllowed"] as? Bool, false)
 
         let agentRuleSchema = try readJSON(schemaURL("viftyctl-agent-rule.schema.json"))
         let agentRuleProperties = try XCTUnwrap(agentRuleSchema["properties"] as? [String: Any])

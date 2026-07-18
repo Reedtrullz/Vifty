@@ -2,13 +2,16 @@
   "autoRestoreAttempted": true,
   "autoRestoreError": null,
   "autoRestoreSucceeded": true,
+  "backgroundProcessesAllowed": false,
   "childExitCode": 0,
   "childTerminationReason": "exited",
   "command": "run",
   "coolingLeasePrepared": true,
+  "descendantCleanupBeforeAutoRestore": true,
   "generatedAt": 700001000,
   "resolvedChildExecutable": "/usr/bin/true",
   "resolvedChildExecutableSHA256Status": "unavailable",
   "schemaID": "https://vifty.local/schemas/viftyctl-run.schema.json",
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "signalScope": "processGroup"
 }

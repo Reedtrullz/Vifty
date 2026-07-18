@@ -1,44 +1,210 @@
 import AppKit
 import SwiftUI
+import ViftyCore
 
 @main
 struct ViftyApp: App {
     @NSApplicationDelegateAdaptor(ViftyAppDelegate.self) private var appDelegate
     @StateObject private var model: AppModel
+    @StateObject private var softwareUpdates: SoftwareUpdateController
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+#if DEBUG
+    private let reviewFixtureRuntime: ViftyReviewFixtureRuntime?
+#endif
 
     @MainActor
     init() {
+        let helperServiceRequest: HelperServiceManagementRequest?
+        let helperServiceBridgeError: Error?
+        do {
+            helperServiceRequest = try HelperServiceManagementRequest.parse(
+                arguments: CommandLine.arguments
+            )
+            helperServiceBridgeError = nil
+        } catch {
+            helperServiceRequest = nil
+            helperServiceBridgeError = error
+        }
+#if DEBUG
+        let reviewFixtureRuntime: ViftyReviewFixtureRuntime?
+        do {
+            reviewFixtureRuntime = try ViftyReviewFixtureRuntime.parse(
+                arguments: CommandLine.arguments
+            )
+        } catch {
+            fatalError(error.localizedDescription)
+        }
+        self.reviewFixtureRuntime = reviewFixtureRuntime
+        if let reviewFixtureRuntime {
+            reviewFixtureRuntime.request.appearance.apply()
+        }
+        let model = reviewFixtureRuntime?.model ?? AppModel()
+#else
         let model = AppModel()
+#endif
         _model = StateObject(wrappedValue: model)
+#if DEBUG
+        let usesInertSoftwareUpdates = helperServiceRequest != nil
+            || helperServiceBridgeError != nil
+#else
+        let usesInertSoftwareUpdates = helperServiceRequest != nil
+            || helperServiceBridgeError != nil
+#endif
+#if DEBUG
+        let softwareUpdates = reviewFixtureRuntime?.softwareUpdates
+            ?? (usesInertSoftwareUpdates
+                ? SoftwareUpdateController.inert()
+                : SoftwareUpdateController.live())
+#else
+        let softwareUpdates = usesInertSoftwareUpdates
+            ? SoftwareUpdateController.inert()
+            : SoftwareUpdateController.live()
+#endif
+        _softwareUpdates = StateObject(wrappedValue: softwareUpdates)
         appDelegate.model = model
+        appDelegate.softwareUpdates = softwareUpdates
+        appDelegate.helperServiceRequest = helperServiceRequest
+        appDelegate.helperServiceBridgeError = helperServiceBridgeError
+        if helperServiceRequest != nil || helperServiceBridgeError != nil {
+            NSApplication.shared.setActivationPolicy(.prohibited)
+            return
+        }
+#if DEBUG
+        appDelegate.reviewFixtureRuntime = reviewFixtureRuntime
+        guard reviewFixtureRuntime == nil else { return }
+#endif
         model.start()
     }
 
     var body: some Scene {
         Window("Vifty", id: "main") {
-            ContentView()
+            Group {
+#if DEBUG
+                if let reviewFixtureRuntime {
+                    switch reviewFixtureRuntime.route {
+                    case .main:
+                        ViftyReviewFixtureSceneHost(
+                            runtime: reviewFixtureRuntime,
+                            provenance: "swiftui-main-window"
+                        ) {
+                            ContentView(daemonInstaller: reviewFixtureRuntime.daemonInstaller)
+                        }
+                    case .settings, .popover:
+                        ViftyReviewFixtureLaunchBridge(runtime: reviewFixtureRuntime)
+                    }
+                } else {
+                    ContentView()
+                }
+#else
+                ContentView()
+#endif
+            }
                 .environmentObject(model)
-                .frame(minWidth: 780, minHeight: 480)
+                .viftyTextScale(model.textScale)
+                .frame(minWidth: initialWindowWidth, minHeight: initialWindowHeight)
                 .onAppear {
                     appDelegate.openMainWindowHandler = { openWindow(id: "main") }
                 }
         }
+#if DEBUG
+        .defaultSize(width: initialWindowWidth, height: initialWindowHeight)
+        .restorationBehavior(reviewFixtureRuntime == nil ? .automatic : .disabled)
+        .defaultLaunchBehavior(reviewFixtureRuntime == nil ? .automatic : .presented)
+#else
         .defaultSize(width: 1180, height: 820)
+#endif
         .windowResizability(.contentMinSize)
         .commands {
-            ViftyCommands(model: model, openWindow: openWindow)
+#if DEBUG
+            if reviewFixtureRuntime == nil {
+                ViftyCommands(
+                    model: model,
+                    softwareUpdates: softwareUpdates,
+                    openWindow: openWindow,
+                    openSettings: openSettings
+                )
+            }
+#else
+            ViftyCommands(
+                model: model,
+                softwareUpdates: softwareUpdates,
+                openWindow: openWindow,
+                openSettings: openSettings
+            )
+#endif
         }
 
         Settings {
-            ViftySettingsView(model: model)
+            Group {
+#if DEBUG
+                if let reviewFixtureRuntime {
+                    if case .settings(let settingsTab) = reviewFixtureRuntime.route {
+                        ViftyReviewFixtureSceneHost(
+                            runtime: reviewFixtureRuntime,
+                            provenance: "swiftui-settings-scene"
+                        ) {
+                            ViftySettingsView(
+                                model: model,
+                                softwareUpdates: softwareUpdates,
+                                initialTab: settingsTab
+                            )
+                        }
+                    } else {
+                        EmptyView()
+                    }
+                } else {
+                    ViftySettingsView(model: model, softwareUpdates: softwareUpdates)
+                }
+#else
+                ViftySettingsView(model: model, softwareUpdates: softwareUpdates)
+#endif
+            }
+            .viftyTextScale(model.textScale)
         }
+#if DEBUG
+        .restorationBehavior(reviewFixtureRuntime == nil ? .automatic : .disabled)
+#endif
+    }
+
+    private var initialWindowWidth: CGFloat {
+#if DEBUG
+        guard let reviewFixtureRuntime else { return 1180 }
+        switch reviewFixtureRuntime.route {
+        case .main:
+            return reviewFixtureRuntime.request.window.size.width
+        case .settings, .popover:
+            return ViftyReviewFixtureWindow.native.size.width
+        }
+#else
+        1180
+#endif
+    }
+
+    private var initialWindowHeight: CGFloat {
+#if DEBUG
+        guard let reviewFixtureRuntime else { return 820 }
+        switch reviewFixtureRuntime.route {
+        case .main:
+            return reviewFixtureRuntime.request.window.size.height
+        case .settings, .popover:
+            return ViftyReviewFixtureWindow.native.size.height
+        }
+#else
+        820
+#endif
     }
 }
 
 @MainActor
 final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
+    weak var softwareUpdates: SoftwareUpdateController?
+    var helperServiceRequest: HelperServiceManagementRequest?
+    var helperServiceBridgeError: Error?
+#if DEBUG
+    var reviewFixtureRuntime: ViftyReviewFixtureRuntime?
+#endif
     var openMainWindowHandler: (() -> Void)? {
         didSet {
             statusItemController?.openMainWindow = { [weak self] in
@@ -51,7 +217,42 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     private let terminationCoordinator = AppTerminationCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let helperServiceBridgeError {
+            writeHelperServiceBridgeError(helperServiceBridgeError)
+            exit(75)
+        }
+        if let helperServiceRequest {
+            Task { @MainActor in
+                do {
+                    let backend = try SystemHelperServiceManagementBackend()
+                    let report = try await HelperServiceManagementBridge.perform(
+                        helperServiceRequest,
+                        backend: backend,
+                        maintenanceReportReader: {
+                            try ViftyCtlRunner.readMaintenanceReport(atPath: $0)
+                        },
+                        maintenanceAuthorizer: { request in
+                            try await ViftyDaemonClient().consumeHelperMaintenanceToken(request)
+                        }
+                    )
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    let data = try encoder.encode(report)
+                    FileHandle.standardOutput.write(data)
+                    FileHandle.standardOutput.write(Data("\n".utf8))
+                    exit(report.complete ? 0 : 75)
+                } catch {
+                    writeHelperServiceBridgeError(error)
+                    exit(75)
+                }
+            }
+            return
+        }
+#if DEBUG
+        guard reviewFixtureRuntime == nil else { return }
+#endif
         guard let model else { return }
+        softwareUpdates?.start()
         statusItemController = ViftyStatusItemController(
             model: model,
             openMainWindow: { [weak self] in
@@ -66,7 +267,29 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard helperServiceRequest == nil, helperServiceBridgeError == nil else { return }
+#if DEBUG
+        guard reviewFixtureRuntime == nil else { return }
+#endif
+        guard let model else { return }
+        Task { @MainActor in
+            await model.refreshSystemSettingsStateOnActivation()
+        }
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+#if DEBUG
+        if let reviewFixtureRuntime {
+            do {
+                try reviewFixtureRuntime.finalize()
+                return .terminateNow
+            } catch {
+                FileHandle.standardError.write(Data("UI review fixture failed: \(error.localizedDescription)\n".utf8))
+                exit(70)
+            }
+        }
+#endif
         guard let model else { return .terminateCancel }
 
         _ = terminationCoordinator.beginTermination(
@@ -83,6 +306,10 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        softwareUpdates?.stop()
+    }
+
     private func openMainWindow() {
         if let openMainWindowHandler {
             openMainWindowHandler()
@@ -90,5 +317,20 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
             window.makeKeyAndOrderFront(nil)
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func writeHelperServiceBridgeError(_ error: Error) {
+        let payload: [String: Any] = [
+            "complete": false,
+            "operatorActionRequired": false,
+            "error": error.localizedDescription
+        ]
+        if let data = try? JSONSerialization.data(
+            withJSONObject: payload,
+            options: [.prettyPrinted, .sortedKeys]
+        ) {
+            FileHandle.standardOutput.write(data)
+            FileHandle.standardOutput.write(Data("\n".utf8))
+        }
     }
 }

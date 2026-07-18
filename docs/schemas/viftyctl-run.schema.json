@@ -78,6 +78,18 @@
       ],
       "description": "Digest availability status for the resolved executable in current run reports. `computed` means resolvedChildExecutableSHA256 contains the lowercase SHA-256 digest; `unavailable` means Vifty could not read or hash the executable bytes. Omitted in legacy run reports."
     },
+    "signalScope": {
+      "const": "processGroup",
+      "description": "Signal-forwarding scope used for this run. Current builds report processGroup; omitted in legacy reports."
+    },
+    "descendantCleanupBeforeAutoRestore": {
+      "const": true,
+      "description": "True when remaining child-process-group members were subject to bounded cleanup before the Auto-restore attempt. Omitted in legacy reports."
+    },
+    "backgroundProcessesAllowed": {
+      "const": false,
+      "description": "False because viftyctl run does not permit child background processes to outlive the guarded workload. Omitted in legacy reports."
+    },
     "generatedAt": {
       "type": "number"
     }

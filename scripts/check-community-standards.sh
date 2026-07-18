@@ -58,6 +58,7 @@ required_files=(
   "SECURITY.md"
   "SUPPORT.md"
   ".github/CODEOWNERS"
+  ".github/release-manifest.json"
   ".github/PULL_REQUEST_TEMPLATE.md"
   ".github/ISSUE_TEMPLATE/config.yml"
   ".github/ISSUE_TEMPLATE/bug-report.yml"
@@ -74,6 +75,69 @@ for relative_path in "${required_files[@]}"; do
     add_check "file:${relative_path}" "blocked" "${relative_path} is missing."
   fi
 done
+
+pr_template_entries="$(
+  find "${ROOT_DIR}/.github" -mindepth 1 -maxdepth 1 -print 2>/dev/null |
+    while IFS= read -r path; do basename "${path}"; done |
+    awk 'tolower($0) == "pull_request_template.md" { print }'
+)"
+if [[ "${pr_template_entries}" == "PULL_REQUEST_TEMPLATE.md" ]]; then
+  add_check "pr-template-path-casing" "passed" "Exactly the canonical .github/PULL_REQUEST_TEMPLATE.md path is present."
+else
+  add_check "pr-template-path-casing" "blocked" "Expected exactly PULL_REQUEST_TEMPLATE.md and no lowercase or duplicate casing; found: ${pr_template_entries:-none}"
+fi
+
+structured_templates_error=""
+if [[ -f "${ROOT_DIR}/.github/release-manifest.json" &&
+      -f "${ROOT_DIR}/.github/ISSUE_TEMPLATE/release-trust.yml" &&
+      -f "${ROOT_DIR}/.github/ISSUE_TEMPLATE/hardware-validation.yml" ]]; then
+  if ! structured_templates_error="$(ruby -rjson -ryaml -e '
+    root = ARGV.fetch(0)
+    manifest = JSON.parse(File.read(File.join(root, ".github/release-manifest.json")))
+    release = YAML.safe_load(
+      File.read(File.join(root, ".github/ISSUE_TEMPLATE/release-trust.yml")),
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false
+    )
+    hardware = YAML.safe_load(
+      File.read(File.join(root, ".github/ISSUE_TEMPLATE/hardware-validation.yml")),
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false
+    )
+    published = manifest.fetch("publishedRelease")
+    architecture = manifest.dig("product", "architectures").join(" + ")
+
+    abort("release template label must contain release-trust") unless Array(release["labels"]).include?("release-trust")
+    release_body = Array(release["body"])
+    release_ids = release_body.map { |item| item["id"] }.compact
+    abort("release template field IDs must be unique") unless release_ids.uniq.length == release_ids.length
+    release_version = release_body.find { |item| item["id"] == "release-version" }
+    abort("release-version field is missing") unless release_version
+    placeholder = release_version.dig("attributes", "placeholder").to_s
+    abort("release-version placeholder does not match manifest") unless placeholder.include?(published.fetch("version"))
+    release_markdown = release_body.select { |item| item["type"] == "markdown" }.map { |item| item.dig("attributes", "value").to_s }.join("\n")
+    expected_fact = "Vifty v#{published.fetch("version")} build #{published.fetch("build")} is the current #{architecture}-only Developer ID release"
+    abort("release template fact block does not match manifest") unless release_markdown.include?(expected_fact)
+
+    abort("hardware template label must contain hardware-validation") unless Array(hardware["labels"]).include?("hardware-validation")
+    hardware_body = Array(hardware["body"])
+    hardware_ids = hardware_body.map { |item| item["id"] }.compact
+    abort("hardware template field IDs must be unique") unless hardware_ids.uniq.length == hardware_ids.length
+    manual_smoke = hardware_body.find { |item| item["id"] == "manual-smoke" }
+    options = Array(manual_smoke && manual_smoke.dig("attributes", "options"))
+    abort("hardware template must expose the read-only not-run result") unless options.include?("Not run — read-only evidence only")
+    mapping_text = hardware_body.select { |item| item["type"] == "markdown" }.map { |item| item.dig("attributes", "value").to_s }.join("\n")
+    abort("hardware template must map not-run to not-recorded") unless mapping_text.include?("manualSmokeTestResult: not-recorded")
+  ' "${ROOT_DIR}" 2>&1)"; then
+    add_check "structured-release-hardware-templates" "blocked" "Structured issue-template validation failed: ${structured_templates_error}"
+  else
+    add_check "structured-release-hardware-templates" "passed" "Release and hardware issue-template fields match manifest facts and evidence states."
+  fi
+else
+  add_check "structured-release-hardware-templates" "blocked" "Manifest or release/hardware issue template is missing."
+fi
 
 check_contains() {
   local name="$1"

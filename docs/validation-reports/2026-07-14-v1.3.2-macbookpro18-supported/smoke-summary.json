@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "kind": "vifty-supervised-manual-hardware-smoke",
+  "generatedAtUTC": "2026-07-14T17:06:12Z",
+  "status": "passed-auto-restored",
+  "humanSupervised": true,
+  "uiAutomationUsed": false,
+  "rawSMCWritesIssuedByCollector": false,
+  "manualFanWritesPerformedByApp": true,
+  "agentCoolingCommandsRun": false,
+  "app": {
+    "tag": "v1.3.2",
+    "sourceSHA": "6a771c2ea10386bf7a0a8369a759930f01d56062",
+    "bundleVersion": "1.3.2",
+    "bundleBuild": 7,
+    "teamID": "X88J3853S2",
+    "artifactName": "Vifty-v1.3.2.zip",
+    "artifactSHA256": "8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0",
+    "installedPublicArtifactParity": true,
+    "appCDHash": "666e4972fcb31fa3fcb3134c956daae0bdf62189",
+    "daemonSHA256": "7543c573528a57bb096b045b9a7476b1d4da4aef88b7cd8b54d4cd2ca5bf7dac",
+    "installedDaemonMatchesBundled": true
+  },
+  "hardware": {
+    "modelIdentifier": "MacBookPro18,1",
+    "isAppleSilicon": true,
+    "isMacBookPro": true,
+    "macOSVersion": "26.5.2",
+    "macOSBuild": "25F84",
+    "fanCount": 2,
+    "controllableFanCount": 2,
+    "temperatureSensorCount": 6
+  },
+  "sequence": [
+    {
+      "step": "baseline-auto",
+      "result": "passed",
+      "fanModes": ["Auto", "Auto"],
+      "fanModeRawValues": [0, 0],
+      "manualControlActive": false
+    },
+    {
+      "step": "fixed-active",
+      "result": "passed",
+      "requestedTargetRPM": [2800, 2800],
+      "manualRunInitiallyUntilChanged": true,
+      "manualRunFinalDurationMinutes": 10,
+      "daemonTargetRPM": [2800, 2800],
+      "fanModes": ["Forced", "Forced"],
+      "fanModeRawValues": [1, 1],
+      "manualControlActive": true,
+      "thermalPressure": "nominal"
+    },
+    {
+      "step": "fixed-auto-restored",
+      "result": "passed",
+      "fanModes": ["Auto", "Auto"],
+      "fanModeRawValues": [0, 0],
+      "manualControlActive": false,
+      "noReassertionObserved": true
+    },
+    {
+      "step": "curve-active",
+      "result": "passed",
+      "curvePoints": [
+        {"temperatureCelsius": 55, "rpm": 1800},
+        {"temperatureCelsius": 70, "rpm": 3000},
+        {"temperatureCelsius": 85, "rpm": 4200}
+      ],
+      "perFanOverridesEnabled": false,
+      "transientPerFanUIDisplayMismatchObserved": true,
+      "authoritativeDaemonTargetsEqualAtReadbacks": true,
+      "daemonTargetRPM": [2928, 2928],
+      "laterProbeTargetRPM": [2963, 2963],
+      "fanModes": ["Forced", "Forced"],
+      "fanModeRawValues": [1, 1],
+      "manualControlActive": true,
+      "thermalPressure": "nominal"
+    },
+    {
+      "step": "curve-auto-restored",
+      "result": "passed",
+      "fanModes": ["Auto", "Auto"],
+      "fanModeRawValues": [0, 0],
+      "targetRPM": [1522, 1643],
+      "manualControlActive": false,
+      "safeToRequestCooling": true,
+      "failedCheckIDs": [],
+      "coolingBlockerIDs": [],
+      "thermalPressure": "nominal",
+      "noReassertionObserved": true
+    }
+  ],
+  "recordings": [
+    {"file": "fixed-screen-recording.mov", "sha256": "204122c2fbb16963672685beb828ba53ea5456a16fd166b51922ee4ff0bb727c", "durationSeconds": 27.288333},
+    {"file": "fixed-auto-screen-recording.mov", "sha256": "128601f61f6c07ce687bbcc99fab6a28d1268312e7dec4e3b52323296b8e62d5", "durationSeconds": 10.2},
+    {"file": "curve-screen-recording.mov", "sha256": "4c344923ebd1ffd0aed8a7cc52b2ae9a72127f34e427cdb496b9426012748978", "durationSeconds": 48.861667},
+    {"file": "curve-auto-screen-recording.mov", "sha256": "ba52dbd824b45fd80463d31381d4d44ad5a8998c6887b7b3ffe55b583219aea3", "durationSeconds": 20.1}
+  ],
+  "formalReviews": {
+    "release": {"status": "passed", "failures": [], "warnings": []},
+    "supportedHardware": {"status": "passed", "manualSmokeTestResult": "passed-auto-restored", "failures": [], "warnings": []}
+  },
+  "claimBoundary": "Exact public Vifty v1.3.2 build 7 on MacBookPro18,1 only; not current-branch, other-version, other-model, broad Apple Silicon, agent-run, or auto-update proof."
+}

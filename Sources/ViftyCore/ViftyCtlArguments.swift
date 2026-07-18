@@ -9,6 +9,9 @@ public enum ViftyCtlCommand: Equatable, Sendable {
     case prepare(AgentControlRequest, json: Bool, force: Bool)
     case restoreAuto(reason: String, json: Bool)
     case run(AgentControlRequest, childArguments: [String], json: Bool, force: Bool)
+    case helperMaintenancePrepare(operation: HelperMaintenanceOperation)
+    case helperMaintenanceConsume(operation: HelperMaintenanceOperation, reportPath: String)
+    case helperMaintenanceCancel
 }
 
 public enum ViftyCtlArguments {
@@ -70,6 +73,29 @@ public enum ViftyCtlArguments {
                 json: requestArguments.contains("--json"),
                 force: requestArguments.contains("--force")
             )
+        case "helper-maintenance-prepare":
+            try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--operation"])
+            guard rest.contains("--json") else { throw ViftyCtlParseError.maintenanceRequiresJSON }
+            return .helperMaintenancePrepare(operation: try parseMaintenanceOperation(rest))
+        case "helper-maintenance-consume":
+            try validateOptions(
+                rest,
+                flagOnly: ["--json"],
+                valueFlags: ["--operation", "--report"]
+            )
+            guard rest.contains("--json") else { throw ViftyCtlParseError.maintenanceRequiresJSON }
+            guard let reportPath = value(for: "--report", in: rest),
+                  reportPath.hasPrefix("/") else {
+                throw ViftyCtlParseError.invalidMaintenanceReport
+            }
+            return .helperMaintenanceConsume(
+                operation: try parseMaintenanceOperation(rest),
+                reportPath: reportPath
+            )
+        case "helper-maintenance-cancel":
+            try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
+            guard rest.contains("--json") else { throw ViftyCtlParseError.maintenanceRequiresJSON }
+            return .helperMaintenanceCancel
         default:
             throw ViftyCtlParseError.unknownCommand(command)
         }
@@ -118,6 +144,12 @@ public enum ViftyCtlArguments {
             return "invalid or missing --idempotency-key"
         case .missingChildCommand:
             return "run requires -- followed by a child command"
+        case .invalidMaintenanceOperation:
+            return "helper maintenance requires --operation repair or uninstall"
+        case .invalidMaintenanceReport:
+            return "helper maintenance consume requires an absolute --report path"
+        case .maintenanceRequiresJSON:
+            return "helper maintenance commands require --json"
         case .unknownOption(let option):
             return "unknown option '\(option)'"
         case .duplicateOption(let option):
@@ -135,6 +167,17 @@ public enum ViftyCtlArguments {
             flagOnly: ["--json", "--force"],
             valueFlags: ["--workload", "--duration", "--max-rpm-percent", "--reason", "--idempotency-key"]
         )
+    }
+
+    private static func parseMaintenanceOperation(
+        _ arguments: [String]
+    ) throws -> HelperMaintenanceOperation {
+        guard let raw = value(for: "--operation", in: arguments),
+              let operation = HelperMaintenanceOperation(rawValue: raw),
+              operation == .repair || operation == .uninstall else {
+            throw ViftyCtlParseError.invalidMaintenanceOperation
+        }
+        return operation
     }
 
     private static func validateOptions(
@@ -304,6 +347,9 @@ public enum ViftyCtlParseError: Error, Equatable, Sendable {
     case invalidReason
     case invalidIdempotencyKey
     case missingChildCommand
+    case invalidMaintenanceOperation
+    case invalidMaintenanceReport
+    case maintenanceRequiresJSON
     case unknownOption(String)
     case duplicateOption(String)
     case unexpectedArgument(String)

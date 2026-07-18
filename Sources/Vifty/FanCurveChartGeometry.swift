@@ -2,6 +2,37 @@ import CoreGraphics
 import Foundation
 import ViftyCore
 
+enum CurveRPMEditingEnvelope {
+    static let portableRange: ClosedRange<Double> = 1_000...7_000
+    static let step: Double = 50
+
+    static func resolve(
+        fans: [Fan],
+        selectedProfile: CurveProfile?
+    ) -> ClosedRange<Double> {
+        var anchors = [portableRange.lowerBound, portableRange.upperBound]
+
+        for fan in fans where fan.controllable {
+            anchors.append(Double(fan.minimumRPM))
+            anchors.append(Double(fan.maximumRPM))
+        }
+
+        if let selectedProfile {
+            anchors.append(contentsOf: [
+                Double(selectedProfile.startRPM),
+                Double(selectedProfile.midRPM),
+                Double(selectedProfile.maxRPM)
+            ])
+        }
+
+        let minimum = anchors.min() ?? portableRange.lowerBound
+        let maximum = anchors.max() ?? portableRange.upperBound
+        let lower = floor(minimum / step) * step
+        let upper = ceil(maximum / step) * step
+        return lower...max(upper, lower + step)
+    }
+}
+
 struct FanCurveChartGeometry: Equatable {
     let temperatureRange: ClosedRange<Double>
     let rpmRange: ClosedRange<Double>
@@ -9,17 +40,22 @@ struct FanCurveChartGeometry: Equatable {
     static func resolvedRPMRange(
         base: ClosedRange<Double>,
         fans: [Fan],
-        includeFanRanges: Bool
+        includeFanRanges: Bool,
+        renderedRPMs: [Double] = []
     ) -> ClosedRange<Double> {
-        let normalizedUpper = max(base.upperBound, base.lowerBound + 100)
-        guard includeFanRanges else {
-            return base.lowerBound...normalizedUpper
+        var lower = base.lowerBound
+        var upper = max(base.upperBound, base.lowerBound + 100)
+
+        for rpm in renderedRPMs where rpm.isFinite {
+            lower = min(lower, rpm)
+            upper = max(upper, rpm)
         }
 
-        let fanMinimum = fans.map { Double($0.minimumRPM) }.min() ?? base.lowerBound
-        let fanMaximum = fans.map { Double($0.maximumRPM) }.max() ?? normalizedUpper
-        let lower = min(base.lowerBound, fanMinimum)
-        let upper = max(normalizedUpper, fanMaximum)
+        if includeFanRanges {
+            lower = min(lower, fans.map { Double($0.minimumRPM) }.min() ?? lower)
+            upper = max(upper, fans.map { Double($0.maximumRPM) }.max() ?? upper)
+        }
+
         return lower...max(upper, lower + 100)
     }
 

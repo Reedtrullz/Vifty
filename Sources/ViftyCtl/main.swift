@@ -3,9 +3,8 @@ import Dispatch
 import Foundation
 import ViftyCore
 
-@main
 struct ViftyCtlMain {
-    static func main() async {
+    static func run() async {
         let rawArguments = Array(CommandLine.arguments.dropFirst())
         do {
             let command = try ViftyCtlArguments.parse(rawArguments)
@@ -49,11 +48,18 @@ struct ViftyCtlMain {
     }
 }
 
+await ViftyCtlMain.run()
+
 struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
     private let environment: [String: String]
+    private let supervisor: ChildProcessSupervisor
 
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        supervisor: ChildProcessSupervisor = ChildProcessSupervisor()
+    ) {
         self.environment = environment
+        self.supervisor = supervisor
     }
 
     func resolve(_ arguments: [String]) throws -> [String] {
@@ -80,15 +86,11 @@ struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
     }
 
     func run(_ arguments: [String]) throws -> Int32 {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: arguments[0])
-        process.arguments = Array(arguments.dropFirst())
-        try process.run()
-        let signalForwarder = ChildProcessSignalForwarder(process: process)
-        signalForwarder.start()
-        process.waitUntilExit()
-        signalForwarder.cancel()
-        return Self.exitCode(for: process.terminationReason, status: process.terminationStatus)
+        try supervisor.run(arguments)
+    }
+
+    func runMaintainingSignalShield(_ arguments: [String]) -> ViftyCtlProcessRunCompletion {
+        supervisor.runMaintainingSignalShield(arguments)
     }
 
     static func exitCode(for reason: Process.TerminationReason, status: Int32) -> Int32 {
@@ -109,46 +111,5 @@ struct ViftyCtlProcessRunner: ViftyCtlProcessRunning {
             return false
         }
         return FileManager.default.isExecutableFile(atPath: path)
-    }
-}
-
-private final class ChildProcessSignalForwarder: @unchecked Sendable {
-    private typealias SignalHandler = @convention(c) (Int32) -> Void
-
-    private let process: Process
-    private let queue = DispatchQueue(label: "tech.reidar.vifty.viftyctl.signal-forwarder")
-    private let signals: [Int32] = [SIGINT, SIGTERM, SIGHUP]
-    private var sources: [DispatchSourceSignal] = []
-    private var previousHandlers: [(signal: Int32, handler: SignalHandler?)] = []
-
-    init(process: Process) {
-        self.process = process
-    }
-
-    func start() {
-        guard sources.isEmpty else { return }
-        previousHandlers.removeAll()
-        for signalNumber in signals {
-            let previousHandler = Darwin.signal(signalNumber, SIG_IGN)
-            previousHandlers.append((signalNumber, previousHandler))
-            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: queue)
-            source.setEventHandler { [weak self] in
-                self?.forward(signalNumber)
-            }
-            source.resume()
-            sources.append(source)
-        }
-    }
-
-    func cancel() {
-        sources.forEach { $0.cancel() }
-        sources.removeAll()
-        previousHandlers.forEach { _ = Darwin.signal($0.signal, $0.handler) }
-        previousHandlers.removeAll()
-    }
-
-    private func forward(_ signalNumber: Int32) {
-        guard process.isRunning else { return }
-        Darwin.kill(process.processIdentifier, signalNumber)
     }
 }

@@ -1,7 +1,27 @@
+import Darwin
 import XCTest
 @testable import ViftyCore
 
 final class CurveProfileStoreTests: XCTestCase {
+    func testDefaultStoreIsIsolatedFromProductionProfilesUnderXCTest() {
+        var store: CurveProfileStore? = CurveProfileStore()
+        let productionURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Vifty/curve-profiles.json")
+        let storageURL = store!.storageURL
+        let cleanupDirectory = storageURL.deletingLastPathComponent()
+
+        XCTAssertNotEqual(storageURL.standardizedFileURL, productionURL.standardizedFileURL)
+        XCTAssertTrue(
+            storageURL.standardizedFileURL.path.hasPrefix(
+                FileManager.default.temporaryDirectory.standardizedFileURL.path
+            )
+        )
+        store!.save([profile(named: "Isolated")])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: storageURL.path))
+        store = nil
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cleanupDirectory.path))
+    }
+
     func testSaveAndLoadRoundTrip() {
         let url = tempURL()
         let store = CurveProfileStore(url: url)
@@ -31,6 +51,92 @@ final class CurveProfileStoreTests: XCTestCase {
         let store = CurveProfileStore(url: url)
         let loaded = store.load()
         XCTAssertTrue(loaded.isEmpty, "Corrupt file should return empty, not crash")
+    }
+
+    func testCorruptPrimaryRecoversValidBackupAndReportsIt() throws {
+        let url = tempURL()
+        let backupURL = url.appendingPathExtension("bak")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("not json".utf8).write(to: url)
+        let expected = [profile(named: "Recovered")]
+        try JSONEncoder().encode(expected).write(to: backupURL)
+
+        let result = try CurveProfileStore(url: url).loadResult()
+
+        XCTAssertEqual(result.profiles, expected)
+        XCTAssertEqual(result.source, .recoveredBackup)
+        XCTAssertNotNil(result.recoveryMessage)
+    }
+
+    func testMissingPrimaryRecoversValidBackup() throws {
+        let url = tempURL()
+        let backupURL = url.appendingPathExtension("bak")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let expected = [profile(named: "Backup only")]
+        try JSONEncoder().encode(expected).write(to: backupURL)
+
+        let result = try CurveProfileStore(url: url).loadResult()
+
+        XCTAssertEqual(result.profiles, expected)
+        XCTAssertEqual(result.source, .recoveredBackup)
+    }
+
+    func testUnreadablePrimaryAndBackupThrowsInsteadOfClaimingEmpty() throws {
+        let url = tempURL()
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("primary corrupt".utf8).write(to: url)
+        try Data("backup corrupt".utf8).write(to: url.appendingPathExtension("bak"))
+
+        XCTAssertThrowsError(try CurveProfileStore(url: url).loadResult()) { error in
+            XCTAssertTrue(error is CurveProfileStoreError)
+        }
+    }
+
+    func testSavingOverCorruptPrimaryPreservesValidBackup() throws {
+        let url = tempURL()
+        let backupURL = url.appendingPathExtension("bak")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("primary corrupt".utf8).write(to: url)
+        let backupProfiles = [profile(named: "Last known good")]
+        let backupData = try JSONEncoder().encode(backupProfiles)
+        try backupData.write(to: backupURL)
+
+        try CurveProfileStore(url: url).saveThrowing([profile(named: "New")])
+
+        XCTAssertEqual(try Data(contentsOf: backupURL), backupData)
+        XCTAssertEqual(try JSONDecoder().decode([CurveProfile].self, from: backupData), backupProfiles)
+    }
+
+    func testBackupReplacementPreservesKnownGoodBytesAtEveryPreRenameFailure() throws {
+        for stage in CurveProfileBackupStage.allCases {
+            let url = tempURL()
+            let backupURL = url.appendingPathExtension("bak")
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try JSONEncoder().encode([profile(named: "Primary")]).write(to: url)
+            let knownGoodBackup = try JSONEncoder().encode([profile(named: "Known good backup")])
+            try knownGoodBackup.write(to: backupURL)
+            let hooks = CurveProfileBackupHooks(
+                beforeStage: { currentStage in
+                    if currentStage == stage { throw InjectedBackupFailure() }
+                },
+                synchronize: { descriptor in
+                    guard fsync(descriptor) == 0 else { throw InjectedBackupFailure() }
+                }
+            )
+
+            try CurveProfileStore(url: url, backupHooks: hooks).saveThrowing([
+                profile(named: "New primary")
+            ])
+
+            XCTAssertEqual(
+                try Data(contentsOf: backupURL),
+                knownGoodBackup,
+                "The existing backup changed after an injected \(stage) failure."
+            )
+        }
     }
 
     func testSaveCreatesBackupFile() {
@@ -120,8 +226,23 @@ final class CurveProfileStoreTests: XCTestCase {
             .appendingPathComponent("curve-profiles.json")
     }
 
+    private func profile(named name: String) -> CurveProfile {
+        CurveProfile(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            name: name,
+            startTemp: 50,
+            startRPM: 1_200,
+            midTemp: 65,
+            midRPM: 2_500,
+            maxTemp: 80,
+            maxRPM: 4_000
+        )
+    }
+
     private func posixPermissions(at url: URL) throws -> Int {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }
+
+private struct InjectedBackupFailure: Error {}

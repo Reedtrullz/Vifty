@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vifty.app/schemas/helper-maintenance-report-v1.json",
+  "title": "Vifty helper maintenance report",
+  "description": "Fail-closed daemon proof used before a repair or uninstall may stop or replace the privileged helper. A serialized token is only a revalidation input; the daemon-owned token remains authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "schemaID",
+    "operation",
+    "safeToStop",
+    "quiesced",
+    "restoreAttempted",
+    "restoreSucceeded",
+    "completeExpectedSetConfirmed",
+    "fanResults",
+    "blockers",
+    "token",
+    "tokenConsumed"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "schemaID": { "const": "https://vifty.app/schemas/helper-maintenance-report-v1.json" },
+    "operation": { "$ref": "#/$defs/operation" },
+    "safeToStop": { "type": "boolean" },
+    "quiesced": { "type": "boolean" },
+    "restoreAttempted": { "type": "boolean" },
+    "restoreSucceeded": { "type": "boolean" },
+    "completeExpectedSetConfirmed": { "type": "boolean" },
+    "fanResults": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fanResult" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "token": {
+      "oneOf": [
+        { "$ref": "#/$defs/token" },
+        { "type": "null" }
+      ]
+    },
+    "tokenConsumed": { "type": "boolean" }
+  },
+  "$defs": {
+    "operation": {
+      "enum": ["repair", "uninstall", "voluntaryTermination", "offlineRecovery"]
+    },
+    "blockerCode": {
+      "enum": [
+        "RESTORE_FAILED",
+        "OWNERSHIP_UNRESOLVED",
+        "SNAPSHOT_UNAVAILABLE",
+        "PROTOCOL_MISMATCH",
+        "FAN_INVENTORY_INVALID",
+        "FAN_STATE_UNCONFIRMED",
+        "HELPER_IDENTITY_UNAVAILABLE",
+        "OFFLINE_AUTHORIZATION_UNAVAILABLE"
+      ]
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "recommendedRecoveryAction"],
+      "properties": {
+        "code": { "$ref": "#/$defs/blockerCode" },
+        "message": { "type": "string", "minLength": 1 },
+        "recommendedRecoveryAction": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fanResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fanID", "observedMode", "confirmedOSManaged", "freshConfirmationAt", "failure"],
+      "properties": {
+        "fanID": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "observedMode": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "confirmedOSManaged": { "type": "boolean" },
+        "freshConfirmationAt": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "null" }
+          ]
+        },
+        "failure": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "token": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "tokenID",
+        "operation",
+        "issuedAt",
+        "expiresAt",
+        "bootSessionID",
+        "daemonSessionID",
+        "journalGeneration",
+        "expectedFanIDs",
+        "helperSHA256",
+        "quiesceGeneration"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "tokenID": { "type": "string", "minLength": 1 },
+        "operation": { "$ref": "#/$defs/operation" },
+        "issuedAt": { "type": "number" },
+        "expiresAt": { "type": "number" },
+        "bootSessionID": { "type": "string", "minLength": 1 },
+        "daemonSessionID": { "type": "string", "minLength": 1 },
+        "journalGeneration": { "type": "integer", "minimum": 0 },
+        "expectedFanIDs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 15 }
+        },
+        "helperSHA256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "quiesceGeneration": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -1,10 +1,20 @@
 # Security Policy
 
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
+
 ## Supported Versions
 
 | Version | Supported |
 | ------- | --------- |
-| 1.2.0 | Supported Developer ID signed/notarized release; installed release review passed |
+| 1.3.2 | Supported Developer ID signed/notarized release; installed release review passed and manual Fixed/Curve/Auto validation passed on MacBookPro18,1 |
 | 1.1.x source/tag | Supported source-first fallback; unsigned assets are not trust-complete |
 | 1.0.x public asset | Not trust-complete; use source or a corrected 1.1.x release path |
 
@@ -32,7 +42,7 @@ Vifty's trust boundaries:
 |---|---|
 | **App ↔ Daemon (XPC)** | The unprivileged SwiftUI app communicates with the root daemon via XPC. The daemon validates client signing identifiers, optionally requires a release TeamID, clamps all fan RPM targets, and the SMC client only permits Vifty's fan-control write keys. |
 | **Agent CLI ↔ Daemon (XPC)** | `viftyctl` sends bounded workload cooling leases through the daemon. Every lease carries a mandatory duration, reason, and idempotency key; the default policy caps leases at 30 minutes. The daemon enforces expiry independently. |
-| **Daemon ↔ SMC (IOKit)** | Only the root daemon writes SMC keys, and low-level writes are allowlisted to fan mode, fan target, and guarded force-test keys. The app never attempts direct AppleSMC writes (fail-closed). |
+| **Daemon/helper ↔ SMC (IOKit)** | The root daemon owns normal fan writes. The guarded local helper may write only for a privileged/root caller on explicit recovery/probe paths. Both routes clamp targets and share the same fan-mode, fan-target, and guarded force-test allowlist; the unprivileged app never attempts direct AppleSMC writes. |
 | **Local filesystem** | Curve profiles, manual-control markers, and agent-control lease/audit files are stored locally with restricted permissions. No data leaves the device. |
 | **Agent lease safety** | User Auto-restore always wins over active and in-flight agent cooling. Sensor loss, unsupported hardware, helper uncertainty, or critical thermal pressure refuses or restores control. |
 

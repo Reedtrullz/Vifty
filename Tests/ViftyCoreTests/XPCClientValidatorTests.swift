@@ -66,7 +66,7 @@ final class XPCClientValidatorTests: XCTestCase {
         XCTAssertFalse(validator.isAllowed(nil))
     }
 
-    func testAllowsMatchingSigningIdentifierWhenTeamRequirementIsNil() {
+    func testRejectsMatchingAdHocIdentifierWithoutExplicitUIDAndPathRequirement() {
         let validator = XPCClientValidator(
             allowedSigningIdentifier: allowedSigningIdentifier,
             allowedTeamIdentifier: nil
@@ -76,10 +76,10 @@ final class XPCClientValidatorTests: XCTestCase {
             teamIdentifier: nil
         )
 
-        XCTAssertTrue(validator.isAllowed(identity))
+        XCTAssertFalse(validator.isAllowed(identity))
     }
 
-    func testAllowsNonNilTeamIdentifierWhenTeamRequirementIsNil() {
+    func testRejectsSignedClientWhenAdHocRequirementIsIncomplete() {
         let validator = XPCClientValidator(
             allowedSigningIdentifier: allowedSigningIdentifier,
             allowedTeamIdentifier: nil
@@ -89,7 +89,7 @@ final class XPCClientValidatorTests: XCTestCase {
             teamIdentifier: "SOME_TEAM"
         )
 
-        XCTAssertTrue(validator.isAllowed(identity))
+        XCTAssertFalse(validator.isAllowed(identity))
     }
 
     func testLegacyAllowedClientPropertiesReturnSingleInitializerValues() {
@@ -143,28 +143,120 @@ final class XPCClientValidatorTests: XCTestCase {
         assertSendable(validator)
     }
 
-    func testAllowsOnlyExplicitClientAllowlist() {
+    func testMissingReleaseTeamFailsClosedInsteadOfCreatingIdentifierOnlyAllowlist() {
         let validator = XPCClientValidator(allowedClients: XPCTrustConfiguration.allowedClients(releaseTeamIdentifier: nil))
 
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil)))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: nil)))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "SOME_TEAM")))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "SOME_TEAM")))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: "SOME_TEAM")))
-        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.anything", teamIdentifier: nil)))
-        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: nil, teamIdentifier: nil)))
+        XCTAssertTrue(validator.allowedClients.isEmpty)
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: nil)))
     }
 
-    func testAllowsNonNilTeamIdentifierWhenAllowedClientHasNilTeamRequirement() {
+    func testExplicitAdHocRequirementRequiresIdentifierUIDPathAndNilTeam() {
         let validator = XPCClientValidator(allowedClients: [
-            XPCAllowedClient(signingIdentifier: "com.example.app", teamIdentifier: nil)
+            XPCAllowedClient(
+                signingIdentifier: "com.example.app",
+                teamIdentifier: nil,
+                effectiveUserID: 501,
+                executablePath: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+            )
         ])
-        let identity = XPCClientIdentity(
+
+        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(
             signingIdentifier: "com.example.app",
-            teamIdentifier: "ABCDE12345"
-        )
-        XCTAssertTrue(validator.isAllowed(identity))
+            teamIdentifier: nil,
+            effectiveUserID: 501,
+            executablePath: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        )))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(
+            signingIdentifier: "com.example.app",
+            teamIdentifier: nil,
+            effectiveUserID: 502,
+            executablePath: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        )))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(
+            signingIdentifier: "com.example.app",
+            teamIdentifier: nil,
+            effectiveUserID: 501,
+            executablePath: "/tmp/Vifty"
+        )))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(
+            signingIdentifier: "com.example.app",
+            teamIdentifier: "ABCDE12345",
+            effectiveUserID: 501,
+            executablePath: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        )))
+    }
+
+    func testDevelopmentEnvironmentBuildsExactUIDAndPathAllowlist() {
+        let clients = XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty",
+            XPCTrustConfiguration.developmentCtlPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+        ])
+
+        XCTAssertEqual(clients, [
+            XPCAllowedClient(
+                signingIdentifier: XPCTrustConfiguration.appSigningIdentifier,
+                teamIdentifier: nil,
+                effectiveUserID: 501,
+                executablePath: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+            ),
+            XPCAllowedClient(
+                signingIdentifier: XPCTrustConfiguration.ctlSigningIdentifier,
+                teamIdentifier: nil,
+                effectiveUserID: 501,
+                executablePath: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+            )
+        ])
+    }
+
+    func testDevelopmentEnvironmentFailsClosedWithoutValidUIDOrAbsolutePath() {
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [:]).isEmpty)
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "not-a-uid",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        ]).isEmpty)
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "relative/Vifty",
+            XPCTrustConfiguration.developmentCtlPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+        ]).isEmpty)
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        ]).isEmpty, "the development allowlist is all-or-nothing")
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty",
+            XPCTrustConfiguration.developmentCtlPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/viftyctl",
+            "VIFTY_XPC_ADHOC_HELPER_PATH": "/Applications/Vifty.app/Contents/MacOS/ViftyHelper"
+        ]).isEmpty)
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "true",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty",
+            XPCTrustConfiguration.developmentCtlPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+        ]).isEmpty)
+        XCTAssertTrue(XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty",
+            XPCTrustConfiguration.developmentCtlPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/viftyctl"
+        ]).isEmpty, "UID and paths without the explicit development flag must fail closed")
+    }
+
+    func testReleaseTeamConfigurationRejectsMixedDevelopmentAllowlistKeys() {
+        let clients = XPCTrustConfiguration.allowedClients(from: [
+            XPCTrustConfiguration.teamEnvironmentKey: "REIDARTEAM",
+            XPCTrustConfiguration.developmentEnableEnvironmentKey: "1",
+            XPCTrustConfiguration.developmentUIDEnvironmentKey: "501",
+            XPCTrustConfiguration.developmentAppPathEnvironmentKey: "/Applications/Vifty.app/Contents/MacOS/Vifty"
+        ])
+
+        XCTAssertTrue(clients.isEmpty)
     }
 
     func testTrustConfigurationReadsTeamIDFromEnvironment() {
@@ -185,14 +277,13 @@ final class XPCClientValidatorTests: XCTestCase {
 
         XCTAssertEqual(clients, [
             XPCAllowedClient(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "REIDARTEAM"),
-            XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "REIDARTEAM"),
-            XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: "REIDARTEAM")
+            XPCAllowedClient(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "REIDARTEAM")
         ])
 
         let validator = XPCClientValidator(allowedClients: clients)
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "REIDARTEAM")))
         XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: "REIDARTEAM")))
-        XCTAssertTrue(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: "REIDARTEAM")))
+        XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: "REIDARTEAM")))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty", teamIdentifier: "OTHERTEAM")))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.ctl", teamIdentifier: nil)))
         XCTAssertFalse(validator.isAllowed(XPCClientIdentity(signingIdentifier: "tech.reidar.vifty.helper", teamIdentifier: nil)))

@@ -6,7 +6,7 @@ final class MakefileTrustGateTests: XCTestCase {
         let makefile = try read("Makefile")
 
         XCTAssertTrue(makefile.contains("verify: ## Run fast local trust gates without installing"))
-        XCTAssertTrue(makefile.contains("verify-full: verify ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
+        XCTAssertTrue(makefile.contains("verify-full: verify release-contract-ruby-tests installer-lifecycle-ruby-tests ui-review-ruby-tests ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
         XCTAssertTrue(makefile.contains("test-fast: ## Run the fast local XCTest suite"))
         XCTAssertTrue(makefile.contains("test-full: ## Run the full XCTest suite, including slow evidence/release script tests"))
         XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))
@@ -74,15 +74,34 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("AGENT_RUN_SMOKE_EXPECTED_DAEMON ?="))
         XCTAssertTrue(makefile.contains("AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH ?= 0"))
         XCTAssertTrue(makefile.contains("SWIFT_BUILD_PATH ?="))
-        XCTAssertTrue(makefile.contains("SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path \"$(SWIFT_BUILD_PATH)\",)"))
-        XCTAssertTrue(makefile.contains("SWIFT_PRODUCTS_DIR = $(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION))"))
+        XCTAssertTrue(makefile.contains("SWIFT_BUILD_PROVENANCE_FILE ?="))
+        XCTAssertTrue(makefile.contains("SWIFT_PROVENANCE_ARGS = $(if $(SWIFT_BUILD_PROVENANCE_FILE),-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __vifty_src"))
+        XCTAssertTrue(makefile.contains("SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path \"$(SWIFT_BUILD_PATH)\",) $(SWIFT_TRIPLE_ARGS) $(SWIFT_PROVENANCE_ARGS)"))
+        XCTAssertTrue(makefile.contains("SWIFT_PRODUCTS_DIR = $(if $(filter release,$(CONFIGURATION))"))
+        XCTAssertTrue(makefile.contains("APP_DIR ?= .build/$(APP_NAME).app"))
+        XCTAssertTrue(makefile.contains("ui-review-build-products: ## Build one clean-tree provenance-bound UI review product transaction"))
+        XCTAssertTrue(makefile.contains("./scripts/build-ui-review-products.sh"))
+        XCTAssertTrue(makefile.contains("ui-review-initialize-ledger: ## Initialize a fresh product-bound ignored UI review ledger"))
+        XCTAssertTrue(makefile.contains("ui-review-start-session: ## Build exact products and initialize a fresh ignored UI review ledger"))
+        XCTAssertTrue(makefile.contains("ui-review-ruby-tests: ## Run portable UI review provenance, publication, and archive safety tests"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/UIReviewBuildProvenanceTests.rb"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/UIReviewLocalLedgerTests.rb"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/UIReviewProductPublicationTests.rb"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/UIReviewSourceArchiveTests.rb"))
+        XCTAssertTrue(makefile.contains("installer-lifecycle-ruby-tests: ## Run portable installer lifecycle transaction and trust regressions"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/InstallerLifecycleTrustContractTests.rb"))
+        XCTAssertTrue(makefile.contains("/usr/bin/ruby Tests/Ruby/HelperLifecycleReplacementFixtureTests.rb"))
         XCTAssertTrue(makefile.contains("VERIFY_TEST_TARGET ?= test-fast"))
         XCTAssertTrue(makefile.contains("SLOW_TEST_SKIP_ARGS :="))
         XCTAssertTrue(makefile.contains("ValidationEvidenceScriptTests"))
         XCTAssertTrue(makefile.contains("ValidationEvidenceReviewScriptTests"))
         XCTAssertTrue(makefile.contains("AgentRunSmokeEvidenceScriptTests"))
         XCTAssertTrue(makefile.contains("GuardedRunScriptTests"))
-        XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh examples/viftyctl/*.sh"))
+        XCTAssertTrue(makefile.contains("HelperLifecycleScriptTests"))
+        XCTAssertTrue(makefile.contains("InstallReplacementPreflightScriptTests"))
+        XCTAssertTrue(makefile.contains("ReleaseManifestScriptTests"))
+        XCTAssertTrue(makefile.contains("UIReviewEvidenceScriptTests"))
+        XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh --mode \"$(RELEASE_METADATA_MODE)\""))
         XCTAssertTrue(makefile.contains("swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS)"))
@@ -99,13 +118,21 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyHelper\" \"$(MACOS)/ViftyHelper\""))
         XCTAssertTrue(makefile.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyCtl\" \"$(MACOS)/viftyctl\""))
         XCTAssertTrue(makefile.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyDaemon\" \"$(MACOS)/ViftyDaemon\""))
-        XCTAssertTrue(makefile.contains("cp docs/schemas/*.schema.json \"$(SCHEMAS)/\""))
+        XCTAssertTrue(makefile.contains("BUNDLED_SCHEMA_INVENTORY ?= scripts/bundled-schema-inventory.txt"))
+        XCTAssertTrue(makefile.contains("$(MAKE) package-bundled-schemas"))
+        XCTAssertFalse(makefile.contains("cp docs/schemas/*.schema.json \"$(SCHEMAS)/\""))
         XCTAssertTrue(makefile.contains("install -m 755 scripts/collect-agent-cooling-evidence.sh \"$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh\""))
         XCTAssertTrue(makefile.contains("install -m 755 scripts/check-manual-smoke-readiness.sh \"$(CONTENTS)/Resources/check-manual-smoke-readiness.sh\""))
         XCTAssertTrue(makefile.contains("install -m 755 scripts/check-agent-run-smoke-readiness.sh \"$(CONTENTS)/Resources/check-agent-run-smoke-readiness.sh\""))
         XCTAssertTrue(makefile.contains("install -m 755 scripts/collect-agent-run-smoke-evidence.sh \"$(CONTENTS)/Resources/collect-agent-run-smoke-evidence.sh\""))
+        XCTAssertTrue(makefile.contains("install -m 755 scripts/vifty-helper-lifecycle.sh \"$(CONTENTS)/Resources/vifty-helper-lifecycle.sh\""))
+        XCTAssertTrue(makefile.contains("install -m 755 scripts/uninstall-vifty.sh \"$(CONTENTS)/Resources/uninstall-vifty.sh\""))
         XCTAssertTrue(makefile.contains("install -m 755 examples/viftyctl/*.sh \"$(WRAPPERS)/\""))
         XCTAssertTrue(makefile.contains("install -m 644 examples/viftyctl/README.md \"$(WRAPPERS)/README.md\""))
+        XCTAssertTrue(makefile.contains("install -m 644 \"$(APP_ICON)\" \"$(CONTENTS)/Resources/ViftyIcon.icns\""))
+        XCTAssertTrue(makefile.contains("install -m 644 \"Resources/Info.plist\" \"$(CONTENTS)/Info.plist\""))
+        XCTAssertTrue(makefile.contains("install -m 644 \"Resources/tech.reidar.vifty.daemon.plist\" \"$(DAEMON_PLIST)\""))
+        XCTAssertFalse(makefile.contains("cp \"Resources/tech.reidar.vifty.daemon.plist\" \"$(DAEMON_PLIST)\""))
         XCTAssertTrue(makefile.contains("plutil -lint \"$(CONTENTS)/Info.plist\""))
         XCTAssertTrue(makefile.contains("plutil -lint \"$(DAEMON_PLIST)\""))
         XCTAssertTrue(makefile.contains("test -x \"$(CONTENTS)/Resources/collect-agent-cooling-evidence.sh\""))
@@ -115,6 +142,8 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("test -x scripts/check-manual-smoke-readiness.sh"))
         XCTAssertTrue(makefile.contains("test -x scripts/check-agent-run-smoke-readiness.sh"))
         XCTAssertTrue(makefile.contains("test -x scripts/repair-vifty-helper.sh"))
+        XCTAssertTrue(makefile.contains("test -x scripts/uninstall-vifty.sh"))
+        XCTAssertTrue(makefile.contains("test -x scripts/configure-daemon-plist.sh"))
         XCTAssertTrue(makefile.contains("source_wrappers=\"$$(find examples/viftyctl -maxdepth 1 -type f -name '*.sh' -exec basename {} \\; | sort)\""))
         XCTAssertTrue(makefile.contains("bundle_wrappers=\"$$(find \"$(WRAPPERS)\" -maxdepth 1 -type f -name '*.sh' -exec basename {} \\; | sort)\""))
         XCTAssertTrue(makefile.contains("Bundled viftyctl wrapper list does not match source examples."))
@@ -132,12 +161,15 @@ final class MakefileTrustGateTests: XCTestCase {
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {
         let makefile = try read("Makefile")
 
-        XCTAssertTrue(makefile.contains(".PHONY: app run-app install repair-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean"))
+        XCTAssertTrue(makefile.contains("install-dev-adhoc repair-helper uninstall-helper"))
         XCTAssertTrue(makefile.contains("run-app: ## Build and open the local app bundle"))
         XCTAssertTrue(makefile.contains("verify: ## Run fast local trust gates without installing"))
-        XCTAssertTrue(makefile.contains("verify-full: verify ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
+        XCTAssertTrue(makefile.contains("verify-full: verify release-contract-ruby-tests installer-lifecycle-ruby-tests ui-review-ruby-tests ## Run full trust gates, including slow XCTest suites, for CI/release-facing checks"))
         XCTAssertTrue(makefile.contains("repair-helper: ## Explicitly repair the installed privileged helper"))
         XCTAssertTrue(makefile.contains("./scripts/repair-vifty-helper.sh --app \"$(REPAIR_HELPER_APP)\""))
+        XCTAssertTrue(makefile.contains("install-dev-adhoc: ## Explicit debug-only install with exact UID/path XPC allowlist"))
+        XCTAssertTrue(makefile.contains("VIFTY_ENABLE_ADHOC_XPC=1 ./scripts/install-vifty.sh"))
+        XCTAssertTrue(makefile.contains("uninstall-helper: ## Safely remove the installed privileged helper"))
         XCTAssertTrue(makefile.contains("validation-evidence: ## Collect read-only release/hardware validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-current-build: ## Build current app and collect read-only local-ad-hoc validation evidence"))
         XCTAssertTrue(makefile.contains("validation-evidence-review: ## Review a captured validation evidence bundle"))
@@ -210,6 +242,46 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("scripts/write-release-checklist.sh --mode source-first --version \"$(RELEASE_VERSION)\" $(if $(SOURCE_FIRST_SOURCE_REF),--source-ref \"$(SOURCE_FIRST_SOURCE_REF)\",)"))
         XCTAssertTrue(makefile.contains("scripts/build-unsigned-dev-artifact.sh --version \"$(RELEASE_VERSION)\" $(if $(UNSIGNED_DEV_SOURCE_REF),--require-source-ref \"$(UNSIGNED_DEV_SOURCE_REF)\",)"))
         XCTAssertTrue(makefile.contains("scripts/check-release-readiness.sh --mode source-first --version \"$(RELEASE_VERSION)\" --repo \"$(RELEASE_REPO)\" --json"))
+    }
+
+    func testAppRecipeNeverBundlesAXEvidenceTargets() throws {
+        let makefile = try read("Makefile")
+        let appRecipe = try XCTUnwrap(
+            makefile.components(separatedBy: "app: release-facts ## Build the release app bundle").last?
+                .components(separatedBy: "\nrun-app:").first
+        )
+
+        XCTAssertTrue(appRecipe.contains("cp \"$(SWIFT_PRODUCTS_DIR)/Vifty\" \"$(MACOS)/Vifty\""))
+        XCTAssertTrue(appRecipe.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyHelper\" \"$(MACOS)/ViftyHelper\""))
+        XCTAssertTrue(appRecipe.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyCtl\" \"$(MACOS)/viftyctl\""))
+        XCTAssertTrue(appRecipe.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyDaemon\" \"$(MACOS)/ViftyDaemon\""))
+        XCTAssertFalse(appRecipe.contains("cp \"$(SWIFT_PRODUCTS_DIR)/ViftyAXCollector\""))
+        XCTAssertFalse(appRecipe.contains("Sources/ViftyAXEvidenceCore"))
+        XCTAssertFalse(appRecipe.contains("Sources/ViftyAXCollector"))
+        XCTAssertTrue(appRecipe.contains("$(MAKE) package-bundled-schemas"))
+        XCTAssertFalse(appRecipe.contains("rm -f \"$(SCHEMAS)\"/ui-review-ax-*.schema.json"))
+        XCTAssertTrue(appRecipe.contains("test -z \"$$(find \"$(CONTENTS)\" -name 'ViftyAXCollector*' -o -name 'ViftyAXEvidenceCore*'"))
+        for source in ["AXReader.swift", "AXTraversal.swift", "AXEvidenceModels.swift", "AXPredicateCatalog.swift"] {
+            XCTAssertTrue(appRecipe.contains("-name '\(source)'"), source)
+        }
+        XCTAssertTrue(appRecipe.contains("-name 'ui-review-ax-*.schema.json'"))
+        XCTAssertTrue(appRecipe.contains("AX evidence tooling must not be bundled in Vifty.app"))
+    }
+
+    func testCIHasEnoughTimeAndUsesOnlyExactTreeToolchainScopedSwiftPMCaches() throws {
+        let workflow = try read(".github/workflows/ci.yml")
+
+        XCTAssertTrue(workflow.contains("timeout-minutes: 35"), workflow)
+        XCTAssertTrue(workflow.contains("id: swiftpm"), workflow)
+        XCTAssertTrue(workflow.contains("xcodebuild -version"), workflow)
+        XCTAssertTrue(workflow.contains("swift --version"), workflow)
+        XCTAssertTrue(
+            workflow.contains(
+                "key: ${{ runner.os }}-${{ runner.arch }}-spm-${{ steps.swiftpm.outputs.toolchain_fingerprint }}-${{ github.sha }}"
+            ),
+            workflow
+        )
+        XCTAssertFalse(workflow.contains("restore-keys:"), workflow)
     }
 
     private func read(_ relativePath: String) throws -> String {

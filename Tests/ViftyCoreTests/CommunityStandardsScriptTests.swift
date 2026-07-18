@@ -24,7 +24,44 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "agent-template-privacy-review", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "hardware-template-agent-run-smoke", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "release-template-source-first", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "passed")
+        XCTAssertEqual(checkStatus(named: "structured-release-hardware-templates", in: checks), "passed")
         XCTAssertEqual(checkStatus(named: "codeowners-support", in: checks), "passed")
+    }
+
+    func testCheckerUsesKeywordSafeLoadWithStrictModernPsychAPI() throws {
+        let harness = try CommunityStandardsHarness()
+        let strictPsychShimURL = harness.rootURL.appendingPathComponent("strict-modern-psych.rb")
+        let strictPsychShim = #"""
+        require "yaml"
+
+        module Psych
+          class << self
+            alias_method :vifty_original_safe_load, :safe_load
+
+            def safe_load(yaml, permitted_classes:, permitted_symbols:, aliases:, **keywords)
+              vifty_original_safe_load(
+                yaml,
+                permitted_classes: permitted_classes,
+                permitted_symbols: permitted_symbols,
+                aliases: aliases,
+                **keywords
+              )
+            end
+          end
+        end
+        """#
+        try strictPsychShim.write(to: strictPsychShimURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runChecker(
+            root: harness.repositoryRoot,
+            json: true,
+            environment: ["RUBYOPT": "-r\(strictPsychShimURL.path)"]
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try result.json()
+        XCTAssertEqual(summary["status"] as? String, "passed")
     }
 
     func testCheckerRejectsMissingSupportFile() throws {
@@ -93,6 +130,40 @@ final class CommunityStandardsScriptTests: XCTestCase {
         XCTAssertEqual(checkStatus(named: "bug-template-evidence-collector", in: checks), "blocked")
     }
 
+    func testCheckerRejectsLowercasePullRequestTemplatePath() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let canonical = harness.rootURL.appendingPathComponent(".github/PULL_REQUEST_TEMPLATE.md")
+        let intermediate = harness.rootURL.appendingPathComponent(".github/pr-template-intermediate.md")
+        let lowercase = harness.rootURL.appendingPathComponent(".github/pull_request_template.md")
+        try FileManager.default.moveItem(at: canonical, to: intermediate)
+        try FileManager.default.moveItem(at: intermediate, to: lowercase)
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        let checks = try XCTUnwrap(try result.json()["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "blocked")
+    }
+
+    func testCheckerRejectsLowercasePullRequestTemplateSymlink() throws {
+        let harness = try CommunityStandardsHarness()
+        try harness.copyCommunitySurface()
+        let canonical = harness.rootURL.appendingPathComponent(".github/PULL_REQUEST_TEMPLATE.md")
+        let lowercase = harness.rootURL.appendingPathComponent(".github/pull_request_template.md")
+        try FileManager.default.removeItem(at: canonical)
+        try FileManager.default.createSymbolicLink(
+            atPath: lowercase.path,
+            withDestinationPath: "../README.md"
+        )
+
+        let result = try harness.runChecker(root: harness.rootURL, json: true)
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        let checks = try XCTUnwrap(try result.json()["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "pr-template-path-casing", in: checks), "blocked")
+    }
+
     private func checkStatus(named name: String, in checks: [[String: Any]]) -> String? {
         checks.first { $0["name"] as? String == name }?["status"] as? String
     }
@@ -136,11 +207,19 @@ private final class CommunityStandardsHarness {
         }
     }
 
-    func runChecker(root: URL, json: Bool) throws -> CommunityStandardsProcessResult {
+    func runChecker(
+        root: URL,
+        json: Bool,
+        environment: [String: String] = [:]
+    ) throws -> CommunityStandardsProcessResult {
         let script = repositoryRoot.appendingPathComponent("scripts/check-community-standards.sh")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.currentDirectoryURL = repositoryRoot
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            environment,
+            uniquingKeysWith: { _, new in new }
+        )
         process.arguments = [
             script.path,
             "--root",
@@ -169,6 +248,7 @@ private final class CommunityStandardsHarness {
         "SECURITY.md",
         "SUPPORT.md",
         ".github/CODEOWNERS",
+        ".github/release-manifest.json",
         ".github/PULL_REQUEST_TEMPLATE.md",
         ".github/ISSUE_TEMPLATE/config.yml",
         ".github/ISSUE_TEMPLATE/bug-report.yml",

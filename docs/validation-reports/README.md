@@ -8,6 +8,14 @@ Hardware Validation Report only after checking `privacy-review.tsv`. Commit the
 reviewed `review-result.json` summary only when it is safe to publish and useful
 for the compatibility index.
 
+The current exact-binary validated report is
+[`2026-07-14-v1.3.2-macbookpro18-supported`](2026-07-14-v1.3.2-macbookpro18-supported/).
+Its review result, machine-readable smoke summary, and human-supervised
+attestation scope Fixed → Auto → Curve → Auto proof to public Vifty v1.3.2
+build 7 on `MacBookPro18,1`. The adjacent
+[`2026-07-14-v1.3.2-macbookpro18-release`](2026-07-14-v1.3.2-macbookpro18-release/)
+summary records the separate installed-release review.
+
 Regenerate the checked-in index after adding or replacing report summaries:
 
 ```sh

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Security
 import ViftyCore
@@ -44,11 +45,14 @@ struct XPCConnectionIdentityExtractor {
         let signingIdentifier = signingInformation[kSecCodeInfoIdentifier as String] as? String
         let teamIdentifier = signingInformation[kSecCodeInfoTeamIdentifier as String] as? String
         let isPlatformBinary = signingInformation[kSecCodeInfoPlatformIdentifier as String] != nil
+        let executablePath = (signingInformation[kSecCodeInfoMainExecutable as String] as? URL)?.path
 
         return XPCClientIdentity(
             signingIdentifier: signingIdentifier,
             teamIdentifier: teamIdentifier,
-            isPlatformBinary: isPlatformBinary
+            isPlatformBinary: isPlatformBinary,
+            effectiveUserID: UInt32(audit_token_to_euid(auditToken)),
+            executablePath: executablePath
         )
     }
 }

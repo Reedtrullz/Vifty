@@ -84,6 +84,7 @@ final class TelemetryHistoryTests: XCTestCase {
 
         XCTAssertEqual(summary.sampleCount, 2)
         XCTAssertEqual(summary.sampleCountText, "2 samples")
+        XCTAssertEqual(summary.plottedSeriesCountText, "2 plotted samples")
         XCTAssertEqual(summary.sampleWindowText, "1 s")
         XCTAssertEqual(summary.latestTemperatureLabel, "Latest temp")
         XCTAssertEqual(summary.latestTemperatureText, "72.6 °C")
@@ -140,6 +141,31 @@ final class TelemetryHistoryTests: XCTestCase {
         ]), "1 h 30 min")
     }
 
+    func testSingleRetainedPointIsNotClaimedAsPlottedHistory() {
+        XCTAssertEqual(
+            TelemetryHistorySummary.plottedSeriesCountText(
+                temperatureCount: 1,
+                fanCount: 1,
+                batteryPowerCount: 1,
+                thermalPressureCount: 1,
+                retainedSampleCount: 1
+            ),
+            "1 retained sample"
+        )
+    }
+
+    func testHistoryReadinessTextMatchesTwoPollChartThreshold() {
+        XCTAssertEqual(
+            TelemetryHistorySummary.historyReadinessText(sampleCount: 0),
+            "History appears after two successful polls."
+        )
+        XCTAssertEqual(
+            TelemetryHistorySummary.historyReadinessText(sampleCount: 1),
+            "History appears after one more successful poll."
+        )
+        XCTAssertNil(TelemetryHistorySummary.historyReadinessText(sampleCount: 2))
+    }
+
     func testSummaryAppliesIndependentSampleAndThermalWindows() {
         var history = TelemetryHistory(limit: 10)
         for index in 0..<5 {
@@ -154,6 +180,7 @@ final class TelemetryHistoryTests: XCTestCase {
 
         XCTAssertEqual(summary.sampleCount, 5)
         XCTAssertEqual(summary.temperatureValues, [63, 64])
+        XCTAssertEqual(summary.plottedSeriesCountText, "2 temp · 2 fan · 2 power · 3 thermal points")
         XCTAssertEqual(summary.fanRPMValues, [2003, 2004])
         XCTAssertEqual(summary.batteryPowerValues, [-10, -10])
         XCTAssertEqual(summary.temperatureRangeText, "63.0 °C-64.0 °C")
@@ -307,6 +334,7 @@ final class TelemetryHistoryTests: XCTestCase {
 
         XCTAssertEqual(summary.latestTemperatureText, "69.2 °C")
         XCTAssertEqual(summary.temperatureValues, [67.4, 69.2])
+        XCTAssertEqual(summary.plottedSeriesCountText, "2 temp · 3 fan · 3 power · 3 thermal points")
         XCTAssertEqual(summary.temperatureRangeText, "67.4 °C-69.2 °C")
         XCTAssertEqual(summary.temperatureChangeText, "+1.8 °C")
     }
@@ -315,6 +343,10 @@ final class TelemetryHistoryTests: XCTestCase {
         XCTAssertNil(TelemetryHistorySummary.changeText([], unit: "C", decimals: 1))
         XCTAssertNil(TelemetryHistorySummary.changeText([72.0], unit: "C", decimals: 1))
         XCTAssertEqual(TelemetryHistorySummary.changeText([72.0, 72.02], unit: "C", decimals: 1), "steady")
+        XCTAssertEqual(
+            TelemetryHistorySummary.changeText([50.0, 50.0, 100.0, 50.0], unit: "°C", decimals: 1),
+            "returned to start"
+        )
         XCTAssertEqual(TelemetryHistorySummary.changeText([72.0, 70.5], unit: "C", decimals: 1), "-1.5 C")
         XCTAssertEqual(TelemetryHistorySummary.changeText([2200.0, 2400.0], unit: "RPM", decimals: 0), "+200 RPM")
     }

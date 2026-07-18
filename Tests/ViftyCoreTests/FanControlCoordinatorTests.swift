@@ -147,7 +147,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         _ = try await coordinator.tick()
         await hardware.clearAppliedCommands()
         await hardware.setSnapshot(HardwareSnapshot(
-            fans: [Self.fan(currentRPM: 4000)],
+            fans: [Self.fan(currentRPM: 4000, hardwareMode: .forced, targetRPM: 4000)],
             temperatureSensors: [Self.sensor(60)],
             modelIdentifier: "MacBookPro18,1",
             isAppleSilicon: true,
@@ -160,7 +160,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertTrue(beforeInterval.isEmpty)
 
         await hardware.setSnapshot(HardwareSnapshot(
-            fans: [Self.fan(currentRPM: 4000)],
+            fans: [Self.fan(currentRPM: 4000, hardwareMode: .forced, targetRPM: 4000)],
             temperatureSensors: [Self.sensor(60)],
             modelIdentifier: "MacBookPro18,1",
             isAppleSilicon: true,
@@ -286,7 +286,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertFalse(state.manualControlActive)
     }
 
-    func testAutoSelectionPreemptsInFlightCurveWritesAndRestoresBothFans() async throws {
+    func testAutoSelectionPreemptsInFlightBatchAtFanBoundaryThenRestoresWholeFanSet() async throws {
         let curve = FanCurve(points: [
             CurvePoint(temperatureCelsius: 50, rpm: 3_000),
             CurvePoint(temperatureCelsius: 70, rpm: 5_000)
@@ -308,15 +308,28 @@ final class FanControlCoordinatorTests: XCTestCase {
         let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
         await coordinator.setMode(.temperatureCurve(curve))
 
-        let tickTask = Task { try await coordinator.tick() }
+        let tickTask = Task { () -> Error? in
+            do {
+                _ = try await coordinator.tick()
+                return nil
+            } catch {
+                return error
+            }
+        }
         await hardware.waitForPausedApply()
         await coordinator.setMode(.auto)
+        let snapshot = try await coordinator.tick()
         await hardware.resumePausedApply()
-        let snapshot = try await tickTask.value
+        let preemptedError = await tickTask.value
         let appliedCommandCount = await hardware.appliedCommands.count
         let restoredFanIDs = await hardware.restoredFanIDs
 
-        XCTAssertEqual(appliedCommandCount, 1)
+        XCTAssertEqual(
+            appliedCommandCount,
+            1,
+            "Once Auto reaches the daemon, the in-flight batch may finish its current fan mutation but must not start the next Fixed write."
+        )
+        XCTAssertTrue(preemptedError?.localizedDescription.contains("preempted") == true)
         XCTAssertEqual(restoredFanIDs, [0, 1])
         XCTAssertEqual(snapshot.fans.map(\.hardwareMode), [.automatic, .automatic])
         let state = await coordinator.state
@@ -390,10 +403,10 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(state.mode, .fixedRPM(3200))
     }
 
-    func testFixedRPMAppliesEvenWhenDaemonUnreachable() async throws {
-        // When the daemon is down, writes should fall back to local SMC.
-        // FakeHardware simulates the local path — if the coordinator calls
-        // apply() and it reaches the hardware, the fallback works.
+    func testFixedRPMUsesFakeOnlyCompatibilityBatch() async throws {
+        // HardwareService's per-fan compatibility implementation exists for
+        // deterministic fakes. RealMacHardwareService overrides the batch and
+        // fails closed when its daemon transaction is unavailable.
         let hardware = FakeHardware(
             snapshot: HardwareSnapshot(
                 fans: [Self.fan()],
@@ -438,6 +451,169 @@ final class FanControlCoordinatorTests: XCTestCase {
         ])
         let state = await coordinator.state
         XCTAssertEqual(state.lastAppliedRPM, [0: 4296, 1: 4700])
+    }
+
+    func testCoordinatorUsesOneBatchForManualApplyAndOneFullSetBatchForAuto() async throws {
+        let snapshot = HardwareSnapshot(
+            fans: [Self.fan()],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = BatchRecordingHardware(snapshot: snapshot)
+        let coordinator = FanControlCoordinator(hardware: hardware, uncleanMarker: Self.marker())
+
+        await coordinator.setMode(.fixedRPM(3_200))
+        _ = try await coordinator.tick()
+
+        let manualRequests = await hardware.manualRequests
+        XCTAssertEqual(manualRequests.count, 1)
+        XCTAssertEqual(manualRequests[0].expectedFanIDs, [0])
+        XCTAssertEqual(manualRequests[0].targetRPMByFanID, [0: 3_200])
+        let legacyApplyCallCount = await hardware.legacyApplyCallCount
+        XCTAssertEqual(legacyApplyCallCount, 0)
+
+        await coordinator.setMode(.auto)
+        _ = try await coordinator.tick()
+
+        let restoreRequests = await hardware.restoreRequests
+        XCTAssertEqual(restoreRequests.count, 1)
+        XCTAssertEqual(restoreRequests[0].expectedFanIDs, [])
+        XCTAssertTrue(restoreRequests[0].allowRestoreAllTrustedFans)
+        XCTAssertNil(restoreRequests[0].unreadableJournalRecoveryAuthority)
+        let legacyRestoreCallCount = await hardware.legacyRestoreCallCount
+        XCTAssertEqual(legacyRestoreCallCount, 0)
+    }
+
+    func testExplicitAutoPropagatesUnreadableJournalOperatorAuthorityOnce() async throws {
+        let snapshot = HardwareSnapshot(
+            fans: [Self.fan()],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = BatchRecordingHardware(snapshot: snapshot)
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: Self.marker(),
+            initialState: ControlState(mode: .auto, manualControlActive: true)
+        )
+
+        await coordinator.setMode(
+            .auto,
+            unreadableJournalRecoveryAuthority: .explicitOperator
+        )
+        _ = try await coordinator.tick()
+
+        let requests = await hardware.restoreRequests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
+    }
+
+    func testFailedExplicitAutoDoesNotReuseOperatorAuthorityOnBackgroundRetry() async throws {
+        let snapshot = HardwareSnapshot(
+            fans: [Self.fan()],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = BatchRecordingHardware(snapshot: snapshot, restoreFailuresRemaining: 1)
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: Self.marker(),
+            initialState: ControlState(mode: .auto, manualControlActive: true)
+        )
+
+        await coordinator.setMode(
+            .auto,
+            unreadableJournalRecoveryAuthority: .explicitOperator
+        )
+        do {
+            _ = try await coordinator.tick()
+            XCTFail("Expected injected explicit restore failure")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("injected restore failure"))
+        }
+        _ = try await coordinator.tick()
+
+        let requests = await hardware.restoreRequests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
+        XCTAssertNil(requests[1].unreadableJournalRecoveryAuthority)
+    }
+
+    func testExplicitAutoUsesDaemonAuthoritativeRestoreWhenClientSnapshotHasNoFans() async throws {
+        let snapshot = HardwareSnapshot(
+            fans: [],
+            temperatureSensors: [],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        )
+        let hardware = BatchRecordingHardware(snapshot: snapshot)
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: Self.marker(),
+            initialState: ControlState(mode: .auto, manualControlActive: true)
+        )
+
+        await coordinator.setMode(
+            .auto,
+            unreadableJournalRecoveryAuthority: .explicitOperator
+        )
+        _ = try await coordinator.tick()
+
+        let requests = await hardware.restoreRequests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertTrue(requests[0].allowRestoreAllTrustedFans)
+        XCTAssertEqual(requests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
+    }
+
+    func testPartialNoJournalAutoFailsAndRetainsManualMarker() async throws {
+        let marker = Self.marker()
+        marker.markActive()
+        let partialFan = Fan(
+            id: 1,
+            name: "Partial Fan",
+            currentRPM: 1_500,
+            minimumRPM: 1_400,
+            maximumRPM: 6_000,
+            controllable: true,
+            hardwareMode: nil,
+            controlEligibility: FanControlEligibility(
+                canApplyFixedRPM: false,
+                canRestoreOSManagedMode: false,
+                reasons: [.missingModeKey]
+            )
+        )
+        let hardware = FakeHardware(snapshot: HardwareSnapshot(
+            fans: [Self.fan(), partialFan],
+            temperatureSensors: [Self.sensor(60)],
+            modelIdentifier: "MacBookPro18,1",
+            isAppleSilicon: true,
+            isMacBookPro: true
+        ))
+        let coordinator = FanControlCoordinator(
+            hardware: hardware,
+            uncleanMarker: marker,
+            initialState: ControlState(mode: .auto, manualControlActive: true)
+        )
+
+        do {
+            _ = try await coordinator.tick()
+            XCTFail("Expected partial global Auto refusal")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("complete trusted fan inventory"))
+        }
+
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertTrue(restoredFanIDs.isEmpty)
+        XCTAssertTrue(marker.wasManualControlActive)
+        let state = await coordinator.state
+        XCTAssertTrue(state.manualControlActive)
     }
 
     func testFixedRPMReappliesWhenHardwareReturnsToAuto() async throws {
@@ -560,7 +736,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         currentRPM: Int? = nil,
         minimumRPM: Int = 1400,
         maximumRPM: Int = 6000,
-        hardwareMode: FanHardwareMode? = nil,
+        hardwareMode: FanHardwareMode? = .automatic,
         targetRPM: Int? = nil
     ) -> Fan {
         Fan(
@@ -571,7 +747,9 @@ final class FanControlCoordinatorTests: XCTestCase {
             maximumRPM: maximumRPM,
             controllable: true,
             hardwareMode: hardwareMode,
-            targetRPM: targetRPM
+            hardwareModeKey: "F0Md",
+            targetRPM: targetRPM ?? minimumRPM,
+            controlEligibility: .trusted
         )
     }
 
@@ -598,6 +776,7 @@ private actor FakeHardware: HardwareService {
     private var applyIsPaused = false
     private var pausedApplyWaiters: [CheckedContinuation<Void, Never>] = []
     private var applyResumeContinuation: CheckedContinuation<Void, Never>?
+    private var restoreGeneration: UInt64 = 0
 
     init(snapshot: HardwareSnapshot, reflectsCommandsInSnapshot: Bool = false) {
         self.snapshotValue = snapshot
@@ -638,6 +817,13 @@ private actor FakeHardware: HardwareService {
 
     func apply(_ command: FanCommand, fan: Fan) async throws {
         appliedCommands.append(command)
+        if reflectsCommandsInSnapshot,
+           case .fixedRPM(let targetRPM) = command.mode,
+           let fanIndex = snapshotValue.fans.firstIndex(where: { $0.id == fan.id }) {
+            snapshotValue.fans[fanIndex].currentRPM = targetRPM
+            snapshotValue.fans[fanIndex].hardwareMode = .forced
+            snapshotValue.fans[fanIndex].targetRPM = targetRPM
+        }
         if shouldPauseFirstApply {
             shouldPauseFirstApply = false
             applyIsPaused = true
@@ -648,14 +834,32 @@ private actor FakeHardware: HardwareService {
             }
             applyIsPaused = false
         }
-        guard reflectsCommandsInSnapshot,
-              case .fixedRPM(let targetRPM) = command.mode,
-              let fanIndex = snapshotValue.fans.firstIndex(where: { $0.id == fan.id }) else {
-            return
+    }
+
+    func applyManualFanControl(
+        _ request: ManualFanControlRequest
+    ) async throws -> FanControlTransactionResult {
+        let startingRestoreGeneration = restoreGeneration
+        let fansByID = Dictionary(uniqueKeysWithValues: snapshotValue.fans.map { ($0.id, $0) })
+        for fanID in request.targetRPMByFanID.keys.sorted() {
+            guard let fan = fansByID[fanID], let rpm = request.targetRPMByFanID[fanID] else {
+                throw ViftyError.helperRejected("Fan \(fanID) is missing from fake batch telemetry.")
+            }
+            guard restoreGeneration == startingRestoreGeneration else {
+                throw ViftyError.helperRejected("Auto restoration preempted fan application.")
+            }
+            try await apply(FanCommand(fanID: fanID, mode: .fixedRPM(rpm)), fan: fan)
+            guard restoreGeneration == startingRestoreGeneration else {
+                throw ViftyError.helperRejected("Auto restoration preempted fan application.")
+            }
         }
-        snapshotValue.fans[fanIndex].currentRPM = targetRPM
-        snapshotValue.fans[fanIndex].hardwareMode = .forced
-        snapshotValue.fans[fanIndex].targetRPM = targetRPM
+        return FanControlTransactionResult(
+            transactionID: request.transactionID,
+            owner: .manual(sessionID: request.sessionID),
+            phase: .active,
+            expectedFanIDs: request.expectedFanIDs,
+            confirmedFanIDs: request.expectedFanIDs
+        )
     }
 
     func restoreAuto(fan: Fan) async throws {
@@ -670,5 +874,101 @@ private actor FakeHardware: HardwareService {
         snapshotValue.fans[fanIndex].currentRPM = fan.minimumRPM
         snapshotValue.fans[fanIndex].hardwareMode = .automatic
         snapshotValue.fans[fanIndex].targetRPM = fan.minimumRPM
+    }
+
+    func restoreAllAuto(
+        _ request: AutoRestoreRequest,
+        beforeOwnershipClear: @escaping @Sendable () throws -> Void
+    ) async throws -> FanControlTransactionResult {
+        restoreGeneration &+= 1
+        let expectedFanIDs: [Int]
+        if request.expectedFanIDs.isEmpty && request.allowRestoreAllTrustedFans {
+            guard !snapshotValue.fans.isEmpty,
+                  snapshotValue.fans.map(\.id).count == Set(snapshotValue.fans.map(\.id)).count,
+                  snapshotValue.fans.allSatisfy({
+                      SMCFanControlKeys.isValidFanID($0.id)
+                          && $0.controlEligibility.canRestoreOSManagedMode
+                  }) else {
+                throw ViftyError.helperRejected(
+                    "Global Auto restore requires one complete trusted fan inventory."
+                )
+            }
+            expectedFanIDs = snapshotValue.fans.map(\.id).sorted()
+        } else {
+            expectedFanIDs = request.expectedFanIDs
+        }
+        let fansByID = Dictionary(uniqueKeysWithValues: snapshotValue.fans.map { ($0.id, $0) })
+        for fanID in expectedFanIDs {
+            guard let fan = fansByID[fanID] else {
+                throw ViftyError.helperRejected("Expected fan \(fanID) is missing from fake restore telemetry.")
+            }
+            try await restoreAuto(fan: fan)
+        }
+        try beforeOwnershipClear()
+        return FanControlTransactionResult(
+            transactionID: request.transactionID,
+            owner: nil,
+            phase: nil,
+            expectedFanIDs: expectedFanIDs,
+            confirmedFanIDs: expectedFanIDs
+        )
+    }
+}
+
+private actor BatchRecordingHardware: HardwareService {
+    let snapshotValue: HardwareSnapshot
+    var manualRequests: [ManualFanControlRequest] = []
+    var restoreRequests: [AutoRestoreRequest] = []
+    var legacyApplyCallCount = 0
+    var legacyRestoreCallCount = 0
+    var restoreFailuresRemaining: Int
+
+    init(snapshot: HardwareSnapshot, restoreFailuresRemaining: Int = 0) {
+        self.snapshotValue = snapshot
+        self.restoreFailuresRemaining = restoreFailuresRemaining
+    }
+
+    func snapshot() async throws -> HardwareSnapshot {
+        snapshotValue
+    }
+
+    func apply(_ command: FanCommand, fan: Fan) async throws {
+        legacyApplyCallCount += 1
+    }
+
+    func restoreAuto(fan: Fan) async throws {
+        legacyRestoreCallCount += 1
+    }
+
+    func applyManualFanControl(
+        _ request: ManualFanControlRequest
+    ) async throws -> FanControlTransactionResult {
+        manualRequests.append(request)
+        return FanControlTransactionResult(
+            transactionID: request.transactionID,
+            owner: .manual(sessionID: request.sessionID),
+            phase: .active,
+            expectedFanIDs: request.expectedFanIDs,
+            confirmedFanIDs: request.expectedFanIDs
+        )
+    }
+
+    func restoreAllAuto(
+        _ request: AutoRestoreRequest,
+        beforeOwnershipClear: @escaping @Sendable () throws -> Void
+    ) async throws -> FanControlTransactionResult {
+        restoreRequests.append(request)
+        if restoreFailuresRemaining > 0 {
+            restoreFailuresRemaining -= 1
+            throw ViftyError.helperRejected("injected restore failure")
+        }
+        try beforeOwnershipClear()
+        return FanControlTransactionResult(
+            transactionID: request.transactionID,
+            owner: nil,
+            phase: nil,
+            expectedFanIDs: request.expectedFanIDs,
+            confirmedFanIDs: request.expectedFanIDs
+        )
     }
 }

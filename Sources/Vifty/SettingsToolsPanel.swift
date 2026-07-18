@@ -6,12 +6,10 @@ struct SettingsCategorySection<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
+        Section {
             content
+        } header: {
+            Label(title, systemImage: systemImage)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
     }
 }

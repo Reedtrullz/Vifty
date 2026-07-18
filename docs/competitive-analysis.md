@@ -1,5 +1,15 @@
 # Competitive Analysis and Product Direction
 
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
+
 Vifty's product thesis is narrow on purpose: Vifty should be the open-source, auditable thermal-control layer for Apple Silicon MacBook Pro developer workloads.
 
 Do not compete as a general-purpose system monitor yet. Macs already have mature tools for broad sensor dashboards, polished menu-bar telemetry, battery management, and consumer fan control. Vifty earns its place by making privileged fan control inspectable, local, fail-closed, and useful for builds, tests, and local coding agents.
@@ -38,7 +48,7 @@ Priority order: trusted release story, hardware validation evidence, daemon safe
 
 The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
 
-1. **Trusted release story:** publish `v1.2.0` only through the strict Developer ID workflow, preserve the historical `v1.1.1` source-first boundary, and keep Homebrew blocked until the public checksum and verifier pass.
+1. **Trusted release story:** preserve the verified `v1.3.2` Developer ID artifact and historical `v1.1.1` source-first boundary; every future candidate must pass the manifest, signed-tag, checksum, verifier, and Homebrew handoff gates as a new immutable release.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, main-window settings, a compact/readiness-oriented menu-bar popover, compact power/history/temperature surfaces, and a better screenshot/demo.

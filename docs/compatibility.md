@@ -1,5 +1,15 @@
 # Compatibility Status
 
+<!-- BEGIN GENERATED RELEASE FACTS -->
+> Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
+> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
+> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
+> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+<!-- END GENERATED RELEASE FACTS -->
+
 Vifty's compatibility claims are evidence-based. A model family is considered validated only when a real machine report includes the read-only readiness JSON, helper fan probe output, install source, macOS version, bundle/signing evidence, and manual smoke-test result when the hardware is supported.
 
 Use the GitHub **Hardware Validation Report** issue template to contribute evidence. The validation procedure lives in [hardware-validation.md](hardware-validation.md), and `scripts/collect-validation-evidence.sh` can gather the standard read-only evidence bundle from an installed app.
@@ -8,30 +18,30 @@ Install source matters. For `v1.1.1`, source builds from the tag and `Vifty-v1.1
 
 ## Current Claim
 
-Vifty targets Apple Silicon MacBook Pro models on macOS 15+. That is the intended support scope, not a blanket guarantee for every machine in that family.
+Vifty targets Apple Silicon MacBook Pro models on macOS 15+. The published application is arm64-only. Intel Macs cannot execute this binary, so Rosetta or a read-only safe-block claim is not Intel compatibility evidence; a future universal build would require a separate Intel build, launch, diagnostic, and unsupported-hardware validation program.
 
-Until enough public reports exist, treat each model family as **needs validation**. Unsupported Macs should remain under macOS automatic fan control. The canonical unsupported-machine behavior is documented in [unsupported-hardware.md](unsupported-hardware.md).
+The exact public Vifty v1.3.2 build 7 now has one validated report for model identifier `MacBookPro18,1` on macOS 26.5.2. Treat every other model identifier and Vifty build as **needs validation** until its own reviewed evidence exists. Unsupported Macs should remain under macOS automatic fan control. The canonical unsupported-machine behavior is documented in [unsupported-hardware.md](unsupported-hardware.md).
 
 ## Status Table
 
 | Hardware family | Public status | Required evidence |
 | --- | --- | --- |
-| M1 Pro/Max MacBook Pro | Needs manual smoke | Four local ad-hoc `MacBookPro18,1` candidate reports exist, including one supervised agent-run Auto-restore smoke; three current read-only reports are rejected while manual control is active. Still requires manual Auto restore plus Fixed/Curve smoke before validated support |
+| M1 Pro/Max MacBook Pro | Validated evidence for `MacBookPro18,1` / v1.3.2 only | The exact public v1.3.2 build 7 passed installed release review and supervised Fixed → Auto → Curve → Auto validation; see the [review result](validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json) and [attestation](validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md). Other model identifiers and builds still need their own evidence |
 | M2 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | M3 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | M4 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | M5 Pro/Max MacBook Pro | Needs validation | `viftyctl diagnose --json`, `ViftyHelper probeLocal`, manual smoke test if `ready` or safely `degraded` |
 | Apple Silicon non-MacBook-Pro | Expected blocked | `viftyctl diagnose --json` showing the hardware gate |
-| Intel MacBook Pro | Expected blocked | `viftyctl diagnose --json` showing the Apple Silicon gate |
+| Intel MacBook Pro | Binary unavailable | The arm64-only app and CLI cannot execute; no diagnostic safe-block claim is made |
 | Other Macs | Unsupported | Do not run manual fan writes |
 
 ## Generated Compatibility Matrix
 
 Do not hand-edit the generated compatibility matrix. Use `scripts/summarize-validation-reports.sh --output-markdown <reports-dir>/compatibility-matrix.md` after review results are accepted, then copy or link the generated table with its report sources intact. The matrix evidence cell intentionally shows source ref plus short SHA, reviewed date, manual/agent smoke status, manual-smoke readiness source when reviewed, agent-run privacy-review status when captured, and agent-run startup mode when reviewed smoke evidence includes it so local ad-hoc `main` reports are not mistaken for current release-tag evidence, validated hardware support, or cooling authorization.
 
-The current checked-in generated index lives in [validation-reports/compatibility-index.json](validation-reports/compatibility-index.json), with TSV and Markdown drafts beside it; use its `generatedAtUTC` field for the exact index timestamp. In that checked-in index, `MacBookPro18` has four local ad-hoc `MacBookPro18,1` candidate reports, including a reviewed `sourceRef: "main"` report at `30035f8c75f6dda721bbea3455949421841f0c9a` reviewed on `2026-06-18T08:47:12Z`, with `daemonControlPathReady=true`, `safeToRequestCooling=true`, legacy `manualControlActive` not captured, `agentRunSmokeResult: "passed-auto-restored"`, and `manualSmokeTestResult: "not-recorded"`. The same generated index also includes three rejected current `main` reports, including the latest `afa792926f598d187f1f0f1fba7c9a73d7336352` report reviewed on `2026-06-21T03:55:35Z`, with `manualControlActive=true`, `safeToRequestCooling=false`, `failedCheckIDs: ["manualControlClear"]`, `coolingBlockerIDs: ["manualControlClear"]`, `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"`, and `recommendedRecoveryAction: "restoreAutoBeforeRetry"`. That keeps the family at **Needs manual smoke** in the generated draft, not validated support.
+The current checked-in generated index lives in [validation-reports/compatibility-index.json](validation-reports/compatibility-index.json), with TSV and Markdown drafts beside it; use its `generatedAtUTC` field for the exact index timestamp. It records one `validated-hardware-evidence` row for the notarized v1.3.2 artifact on `MacBookPro18,1`, with `manualSmokeTestResult: "passed-auto-restored"`, `manualControlActive=false`, `safeToRequestCooling=true`, daemon readiness, and the durable attestation source. It also preserves four older local-ad-hoc candidate reports, including the separate agent-run Auto-restore proof at `30035f8c75f6dda721bbea3455949421841f0c9a`, plus three rejected current-`main` reports where `manualControlActive=true`. The latest rejected row remains `afa792926f598d187f1f0f1fba7c9a73d7336352`, with `safeToRequestCooling=false`, `failedCheckIDs: ["manualControlClear"]`, `coolingBlockerIDs: ["manualControlClear"]`, `recommendedAgentAction: "restoreAutoBeforeRequestingCooling"`, and `recommendedRecoveryAction: "restoreAutoBeforeRetry"`. Historical failures remain visible without weakening the exact v1.3.2 validation.
 
-Rows without reviewed evidence stay **Needs report**. A supported row must include helper health, fan count, min/max RPM, Auto restore, Fixed/Curve smoke, and `viftyctl diagnose --json` evidence before it can move beyond candidate status. First-report priority is M1 Pro/Max, M2 Pro/Max, M3 Pro/Max, and M4 Pro/Max MacBook Pro hardware.
+Rows without reviewed evidence stay **Needs report**. A supported row must include helper health, fan count, min/max RPM, Auto restore, Fixed/Curve smoke, and `viftyctl diagnose --json` evidence before it can move beyond candidate status. Next-report priority is additional M1 Pro/Max model identifiers plus M2 Pro/Max, M3 Pro/Max, and M4 Pro/Max MacBook Pro hardware.
 
 ## Evidence Rules
 

@@ -10,7 +10,7 @@ body:
 
         Please collect read-only evidence. Do not bypass Gatekeeper, edit the cask SHA manually, disable verifier signature/notarization checks, or run fan-write smoke tests to diagnose a release-trust issue.
 
-        Vifty v1.2.0 is the current published Developer ID release. Its signed/notarized GitHub Release assets, matching Homebrew cask checksum, and public verifier/readiness evidence pass as described in docs/release-status.md. Report any local mismatch with those checks here. A source tag, passing CI run, unsigned-dev convenience build, local signing smoke build, or CI artifact alone is not a trusted public binary release.
+        Vifty v1.3.2 build 7 is the current arm64-only Developer ID release. Its signed/notarized GitHub Release artifact and matching Homebrew cask checksum pass the release-level verifier as recorded in .github/release-manifest.json. Exact-build installed release review passed, and manual Fixed/Curve/Auto validation passed on MacBookPro18,1; neither result transfers to another build or model. Report any local mismatch with those facts here. A source tag, passing CI run, unsigned-dev convenience build, local signing smoke build, or CI artifact alone is not a trusted public binary release.
 
         The published v1.1.0 source/unsigned-dev release has a known helper-unreachable issue that was fixed by v1.1.1. Do not retag v1.1.0 or replace its unsigned-dev assets with a main build; report it here and use the v1.1.1 source-first hotfix path.
 
@@ -19,7 +19,7 @@ body:
     attributes:
       label: Release version
       description: Which Vifty release is affected?
-      placeholder: e.g. 1.2.0
+      placeholder: e.g. 1.3.2
     validations:
       required: true
 
@@ -83,7 +83,7 @@ body:
         brew install --cask vifty
         git fetch origin main --tags
         scripts/check-release-readiness.sh --mode source-first --version 1.1.1 --repo Reedtrullz/Vifty --json
-        scripts/check-release-readiness.sh --mode developer-id --version 1.2.0 --repo Reedtrullz/Vifty --require-source-ref v1.2.0 --json
+        scripts/check-release-readiness.sh --mode developer-id --version 1.3.2 --repo Reedtrullz/Vifty --require-source-ref v1.3.2 --json
         scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"
     validations:
       required: true

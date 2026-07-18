@@ -196,11 +196,11 @@ Collect at least one passing GitHub hardware-validation report for each availabl
 | M4 Pro/Max MacBook Pro | macOS 15+ | `ready` or explained `degraded` | `viftyctl diagnose --json`, `ViftyHelper probeLocal` |
 | M5 Pro/Max MacBook Pro | macOS 15+ | `ready` or explained `degraded` | `viftyctl diagnose --json`, `ViftyHelper probeLocal` |
 | Apple Silicon non-MacBook-Pro | macOS 15+ | `blocked` | `viftyctl diagnose --json` |
-| Intel MacBook Pro | macOS 15+ if available | `blocked` | `viftyctl diagnose --json` |
+| Intel MacBook Pro | Not executable | Binary unavailable; no safe-block claim | Record arm64 release identity only; do not request installed-app diagnostics |
 
 ## M1 Pro Local Validation Quick Path
 
-Use this path for the available `MacBookPro18,1` / M1 Pro machine before changing the M1 Pro/Max row from **Needs manual smoke** to validated hardware evidence. Keep the installed app, helper, collected bundle, reviewed `sourceSHA`, and compatibility index aligned with the exact source build being validated.
+This path produced the checked-in exact-v1.3.2 `MacBookPro18,1` validated report on 2026-07-14. Repeat it for every future build or additional model identifier; keep the installed app, helper, collected bundle, reviewed `sourceSHA`, and compatibility index aligned with the exact binary being validated.
 
 1. Collect the read-only bundle with explicit source provenance. For current `main` or local ad-hoc builds, use the exact commit SHA of the installed app rather than a release-tag install source:
 
@@ -394,4 +394,4 @@ codesign --verify --deep --strict .build/Vifty.app
 codesign -dvvv .build/Vifty.app 2>&1 | grep TeamIdentifier
 ```
 
-The LaunchDaemon plist must contain the same `VIFTY_XPC_ALLOWED_TEAM_ID` as the signed app's TeamIdentifier. Ad-hoc local builds may leave the value empty.
+The LaunchDaemon plist must contain the same `VIFTY_XPC_ALLOWED_TEAM_ID` as the signed app's TeamIdentifier. An empty TeamID is read-only/fail-closed for daemon XPC writes, not a permissive ad-hoc mode. Any local ad-hoc report that claims daemon-backed manual or agent writes must use the explicit UID-plus-canonical-path development allowlist described in [trust-model.md](trust-model.md) and preserve its exact daemon/build provenance; public release evidence must contain no `VIFTY_XPC_ADHOC_*` keys.

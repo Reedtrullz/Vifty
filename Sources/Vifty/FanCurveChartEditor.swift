@@ -20,25 +20,61 @@ struct FanCurveChartEditor: View {
     private let fanColors: [Color] = [.cyan, .purple, .mint, .pink]
     private let chartHeight: CGFloat = 272
 
+    @ViewBuilder
+    private var chartLegend: some View {
+        if !fanCurveSeries.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    chartLegendItems
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    chartLegendItems
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+    }
+
+    @ViewBuilder
+    private var chartLegendItems: some View {
+        chartLegendSwatch(
+            .accentColor,
+            label: chartPresentation.requestedLegendLabel,
+            dashed: false
+        )
+        ForEach(chartPresentation.differingSeries) { series in
+            chartLegendSwatch(
+                fanColors[series.colorIndex % fanColors.count],
+                label: chartPresentation.legendLabel(for: series),
+                dashed: true
+            )
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("Curve chart", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                    .font(.caption.weight(.semibold))
+                    .viftyFont(.caption, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(TemperatureDisplayFormatter.whole(tempRange.lowerBound))-\(TemperatureDisplayFormatter.whole(tempRange.upperBound)) · \(Int(rpmLower.rounded()))-\(Int(rpmUpper.rounded())) RPM")
-                    .font(.caption2.monospacedDigit())
+                    .viftyFont(.caption2)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
 
             if let liveCurveTargetText {
                 Text(liveCurveTargetText)
-                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .viftyFont(.caption2, weight: .semibold)
+                    .monospacedDigit()
                     .foregroundStyle(.orange)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
+
+            chartLegend
 
             GeometryReader { geometry in
                 ZStack {
@@ -51,10 +87,10 @@ struct FanCurveChartEditor: View {
                         curvePointAxisGuides(for: [activePoint], color: .accentColor, in: geometry.size)
                     }
 
-                    drawCurve(basePoints, in: geometry.size)
+                    drawCurve(chartPresentation.basePoints, in: geometry.size)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                    ForEach(fanCurveSeries.filter { !$0.matchesBase }) { series in
+                    ForEach(chartPresentation.differingSeries) { series in
                         let color = fanColors[series.colorIndex % fanColors.count]
                         drawCurve(series.points, in: geometry.size)
                             .stroke(color.opacity(0.75), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [6, 5]))
@@ -78,7 +114,6 @@ struct FanCurveChartEditor: View {
                             valueLabelOffsetY: activeHandleLabelOffsetY(for: value),
                             temperature: value.temperature,
                             rpm: value.rpm,
-                            accessibilityValueText: value.accessibilityValueText,
                             onHoverChanged: { isHovering in
                                 activeChartPoint = isHovering ? point : nil
                             }
@@ -98,40 +133,55 @@ struct FanCurveChartEditor: View {
             .frame(height: chartHeight)
 
             curvePointSummaryStrip
-
-            if !fanCurveSeries.isEmpty {
-                HStack(spacing: 10) {
-                    chartLegendSwatch(.accentColor, label: "Base", dashed: false)
-                    ForEach(fanCurveSeries) { series in
-                        chartLegendSwatch(
-                            fanColors[series.colorIndex % fanColors.count],
-                            label: series.matchesBase ? "\(series.name) · Matches base" : series.name,
-                            dashed: !series.matchesBase
-                        )
-                    }
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            }
         }
         .padding(10)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .contain)
+        .accessibilityRepresentation {
+            VStack {
+                ForEach(ViftyCurveAccessibilityControl.allCases) { control in
+                    CurveAccessibilitySlider(
+                        control: control,
+                        value: accessibilityBinding(for: control),
+                        range: control.isTemperature ? tempRange : editorRPMRange,
+                        step: control.isTemperature ? 1 : 50,
+                        valueText: control.valueText(
+                            startTemperature: startTemp,
+                            startRPM: startRPM,
+                            rampTemperature: midTemp,
+                            rampRPM: midRPM,
+                            highTemperature: maxTemp,
+                            highRPM: maxRPM
+                        )
+                    )
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(ViftyAccessibilityIdentifier.curveChart)
+        }
+    }
+
+    private func accessibilityBinding(
+        for control: ViftyCurveAccessibilityControl
+    ) -> Binding<Double> {
+        switch control {
+        case .startTemperature: $startTemp
+        case .startRPM: $startRPM
+        case .rampTemperature: $midTemp
+        case .rampRPM: $midRPM
+        case .highTemperature: $maxTemp
+        case .highRPM: $maxRPM
+        }
     }
 
     private var editorRPMRange: ClosedRange<Double> {
-        FanCurveChartGeometry.resolvedRPMRange(
-            base: rpmRange,
-            fans: [],
-            includeFanRanges: false
-        )
+        rpmRange
     }
 
     private var chartRPMRange: ClosedRange<Double> {
         FanCurveChartGeometry.resolvedRPMRange(
             base: editorRPMRange,
             fans: fans,
-            includeFanRanges: usePerFanOverrides
+            includeFanRanges: true
         )
     }
 
@@ -156,13 +206,6 @@ struct FanCurveChartEditor: View {
         FanCurveChartGeometry(
             temperatureRange: tempRange,
             rpmRange: chartRPMRange
-        )
-    }
-
-    private var editorGeometry: FanCurveChartGeometry {
-        FanCurveChartGeometry(
-            temperatureRange: tempRange,
-            rpmRange: editorRPMRange
         )
     }
 
@@ -195,19 +238,15 @@ struct FanCurveChartEditor: View {
 
     private var liveCurveTargetText: String? {
         guard let liveTemperature else { return nil }
-        let targetRPM = targetRPM(at: liveTemperature, points: basePoints)
-        return "Live \(TemperatureDisplayFormatter.whole(liveTemperature)) -> Base \(formattedRPM(targetRPM))"
+        let targetRPM = chartGeometry.targetRPM(
+            at: liveTemperature,
+            points: chartPresentation.basePoints
+        )
+        return "Live \(TemperatureDisplayFormatter.whole(liveTemperature)) -> Requested \(formattedRPM(targetRPM))"
     }
 
     private var fanCurveSeries: [FanCurveSeriesPresentation] {
         chartPresentation.series
-    }
-
-    private func targetRPM(at temperature: Double, points: [FanCurveChartPoint]) -> Int {
-        editorGeometry.targetRPM(
-            at: temperature,
-            points: points.map { FanCurveChartValue(temperature: $0.temperature, rpm: $0.rpm) }
-        )
     }
 
     private func formattedRPM(_ rpm: Int) -> String {
@@ -441,7 +480,8 @@ struct FanCurveChartEditor: View {
 
     private func liveTemperatureLabel(_ temperature: Double, in size: CGSize) -> some View {
         Text(TemperatureDisplayFormatter.whole(temperature))
-            .font(.caption2.weight(.semibold).monospacedDigit())
+            .viftyFont(.caption2, weight: .semibold)
+            .monospacedDigit()
             .foregroundStyle(.orange)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
@@ -458,7 +498,7 @@ struct FanCurveChartEditor: View {
             .stroke(color, style: StrokeStyle(lineWidth: dashed ? 2.5 : 3, lineCap: .round, dash: dashed ? [6, 5] : []))
             .frame(width: 14, height: 4)
             Text(label)
-                .font(.caption2)
+                .viftyFont(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
@@ -470,7 +510,8 @@ private struct CurveChartAxisValue: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.monospacedDigit())
+            .viftyFont(.caption2)
+            .monospacedDigit()
             .foregroundStyle(.secondary.opacity(0.9))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -486,7 +527,8 @@ private struct CurveChartAxisTitle: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.bold).monospacedDigit())
+            .viftyFont(.caption2, weight: .bold)
+            .monospacedDigit()
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .padding(.horizontal, 5)
@@ -503,7 +545,8 @@ private struct CurveChartAxisReadout: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold).monospacedDigit())
+            .viftyFont(.caption2, weight: .semibold)
+            .monospacedDigit()
             .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.65)
@@ -552,9 +595,6 @@ private struct FanCurveChartPoint: Identifiable {
         "\(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM"
     }
 
-    var accessibilityValueText: String {
-        "\(TemperatureDisplayFormatter.whole(temperature)), \(Int(rpm.rounded())) RPM"
-    }
 }
 
 private struct CurveChartPointSummaryChip: View {
@@ -563,13 +603,15 @@ private struct CurveChartPointSummaryChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(point.label)
-                .font(.caption2.weight(.semibold))
+                .viftyFont(.caption2, weight: .semibold)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(point.temperatureText)
-                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .viftyFont(.caption2, weight: .semibold)
+                    .monospacedDigit()
                 Text(point.rpmText)
-                    .font(.caption2.monospacedDigit())
+                    .viftyFont(.caption2)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
         }
@@ -590,7 +632,6 @@ private struct ChartHandle: View {
     let valueLabelOffsetY: CGFloat
     let temperature: Double
     let rpm: Double
-    let accessibilityValueText: String
     let onHoverChanged: (Bool) -> Void
 
     var body: some View {
@@ -610,9 +651,44 @@ private struct ChartHandle: View {
         .frame(width: 118, height: 58)
         .onHover(perform: onHoverChanged)
         .help("\(label): \(TemperatureDisplayFormatter.whole(temperature)) · \(Int(rpm.rounded()).formatted(.number.grouping(.automatic))) RPM")
-        .accessibilityLabel("\(label) curve point")
-        .accessibilityValue(accessibilityValueText)
-        .accessibilityHint("Drag to edit with a pointer. Use Exact points below for keyboard editing.")
+        .accessibilityHidden(true)
+    }
+}
+
+private struct CurveAccessibilitySlider: View {
+    let control: ViftyCurveAccessibilityControl
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let valueText: String
+
+    var body: some View {
+        Slider(value: $value, in: range, step: step)
+            .accessibilityLabel(control.label)
+            .accessibilityValue(valueText)
+            .accessibilityIdentifier(control.identifier)
+            .accessibilityAdjustableAction { direction in
+                let adjustmentDirection: CurvePointAdjustmentDirection
+                switch direction {
+                case .increment:
+                    adjustmentDirection = .increment
+                case .decrement:
+                    adjustmentDirection = .decrement
+                @unknown default:
+                    return
+                }
+                value = control.isTemperature
+                    ? CurvePointAdjustment.temperature(
+                        value,
+                        direction: adjustmentDirection,
+                        range: range
+                    )
+                    : CurvePointAdjustment.rpm(
+                        value,
+                        direction: adjustmentDirection,
+                        range: range
+                    )
+            }
     }
 }
 
@@ -623,10 +699,11 @@ private struct CurveChartHandleValueLabel: View {
     var body: some View {
         VStack(spacing: 1) {
             Text(label)
-                .font(.caption2.weight(.bold))
+                .viftyFont(.caption2, weight: .bold)
                 .foregroundStyle(.secondary)
             Text(valueText)
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .viftyFont(.caption2, weight: .semibold)
+                .monospacedDigit()
                 .foregroundStyle(.primary)
         }
         .lineLimit(1)

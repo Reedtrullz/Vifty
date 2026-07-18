@@ -16,6 +16,47 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         XCTAssertEqual(command, .status(json: true))
     }
 
+    func testParsesStrictHelperMaintenanceCommands() throws {
+        XCTAssertEqual(
+            try ViftyCtlArguments.parse([
+                "helper-maintenance-prepare", "--operation", "repair", "--json"
+            ]),
+            .helperMaintenancePrepare(operation: .repair)
+        )
+        XCTAssertEqual(
+            try ViftyCtlArguments.parse([
+                "helper-maintenance-consume", "--operation", "uninstall",
+                "--report", "/private/tmp/report.json", "--json"
+            ]),
+            .helperMaintenanceConsume(
+                operation: .uninstall,
+                reportPath: "/private/tmp/report.json"
+            )
+        )
+        XCTAssertEqual(
+            try ViftyCtlArguments.parse(["helper-maintenance-cancel", "--json"]),
+            .helperMaintenanceCancel
+        )
+    }
+
+    func testHelperMaintenanceRejectsNonJSONInvalidOperationAndRelativeReport() {
+        assertParseError(
+            ["helper-maintenance-prepare", "--operation", "repair"],
+            equals: .maintenanceRequiresJSON
+        )
+        assertParseError(
+            ["helper-maintenance-prepare", "--operation", "offlineRecovery", "--json"],
+            equals: .invalidMaintenanceOperation
+        )
+        assertParseError(
+            [
+                "helper-maintenance-consume", "--operation", "repair",
+                "--report", "report.json", "--json"
+            ],
+            equals: .invalidMaintenanceReport
+        )
+    }
+
     func testParsesAgentRuleJSON() throws {
         let command = try ViftyCtlArguments.parse(["agent-rule", "--json"])
 

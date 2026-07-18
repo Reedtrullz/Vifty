@@ -164,6 +164,9 @@ SCHEMA_DIR="${APP_PATH}/Contents/Resources/schemas"
 DAEMON_PLIST="${APP_PATH}/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist"
 DAEMON_LABEL="tech.reidar.vifty.daemon"
 RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID="https://vifty.local/schemas/release-artifact-summary.schema.json"
+RELEASE_ARTIFACT_CONTRACT_PATH="${VIFTY_RELEASE_ARTIFACT_CONTRACT_PATH:-${ROOT_DIR}/scripts/lib/release_artifact_contract.rb}"
+RELEASE_MANIFEST_PATH="${VIFTY_RELEASE_MANIFEST_PATH:-${ROOT_DIR}/.github/release-manifest.json}"
+RELEASE_SOURCE_REPOSITORY="${VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT:-${ROOT_DIR}}"
 EXPECTED_SCHEMA_FILES=(
   "agent-cooling-evidence-summary.schema.json"
   "agent-cooling-evidence-review.schema.json"
@@ -658,6 +661,7 @@ capture_capabilities_contract() {
       "runLifecycle.structuredPreChildFailures" => run_lifecycle["structuredPreChildFailures"],
       "runLifecycle.cleanupStateReportedOnLaunchFailure" => run_lifecycle["cleanupStateReportedOnLaunchFailure"],
       "runLifecycle.resolvedChildExecutableReported" => run_lifecycle["resolvedChildExecutableReported"],
+      "runLifecycle.descendantCleanupBeforeAutoRestore" => run_lifecycle["descendantCleanupBeforeAutoRestore"],
       "directControlLifecycle.prepareUsesIdempotencyKey" => direct_lifecycle["prepareUsesIdempotencyKey"],
       "directControlLifecycle.preferRunForSingleChildWorkloads" => direct_lifecycle["preferRunForSingleChildWorkloads"]
     }
@@ -671,6 +675,7 @@ capture_capabilities_contract() {
     end
 
     expected_false_booleans = {
+      "runLifecycle.backgroundProcessesAllowed" => run_lifecycle["backgroundProcessesAllowed"],
       "directControlLifecycle.restoreAutoAcceptsIdempotencyKey" => direct_lifecycle["restoreAutoAcceptsIdempotencyKey"],
       "directControlLifecycle.restoreAutoScopedByIdempotencyKey" => direct_lifecycle["restoreAutoScopedByIdempotencyKey"]
     }
@@ -691,6 +696,13 @@ capture_capabilities_contract() {
     missing_signals = expected_signals - signals
     unless missing_signals.empty?
       warn "runLifecycle.signalsForwardedToChild missing #{missing_signals.join(",")}"
+      ok = false
+    end
+
+    signal_scope = run_lifecycle["signalScope"]
+    puts "runLifecycle.signalScope\t#{signal_scope}\tprocessGroup"
+    unless signal_scope == "processGroup"
+      warn "runLifecycle.signalScope #{signal_scope.inspect} did not match processGroup"
       ok = false
     end
 
@@ -815,6 +827,18 @@ capture_release_artifact_summary() {
         "installedAppBundleVersion" => installed_app_version,
         "caskVersion" => data["caskVersion"],
         "bundleVersion" => data["bundleVersion"],
+        "bundleBuild" => data["bundleBuild"],
+        "bundleIdentifier" => data["bundleIdentifier"],
+        "releaseVersion" => data["releaseVersion"],
+        "releaseTag" => data["releaseTag"],
+        "releaseSourceCommit" => data["releaseSourceCommit"],
+        "releaseManifestEntryKind" => data["releaseManifestEntryKind"],
+        "releaseManifestSchemaVersion" => data["releaseManifestSchemaVersion"],
+        "releaseManifestSHA256" => data["releaseManifestSHA256"],
+        "runtimeIdentifiers" => data["runtimeIdentifiers"]&.to_json,
+        "launchDaemonLabel" => data["launchDaemonLabel"],
+        "machServiceName" => data["machServiceName"],
+        "architectures" => data["architectures"]&.to_json,
         "expectedArtifactName" => data["expectedArtifactName"],
         "expectedSHA" => data["expectedSHA"],
         "expectedSHASource" => data["expectedSHASource"],
@@ -844,6 +868,12 @@ capture_release_artifact_summary() {
         ok = false
       end
 
+      schema_version = data["schemaVersion"]
+      unless [1, 2].include?(schema_version)
+        warn "release artifact summary schemaVersion #{schema_version.inspect} must be 1 or 2"
+        ok = false
+      end
+
       if installed_app_version.to_s.empty?
         warn "installed app bundle version could not be read from Info.plist"
         ok = false
@@ -856,12 +886,54 @@ capture_release_artifact_summary() {
       end
 
       summary_cask_version = data["caskVersion"].to_s
-      if !summary_cask_version.empty? && summary_cask_version != installed_app_version
-        warn "release artifact summary caskVersion #{summary_cask_version.inspect} did not match installed app bundle version #{installed_app_version.inspect}"
-        ok = false
+      summary_release_version = data["releaseVersion"].to_s
+      expected_sha_source = data["expectedSHASource"].to_s
+      identity_version = summary_cask_version
+
+      if schema_version == 2
+        identity_version = summary_release_version
+        if summary_release_version.empty?
+          warn "release artifact summary version 2 must include releaseVersion"
+          ok = false
+        elsif summary_release_version != summary_bundle_version
+          warn "release artifact summary releaseVersion #{summary_release_version.inspect} did not match bundleVersion #{summary_bundle_version.inspect}"
+          ok = false
+        end
+
+        release_tag = data["releaseTag"].to_s
+        unless release_tag == "v#{summary_release_version}"
+          warn "release artifact summary releaseTag #{release_tag.inspect} did not match v#{summary_release_version}"
+          ok = false
+        end
+        release_entry_kind = data["releaseManifestEntryKind"].to_s
+        unless %w[candidate published historical].include?(release_entry_kind)
+          warn "release artifact summary releaseManifestEntryKind #{release_entry_kind.inspect} was not recognized"
+          ok = false
+        end
+        release_source_commit = data["releaseSourceCommit"]
+        unless release_source_commit.to_s.match?(/\A[0-9a-f]{40}\z/)
+          warn "release artifact summary releaseSourceCommit must be a lowercase 40-character tag commit"
+          ok = false
+        end
+
+        if expected_sha_source == "cask sha256" && summary_cask_version != summary_release_version
+          warn "release artifact summary using cask sha256 must have matching caskVersion and releaseVersion"
+          ok = false
+        elsif expected_sha_source == "expected sha256" && release_entry_kind != "candidate"
+          warn "release artifact summary using expected sha256 must select a candidate entry"
+          ok = false
+        elsif !%w[cask\ sha256 expected\ sha256 manifest\ sha256].include?(expected_sha_source)
+          warn "release artifact summary expectedSHASource #{expected_sha_source.inspect} was not recognized"
+          ok = false
+        end
+      else
+        if !summary_cask_version.empty? && summary_cask_version != installed_app_version
+          warn "release artifact summary caskVersion #{summary_cask_version.inspect} did not match installed app bundle version #{installed_app_version.inspect}"
+          ok = false
+        end
       end
 
-      expected_artifact_name = "Vifty-v#{summary_cask_version}.zip"
+      expected_artifact_name = "Vifty-v#{identity_version}.zip"
       if data["expectedArtifactName"].to_s != expected_artifact_name
         warn "release artifact summary expectedArtifactName #{data["expectedArtifactName"].inspect} did not match #{expected_artifact_name}"
         ok = false
@@ -917,6 +989,10 @@ capture_release_artifact_summary() {
       exit(ok ? 0 : 1)
     ' "${RELEASE_SUMMARY_PATH}" "${json_path}" "${installed_app_version}" "${RELEASE_ARTIFACT_SUMMARY_SCHEMA_ID}" > "${stdout_path}" 2>> "${stderr_path}"
     status=$?
+    if ! ruby "${RELEASE_ARTIFACT_CONTRACT_PATH}" validate-summary \
+      "${json_path}" "${RELEASE_MANIFEST_PATH}" "${RELEASE_SOURCE_REPOSITORY}" 2>> "${stderr_path}"; then
+      status=1
+    fi
     set -e
   fi
 
@@ -1139,7 +1215,7 @@ write_review_summary() {
   summary_row "release-checklist" "0 or skipped" "release-trust" "Optional release checklist should match the installed app version and include post-publication trust follow-up when supplied."
   summary_row "schema-resources" "0" "support-release-and-agent-contract" "Bundled support, release, validation, and viftyctl JSON Schemas should be present and hashed."
   summary_row "launchdaemon-lint" "0" "release-trust" "Bundled LaunchDaemon plist should be valid."
-  summary_row "launchdaemon-teamid" "0 for public release" "release-trust" "Public releases should expose VIFTY_XPC_ALLOWED_TEAM_ID; ad-hoc builds may be empty."
+  summary_row "launchdaemon-teamid" "0 for public release" "release-trust" "Public releases expose VIFTY_XPC_ALLOWED_TEAM_ID and no VIFTY_XPC_ADHOC_* keys; an empty local TeamID is read-only/fail-closed for daemon XPC writes."
   summary_row "launchctl-print-daemon" "0 when installed" "hardware-validation" "Nonzero means the daemon was not registered or not visible to launchctl."
   summary_row "codesign-verify-app" "0 for public release" "release-trust" "App signature should verify."
   summary_row "codesign-verify-viftyctl" "0 for public release" "release-trust" "Bundled viftyctl signature should verify."

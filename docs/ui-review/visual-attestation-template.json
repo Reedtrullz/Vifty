@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "method": "visual-inspection",
+  "reviewer": "REPLACE_WITH_REVIEWER_NAME",
+  "reviewedAt": "1970-01-01T00:00:00Z",
+  "coveredRowIDs": [],
+  "captureBindings": [],
+  "steps": [
+    {
+      "id": "clipping",
+      "status": "pending",
+      "coveredRowIDs": [],
+      "notes": "Inspect every covered screenshot for clipped content."
+    },
+    {
+      "id": "overlap",
+      "status": "pending",
+      "coveredRowIDs": [],
+      "notes": "Inspect every covered screenshot for overlapping controls or text."
+    },
+    {
+      "id": "legibility",
+      "status": "pending",
+      "coveredRowIDs": [],
+      "notes": "Inspect hierarchy, contrast, labels, and values for legibility."
+    },
+    {
+      "id": "hierarchy",
+      "status": "pending",
+      "coveredRowIDs": [],
+      "notes": "Confirm the intended visual hierarchy in every native container."
+    },
+    {
+      "id": "transient-state",
+      "status": "pending",
+      "coveredRowIDs": [],
+      "notes": "Confirm transient, recovery, helper, and notification states are represented correctly."
+    }
+  ],
+  "overallStatus": "pending"
+}

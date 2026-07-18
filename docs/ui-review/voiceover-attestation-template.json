@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "method": "voiceover-session",
+  "reviewer": "REPLACE_WITH_REVIEWER_NAME",
+  "reviewedAt": "1970-01-01T00:00:00Z",
+  "coveredRowIDs": [],
+  "captureBindings": [],
+  "actionSequence": [
+    "settings-general",
+    "settings-menu-bar",
+    "settings-notifications",
+    "settings-agent-workflows",
+    "settings-general"
+  ],
+  "inspectOnlyControlGroups": [
+    "curve-point-adjustables",
+    "notification-actions",
+    "sensor-buttons"
+  ],
+  "disallowedActionsPerformed": [],
+  "steps": [
+    {
+      "id": "spoken-labels-values",
+      "status": "pending",
+      "coveredRowIDs": [
+        "confirmed-owner-headline",
+        "correct-per-fan-target",
+        "explicit-temperature-role",
+        "no-duplicate-chart-elements",
+        "notification-actions",
+        "sensor-selected-trait-value",
+        "settings-logical-traversal",
+        "six-adjustable-point-controls"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record the specific labels, roles, states, and values VoiceOver actually spoke for these rows."
+    },
+    {
+      "id": "focus-movement",
+      "status": "pending",
+      "coveredRowIDs": [
+        "no-duplicate-chart-elements",
+        "notification-actions",
+        "sensor-selected-trait-value",
+        "settings-logical-traversal",
+        "six-adjustable-point-controls"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record the human-observed VoiceOver focus movement and order through these controls."
+    },
+    {
+      "id": "rotor-grouping",
+      "status": "pending",
+      "coveredRowIDs": [
+        "confirmed-owner-headline",
+        "no-duplicate-chart-elements",
+        "settings-logical-traversal"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record the rotor and group boundaries VoiceOver exposed for the session headline, chart, and Settings sections."
+    },
+    {
+      "id": "adjustable-controls",
+      "status": "pending",
+      "coveredRowIDs": [
+        "six-adjustable-point-controls"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record how VoiceOver announced all six curve-point adjustables; inspect and announce only, and do not invoke an adjustable."
+    },
+    {
+      "id": "buttons",
+      "status": "pending",
+      "coveredRowIDs": [
+        "notification-actions",
+        "sensor-selected-trait-value",
+        "settings-logical-traversal"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record how VoiceOver named and described the bound sensor, notification, and Settings buttons without activating them."
+    },
+    {
+      "id": "scroll-reachability",
+      "status": "pending",
+      "coveredRowIDs": [
+        "compact-main-scroll-reachable",
+        "settings-agent-workflows-scroll-reachable",
+        "settings-general-scroll-reachable",
+        "settings-menu-bar-scroll-reachable",
+        "settings-notifications-scroll-reachable"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Record the exact end anchor reached in the compact main surface and each Settings section."
+    },
+    {
+      "id": "safe-action-announcements",
+      "status": "pending",
+      "coveredRowIDs": [
+        "settings-logical-traversal"
+      ],
+      "notes": "REPLACE_WITH_OBSERVED_RESULT: Activate only General -> Menu Bar -> Notifications -> Agent Workflows -> General and record each resulting VoiceOver announcement."
+    }
+  ],
+  "overallStatus": "pending"
+}

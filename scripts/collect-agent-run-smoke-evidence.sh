@@ -521,6 +521,9 @@ capabilities_run_contract_safe() {
         lifecycle["structuredPreChildFailures"] == true &&
         lifecycle["cleanupStateReportedOnLaunchFailure"] == true &&
         lifecycle["resolvedChildExecutableReported"] == true &&
+        lifecycle["signalScope"] == "processGroup" &&
+        lifecycle["descendantCleanupBeforeAutoRestore"] == true &&
+        lifecycle["backgroundProcessesAllowed"] == false &&
         %w[INT TERM HUP].all? { |signal| signals.include?(signal) } &&
         wrapper_resources["sourceDirectory"] == "examples/viftyctl" &&
         wrapper_resources["bundleDirectory"] == "Contents/Resources/viftyctl-wrappers" &&
@@ -553,7 +556,7 @@ LaunchDaemon helper that actually services XPC. Current-build smoke evidence
 requires that installed daemon hash to match the freshly built
 \`ViftyDaemon\`; otherwise the collector stops before requesting cooling.
 
-The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, including \`resolvedChildExecutableReported=true\`; then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
+The collector proceeds only when \`pre-capabilities.json\` exits 0, advertises \`schemaVersion=1\`, stable \`schemaIDs.capabilities\`, \`schemaIDs.diagnose\`, \`schemaIDs.commandError\`, and \`schemaIDs.run\`, \`daemonStatusAvailable=true\`, \`policySource=daemonStatus\`, \`policyStatusAvailable=true\`, \`policy.enabled=true\`, \`run\`, the \`test\` workload, the expected \`wrapperResources\` source/app-bundle-relative discovery metadata, and the safe \`runLifecycle\` contract used by guarded wrappers, including \`resolvedChildExecutableReported=true\`, \`signalScope=processGroup\`, \`descendantCleanupBeforeAutoRestore=true\`, and \`backgroundProcessesAllowed=false\`; then \`pre-diagnose.json\` reports \`safeToRequestCooling=true\`, \`daemonControlPathReady=true\`, \`manualControlActive=false\`, and \`recommendedAgentAction\` is either \`requestCooling\` or \`requestCoolingWithCaution\`. The caution path is still bounded smoke evidence; do not raise duration or RPM just because the collector proceeds. If the first \`viftyctl run --json\` attempt returns a structured \`PREPARE_RATE_LIMITED\` response with \`retryAfterSeconds\`, the collector records that response, waits once, and captures exactly one retry as the final run proof.
 
 Do not run this smoke test when readiness is blocked, safeToRequestCooling is false, daemonControlPathReady is false, manualControlActive is true, hardware is unsupported, thermal pressure is critical, fans or sensors are missing, or RPM ranges are invalid.
 In those cases this script should stop before calling \`viftyctl run\` and keep
@@ -752,7 +755,10 @@ write_summary_json() {
         "resolvedChildExecutable" => nil,
         "resolvedChildExecutablePathPrivacy" => "notProvided",
         "resolvedChildExecutableSHA256" => nil,
-        "resolvedChildExecutableSHA256Status" => nil
+        "resolvedChildExecutableSHA256Status" => nil,
+        "signalScope" => nil,
+        "descendantCleanupBeforeAutoRestore" => nil,
+        "backgroundProcessesAllowed" => nil
       }
     else
       exit_status = run_status.to_i
@@ -771,6 +777,9 @@ write_summary_json() {
       resolved_child_executable_path_privacy = share_safe_executable_path_privacy(raw_resolved_child_executable)
       resolved_child_executable_sha256 = run_report["resolvedChildExecutableSHA256"].is_a?(String) ? run_report["resolvedChildExecutableSHA256"] : nil
       resolved_child_executable_sha256_status = run_report["resolvedChildExecutableSHA256Status"].is_a?(String) ? run_report["resolvedChildExecutableSHA256Status"] : nil
+      signal_scope = run_report["signalScope"].is_a?(String) ? run_report["signalScope"] : nil
+      descendant_cleanup_before_auto_restore = boolean_or_nil(run_report["descendantCleanupBeforeAutoRestore"])
+      background_processes_allowed = boolean_or_nil(run_report["backgroundProcessesAllowed"])
 
       if exit_status == 0
         cooling_lease_prepared = true if cooling_lease_prepared.nil?
@@ -799,7 +808,10 @@ write_summary_json() {
         "resolvedChildExecutable" => resolved_child_executable,
         "resolvedChildExecutablePathPrivacy" => resolved_child_executable_path_privacy,
         "resolvedChildExecutableSHA256" => resolved_child_executable_sha256,
-        "resolvedChildExecutableSHA256Status" => resolved_child_executable_sha256_status
+        "resolvedChildExecutableSHA256Status" => resolved_child_executable_sha256_status,
+        "signalScope" => signal_scope,
+        "descendantCleanupBeforeAutoRestore" => descendant_cleanup_before_auto_restore,
+        "backgroundProcessesAllowed" => background_processes_allowed
       }
     end
     rate_limit_retry = {
@@ -857,6 +869,9 @@ write_summary_json() {
         "commandErrorSchemaID" => capabilities.dig("schemaIDs", "commandError"),
         "runSchemaID" => capabilities.dig("schemaIDs", "run"),
         "resolvedChildExecutableReported" => boolean_or_nil(capabilities.dig("runLifecycle", "resolvedChildExecutableReported")),
+        "signalScope" => capabilities.dig("runLifecycle", "signalScope"),
+        "descendantCleanupBeforeAutoRestore" => boolean_or_nil(capabilities.dig("runLifecycle", "descendantCleanupBeforeAutoRestore")),
+        "backgroundProcessesAllowed" => boolean_or_nil(capabilities.dig("runLifecycle", "backgroundProcessesAllowed")),
         "daemonStatusAvailable" => capabilities["daemonStatusAvailable"],
         "policySource" => capabilities["policySource"],
         "policyStatusAvailable" => capabilities["policyStatusAvailable"],

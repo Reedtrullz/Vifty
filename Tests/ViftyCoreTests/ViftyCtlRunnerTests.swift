@@ -77,7 +77,11 @@ final class ViftyCtlRunnerTests: XCTestCase {
     func testStatusHumanReadableStillThrowsWhenDaemonUnavailable() async throws {
         let expected = ViftyError.helperRejected("Daemon request timed out.")
         let client = FakeAgentControlClient(statusError: expected)
-        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlActiveReader: { false }
+        )
 
         do {
             _ = try await runner.run(.status(json: false))
@@ -346,6 +350,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(runLifecycle["structuredPreChildFailures"] as? Bool, true)
         XCTAssertEqual(runLifecycle["cleanupStateReportedOnLaunchFailure"] as? Bool, true)
         XCTAssertEqual(runLifecycle["resolvedChildExecutableReported"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["signalScope"] as? String, ViftyCtlSignalScope.processGroup.rawValue)
+        XCTAssertEqual(runLifecycle["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["backgroundProcessesAllowed"] as? Bool, false)
         let directControlLifecycle = try XCTUnwrap(json["directControlLifecycle"] as? [String: Any])
         XCTAssertEqual(directControlLifecycle["prepareUsesIdempotencyKey"] as? Bool, true)
         XCTAssertEqual(directControlLifecycle["restoreAutoAcceptsIdempotencyKey"] as? Bool, false)
@@ -430,6 +437,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(runLifecycle["autoRestoreAfterChildExit"] as? Bool, true)
         XCTAssertEqual(runLifecycle["cleanupStateReportedOnLaunchFailure"] as? Bool, true)
         XCTAssertEqual(runLifecycle["resolvedChildExecutableReported"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["signalScope"] as? String, ViftyCtlSignalScope.processGroup.rawValue)
+        XCTAssertEqual(runLifecycle["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(runLifecycle["backgroundProcessesAllowed"] as? Bool, false)
         let directControlLifecycle = try XCTUnwrap(json["directControlLifecycle"] as? [String: Any])
         XCTAssertEqual(directControlLifecycle["prepareUsesIdempotencyKey"] as? Bool, true)
         XCTAssertEqual(directControlLifecycle["restoreAutoAcceptsIdempotencyKey"] as? Bool, false)
@@ -520,10 +530,61 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["passed"] as? Bool) == true
                 && (check["severity"] as? String) == "warning"
         })
+        XCTAssertTrue(checks.contains { check in
+            (check["id"] as? String) == "replacementMaintenanceAttestation"
+                && (check["passed"] as? Bool) == true
+                && (check["severity"] as? String) == "error"
+        })
         let prepareRequestCount = await client.prepareRequestCount
         let restoreReasonCount = await client.restoreReasonCount
         XCTAssertEqual(prepareRequestCount, 0)
         XCTAssertEqual(restoreReasonCount, 0)
+    }
+
+    func testDiagnoseReplacementMaintenanceAttestationDoesNotAssumeTwoFans() async throws {
+        var snapshot = Self.readySnapshot()
+        snapshot.fans = Array(snapshot.fans.prefix(1))
+        let client = FakeAgentControlClient(snapshot: snapshot)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+        let json = try jsonObject(in: result.stdout)
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(json["fanCount"] as? Int, 1)
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "replacementMaintenanceAttestation"
+                && $0["passed"] as? Bool == true
+        })
+    }
+
+    func testDiagnoseOmitsReplacementAttestationForSelfConsistentUntrustedInventory() async throws {
+        var snapshot = Self.readySnapshot()
+        snapshot.fans = Array(snapshot.fans.prefix(1))
+        snapshot.fans[0].controlEligibility = .legacyUnspecified
+        let client = FakeAgentControlClient(snapshot: snapshot)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+        let json = try jsonObject(in: result.stdout)
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertEqual(json["fanCount"] as? Int, 1)
+        XCTAssertFalse(checks.contains {
+            $0["id"] as? String == "replacementMaintenanceAttestation"
+        })
     }
 
     func testDiagnoseJSONBlocksCoolingWhenInstalledDaemonDiffersFromExpectedBuild() async throws {
@@ -1085,7 +1146,11 @@ final class ViftyCtlRunnerTests: XCTestCase {
             )
         ]
         let client = FakeAgentControlClient(auditEvents: events)
-        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlActiveReader: { false }
+        )
 
         let result = try await runner.run(.audit(limit: 20, json: false))
 
@@ -1464,13 +1529,19 @@ final class ViftyCtlRunnerTests: XCTestCase {
     func testRestoreAutoCallsAgentControlRestore() async throws {
         let client = FakeAgentControlClient()
         let processRunner = FakeProcessRunner(exitCode: 0)
-        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            manualControlClearer: {}
+        )
 
         let result = try await runner.run(.restoreAuto(reason: "done", json: true))
 
         XCTAssertEqual(result.exitCode, 0)
         let restoreReasons = await client.restoreReasons
+        let restoreAuthorities = await client.restoreAuthorities
         XCTAssertEqual(restoreReasons, ["done"])
+        XCTAssertEqual(restoreAuthorities, [.explicitOperator])
         XCTAssertEqual(processRunner.runCallCount, 0)
     }
 
@@ -1558,8 +1629,11 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 7)
         let prepareRequests = await client.prepareRequests
         let restoreReasons = await client.restoreReasons
+        let restoreAuthorities = await client.restoreAuthorities
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 7"])
+        XCTAssertEqual(restoreAuthorities.count, 1)
+        XCTAssertNil(restoreAuthorities[0])
         XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
     }
 
@@ -1598,6 +1672,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let executableDigest = try XCTUnwrap(json["resolvedChildExecutableSHA256"] as? String)
         XCTAssertNotNil(executableDigest.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression))
         XCTAssertEqual(json["resolvedChildExecutableSHA256Status"] as? String, "computed")
+        XCTAssertEqual(json["signalScope"] as? String, ViftyCtlSignalScope.processGroup.rawValue)
+        XCTAssertEqual(json["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(json["backgroundProcessesAllowed"] as? Bool, false)
         XCTAssertEqual(json["generatedAt"] as? Double, 721_692_800)
         let prepareRequests = await client.prepareRequests
         let restoreReasons = await client.restoreReasons
@@ -1690,6 +1767,70 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let restoreReasons = await client.restoreReasons
         XCTAssertEqual(restoreReasons, ["viftyctl run child exited with 0"])
         XCTAssertEqual(processRunner.runArguments, [["/usr/bin/swift", "test"]])
+    }
+
+    func testRunKeepsSignalShieldActiveUntilAutoRestoreAttemptCompletes() async throws {
+        let request = AgentControlRequest(
+            workload: .test,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "swift test",
+            idempotencyKey: "signal-shield"
+        )
+        let observation = SignalShieldObservation()
+        let client = FakeAgentControlClient(
+            prepareResponses: [Self.allowedStatus(for: request)],
+            restoreObserver: { observation.recordRestoreAttempt() }
+        )
+        let processRunner = FakeProcessRunner(
+            exitCode: 0,
+            resolvedArguments: ["/usr/bin/swift", "test"],
+            signalShieldObservation: observation
+        )
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
+
+        let result = try await runner.run(
+            .run(request, childArguments: ["swift", "test"], json: false, force: false)
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(observation.wasActiveDuringRestore)
+        XCTAssertFalse(observation.isActive)
+        XCTAssertEqual(observation.finishCount, 1)
+    }
+
+    func testRunKeepsSignalShieldActiveThroughRestoreAfterChildLaunchFailure() async throws {
+        let request = AgentControlRequest(
+            workload: .test,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "swift test",
+            idempotencyKey: "signal-shield-launch-error"
+        )
+        let observation = SignalShieldObservation()
+        let launchError = ViftyError.helperRejected("launch failed")
+        let client = FakeAgentControlClient(
+            prepareResponses: [Self.allowedStatus(for: request)],
+            restoreObserver: { observation.recordRestoreAttempt() }
+        )
+        let processRunner = FakeProcessRunner(
+            error: launchError,
+            signalShieldObservation: observation
+        )
+        let runner = ViftyCtlRunner(client: client, processRunner: processRunner)
+
+        do {
+            _ = try await runner.run(
+                .run(request, childArguments: ["missing"], json: false, force: false)
+            )
+            XCTFail("Expected the launch failure")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, launchError.localizedDescription)
+        }
+
+        XCTAssertTrue(observation.wasActiveDuringRestore)
+        XCTAssertFalse(observation.isActive)
+        XCTAssertEqual(observation.finishCount, 1)
     }
 
     func testRunRestoresIfChildLaunchThrows() async throws {
@@ -1793,6 +1934,56 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(prepareRequests, [request])
         XCTAssertEqual(restoreReasons, ["viftyctl run failed to launch child: \(launchError.localizedDescription)"])
         XCTAssertEqual(processRunner.runArguments, [["missing-command"]])
+    }
+
+    func testRunJSONReportsUnconfirmedDescendantCleanupAndStillRestoresAuto() async throws {
+        let request = AgentControlRequest(
+            workload: .test,
+            durationSeconds: 600,
+            maxRPMPercent: 70,
+            reason: "swift test",
+            idempotencyKey: "key"
+        )
+        let client = FakeAgentControlClient(prepareResponses: [Self.allowedStatus(for: request)])
+        let lifecycleError = ViftyCtlChildProcessLifecycleError(
+            phase: .descendantCleanup,
+            message: "process group survived bounded TERM/KILL escalation",
+            childExitCode: 0,
+            descendantCleanupCompleted: false,
+            backgroundProcessesMayRemain: true
+        )
+        let processRunner = FakeProcessRunner(
+            resolvedArguments: ["/usr/bin/swift", "test"],
+            error: lifecycleError
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: processRunner,
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+
+        let result = try await runner.run(
+            .run(request, childArguments: ["swift", "test"], json: true, force: false)
+        )
+
+        XCTAssertEqual(result.exitCode, 1)
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["errorCode"] as? String, AgentControlErrorCode.childCommandFailed.rawValue)
+        XCTAssertEqual(json["safeToProceed"] as? Bool, false)
+        XCTAssertEqual(json["coolingLeasePrepared"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreAttempted"] as? Bool, true)
+        XCTAssertEqual(json["autoRestoreSucceeded"] as? Bool, true)
+        XCTAssertEqual(json["childProcessFailurePhase"] as? String, "descendantCleanup")
+        XCTAssertEqual(json["childExitCode"] as? Int, 0)
+        XCTAssertEqual(json["descendantCleanupCompleted"] as? Bool, false)
+        XCTAssertEqual(json["backgroundProcessesMayRemain"] as? Bool, true)
+        XCTAssertTrue((json["message"] as? String)?.contains("survived bounded") == true)
+        let restoreReasons = await client.restoreReasons
+        XCTAssertEqual(
+            restoreReasons,
+            ["viftyctl run child lifecycle failed during descendantCleanup: process group survived bounded TERM/KILL escalation"]
+        )
     }
 
     func testRunJSONReportsRestoreFailureWhenChildLaunchThrowsAfterPrepare() async throws {
@@ -2201,6 +2392,356 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(processRunner.runCallCount, 0)
     }
 
+    func testDiagnoseBlocksWhenOwnershipStatusIsUnavailable() async throws {
+        let client = FakeAgentControlClient(
+            ownershipError: ViftyError.helperRejected("ownership status timed out")
+        )
+        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+
+        let result = try await runner.run(.diagnose(json: true))
+        let json = try jsonObject(in: result.stdout)
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(json["fanControlOwnershipStatusError"] as? String, "The fan helper rejected the command: ownership status timed out")
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlOwnershipStatusAvailable"
+                && $0["passed"] as? Bool == false
+        })
+        XCTAssertFalse(checks.contains {
+            $0["id"] as? String == "replacementMaintenanceAttestation"
+        })
+    }
+
+    func testDiagnoseBlocksProtocolMismatch() async throws {
+        let legacyOwnership = FanControlOwnershipStatus(
+            protocolVersion: FanControlProtocolVersion.legacy,
+            owner: nil,
+            phase: nil,
+            transactionID: nil,
+            expectedFanIDs: [],
+            recoveryPending: false
+        )
+        let client = FakeAgentControlClient(ownership: legacyOwnership)
+        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+
+        let result = try await runner.run(.diagnose(json: true))
+        let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlProtocolCurrent"
+                && $0["passed"] as? Bool == false
+        })
+        XCTAssertFalse(checks.contains {
+            $0["id"] as? String == "replacementMaintenanceAttestation"
+        })
+    }
+
+    func testDiagnoseBlocksRecoveryPendingAndExposesStableRecoveryCode() async throws {
+        let pending = FanControlOwnershipStatus(
+            owner: .recovery,
+            phase: .restorePending,
+            transactionID: "tx-recovery",
+            expectedFanIDs: [0, 1],
+            confirmedOSManagedFanIDs: [0],
+            recoveryPending: true,
+            errorCode: "RESTORE_UNCONFIRMED",
+            errorMessage: "fan 1 mode readback is unknown",
+            recoveryAttemptCount: 2
+        )
+        let client = FakeAgentControlClient(ownership: pending)
+        let runner = ViftyCtlRunner(client: client, processRunner: FakeProcessRunner())
+
+        let result = try await runner.run(.diagnose(json: true))
+        let json = try jsonObject(in: result.stdout)
+        let ownership = try XCTUnwrap(json["fanControlOwnership"] as? [String: Any])
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertEqual(ownership["errorCode"] as? String, "RESTORE_UNCONFIRMED")
+        XCTAssertEqual(ownership["errorMessage"] as? String, "fan 1 mode readback is unknown")
+        XCTAssertEqual(ownership["recoveryAttemptCount"] as? Int, 2)
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlRecoveryClear"
+                && $0["passed"] as? Bool == false
+        })
+    }
+
+    func testDiagnoseBlocksForcedOrUnknownFanWithoutOwner() async throws {
+        let forcedClient = FakeAgentControlClient(snapshot: Self.readySnapshot(fanMode: .forced))
+        let forcedRunner = ViftyCtlRunner(client: forcedClient, processRunner: FakeProcessRunner())
+        let unknownClient = FakeAgentControlClient(snapshot: Self.readySnapshot(fanMode: .unknown(2)))
+        let unknownRunner = ViftyCtlRunner(client: unknownClient, processRunner: FakeProcessRunner())
+
+        for result in [
+            try await forcedRunner.run(.diagnose(json: true)),
+            try await unknownRunner.run(.diagnose(json: true))
+        ] {
+            let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+            XCTAssertEqual(result.exitCode, 75)
+            XCTAssertTrue(checks.contains {
+                $0["id"] as? String == "fanControlHardwareConsistent"
+                    && $0["passed"] as? Bool == false
+            })
+        }
+    }
+
+    func testDiagnoseBlocksOwnershipFanSetInconsistency() async throws {
+        let ownership = FanControlOwnershipStatus(
+            owner: .manual(sessionID: "manual-1"),
+            phase: .active,
+            transactionID: "tx-1",
+            expectedFanIDs: [0, 2],
+            recoveryPending: false
+        )
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(fanMode: .forced),
+            ownership: ownership
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+        let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlHardwareConsistent"
+                && $0["passed"] as? Bool == false
+        })
+    }
+
+    func testDiagnoseBlocksActiveManualOwnershipEvenWhenLocalMarkerIsClear() async throws {
+        let ownership = FanControlOwnershipStatus(
+            owner: .manual(sessionID: "manual-1"),
+            phase: .active,
+            transactionID: "tx-1",
+            expectedFanIDs: [0, 1],
+            recoveryPending: false
+        )
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(fanMode: .forced),
+            ownership: ownership
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+        let json = try jsonObject(in: result.stdout)
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertEqual(json["manualControlActive"] as? Bool, false)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, false)
+        XCTAssertEqual(
+            json["recommendedRecoveryAction"] as? String,
+            ViftyCtlReadinessRecoveryAction.restoreAutoBeforeRetry.rawValue
+        )
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlOwnershipClear"
+                && $0["passed"] as? Bool == false
+        })
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlHardwareConsistent"
+                && $0["passed"] as? Bool == true
+        })
+    }
+
+    func testDiagnoseRejectsForcedOrUnknownFansOutsideManualExpectedDomain() async throws {
+        let ownership = FanControlOwnershipStatus(
+            owner: .manual(sessionID: "manual-1"),
+            phase: .active,
+            transactionID: "tx-1",
+            expectedFanIDs: [0],
+            recoveryPending: false
+        )
+
+        for modes in [[FanHardwareMode.forced, .forced], [.forced, .unknown(2)]] {
+            let client = FakeAgentControlClient(
+                snapshot: Self.readySnapshot(fanModes: modes),
+                ownership: ownership
+            )
+            let result = try await ViftyCtlRunner(
+                client: client,
+                processRunner: FakeProcessRunner()
+            ).run(.diagnose(json: true))
+            let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+            XCTAssertEqual(result.exitCode, 75)
+            XCTAssertTrue(checks.contains {
+                $0["id"] as? String == "fanControlHardwareConsistent"
+                    && $0["passed"] as? Bool == false
+            })
+        }
+    }
+
+    func testDiagnoseRejectsAgentOwnershipWhoseExpectedFansDifferFromLeaseTargets() async throws {
+        let request = AgentControlRequest(
+            workload: .test,
+            durationSeconds: 300,
+            maxRPMPercent: 60,
+            reason: "test",
+            idempotencyKey: "agent-1"
+        )
+        let status = AgentControlStatus(
+            enabled: true,
+            activeLease: AgentCoolingLease(
+                id: "lease-1",
+                request: request,
+                createdAt: Date(timeIntervalSince1970: 1_000),
+                expiresAt: Date(timeIntervalSince1970: 1_300),
+                targetRPMByFanID: [0: 3_000]
+            ),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+        let ownership = FanControlOwnershipStatus(
+            owner: .agent(leaseID: "lease-1"),
+            phase: .active,
+            transactionID: "lease-1",
+            expectedFanIDs: [0, 1],
+            recoveryPending: false
+        )
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(fanMode: .forced),
+            ownership: ownership,
+            status: status
+        )
+
+        let result = try await ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner()
+        ).run(.diagnose(json: true))
+        let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+        XCTAssertEqual(result.exitCode, 75)
+        XCTAssertTrue(checks.contains {
+            $0["id"] as? String == "fanControlHardwareConsistent"
+                && $0["passed"] as? Bool == false
+        })
+    }
+
+    func testDiagnoseTreatsManualAndAgentTransientPhasesAsBlocked() async throws {
+        let transientPhases: [FanControlPhase] = [.prepared, .applying, .restoring, .restorePending]
+        let request = AgentControlRequest(
+            workload: .test,
+            durationSeconds: 300,
+            maxRPMPercent: 60,
+            reason: "test",
+            idempotencyKey: "agent-1"
+        )
+        let agentStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: AgentCoolingLease(
+                id: "lease-1",
+                request: request,
+                createdAt: Date(timeIntervalSince1970: 1_000),
+                expiresAt: Date(timeIntervalSince1970: 1_300),
+                targetRPMByFanID: [0: 3_000, 1: 3_100]
+            ),
+            lastDecision: nil,
+            lastErrorCode: nil
+        )
+
+        for owner in [FanControlOwner.manual(sessionID: "manual-1"), .agent(leaseID: "lease-1")] {
+            for phase in transientPhases {
+                let ownership = FanControlOwnershipStatus(
+                    owner: owner,
+                    phase: phase,
+                    transactionID: "tx-1",
+                    expectedFanIDs: [0, 1],
+                    recoveryPending: phase == .restoring || phase == .restorePending
+                )
+                let client = FakeAgentControlClient(
+                    snapshot: Self.readySnapshot(fanMode: .forced),
+                    ownership: ownership,
+                    status: agentStatus
+                )
+                let result = try await ViftyCtlRunner(
+                    client: client,
+                    processRunner: FakeProcessRunner()
+                ).run(.diagnose(json: true))
+                let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+                XCTAssertEqual(result.exitCode, 75, "\(owner.type) \(phase.rawValue)")
+                XCTAssertTrue(checks.contains {
+                    $0["id"] as? String == "fanControlOwnershipStateValid"
+                        && $0["passed"] as? Bool == false
+                }, "\(owner.type) \(phase.rawValue)")
+            }
+        }
+    }
+
+    func testDiagnoseRequiresRecoveryOwnerToUsePendingRecoveryShape() async throws {
+        let invalidStatuses = [
+            FanControlOwnershipStatus(
+                owner: .recovery,
+                phase: .active,
+                transactionID: "tx-1",
+                expectedFanIDs: [0, 1],
+                recoveryPending: true
+            ),
+            FanControlOwnershipStatus(
+                owner: .recovery,
+                phase: .restorePending,
+                transactionID: "tx-1",
+                expectedFanIDs: [0, 1],
+                recoveryPending: false
+            )
+        ]
+
+        for ownership in invalidStatuses {
+            let client = FakeAgentControlClient(ownership: ownership)
+            let result = try await ViftyCtlRunner(
+                client: client,
+                processRunner: FakeProcessRunner()
+            ).run(.diagnose(json: true))
+            let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+            XCTAssertEqual(result.exitCode, 75)
+            XCTAssertTrue(checks.contains {
+                $0["id"] as? String == "fanControlOwnershipStateValid"
+                    && $0["passed"] as? Bool == false
+            })
+        }
+    }
+
+    func testDiagnoseRejectsBlankManualSessionAndAgentLeaseIDs() async throws {
+        for owner in [FanControlOwner.manual(sessionID: " \t"), .agent(leaseID: "\n")] {
+            let ownership = FanControlOwnershipStatus(
+                owner: owner,
+                phase: .active,
+                transactionID: "tx-1",
+                expectedFanIDs: [0, 1],
+                recoveryPending: false
+            )
+            let client = FakeAgentControlClient(
+                snapshot: Self.readySnapshot(fanMode: .forced),
+                ownership: ownership
+            )
+            let result = try await ViftyCtlRunner(
+                client: client,
+                processRunner: FakeProcessRunner(),
+                manualControlActiveReader: { false }
+            ).run(.diagnose(json: true))
+            let checks = try XCTUnwrap(try jsonObject(in: result.stdout)["checks"] as? [[String: Any]])
+
+            XCTAssertEqual(result.exitCode, 75)
+            XCTAssertTrue(checks.contains {
+                $0["id"] as? String == "fanControlOwnershipStateValid"
+                    && $0["passed"] as? Bool == false
+            })
+        }
+    }
+
     private func boolValue(
         _ key: String,
         in stdout: String,
@@ -2251,7 +2792,12 @@ final class ViftyCtlRunnerTests: XCTestCase {
     }
 
     fileprivate static func readySnapshot(fanMode: FanHardwareMode = .automatic) -> HardwareSnapshot {
-        HardwareSnapshot(
+        readySnapshot(fanModes: [fanMode, fanMode])
+    }
+
+    fileprivate static func readySnapshot(fanModes: [FanHardwareMode]) -> HardwareSnapshot {
+        precondition(fanModes.count == 2)
+        return HardwareSnapshot(
             fans: [
                 Fan(
                     id: 0,
@@ -2260,7 +2806,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
                     minimumRPM: 1_400,
                     maximumRPM: 6_000,
                     controllable: true,
-                    hardwareMode: fanMode,
+                    hardwareMode: fanModes[0],
                     hardwareModeKey: "F0Md",
                     targetRPM: 2_000
                 ),
@@ -2271,7 +2817,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
                     minimumRPM: 1_400,
                     maximumRPM: 6_000,
                     controllable: true,
-                    hardwareMode: fanMode,
+                    hardwareMode: fanModes[1],
                     hardwareModeKey: "F1md",
                     targetRPM: 2_000
                 )
@@ -2283,6 +2829,148 @@ final class ViftyCtlRunnerTests: XCTestCase {
             isAppleSilicon: true,
             isMacBookPro: true,
             capturedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+    }
+
+    func testHelperMaintenancePrepareEmitsOnlyDaemonReportAndUsesBlockedExitForUnsafeShape() async throws {
+        let safeReport = Self.maintenanceReport(operation: .repair)
+        let safeClient = FakeAgentControlClient(maintenancePrepareResponse: safeReport)
+        let safe = try await ViftyCtlRunner(
+            client: safeClient,
+            processRunner: FakeProcessRunner()
+        ).run(.helperMaintenancePrepare(operation: .repair))
+        XCTAssertEqual(safe.exitCode, 0)
+        let prepareOperations = await safeClient.maintenancePrepareOperations
+        XCTAssertEqual(prepareOperations, [.repair])
+        let safeData = try XCTUnwrap(safe.stdout.data(using: .utf8))
+        let decoder = JSONDecoder()
+        XCTAssertEqual(try decoder.decode(HelperMaintenanceReport.self, from: safeData), safeReport)
+
+        var blockedReport = safeReport
+        blockedReport.safeToStop = false
+        blockedReport.token = nil
+        blockedReport.blockers = [HelperMaintenanceBlocker(
+            code: .ownershipUnresolved,
+            message: "blocked",
+            recommendedRecoveryAction: "restore"
+        )]
+        let blocked = try await ViftyCtlRunner(
+            client: FakeAgentControlClient(maintenancePrepareResponse: blockedReport),
+            processRunner: FakeProcessRunner()
+        ).run(.helperMaintenancePrepare(operation: .repair))
+        XCTAssertEqual(blocked.exitCode, 75)
+    }
+
+    func testHelperMaintenanceConsumeValidatesReportThenUsesDaemonOwnedToken() async throws {
+        let report = Self.maintenanceReport(operation: .uninstall)
+        let token = try XCTUnwrap(report.token)
+        let authorization = HelperMaintenanceAuthorization(
+            authorized: true,
+            operation: .uninstall,
+            tokenID: token.tokenID,
+            consumedAt: Date(timeIntervalSince1970: 1_001),
+            quiesced: true,
+            tokenConsumed: true
+        )
+        let client = FakeAgentControlClient(maintenanceConsumeResponse: authorization)
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            maintenanceReportReader: { path in
+                XCTAssertEqual(path, "/fixture/report.json")
+                return report
+            }
+        )
+
+        let result = try await runner.run(.helperMaintenanceConsume(
+            operation: .uninstall,
+            reportPath: "/fixture/report.json"
+        ))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let consumeRequests = await client.maintenanceConsumeRequests
+        XCTAssertEqual(
+            consumeRequests,
+            [HelperMaintenanceAuthorizationRequest(operation: .uninstall, token: token)]
+        )
+    }
+
+    func testHelperMaintenanceConsumeRejectsUserReportBeforeDaemonCall() async throws {
+        var report = Self.maintenanceReport(operation: .repair)
+        report.completeExpectedSetConfirmed = false
+        let unsafeReport = report
+        let client = FakeAgentControlClient(maintenanceConsumeResponse: HelperMaintenanceAuthorization(
+            authorized: true,
+            operation: .repair,
+            tokenID: "must-not-run",
+            consumedAt: Date(),
+            quiesced: true,
+            tokenConsumed: true
+        ))
+        let result = try await ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            maintenanceReportReader: { _ in unsafeReport }
+        ).run(.helperMaintenanceConsume(operation: .repair, reportPath: "/fixture/report.json"))
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stdout.contains("helper"))
+        let consumeRequests = await client.maintenanceConsumeRequests
+        XCTAssertTrue(consumeRequests.isEmpty)
+    }
+
+    func testHelperMaintenanceCancelUsesDaemonAndReturnsJSON() async throws {
+        let client = FakeAgentControlClient()
+        let result = try await ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner()
+        ).run(.helperMaintenanceCancel)
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout, "{\"cancelled\":true}\n")
+        let cancellationCount = await client.maintenanceCancellationCount
+        XCTAssertEqual(cancellationCount, 1)
+    }
+
+    private static func maintenanceReport(
+        operation: HelperMaintenanceOperation
+    ) -> HelperMaintenanceReport {
+        let issuedAt = Date(timeIntervalSince1970: 1_000)
+        let token = HelperMaintenanceToken(
+            tokenID: "maintenance-token",
+            operation: operation,
+            issuedAt: issuedAt,
+            expiresAt: issuedAt.addingTimeInterval(30),
+            bootSessionID: "boot",
+            daemonSessionID: "daemon",
+            journalGeneration: 4,
+            expectedFanIDs: [0, 1],
+            helperSHA256: String(repeating: "a", count: 64),
+            quiesceGeneration: 2
+        )
+        return HelperMaintenanceReport(
+            operation: operation,
+            safeToStop: true,
+            quiesced: true,
+            restoreAttempted: true,
+            restoreSucceeded: true,
+            completeExpectedSetConfirmed: true,
+            fanResults: [
+                HelperMaintenanceFanResult(
+                    fanID: 0,
+                    observedMode: "automatic",
+                    confirmedOSManaged: true,
+                    freshConfirmationAt: issuedAt
+                ),
+                HelperMaintenanceFanResult(
+                    fanID: 1,
+                    observedMode: "system",
+                    confirmedOSManaged: true,
+                    freshConfirmationAt: issuedAt
+                )
+            ],
+            blockers: [],
+            token: token
         )
     }
 
@@ -2318,20 +3006,31 @@ private final class ManualControlFlag: @unchecked Sendable {
 
 private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
     private let snapshotResponse: HardwareSnapshot
+    private let ownershipResponse: FanControlOwnershipStatus
     private let statusResponse: AgentControlStatus
     private let auditResponse: [AgentControlAuditEvent]
     private let snapshotError: (any Error)?
+    private let ownershipError: (any Error)?
     private let statusError: (any Error)?
     private let auditError: (any Error)?
     private let prepareError: (any Error)?
     private let restoreError: (any Error)?
+    private let restoreObserver: (@Sendable () -> Void)?
+    private let maintenancePrepareResponse: HelperMaintenanceReport?
+    private let maintenanceConsumeResponse: HelperMaintenanceAuthorization?
+    private let maintenanceError: (any Error)?
     private var prepareResponses: [AgentControlStatus]
     private var storedPrepareRequests: [AgentControlRequest] = []
     private var storedRestoreReasons: [String] = []
+    private var storedRestoreAuthorities: [UnreadableJournalRecoveryAuthority?] = []
     private var storedAuditLimits: [Int] = []
+    private var storedMaintenancePrepareOperations: [HelperMaintenanceOperation] = []
+    private var storedMaintenanceConsumeRequests: [HelperMaintenanceAuthorizationRequest] = []
+    private var maintenanceCancelCount = 0
 
     init(
         snapshot: HardwareSnapshot = ViftyCtlRunnerTests.readySnapshot(),
+        ownership: FanControlOwnershipStatus = .osManaged,
         status: AgentControlStatus = AgentControlStatus(
             enabled: true,
             activeLease: nil,
@@ -2341,19 +3040,30 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
         auditEvents: [AgentControlAuditEvent] = [],
         prepareResponses: [AgentControlStatus] = [],
         snapshotError: (any Error)? = nil,
+        ownershipError: (any Error)? = nil,
         statusError: (any Error)? = nil,
         auditError: (any Error)? = nil,
         prepareError: (any Error)? = nil,
-        restoreError: (any Error)? = nil
+        restoreError: (any Error)? = nil,
+        restoreObserver: (@Sendable () -> Void)? = nil,
+        maintenancePrepareResponse: HelperMaintenanceReport? = nil,
+        maintenanceConsumeResponse: HelperMaintenanceAuthorization? = nil,
+        maintenanceError: (any Error)? = nil
     ) {
         self.snapshotResponse = snapshot
+        self.ownershipResponse = ownership
         self.statusResponse = status
         self.auditResponse = auditEvents
         self.snapshotError = snapshotError
+        self.ownershipError = ownershipError
         self.statusError = statusError
         self.auditError = auditError
         self.prepareError = prepareError
         self.restoreError = restoreError
+        self.restoreObserver = restoreObserver
+        self.maintenancePrepareResponse = maintenancePrepareResponse
+        self.maintenanceConsumeResponse = maintenanceConsumeResponse
+        self.maintenanceError = maintenanceError
         self.prepareResponses = prepareResponses
     }
 
@@ -2373,9 +3083,23 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
         storedRestoreReasons
     }
 
+    var restoreAuthorities: [UnreadableJournalRecoveryAuthority?] {
+        storedRestoreAuthorities
+    }
+
     var auditLimits: [Int] {
         storedAuditLimits
     }
+
+    var maintenancePrepareOperations: [HelperMaintenanceOperation] {
+        storedMaintenancePrepareOperations
+    }
+
+    var maintenanceConsumeRequests: [HelperMaintenanceAuthorizationRequest] {
+        storedMaintenanceConsumeRequests
+    }
+
+    var maintenanceCancellationCount: Int { maintenanceCancelCount }
 
     func snapshot() async throws -> HardwareSnapshot {
         if let snapshotError {
@@ -2389,6 +3113,11 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
             throw statusError
         }
         return statusResponse
+    }
+
+    func fanControlOwnershipStatus() async throws -> FanControlOwnershipStatus {
+        if let ownershipError { throw ownershipError }
+        return ownershipResponse
     }
 
     func auditEvents(limit: Int) async throws -> [AgentControlAuditEvent] {
@@ -2412,10 +3141,52 @@ private actor FakeAgentControlClient: ViftyCtlAgentControlClient {
 
     func restore(reason: String) async throws -> AgentControlStatus {
         storedRestoreReasons.append(reason)
+        storedRestoreAuthorities.append(nil)
+        restoreObserver?()
         if let restoreError {
             throw restoreError
         }
         return statusResponse
+    }
+
+    func restore(
+        reason: String,
+        unreadableJournalRecoveryAuthority: UnreadableJournalRecoveryAuthority?
+    ) async throws -> AgentControlStatus {
+        storedRestoreReasons.append(reason)
+        storedRestoreAuthorities.append(unreadableJournalRecoveryAuthority)
+        restoreObserver?()
+        if let restoreError {
+            throw restoreError
+        }
+        return statusResponse
+    }
+
+    func prepareHelperMaintenance(
+        operation: HelperMaintenanceOperation
+    ) async throws -> HelperMaintenanceReport {
+        storedMaintenancePrepareOperations.append(operation)
+        if let maintenanceError { throw maintenanceError }
+        guard let maintenancePrepareResponse else {
+            throw ViftyError.helperRejected("fixture maintenance report unavailable")
+        }
+        return maintenancePrepareResponse
+    }
+
+    func consumeHelperMaintenanceToken(
+        _ request: HelperMaintenanceAuthorizationRequest
+    ) async throws -> HelperMaintenanceAuthorization {
+        storedMaintenanceConsumeRequests.append(request)
+        if let maintenanceError { throw maintenanceError }
+        guard let maintenanceConsumeResponse else {
+            throw ViftyError.helperRejected("fixture maintenance authorization unavailable")
+        }
+        return maintenanceConsumeResponse
+    }
+
+    func cancelHelperMaintenance() async throws {
+        maintenanceCancelCount += 1
+        if let maintenanceError { throw maintenanceError }
     }
 }
 
@@ -2425,18 +3196,21 @@ private final class FakeProcessRunner: ViftyCtlProcessRunning, @unchecked Sendab
     private let resolvedArguments: [String]?
     private let resolveError: (any Error)?
     private let error: (any Error)?
+    private let signalShieldObservation: SignalShieldObservation?
     private var storedRunArguments: [[String]] = []
 
     init(
         exitCode: Int32 = 0,
         resolvedArguments: [String]? = nil,
         resolveError: (any Error)? = nil,
-        error: (any Error)? = nil
+        error: (any Error)? = nil,
+        signalShieldObservation: SignalShieldObservation? = nil
     ) {
         self.exitCode = exitCode
         self.resolvedArguments = resolvedArguments
         self.resolveError = resolveError
         self.error = error
+        self.signalShieldObservation = signalShieldObservation
     }
 
     var runCallCount: Int {
@@ -2466,10 +3240,54 @@ private final class FakeProcessRunner: ViftyCtlProcessRunning, @unchecked Sendab
         }
     }
 
+    func runMaintainingSignalShield(_ arguments: [String]) -> ViftyCtlProcessRunCompletion {
+        signalShieldObservation?.activate()
+        let finish: @Sendable () -> Void = { [signalShieldObservation] in
+            signalShieldObservation?.finish()
+        }
+        do {
+            return ViftyCtlProcessRunCompletion(
+                exitCode: try run(arguments),
+                finishSignalHandling: finish
+            )
+        } catch {
+            return ViftyCtlProcessRunCompletion(
+                error: error,
+                finishSignalHandling: finish
+            )
+        }
+    }
+
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock()
         defer { lock.unlock() }
         return try body()
+    }
+}
+
+private final class SignalShieldObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedActive = false
+    private var storedWasActiveDuringRestore = false
+    private var storedFinishCount = 0
+
+    var isActive: Bool { lock.withLock { storedActive } }
+    var wasActiveDuringRestore: Bool { lock.withLock { storedWasActiveDuringRestore } }
+    var finishCount: Int { lock.withLock { storedFinishCount } }
+
+    func activate() {
+        lock.withLock { storedActive = true }
+    }
+
+    func recordRestoreAttempt() {
+        lock.withLock { storedWasActiveDuringRestore = storedActive }
+    }
+
+    func finish() {
+        lock.withLock {
+            storedActive = false
+            storedFinishCount += 1
+        }
     }
 }
 

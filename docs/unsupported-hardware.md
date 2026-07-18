@@ -1,8 +1,8 @@
 # Unsupported Hardware Policy
 
-Vifty's fan-control support scope is intentionally narrow: Apple Silicon MacBook Pro models on macOS 15+, validated by real reports. Other Macs should remain under macOS automatic fan control.
+Vifty's fan-control support scope is intentionally narrow: Apple Silicon MacBook Pro models on macOS 15+, validated by real reports. Other Macs should remain under macOS automatic fan control. The published app and CLI are arm64-only, so Intel Macs cannot execute the public binary and cannot produce a `viftyctl diagnose` safe-block report from it.
 
-Unsupported hardware safe block is expected behavior, not a bug to bypass. When a machine is outside the write-control scope, `viftyctl diagnose --json` should report `state: "blocked"`, `safeToRequestCooling: false`, `daemonControlPathReady: true`, and a recovery action such as `collectHardwareEvidence` or `backOffWorkload`; the app, helper, daemon, and local agent paths should refuse manual or agent cooling. If `daemonControlPathReady` is false, treat the report as helper/daemon repair evidence rather than unsupported-hardware proof.
+Unsupported hardware safe block is expected behavior, not a bug to bypass, when the binary can run on that hardware. On an unsupported Apple Silicon Mac, `viftyctl diagnose --json` should report `state: "blocked"`, `safeToRequestCooling: false`, `daemonControlPathReady: true`, and a recovery action such as `collectHardwareEvidence` or `backOffWorkload`; the app, helper, daemon, and local agent paths should refuse manual or agent cooling. If `daemonControlPathReady` is false, treat the report as helper/daemon repair evidence rather than unsupported-hardware proof. For Intel, record only that the arm64 binary is unavailable; do not relabel a launch failure or Rosetta behavior as a policy safe block.
 
 ## Unsupported Scope
 
@@ -33,7 +33,7 @@ Local agents must treat `safeToRequestCooling: false`, `daemonControlPathReady: 
 
 ## Safe Evidence To Collect
 
-For unsupported-hardware reports, collect read-only evidence only:
+For unsupported Apple Silicon reports where the app can execute, collect read-only evidence only:
 
 ```sh
 /Applications/Vifty.app/Contents/MacOS/viftyctl diagnose --json
@@ -48,7 +48,7 @@ scripts/collect-validation-evidence.sh --app /Applications/Vifty.app
 make validation-evidence-review VALIDATION_EVIDENCE_BUNDLE=<evidence-dir> VALIDATION_EVIDENCE_REVIEW_MODE=unsupported-hardware VALIDATION_EVIDENCE_REVIEW_SUMMARY=<evidence-dir>/review-result.json
 ```
 
-The resulting `review-result.json` can be indexed as unsupported-hardware safe-block evidence. It must not be used as proof that fan control is supported on that machine.
+The resulting `review-result.json` can be indexed as unsupported-hardware safe-block evidence. It must not be used as proof that fan control is supported on that machine. This installed-app path does not apply to Intel Macs while the release remains arm64-only.
 
 ## Do Not Do This
 

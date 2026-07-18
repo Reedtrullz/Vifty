@@ -25,11 +25,12 @@ final class MenuBarPanelPresentationTests: XCTestCase {
             manualControlAttentionSummary: nil,
             selectedMode: .fixed,
             applyState: .applied,
-            manualSessionExpiresAt: nil
+            manualSessionExpiresAt: nil,
+            ownershipStatus: activeStatus(owner: .manual(sessionID: "manual-1"))
         ))
         let presentation = MenuBarPanelPresentation.resolve(input: input(
             controlSession: controlSession,
-            isManualControlActive: true
+            ownershipStatus: activeStatus(owner: .manual(sessionID: "manual-1"))
         ))
 
         XCTAssertEqual(controlSession.state, .manual)
@@ -50,12 +51,12 @@ final class MenuBarPanelPresentationTests: XCTestCase {
                 primaryActionHelp: "Repair the helper before fan writes.",
                 primaryActionDisabled: false
             ),
-            isManualControlActive: true
+            ownershipStatus: activeStatus(owner: .manual(sessionID: "manual-1"))
         ))
 
         XCTAssertEqual(presentation.primaryAction, .openMainWindow)
         XCTAssertEqual(presentation.primaryActionTitle, "Open Vifty")
-        XCTAssertFalse(presentation.showsRestoreAuto)
+        XCTAssertTrue(presentation.showsRestoreAuto)
     }
 
     func testAgentSessionDoesNotSurfaceTargetOrRecoveryDetailVerbatim() {
@@ -73,7 +74,8 @@ final class MenuBarPanelPresentationTests: XCTestCase {
                 primaryActionTitle: "Restore Auto",
                 primaryActionHelp: "Restore automatic macOS fan control.",
                 primaryActionDisabled: false
-            )
+            ),
+            ownershipStatus: activeStatus(owner: .agent(leaseID: "lease-1"))
         ))
 
         XCTAssertEqual(presentation.headline, "Bounded workload cooling")
@@ -103,10 +105,12 @@ final class MenuBarPanelPresentationTests: XCTestCase {
             manualControlAttentionSummary: nil,
             selectedMode: .auto,
             applyState: .applied,
-            manualSessionExpiresAt: nil
+            manualSessionExpiresAt: nil,
+            ownershipStatus: activeStatus(owner: .agent(leaseID: "lease-1"))
         ))
         let presentation = MenuBarPanelPresentation.resolve(input: input(
-            controlSession: controlSession
+            controlSession: controlSession,
+            ownershipStatus: activeStatus(owner: .agent(leaseID: "lease-1"))
         ))
 
         XCTAssertEqual(controlSession.title, "Agent cooling needs attention")
@@ -138,6 +142,44 @@ final class MenuBarPanelPresentationTests: XCTestCase {
         XCTAssertTrue(presentations.allSatisfy { $0.visibleActionTitles.allSatisfy { $0.count <= 30 } })
     }
 
+    func testManualDraftWhileMacOSOwnsFansKeepsMacOSHeadlineAndHidesRestore() {
+        let draft = ControlSessionPresentation.resolve(ControlSessionInput(
+            helperHealth: .healthy(fanCount: 2),
+            helperHealthNeedsAttention: false,
+            helperRepairActionAvailable: false,
+            manualFanControlAvailable: true,
+            controlOwnershipNeedsAttention: false,
+            controlOwnershipSummary: "Draft Curve",
+            agentCoolingSummary: nil,
+            hasAgentCoolingLease: false,
+            agentCoolingNeedsAttention: false,
+            manualControlAttentionSummary: nil,
+            selectedMode: .curve,
+            applyState: .pending,
+            manualSessionExpiresAt: nil,
+            ownershipStatus: .osManaged
+        ))
+
+        let presentation = MenuBarPanelPresentation.resolve(input: input(
+            controlSession: draft,
+            ownershipStatus: .osManaged
+        ))
+
+        XCTAssertEqual(presentation.headline, "macOS controls fans")
+        XCTAssertEqual(presentation.ownerText, "Owner: macOS")
+        XCTAssertFalse(presentation.showsRestoreAuto)
+    }
+
+    func testUnknownOwnershipRequiresConfirmationAndHidesRestore() {
+        let presentation = MenuBarPanelPresentation.resolve(input: input(
+            ownershipStatus: nil
+        ))
+
+        XCTAssertEqual(presentation.headline, "Fan ownership needs confirmation")
+        XCTAssertEqual(presentation.ownerText, "Owner: Confirmation required")
+        XCTAssertFalse(presentation.showsRestoreAuto)
+    }
+
     private func input(
         controlSession: ControlSessionPresentation = ControlSessionPresentation(
             state: .ready,
@@ -150,11 +192,11 @@ final class MenuBarPanelPresentationTests: XCTestCase {
             primaryActionHelp: "",
             primaryActionDisabled: true
         ),
-        isManualControlActive: Bool = false
+        ownershipStatus: FanControlOwnershipStatus? = .osManaged
     ) -> MenuBarPanelPresentation.Input {
         MenuBarPanelPresentation.Input(
             controlSession: controlSession,
-            ownerText: "Owner: macOS",
+            ownershipStatus: ownershipStatus,
             attentionText: nil,
             fans: [
                 Fan(
@@ -166,8 +208,17 @@ final class MenuBarPanelPresentationTests: XCTestCase {
                     controllable: true,
                     hardwareMode: .automatic
                 )
-            ],
-            isManualControlActive: isManualControlActive
+            ]
+        )
+    }
+
+    private func activeStatus(owner: FanControlOwner) -> FanControlOwnershipStatus {
+        FanControlOwnershipStatus(
+            owner: owner,
+            phase: .active,
+            transactionID: "transaction-1",
+            expectedFanIDs: [0, 1],
+            recoveryPending: false
         )
     }
 }

@@ -32,6 +32,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(try harness.read("README.txt").contains("supported Apple Silicon MacBook Pro hardware"))
         XCTAssertTrue(try harness.read("README.txt").contains("safe `runLifecycle` contract used by guarded wrappers"))
         XCTAssertTrue(try harness.read("README.txt").contains("`resolvedChildExecutableReported=true`"))
+        XCTAssertTrue(try harness.read("README.txt").contains("`signalScope=processGroup`"))
         XCTAssertTrue(try harness.read("README.txt").contains("`recommendedAgentAction` is either `requestCooling` or `requestCoolingWithCaution`"))
         XCTAssertTrue(try harness.read("README.txt").contains("`manualControlActive=false`"))
         XCTAssertTrue(try harness.read("README.txt").contains("Do not run this smoke test when readiness is blocked"))
@@ -149,6 +150,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "https://vifty.local/schemas/viftyctl-run.schema.json"
         )
         XCTAssertEqual(preflight["resolvedChildExecutableReported"] as? Bool, true)
+        XCTAssertEqual(preflight["signalScope"] as? String, "processGroup")
+        XCTAssertEqual(preflight["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(preflight["backgroundProcessesAllowed"] as? Bool, false)
         XCTAssertEqual(preflight["recommendedAgentAction"] as? String, "requestCooling")
         let run = try XCTUnwrap(summary["run"] as? [String: Any])
         XCTAssertEqual(run["exitStatus"] as? Int, 0)
@@ -167,6 +171,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(run["resolvedChildExecutablePathPrivacy"] as? String, "basenameOnly")
         XCTAssertEqual(run["resolvedChildExecutableSHA256"] as? String, String(repeating: "a", count: 64))
         XCTAssertEqual(run["resolvedChildExecutableSHA256Status"] as? String, "computed")
+        XCTAssertEqual(run["signalScope"] as? String, "processGroup")
+        XCTAssertEqual(run["descendantCleanupBeforeAutoRestore"] as? Bool, true)
+        XCTAssertEqual(run["backgroundProcessesAllowed"] as? Bool, false)
         XCTAssertEqual(run["skipReasons"] as? [String], [])
         let rateLimitRetry = try XCTUnwrap(summary["rateLimitRetry"] as? [String: Any])
         XCTAssertEqual(rateLimitRetry["attempted"] as? Bool, false)
@@ -277,9 +284,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
     }
 
     func testSmokeCollectorSummaryUsesPrivacySafeChildCommandEnvelope() throws {
-        let reportedResolvedExecutable = "/Users/reidar/Private Client/bin/client-build-tool"
+        let reportedResolvedExecutable = "/Users/private-user/Private Client/bin/client-build-tool"
         let runJSON = """
-        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"\(reportedResolvedExecutable)","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","autoRestoreError":null,"generatedAt":700000000}
+        {"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"\(reportedResolvedExecutable)","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false,"autoRestoreError":null,"generatedAt":700000000}
         """
         let harness = try AgentRunSmokeEvidenceHarness(runJSON: runJSON)
         let privateToolURL = harness.rootURL
@@ -309,6 +316,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
         let metadata = try harness.read("metadata.txt")
         XCTAssertFalse(metadata.contains("/Users/reidar"), metadata)
+        XCTAssertFalse(metadata.contains("/Users/private-user"), metadata)
         XCTAssertFalse(metadata.contains(harness.rootURL.path), metadata)
         XCTAssertFalse(metadata.contains("super-secret-token"), metadata)
         XCTAssertTrue(metadata.contains("childCommandName=client-build-tool"))
@@ -318,6 +326,7 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
 
         let summaryText = try harness.read("agent-run-smoke-evidence-summary.json")
         XCTAssertFalse(summaryText.contains("/Users/reidar"), summaryText)
+        XCTAssertFalse(summaryText.contains("/Users/private-user"), summaryText)
         XCTAssertFalse(summaryText.contains(harness.rootURL.path), summaryText)
         XCTAssertFalse(summaryText.contains("super-secret-token"), summaryText)
 
@@ -967,7 +976,10 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "autoRestoreSucceeded",
             "childExitCode",
             "resolvedChildExecutable",
-            "resolvedChildExecutablePathPrivacy"
+            "resolvedChildExecutablePathPrivacy",
+            "signalScope",
+            "descendantCleanupBeforeAutoRestore",
+            "backgroundProcessesAllowed"
         ] {
             XCTAssertTrue(runRequired.contains(field), "run should require \(field)")
         }
@@ -1018,6 +1030,9 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             "commandErrorSchemaID",
             "runSchemaID",
             "resolvedChildExecutableReported",
+            "signalScope",
+            "descendantCleanupBeforeAutoRestore",
+            "backgroundProcessesAllowed",
             "daemonStatusAvailable",
             "policySource",
             "policyStatusAvailable",
@@ -1060,6 +1075,24 @@ final class AgentRunSmokeEvidenceScriptTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    func testSmokeCollectorBlocksBeforeRunWhenProcessGroupLifecycleGuaranteeDrifts() throws {
+        let capabilitiesJSON = AgentRunSmokeEvidenceHarness.defaultCapabilitiesJSON
+            .replacingOccurrences(
+                of: #""signalScope":"processGroup""#,
+                with: #""signalScope":"immediateChild""#
+            )
+        let harness = try AgentRunSmokeEvidenceHarness(capabilitiesJSON: capabilitiesJSON)
+
+        let result = try harness.runCollector([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--output", harness.outputURL.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 75, result.stderr)
+        XCTAssertTrue(result.stdout.contains("capabilities preflight did not advertise safe viftyctl run"), result.stdout)
+        XCTAssertFalse(try harness.loggedArguments().contains { $0.hasPrefix("run ") })
     }
 }
 
@@ -1135,7 +1168,7 @@ private final class AgentRunSmokeEvidenceHarness {
             "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
             "VIFTY_FAKE_STATUS_JSON": statusJSON,
             "VIFTY_FAKE_AUDIT_JSON": auditJSON,
-            "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"/bin/sleep","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","autoRestoreError":null,"generatedAt":700000000}"#,
+            "VIFTY_FAKE_RUN_JSON": self.runJSONs.last ?? #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"/bin/sleep","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false,"autoRestoreError":null,"generatedAt":700000000}"#,
             "VIFTY_FAKE_RUN_EXIT": "\(self.runExitCodes.last ?? 0)",
             "VIFTY_AGENT_RUN_SMOKE_SKIP_RETRY_SLEEP": "1",
             "VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH": installedDaemonURL.path
@@ -1261,8 +1294,8 @@ private final class AgentRunSmokeEvidenceHarness {
     }
 
     static let defaultCapabilitiesJSON = """
-    {"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"},"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["bun-build.sh","bun-test.sh","cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pnpm-build.sh","pnpm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","uv-build.sh","uv-test.sh","xcode-build.sh","xcode-test.sh"]}}
+    {"schemaVersion":1,"schemaIDs":{"capabilities":"https://vifty.local/schemas/viftyctl-capabilities.schema.json","diagnose":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","status":"https://vifty.local/schemas/viftyctl-status.schema.json","audit":"https://vifty.local/schemas/viftyctl-audit.schema.json","commandError":"https://vifty.local/schemas/viftyctl-command-error.schema.json","run":"https://vifty.local/schemas/viftyctl-run.schema.json"},"daemonStatusAvailable":true,"policyStatusAvailable":true,"policySource":"daemonStatus","commands":["status","capabilities","diagnose","audit","prepare","restore-auto","run"],"workloads":["build","test","render","localModel","custom"],"supportsForceRetry":true,"policy":{"enabled":true,"minimumAgentRPMPercent":35,"maximumAllowedRPMPercent":80,"maxDurationSeconds":1800,"prepareCooldownSeconds":30},"exitCodes":{"success":0,"commandFailure":1,"usage":64,"unavailable":69,"blockedReadiness":75},"runLifecycle":{"childCommandPreflightBeforeCooling":true,"signalsForwardedToChild":["INT","TERM","HUP"],"autoRestoreAfterChildExit":true,"structuredPreChildFailures":true,"cleanupStateReportedOnLaunchFailure":true,"resolvedChildExecutableReported":true,"signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false},"directControlLifecycle":{"prepareUsesIdempotencyKey":true,"restoreAutoAcceptsIdempotencyKey":false,"restoreAutoScopedByIdempotencyKey":false,"preferRunForSingleChildWorkloads":true},"metadataLimits":{"maximumReasonLength":512,"maximumIdempotencyKeyLength":256},"wrapperResources":{"sourceDirectory":"examples/viftyctl","bundleDirectory":"Contents/Resources/viftyctl-wrappers","guardedRunScript":"guarded-run.sh","workloadScripts":["bun-build.sh","bun-test.sh","cargo-build.sh","cargo-test.sh","custom-workload.sh","go-build.sh","go-test.sh","local-model.sh","make-build.sh","make-test.sh","make-verify.sh","npm-build.sh","npm-test.sh","pnpm-build.sh","pnpm-test.sh","pytest.sh","swift-release-build.sh","swift-test.sh","uv-build.sh","uv-test.sh","xcode-build.sh","xcode-test.sh"]}}
     """
 
-    static let runSuccessJSON = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"/bin/sleep","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","autoRestoreError":null,"generatedAt":700000000}"#
+    static let runSuccessJSON = #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-run.schema.json","command":"run","coolingLeasePrepared":true,"autoRestoreAttempted":true,"autoRestoreSucceeded":true,"childExitCode":0,"childTerminationReason":"exited","resolvedChildExecutable":"/bin/sleep","resolvedChildExecutableSHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","resolvedChildExecutableSHA256Status":"computed","signalScope":"processGroup","descendantCleanupBeforeAutoRestore":true,"backgroundProcessesAllowed":false,"autoRestoreError":null,"generatedAt":700000000}"#
 }
