@@ -367,7 +367,8 @@ else
          release_governance_checker_text.include?('"releaseAuthorized" => !fixture_mode') &&
          release_governance_checker_text.include?('"dataSource" => fixture_mode ? "test-fixture" : "github-api-live"') &&
          release_governance_checker_text.include?('repo.dig("permissions", "admin") == true') &&
-         release_governance_checker_text.include?('"rulesetUpdatedAt" => updated_at') &&
+         release_governance_checker_text.include?('canonical_updated_at = Time.iso8601(updated_at).utc.iso8601(9)') &&
+         release_governance_checker_text.include?('"rulesetUpdatedAt" => canonical_updated_at') &&
          release_governance_checker_text.include?('"currentUserCanBypass" => current_user_can_bypass') &&
          release_governance_checker_text.include?('current_user_can_bypass == "never"') &&
          release_governance_checker_text.include?('includes == ["refs/tags/v*"] && excludes == []') &&
@@ -1004,7 +1005,7 @@ else
       "Import Developer ID certificate" => "c1d39d72865189a04b4d529ee8ccda1abb42ddff304466d8abcbf45d3bea4147",
       "Revalidate trusted tooling and sign existing candidate" => "ba4561b4ab6926f6dd028f634b2f0c79a36d24aba14cc12a1386f6eec929401f",
       "Notarize signed candidate" => "f5050e48f720d04083c7d15f22bf82f72cc2f822d23ef08d0761a09fe3a316a7",
-      "Create and verify release assets with trusted tools" => "449aea8782a888719e592bc48ba75d2c27df5c1809c4ee9be07e5a9f8b9f2b4e",
+      "Create and verify release assets with trusted tools" => "0619d4252a470afea71054a535385dd864d98656c06ad9e3849f404a4d94c238",
       "Remove signing material" => "4df2d7fa1538a8e0017e92932873c0bf76dd6984e000ac1bfd9795c6263040c1",
       "Upload verified release assets for publication" => "ce920891b00c02cc279f139e1823cbdb94f025d8588d771b607747c77eb09e34"
     }
@@ -1188,7 +1189,8 @@ else
            run_text.include?('ruleset_evidence["rulesetID"] == governance_validation["rulesetID"]') &&
            run_text.include?('ruleset_evidence["rulesetUpdatedAt"] == governance_validation["rulesetUpdatedAt"]') &&
            run_text.include?('ruleset_evidence["currentUserCanBypass"] == "never"') &&
-           run_text.include?('ruleset["updated_at"] == expected_updated_at') &&
+           run_text.include?('live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601(9)') &&
+           run_text.include?('live_updated_at == expected_updated_at') &&
            run_text.include?('ruleset["current_user_can_bypass"] == "never"') &&
            run_text.include?('"bypassActorsVerified" => false') &&
            run_text.include?('full_ref = "refs/tags/#{tag}"') &&
@@ -1243,7 +1245,7 @@ else
     expected_step_hashes = {
       "Download verified release assets" => "2efd54639fbb126e0ce7aa6fcb477987a276e7b0a98d6ecfb745a1b25df99dc8",
       "Recheck downloaded asset identity" => "aa5a51382d16e1ad1b73abec06a173c75673c05b43bad9ccf55e664aa7573c00",
-      "Publish GitHub release" => "295a32714cb87b4b0a252275e76b8677102127c53f8cb91bc1eaa61a258bd9ca"
+      "Publish GitHub release" => "6cfcb858c1f9e062754cd855400f815626db74295c828e4ec5fdfd5c977570ae"
     }
     names = steps.map { |step| step.is_a?(Hash) ? step["name"] : nil }
     errors << "publish step set must match the reviewed allowlist exactly" unless names == expected_step_hashes.keys
@@ -1330,7 +1332,8 @@ else
     unless publish_run_text.include?("verify_immutable_tag_ruleset()") &&
            publish_run_text.scan("verify_immutable_tag_ruleset").length >= 4 &&
            !publish_run_text.include?('ruleset["bypass_actors"]') &&
-           publish_run_text.include?('ruleset["updated_at"] == expected_updated_at') &&
+           publish_run_text.include?('live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601(9)') &&
+           publish_run_text.include?('live_updated_at == expected_updated_at') &&
            publish_run_text.include?('ruleset["current_user_can_bypass"] == "never"') &&
            publish_run_text.include?('full_ref = "refs/tags/#{tag}"') &&
            publish_run_text.include?('includes == ["refs/tags/v*"]') &&

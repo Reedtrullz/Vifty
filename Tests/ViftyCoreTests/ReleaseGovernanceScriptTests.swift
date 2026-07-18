@@ -39,12 +39,52 @@ final class ReleaseGovernanceScriptTests: XCTestCase {
         let ruleset = try XCTUnwrap(summary["tagRulesetEvidence"] as? [String: Any])
         XCTAssertEqual(ruleset["excludePatternsVerified"] as? Bool, true)
         XCTAssertEqual(ruleset["bypassActorsVerified"] as? Bool, true)
-        XCTAssertEqual(ruleset["rulesetUpdatedAt"] as? String, "2026-01-01T00:00:00Z")
+        XCTAssertEqual(ruleset["rulesetUpdatedAt"] as? String, "2026-01-01T00:00:00.000000000Z")
         XCTAssertEqual(ruleset["currentUserCanBypass"] as? String, "never")
         XCTAssertTrue(try XCTUnwrap(ruleset["bypassActors"] as? [Any]).isEmpty)
         let secrets = try XCTUnwrap(summary["releaseSecrets"] as? [String: Any])
         XCTAssertEqual(secrets["storageScope"] as? String, "repository")
         XCTAssertTrue(try XCTUnwrap(secrets["environmentShadowNames"] as? [Any]).isEmpty)
+    }
+
+    func testAdministratorPreTagGateCanonicalizesRulesetRevisionWithoutLosingPrecision() throws {
+        let cases = [
+            (
+                "2026-07-14T18:23:49.241+02:00",
+                "2026-07-14T16:23:49.241000000Z"
+            ),
+            (
+                "2026-07-14T16:23:49.241Z",
+                "2026-07-14T16:23:49.241000000Z"
+            ),
+            (
+                "2026-07-14T16:23:49.242Z",
+                "2026-07-14T16:23:49.242000000Z"
+            )
+        ]
+
+        for (input, expected) in cases {
+            let fixture = try ReleaseGovernanceFixture(rulesetUpdatedAt: input)
+            let result = try runChecker(fixture)
+
+            XCTAssertEqual(result.exitCode, 0, result.stderr)
+            let summary = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any]
+            )
+            let ruleset = try XCTUnwrap(summary["tagRulesetEvidence"] as? [String: Any])
+            XCTAssertEqual(ruleset["rulesetUpdatedAt"] as? String, expected)
+        }
+    }
+
+    func testAdministratorPreTagGateRejectsRulesetRevisionBeyondNanosecondPrecision() throws {
+        let fixture = try ReleaseGovernanceFixture(
+            rulesetUpdatedAt: "2026-07-14T16:23:49.2410000001Z"
+        )
+
+        let result = try runChecker(fixture)
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("malformed or incomplete"), result.stderr)
     }
 
     func testAdministratorPreTagGateRejectsRulesetWithoutVisibleBypassEvidence() throws {

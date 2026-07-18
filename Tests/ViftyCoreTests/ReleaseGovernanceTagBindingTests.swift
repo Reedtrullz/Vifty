@@ -27,6 +27,42 @@ final class ReleaseGovernanceTagBindingTests: XCTestCase {
         XCTAssertEqual(summary["evidenceSHA256"] as? String, fixture.evidenceSHA256)
     }
 
+    func testValidatorAcceptsCanonicalNanosecondRulesetRevisionAndRejectsOtherForms() throws {
+        let fixture = try GovernanceTagFixture(sourceRoot: repositoryRoot)
+        var ruleset = try XCTUnwrap(fixture.evidence["tagRulesetEvidence"] as? [String: Any])
+        ruleset["rulesetUpdatedAt"] = "2026-01-01T00:00:00.241000000Z"
+        fixture.evidence["tagRulesetEvidence"] = ruleset
+        try fixture.writeEvidence()
+
+        var result = try fixture.runValidator(taggerTime: fixture.observedAt)
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+
+        for noncanonical in [
+            "2026-01-01T00:00:00.241Z",
+            "2026-01-01T02:00:00.241000000+02:00"
+        ] {
+            ruleset["rulesetUpdatedAt"] = noncanonical
+            fixture.evidence["tagRulesetEvidence"] = ruleset
+            try fixture.writeEvidence()
+            result = try fixture.runValidator(taggerTime: fixture.observedAt)
+            XCTAssertEqual(result.exitCode, 65)
+            XCTAssertTrue(result.stderr.contains("rulesetUpdatedAt"), result.stderr)
+        }
+    }
+
+    func testValidatorKeepsFreshnessTimestampsAtCanonicalWholeSecondPrecision() throws {
+        let fixture = try GovernanceTagFixture(sourceRoot: repositoryRoot)
+        fixture.evidence["observationStartedAt"] = "2026-01-01T00:00:00.900000000Z"
+        fixture.evidence["observedAt"] = "2026-01-01T00:00:00.100000000Z"
+        try fixture.writeEvidence()
+
+        let result = try fixture.runValidator(taggerTime: fixture.observedAt)
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("observationStartedAt"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("YYYY-MM-DDTHH:MM:SSZ"), result.stderr)
+    }
+
     func testFixtureGovernanceProducerOutputIsMarkedAndRejectedByProductionValidator() throws {
         let fixture = try GovernanceTagFixture(sourceRoot: repositoryRoot)
 
