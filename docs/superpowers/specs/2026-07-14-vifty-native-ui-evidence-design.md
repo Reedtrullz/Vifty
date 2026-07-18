@@ -1,6 +1,6 @@
 # Native UI, Accessibility, and VoiceOver Evidence Design
 
-**Status:** Implementation and current-build automated evidence complete with 50 sealed rows. Human visual and VoiceOver attestations remain pending.
+**Status:** Implementation complete. A committed portable checkpoint records 50 automated rows passing for exact historical source `6ac429cbacf7cc3358c74493ab7461a43fa40275`; current `HEAD` differs, so current-source recapture remains required. Human visual review remains pending, and VoiceOver was skipped by the owner with no VoiceOver behavior claimed.
 
 ## Goal
 
@@ -135,7 +135,7 @@ A VoiceOver attestation references the same immutable capture set and records a 
 
 Overall manifest status remains pending until required automated rows and both human attestations pass. A separate automated verifier mode may report that autonomous evidence is complete while human gates remain pending.
 
-The historical autonomous result contained 9 of 9 fixture rows, 28 of 28 visual rows, and 13 of 13 AX rows in a 50-entry ledger. `--verify-automated` passed against release SHA-256 `3ca9a5d6d8cdd09656ca76c06056ed0c066fbb4b945416be54cd464959d2db5a`, debug SHA-256 `139d440226a00d739d76beb74bc6d0ae60401c3696a8f176158367c4231c7afc`, and collector SHA-256 `e54135c739c1174a38d93c3cbd5317583f6585d3b85ab02d3cf1e71c51dc0e0c`. That snapshot was superseded after the curve chart and its Accessibility contract changed. The current manifest is pending a fresh 50-row seal; prior agent and human image reviews remain historical and cannot satisfy the current visual gate.
+An early historical autonomous result contained 9 of 9 fixture rows, 28 of 28 visual rows, and 13 of 13 AX rows in a 50-entry ledger. `--verify-automated` passed against release SHA-256 `3ca9a5d6d8cdd09656ca76c06056ed0c066fbb4b945416be54cd464959d2db5a`, debug SHA-256 `139d440226a00d739d76beb74bc6d0ae60401c3696a8f176158367c4231c7afc`, and collector SHA-256 `e54135c739c1174a38d93c3cbd5317583f6585d3b85ab02d3cf1e71c51dc0e0c`. That snapshot was superseded after the curve chart and its Accessibility contract changed. A later committed portable checkpoint records a separate 50-row automated pass for exact source `6ac429cbacf7cc3358c74493ab7461a43fa40275` and byte-binds the canonical hero, but it also does not transfer to current `HEAD`. The tracked request manifest remains pending a fresh current-source seal; prior agent and human image reviews remain historical and cannot satisfy the current visual gate.
 
 ## Orchestration and failure handling
 

@@ -1,0 +1,7 @@
+{
+  "platform": "darwin-arm64",
+  "schemaVersion": 1,
+  "sha256": "282ec2bb5c6abb6cee50cbfa5f8c04ac2fd6b8523693970a5cab331b121f5430",
+  "tool": "gh",
+  "version": "2.93.0"
+}

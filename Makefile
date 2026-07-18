@@ -106,7 +106,9 @@ package-bundled-schemas: ## Package the explicit reviewed JSON Schema inventory 
 
 release-contract-ruby-tests: ## Run portable release inventory and artifact-contract regressions
 	/usr/bin/ruby Tests/Ruby/BundledSchemaInventoryTests.rb
+	/usr/bin/ruby Tests/Ruby/ReleaseCandidateInventoryTests.rb
 	/usr/bin/ruby Tests/Ruby/ReleaseArtifactContractTests.rb
+	/usr/bin/ruby Tests/Ruby/WorkflowContractTests.rb
 
 installer-lifecycle-ruby-tests: ## Run portable installer lifecycle transaction and trust regressions
 	/usr/bin/ruby Tests/Ruby/InstallerLifecycleTrustContractTests.rb

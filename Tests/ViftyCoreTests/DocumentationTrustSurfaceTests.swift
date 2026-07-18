@@ -158,6 +158,29 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(agents.contains("no direct copy-to-target writes"))
         XCTAssertTrue(agents.contains("convenience wrappers for Swift, Xcode, Make, npm, pnpm, Bun, Go, cargo, uv, pytest, local-model, and custom workloads"))
         XCTAssertTrue(agents.contains("Swift/Xcode/Make/npm/pnpm/Bun/Go/cargo/uv/pytest/local-model/custom workload shortcut scripts"))
+        XCTAssertTrue(agents.contains("`scripts/check-release-environment.sh`"))
+        XCTAssertTrue(agents.contains("`scripts/check-release-governance.sh`"))
+        XCTAssertTrue(agents.contains("`scripts/create-signed-release-tag.sh`"))
+        XCTAssertTrue(agents.contains("`.github/release-gh-toolchain.json`"))
+        XCTAssertTrue(agents.contains("`scripts/verify-release-gh-toolchain.rb`"))
+        XCTAssertTrue(agents.contains("`scripts/validate-release-governance-evidence.rb`"))
+        XCTAssertTrue(agents.contains("`ReleaseEnvironmentScriptTests`"))
+        XCTAssertTrue(agents.contains("`ReleaseGovernanceScriptTests`"))
+        XCTAssertTrue(agents.contains("`ReleaseGovernanceTagBindingTests`"))
+        XCTAssertTrue(agents.contains("lets that push automatically trigger `release.yml`, and never calls `workflow_dispatch`"))
+        XCTAssertTrue(agents.contains("inspection evidence only, never retry authorization"))
+        XCTAssertTrue(agents.contains("rejection of resumed transactions or workflow reruns"))
+        XCTAssertTrue(agents.contains("exactly one first-attempt `push` run"))
+        XCTAssertTrue(agents.contains("exact actor-ID/login/repository/workflow path-and-ID/tag/commit/creation-time correlation"))
+        XCTAssertTrue(agents.contains("conditions `include: [refs/tags/v*]` and `exclude: []`"))
+        XCTAssertTrue(agents.contains("complete reviewed release-tool set"))
+        XCTAssertTrue(agents.contains("keeps the GitHub token out of the signer"))
+        XCTAssertTrue(agents.contains("absence of every draft or published release"))
+        XCTAssertTrue(agents.contains("permanently retires that tag even if remote state or the checkout later disappears"))
+        XCTAssertTrue(agents.contains("~/Library/Application Support/Vifty/ReleaseTransactions/Reedtrullz-Vifty/<tag>/"))
+        XCTAssertTrue(agents.contains("cannot attest that this local helper ran or that `retired.json` exists"))
+        XCTAssertTrue(agents.contains("sole signer/repository administrator is therefore an explicit operational trust root"))
+        XCTAssertTrue(agents.contains("unsupported and lacks the local one-shot transaction guarantee even if remote admission passes"))
     }
 
     func testAgentInstructionsTrackCurrentReleaseBoundary() throws {
@@ -388,6 +411,9 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(trustModel.contains("VIFTY_XPC_ADHOC_ALLOWED_UID"))
         XCTAssertTrue(trustModel.contains("exact absolute app and `viftyctl` paths"))
         XCTAssertTrue(trustModel.contains("must contain no `VIFTY_XPC_ADHOC_*` metadata"))
+        XCTAssertTrue(trustModel.contains("cannot attest that `scripts/push-and-dispatch-signed-release-tag.sh` ran"))
+        XCTAssertTrue(trustModel.contains("sole signer/repository administrator is explicitly trusted not to substitute a raw tag push"))
+        XCTAssertTrue(trustModel.contains("unsupported and lacks the local transaction guarantee even if remote admission passes"))
         XCTAssertFalse(trustModel.contains("Local ad-hoc builds leave `VIFTY_XPC_ALLOWED_TEAM_ID` empty so contributors can build the project."))
         XCTAssertTrue(trustModel.contains("[release-status.md](release-status.md)"))
     }
@@ -437,9 +463,11 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let publishedBuild = try XCTUnwrap(published["build"] as? Int)
         let publishedSHA = try XCTUnwrap(published["sha256"] as? String)
         let publishedArtifact = try XCTUnwrap(published["artifact"] as? String)
+        let candidate = manifest["candidate"] as? [String: Any]
         let readme = try read("README.md")
         let releaseStatus = try read("docs/release-status.md")
         let release = try read("docs/release.md")
+        let uiReview = try read("docs/ui-review/README.md")
         let cask = try read("Casks/vifty.rb")
         let sourceFirstNotes = try read("docs/release-notes/v1.1.0.md")
         let hotfixNotes = try read("docs/release-notes/v1.1.1.md")
@@ -467,6 +495,12 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening"))
         XCTAssertTrue(readme.contains("use the `v1.1.1` source-first hotfix release instead"))
         XCTAssertTrue(readme.contains("The Homebrew cask now points at the published `\(publishedTag)` notarized zip with SHA-256 `\(publishedSHA)`"))
+        XCTAssertTrue(readme.contains("canonical hero in the committed automated checkpoint for exact source `6ac429cbacf7cc3358c74493ab7461a43fa40275`"))
+        XCTAssertTrue(readme.contains("VoiceOver was skipped by the owner with no VoiceOver behavior claimed"))
+        XCTAssertTrue(uiReview.contains("valid only for its exact historical source `6ac429cbacf7cc3358c74493ab7461a43fa40275`"))
+        XCTAssertTrue(uiReview.contains("not current-source UI evidence"))
+        XCTAssertTrue(uiReview.contains("not the full evidence bundle, a human visual or VoiceOver attestation"))
+        XCTAssertFalse(uiReview.contains("no portable automated checkpoint exists yet"))
         XCTAssertTrue(readme.contains("The exact installed public `\(publishedTag)` build also passed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`"))
         XCTAssertTrue(readme.contains("Installed-binary parity, explicit Auto restoration, and manual hardware compatibility are now separately reviewed for that exact build on `MacBookPro18,1`"))
         XCTAssertFalse(readme.contains("brew install --cask vifty"))
@@ -489,9 +523,74 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("Do not borrow a different organization's Developer ID certificate for a release."))
         XCTAssertTrue(release.contains("never commit them or record them in project notes"))
         XCTAssertTrue(release.contains("Keep `Casks/vifty.rb` exactly on the current published manifest version/SHA throughout candidate build, signing, notarization, and publication."))
-        XCTAssertTrue(release.contains("GitHub can create a referenced missing environment without protection rules"))
-        XCTAssertTrue(release.contains("do not create an owner-only substitute"))
-        XCTAssertTrue(release.contains("fails before signing secrets"))
+        XCTAssertTrue(release.contains("GitHub can create a referenced missing environment with permissive defaults"))
+        XCTAssertTrue(release.contains("explicit solo-maintainer policy"))
+        XCTAssertTrue(release.contains("no required-reviewer rule"))
+        XCTAssertTrue(release.contains("`protected_branches: false`"))
+        XCTAssertTrue(release.contains("`custom_branch_policies: true`"))
+        XCTAssertTrue(
+            release.contains(
+                "exactly one custom deployment policy with type `tag` and pattern `v*`"
+            )
+        )
+        XCTAssertTrue(release.contains("a required pull request with zero approvals and no bypass actors"))
+        XCTAssertTrue(release.contains("before any step consumes a signing secret"))
+        XCTAssertTrue(release.contains("## Required GitHub Repository Secrets"))
+        XCTAssertTrue(release.contains("deliberately retains its existing six repository-scoped release secrets"))
+        XCTAssertTrue(release.contains("permits them only on the protected `sign-notarize` job"))
+        XCTAssertTrue(release.contains("rejects any same-name environment secret"))
+        XCTAssertTrue(release.contains("scripts/check-release-governance.sh"))
+        XCTAssertTrue(release.contains("`evidenceScope: \"administrator-pretag\"`"))
+        XCTAssertTrue(release.contains("scripts/create-signed-release-tag.sh"))
+        XCTAssertTrue(release.contains(".github/release-gh-toolchain.json"))
+        XCTAssertTrue(release.contains("scripts/verify-release-gh-toolchain.rb"))
+        XCTAssertTrue(release.contains("byte-identical to the exact first parent"))
+        XCTAssertTrue(release.contains("copies and verifies the reviewed Darwin arm64 `gh` bytes before token access"))
+        XCTAssertTrue(release.contains("both verifier/policy hashes are bound into the signed governance evidence"))
+        XCTAssertTrue(release.contains("complete reviewed release-tool set"))
+        XCTAssertTrue(release.contains("conditions are exactly `include: [refs/tags/v*]` and `exclude: []`"))
+        XCTAssertTrue(release.contains("removes GitHub credentials from the signer's environment"))
+        XCTAssertTrue(release.contains("authenticated paginated scan proving that no draft or published release owns the tag"))
+        XCTAssertTrue(release.contains("scripts/validate-release-governance-evidence.rb"))
+        XCTAssertTrue(release.contains("embeds the same-actor live evidence bytes in the annotated tag"))
+        XCTAssertTrue(release.contains("the same ruleset ID/ref"))
+        XCTAssertTrue(release.contains("It never accepts caller-authored evidence and never pushes."))
+        XCTAssertTrue(release.contains("scripts/push-and-dispatch-signed-release-tag.sh"))
+        XCTAssertTrue(release.contains("never calls `workflow_dispatch`"))
+        XCTAssertTrue(release.contains("That tag push automatically starts `Release <tag>`."))
+        XCTAssertTrue(release.contains("numeric Release workflow ID only to correlate and verify exactly one `push`-event run at attempt 1"))
+        XCTAssertTrue(release.contains("actor ID/login, repository, workflow path/ID, tag, commit, URL, and creation time"))
+        XCTAssertTrue(release.contains("~/Library/Application Support/Vifty/ReleaseTransactions/Reedtrullz-Vifty/<tag>/retired.json"))
+        XCTAssertTrue(release.contains("The marker and receipt are inspection evidence only and never authorize a retry."))
+        XCTAssertTrue(release.contains("Remote proof stops at the GitHub boundary."))
+        XCTAssertTrue(release.contains("GitHub cannot attest that the local helper ran or that `retired.json` or `receipt.json` exists"))
+        XCTAssertTrue(release.contains("sole signer/repository administrator is therefore an explicit operational trust root"))
+        XCTAssertTrue(release.contains("unsupported and lacks the local one-shot transaction guarantee even if every remote admission check passes"))
+        XCTAssertTrue(release.contains("Treat the helper as a one-shot transaction."))
+        XCTAssertTrue(release.contains("do not invoke the helper a second time, dispatch manually, rerun the workflow, or delete, move, or reuse the tag"))
+        XCTAssertTrue(release.contains("If the original transaction is conclusively shown not to have published, cut a new patch version."))
+        XCTAssertTrue(release.contains("Release publication is triggered only by pushing the exact signed `v*` tag."))
+        XCTAssertTrue(release.contains("first and only permitted workflow attempt"))
+        XCTAssertTrue(release.contains("Watch the automatically triggered first-attempt `Release <tag>` workflow."))
+        XCTAssertFalse(release.contains("Release publication is deliberately not triggered by tag push."))
+        XCTAssertFalse(release.contains("Watch the manually dispatched `Release` workflow."))
+        XCTAssertFalse(release.contains("--ref main"))
+        XCTAssertTrue(release.contains("persist the current-fresh admission in the hashed candidate handoff"))
+        XCTAssertTrue(release.contains("records `privilegedSettingsVerified: false` and `bypassActorsVerified: false`"))
+        XCTAssertOrder(
+            in: release,
+            after: "## Developer ID Release Checklist",
+            "Commit the release prep, merge it to protected `main`, and wait for CI to pass on that exact merged commit.",
+            before: "scripts/create-signed-release-tag.sh \\",
+            message: "Release prep, merge, and exact-main CI must precede signed tag creation and its internal administrator-pretag capture."
+        )
+        XCTAssertOrder(
+            in: release,
+            after: "## Developer ID Release Checklist",
+            "The internally invoked administrator-authenticated read-only gate",
+            before: "scripts/create-signed-release-tag.sh \\",
+            message: "The documented internal administrator-pretag contract must precede the signed tag command."
+        )
         XCTAssertTrue(releaseStatus.contains("`\(publishedTag)` is the current published Developer ID release."))
         XCTAssertTrue(releaseStatus.contains("`v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`."))
         XCTAssertTrue(releaseStatus.contains("Developer ID publication evidence for immutable `\(publishedTag)`: at publication time"))
@@ -503,8 +602,55 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json"))
         XCTAssertTrue(releaseStatus.contains("The separate supported-hardware review also passed with `manualSmokeTestResult: \"passed-auto-restored\"`."))
         XCTAssertTrue(releaseStatus.contains("active GitHub ruleset `18940029` (`Immutable Vifty release tags`)"))
-        XCTAssertTrue(releaseStatus.contains("the protected `release` environment is absent"))
-        XCTAssertTrue(releaseStatus.contains("The manifest candidate remains `null`; an owner-only environment is not an acceptable substitute."))
+        XCTAssertTrue(
+            releaseStatus.contains(
+                "The live `release` environment still has no required-reviewer rule"
+            )
+        )
+        XCTAssertTrue(releaseStatus.contains("explicit next-release blocker"))
+        XCTAssertTrue(
+            releaseStatus.contains(
+                "exactly one custom policy with type `tag` and pattern `v*`"
+            )
+        )
+        XCTAssertTrue(releaseStatus.contains("strict Actions-owned `SwiftPM checks` for administrators"))
+        XCTAssertTrue(releaseStatus.contains("`.github/release-gh-toolchain.json` to be byte-identical to the exact first parent"))
+        XCTAssertTrue(releaseStatus.contains("privately copies and verifies the pinned Darwin arm64 `gh` bytes before token access"))
+        XCTAssertTrue(releaseStatus.contains("does not dispatch"))
+        XCTAssertTrue(releaseStatus.contains("automatically creates for that tag push"))
+        XCTAssertTrue(releaseStatus.contains("exactly one `push`-event run at attempt 1"))
+        XCTAssertTrue(releaseStatus.contains("actor ID/login, repository, workflow path/ID, tag, commit, URL, and creation time"))
+        XCTAssertTrue(releaseStatus.contains("complete reviewed release-tool set"))
+        XCTAssertTrue(releaseStatus.contains("keeping GitHub credentials out of its environment"))
+        XCTAssertTrue(releaseStatus.contains("paginated absence of every draft or published release"))
+        XCTAssertTrue(releaseStatus.contains("checkout-independent retired-tag marker and private receipt"))
+        XCTAssertTrue(releaseStatus.contains("~/Library/Application Support/Vifty/ReleaseTransactions/Reedtrullz-Vifty/<tag>/"))
+        XCTAssertTrue(releaseStatus.contains("Those files are inspection evidence only and never retry authorization."))
+        XCTAssertTrue(releaseStatus.contains("second helper invocation, manual dispatch, workflow rerun, or deleting/moving/reusing that tag is forbidden"))
+        XCTAssertTrue(releaseStatus.contains("This solo-maintainer design has an explicit remote-proof limit."))
+        XCTAssertTrue(releaseStatus.contains("cannot prove that the supported local helper created `retired.json` and `receipt.json`"))
+        XCTAssertTrue(releaseStatus.contains("sole signer/repository administrator is therefore trusted not to bypass that helper with a raw tag push"))
+        XCTAssertTrue(releaseStatus.contains("unsupported and lacks the local one-shot transaction guarantee even if remote admission passes"))
+        XCTAssertTrue(releaseStatus.contains("only after the original transaction is conclusively shown not to have published"))
+        XCTAssertTrue(releaseStatus.contains("requires a pull request with zero approvals and no bypass actors"))
+        XCTAssertTrue(releaseStatus.contains("remain deliberately repository-scoped for this solo-maintainer workflow"))
+        XCTAssertTrue(releaseStatus.contains("environment contains no same-name copies"))
+        XCTAssertTrue(releaseStatus.contains("requires the signed ruleset ID to match the narrower public ruleset readback"))
+        if let candidate {
+            let candidateTag = try XCTUnwrap(candidate["tag"] as? String)
+            let candidateBuild = try XCTUnwrap(candidate["build"] as? Int)
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "The manifest candidate records `\(candidateTag)` build `\(candidateBuild)` as pending until exact-main CI and signed-tag publication; no release is authorized by candidate metadata alone."
+                )
+            )
+        } else {
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "The manifest candidate remains `null` until a separate release-prep pull request passes exact-main CI"
+                )
+            )
+        }
         XCTAssertTrue(releaseStatus.contains(publishedSHA))
         XCTAssertTrue(releaseStatus.contains("`v1.1.1` remains the published source-first fallback."))
         XCTAssertTrue(releaseStatus.contains("Unsigned convenience app zip:** optional tester convenience only."))
@@ -515,7 +661,21 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(releaseStatus.contains("Known issue: the published `v1.1.0` source/unsigned-dev release predates helper-install and app-polling hardening on `main`"))
         XCTAssertTrue(releaseStatus.contains("Do not retag `v1.1.0`, rebuild `Vifty-v1.1.0-unsigned-dev.zip` from later `main`, or claim the published `v1.1.0` convenience artifact is the official trusted binary."))
         XCTAssertTrue(releaseStatus.contains("The honest remediation is the immutable `v1.1.1` source-first hotfix release, which remains permanently unsigned/not notarized as published"))
-        XCTAssertTrue(releaseStatus.contains("Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `\(publishedVersion)` build `\(publishedBuild)`"))
+        if let candidate {
+            let candidateVersion = try XCTUnwrap(candidate["version"] as? String)
+            let candidateBuild = try XCTUnwrap(candidate["build"] as? Int)
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "Release candidate metadata in `Resources/Info.plist` is staged at `\(candidateVersion)` build `\(candidateBuild)`, while `Casks/vifty.rb` remains pinned to published `\(publishedVersion)` with SHA-256 `\(publishedSHA)`"
+                )
+            )
+        } else {
+            XCTAssertTrue(
+                releaseStatus.contains(
+                    "Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `\(publishedVersion)` build `\(publishedBuild)`"
+                )
+            )
+        }
         XCTAssertTrue(releaseStatus.contains("The supervised `v1.3.1` manual smoke is not a passed compatibility claim."))
         XCTAssertTrue(releaseStatus.contains("selecting Auto during an in-flight Curve tick could briefly show Auto active before the suspended write resumed"))
         XCTAssertTrue(releaseStatus.contains("validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md"))

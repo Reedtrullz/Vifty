@@ -1,13 +1,10 @@
 name: Release
-run-name: Release ${{ inputs.tag }}
+run-name: Release ${{ github.ref_name }}
 
 "on":
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing signed tag to release, e.g. v1.3.3"
-        required: true
-        type: string
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -16,7 +13,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -25,22 +22,26 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 35
     permissions:
+      actions: read
       contents: read
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
-      - name: Require protected default-branch workflow context
+      - name: Require immutable signed-tag workflow context
         run: |
           set -euo pipefail
-          test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
-          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_EVENT_NAME}" = "push"
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          test "${GITHUB_REF_TYPE}" = "tag"
+          test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}"
+          test "${GITHUB_REF}" = "refs/tags/${RELEASE_TAG}"
           [[ "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
       - name: Check out signed release tag without credentials
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: refs/tags/${{ github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -68,16 +69,25 @@ jobs:
             exit 1
           fi
           git fetch --no-tags origin "${GITHUB_SHA}"
+          TRUSTED_SIGNERS="${RUNNER_TEMP}/vifty-release-signers.allowed"
+          PARENT_SIGNERS="${RUNNER_TEMP}/vifty-release-parent-signers.allowed"
+          git show "${GITHUB_SHA}:.github/release-signers.allowed" > "${TRUSTED_SIGNERS}"
+          git show "${GITHUB_SHA}^:.github/release-signers.allowed" > "${PARENT_SIGNERS}"
+          cmp -s "${TRUSTED_SIGNERS}" "${PARENT_SIGNERS}"
+          chmod 444 "${TRUSTED_SIGNERS}"
+          TAG_OBJECT="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{tag}")"
+          test "$(git rev-parse --verify "${TAG_OBJECT}^{commit}")" = "${GITHUB_SHA}"
+          git -c gpg.format=ssh \
+            -c gpg.ssh.program=/usr/bin/ssh-keygen \
+            -c gpg.ssh.allowedSignersFile="${TRUSTED_SIGNERS}" \
+            verify-tag "${TAG_OBJECT}"
+          scripts/check-release-prep-diff.sh \
+            --root "${GITHUB_WORKSPACE}" \
+            --commit "${GITHUB_SHA}"
           scripts/check-release-manifest.sh \
             --publication-version "${VERSION}" \
             --base-ref "${GITHUB_SHA}^" \
             --require-base
-          TRUSTED_SIGNERS="${RUNNER_TEMP}/vifty-release-signers.allowed"
-          git show "${GITHUB_SHA}:.github/release-signers.allowed" > "${TRUSTED_SIGNERS}"
-          chmod 444 "${TRUSTED_SIGNERS}"
-          git -c gpg.format=ssh \
-            -c gpg.ssh.allowedSignersFile="${TRUSTED_SIGNERS}" \
-            verify-tag "${RELEASE_TAG}"
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
       - name: Verify remote ancestry and exact-commit CI provenance
@@ -85,12 +95,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          scripts/check-release-provenance.sh \
+          RELEASE_GH_TOKEN="${GH_TOKEN:?}"
+          unset GH_TOKEN GITHUB_TOKEN
+          GH_TOKEN="${RELEASE_GH_TOKEN}" scripts/check-release-provenance.sh \
             --tag "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
             --main-ref "${GITHUB_SHA}" \
             --allowed-signers "${RUNNER_TEMP}/vifty-release-signers.allowed" \
-            --json
+            --require-current-governance-freshness \
+            --json > "${RUNNER_TEMP}/vifty-release-admission-provenance.json"
+          ruby -rjson -e '
+            provenance = JSON.parse(File.read(ARGV.fetch(0)))
+            actor = provenance.dig("administratorGovernanceEvidence", "authenticatedActor")
+            abort("signed governance actor does not match tag-push actor") unless
+              actor.is_a?(Hash) &&
+                actor["id"].to_s == ARGV.fetch(1) &&
+                actor["login"] == ARGV.fetch(2)
+          ' "${RUNNER_TEMP}/vifty-release-admission-provenance.json" \
+            "${GITHUB_ACTOR_ID}" "${GITHUB_ACTOR}"
+          chmod 444 "${RUNNER_TEMP}/vifty-release-admission-provenance.json"
+          unset RELEASE_GH_TOKEN
 
       - name: Validate release metadata and workflow contract
         run: |
@@ -119,29 +143,40 @@ jobs:
         run: |
           set -euo pipefail
           INPUT_DIR=".build/release-input"
+          CANDIDATE_APP=".build/release-candidate/Vifty.app"
           rm -rf "${INPUT_DIR}"
           mkdir -p "${INPUT_DIR}"
           ditto .build/Vifty.app "${INPUT_DIR}/Vifty.app"
+          cp "${RUNNER_TEMP}/vifty-release-admission-provenance.json" \
+            "${INPUT_DIR}/release-admission-provenance.json"
           (
             cd "${INPUT_DIR}"
-            find Vifty.app -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > candidate-files.sha256
-            ditto -c -k --keepParent Vifty.app Vifty-unsigned-candidate.zip
+            ditto -c -k --keepParent --norsrc --noextattr --noqtn --noacl \
+              Vifty.app Vifty-unsigned-candidate.zip
+            /usr/bin/ruby "${GITHUB_WORKSPACE}/scripts/release-candidate-inventory.rb" create \
+              --app Vifty.app \
+              --archive Vifty-unsigned-candidate.zip \
+              --supplemental release-admission-provenance.json \
+              --output candidate-inventory.json
             rm -rf Vifty.app
           )
 
       - name: Upload hash-inventoried unsigned candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: vifty-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          name: vifty-candidate-${{ github.run_id }}
           path: |
             .build/release-input/Vifty-unsigned-candidate.zip
-            .build/release-input/candidate-files.sha256
+            .build/release-input/candidate-inventory.json
+            .build/release-input/release-admission-provenance.json
           if-no-files-found: error
           retention-days: 1
+          overwrite: true
 
   sign-notarize:
     name: Sign and notarize inventoried candidate
     needs: prepare-candidate
+    if: ${{ github.run_attempt == 1 }}
     runs-on: macos-15
     timeout-minutes: 25
     environment: release
@@ -149,7 +184,7 @@ jobs:
       actions: read
       contents: read
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
       - name: Check out trusted release tooling
@@ -180,6 +215,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          RELEASE_GH_TOKEN="${GH_TOKEN:?}"
+          unset GH_TOKEN GITHUB_TOKEN
           TRUSTED_ROOT="${GITHUB_WORKSPACE}/.build/trusted-release-source"
           (
             cd "${TRUSTED_ROOT}"
@@ -189,23 +226,29 @@ jobs:
           )
           VIFTY_WORKFLOW_CONTRACT_ROOT="${TRUSTED_ROOT}" \
             ruby "${TRUSTED_ROOT}/scripts/check-workflow-contract.rb"
-          bash "${TRUSTED_ROOT}/scripts/check-release-environment.sh" \
+          GH_TOKEN="${RELEASE_GH_TOKEN}" \
+            "${TRUSTED_ROOT}/scripts/check-release-environment.sh" \
             --repo "${GITHUB_REPOSITORY}" \
             --environment release \
             --branch main \
+            --workflow-public \
+            --expected-branch-sha "${GITHUB_SHA}" \
             --output "${RUNNER_TEMP}/vifty-release-environment-readback.json"
+          unset RELEASE_GH_TOKEN
 
       - name: Download inventoried candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: vifty-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          name: vifty-candidate-${{ github.run_id }}
           path: .build/release-input
 
-      - name: Verify candidate and trusted tool inventories before secrets
+      - name: Verify candidate and trusted tool inventories before secret-consuming steps
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          RELEASE_GH_TOKEN="${GH_TOKEN:?}"
+          unset GH_TOKEN GITHUB_TOKEN
           TRUSTED_ROOT="${GITHUB_WORKSPACE}/.build/trusted-release-source"
           (
             cd "${TRUSTED_ROOT}"
@@ -214,9 +257,16 @@ jobs:
             shasum -a 256 -c "${RUNNER_TEMP}/vifty-trusted-release-tools.sha256"
           )
           INPUT_DIR="${GITHUB_WORKSPACE}/.build/release-input"
-          cd "${INPUT_DIR}"
-          ditto -x -k Vifty-unsigned-candidate.zip .
-          shasum -a 256 -c candidate-files.sha256
+          EXTRACT_DIR="${GITHUB_WORKSPACE}/.build/release-candidate"
+          rm -rf "${EXTRACT_DIR}"
+          mkdir -p "${EXTRACT_DIR}"
+          /usr/bin/ruby "${TRUSTED_ROOT}/scripts/release-candidate-inventory.rb" extract \
+            --handoff-dir "${INPUT_DIR}" \
+            --inventory "${INPUT_DIR}/candidate-inventory.json" \
+            --extract-to "${EXTRACT_DIR}"
+          "${TRUSTED_ROOT}/scripts/check-release-prep-diff.sh" \
+            --root "${TRUSTED_ROOT}" \
+            --commit "${GITHUB_SHA}"
           VIFTY_RELEASE_MANIFEST_ROOT="${TRUSTED_ROOT}" \
             VIFTY_RELEASE_MANIFEST_BASE_REF="${GITHUB_SHA}^" \
             VIFTY_REQUIRE_RELEASE_MANIFEST_BASE=1 \
@@ -226,11 +276,12 @@ jobs:
               --require-base
           git -C "${TRUSTED_ROOT}" fetch --force origin \
             "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
-          VIFTY_RELEASE_PROVENANCE_ROOT="${TRUSTED_ROOT}" \
+          GH_TOKEN="${RELEASE_GH_TOKEN}" \
+            VIFTY_RELEASE_PROVENANCE_ROOT="${TRUSTED_ROOT}" \
             VIFTY_RELEASE_MANIFEST_BASE_REF="${GITHUB_SHA}^" \
             VIFTY_REQUIRE_RELEASE_MANIFEST_BASE=1 \
             VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT="${TRUSTED_ROOT}" \
-            bash "${TRUSTED_ROOT}/scripts/check-release-provenance.sh" \
+            "${TRUSTED_ROOT}/scripts/check-release-provenance.sh" \
               --tag "${RELEASE_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
               --main-ref "${GITHUB_SHA}" \
@@ -238,7 +289,8 @@ jobs:
               --manifest "${TRUSTED_ROOT}/.github/release-manifest.json" \
               --allowed-signers "${TRUSTED_ROOT}/.github/release-signers.allowed" \
               --json
-          if /usr/bin/plutil -convert json -o - -- Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist | ruby -rjson -e '
+          unset RELEASE_GH_TOKEN
+          if /usr/bin/plutil -convert json -o - -- "${EXTRACT_DIR}/Vifty.app/Contents/Library/LaunchDaemons/tech.reidar.vifty.daemon.plist" | ruby -rjson -e '
             data = JSON.parse(STDIN.read)
             keys = Hash(data["EnvironmentVariables"]).keys.grep(/\AVIFTY_XPC_ADHOC_/)
             exit(keys.empty? ? 1 : 0)
@@ -308,10 +360,12 @@ jobs:
             test -z "${trusted_status}"
             shasum -a 256 -c "${RUNNER_TEMP}/vifty-trusted-release-tools.sha256"
           )
-          cd .build/release-input
-          shasum -a 256 -c candidate-files.sha256
+          CANDIDATE_APP="${GITHUB_WORKSPACE}/.build/release-candidate/Vifty.app"
+          /usr/bin/ruby "${TRUSTED_ROOT}/scripts/release-candidate-inventory.rb" verify-tree \
+            --app "${CANDIDATE_APP}" \
+            --inventory "${GITHUB_WORKSPACE}/.build/release-input/candidate-inventory.json"
           bash "${TRUSTED_ROOT}/scripts/sign-release-candidate.sh" \
-            --app Vifty.app \
+            --app "${CANDIDATE_APP}" \
             --manifest "${TRUSTED_ROOT}/.github/release-manifest.json" \
             --entitlements "${TRUSTED_ROOT}/Resources/Vifty.entitlements" \
             --identity "${SIGNING_IDENTITY}" \
@@ -326,16 +380,18 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
+          CANDIDATE_APP=".build/release-candidate/Vifty.app"
           NOTARY_ZIP="${RUNNER_TEMP}/Vifty-${VERSION}-notary.zip"
-          ditto -c -k --keepParent .build/release-input/Vifty.app "${NOTARY_ZIP}"
+          ditto -c -k --keepParent --norsrc --noextattr --noqtn --noacl \
+            "${CANDIDATE_APP}" "${NOTARY_ZIP}"
           xcrun notarytool submit "${NOTARY_ZIP}" \
             --apple-id "${APPLE_ID}" \
             --team-id "${APPLE_TEAM_ID}" \
             --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
             --wait
-          xcrun stapler staple .build/release-input/Vifty.app
-          xcrun stapler validate .build/release-input/Vifty.app
-          /usr/sbin/spctl --assess --type execute --verbose .build/release-input/Vifty.app
+          xcrun stapler staple "${CANDIDATE_APP}"
+          xcrun stapler validate "${CANDIDATE_APP}"
+          /usr/sbin/spctl --assess --type execute --verbose "${CANDIDATE_APP}"
 
       - name: Create and verify release assets with trusted tools
         env:
@@ -343,8 +399,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          RELEASE_GH_TOKEN="${GH_TOKEN:?}"
+          unset GH_TOKEN GITHUB_TOKEN
           INPUT_DIR=".build/release-input"
           OUTPUT_DIR=".build/release-output"
+          CANDIDATE_APP=".build/release-candidate/Vifty.app"
           VERSION="${RELEASE_TAG#v}"
           ZIP_PATH="${OUTPUT_DIR}/Vifty-v${VERSION}.zip"
           CHECKSUM_PATH="${ZIP_PATH}.sha256"
@@ -355,111 +414,160 @@ jobs:
           ENVIRONMENT_EVIDENCE_PATH="${OUTPUT_DIR}/release-environment-readback.json"
           PROVENANCE_PATH="${RUNNER_TEMP}/vifty-release-provenance-final.json"
           RULESET_EVIDENCE_PATH="${RUNNER_TEMP}/vifty-release-tag-ruleset.json"
+          GOVERNANCE_EVIDENCE_PATH="${OUTPUT_DIR}/administrator-governance-evidence.json"
+          ADMISSION_PROVENANCE_SOURCE="${INPUT_DIR}/release-admission-provenance.json"
+          ADMISSION_PROVENANCE_PATH="${OUTPUT_DIR}/release-admission-provenance.json"
           mkdir -p "${OUTPUT_DIR}"
           test -f "${ENVIRONMENT_EVIDENCE_SOURCE}"
           cp "${ENVIRONMENT_EVIDENCE_SOURCE}" "${ENVIRONMENT_EVIDENCE_PATH}"
+          test -f "${ADMISSION_PROVENANCE_SOURCE}"
+          EXPECTED_ADMISSION_SHA="$(ruby -rjson -e '
+            inventory = JSON.parse(File.read(ARGV.fetch(0)))
+            supplemental = inventory.fetch("supplementalFiles")
+            abort("candidate inventory must bind one admission provenance file") unless
+              supplemental.is_a?(Array) && supplemental.length == 1 &&
+              supplemental.first["path"] == "release-admission-provenance.json"
+            print supplemental.first.fetch("sha256")
+          ' "${INPUT_DIR}/candidate-inventory.json")"
+          test "${EXPECTED_ADMISSION_SHA}" = "$(shasum -a 256 "${ADMISSION_PROVENANCE_SOURCE}" | awk '{print $1}')"
+          cp "${ADMISSION_PROVENANCE_SOURCE}" "${ADMISSION_PROVENANCE_PATH}"
           chmod 444 "${ENVIRONMENT_EVIDENCE_PATH}"
+          chmod 444 "${ADMISSION_PROVENANCE_PATH}"
 
-          write_immutable_tag_ruleset_evidence() {
+          write_public_tag_rule_coverage_evidence() {
+            local expected_ruleset_id="$1"
+            local expected_ruleset_updated_at="$2"
             local rulesets_path="${RUNNER_TEMP}/vifty-release-rulesets-final.json"
-            local details_path candidate_path ruleset_ids ruleset_id
-            local -a matching_evidence_paths=()
+            local details_path
 
-            gh api --paginate --slurp \
-              "repos/${GITHUB_REPOSITORY}/rulesets?includes_parents=true&per_page=100" \
-              > "${rulesets_path}"
-            ruleset_ids="$(ruby -rjson -e '
-              pages = JSON.parse(File.read(ARGV.fetch(0)))
-              abort("ruleset listing must be paginated arrays") unless pages.is_a?(Array) && pages.all? { |page| page.is_a?(Array) }
-              ids = pages.flatten(1).filter_map do |ruleset|
+            builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+              /usr/bin/curl --disable --fail --silent --show-error \
+                --header @- \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                -H 'Cache-Control: no-cache' \
+                -H 'Pragma: no-cache' \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets?includes_parents=true&per_page=100" \
+                > "${rulesets_path}"
+            ruby -rjson -e '
+              rulesets = JSON.parse(File.read(ARGV.fetch(0)))
+              abort("public ruleset listing must be an array smaller than the requested page") unless rulesets.is_a?(Array) && rulesets.length < 100
+              expected_id = Integer(ARGV.fetch(1), 10)
+              matches = rulesets.select do |ruleset|
                 next unless ruleset["target"] == "tag" && ruleset["enforcement"] == "active"
-                id = ruleset["id"]
-                abort("active tag ruleset is missing an integer id") unless id.is_a?(Integer) && id.positive?
-                id
+                ruleset["id"] == expected_id
               end
-              puts ids.uniq.sort
-            ' "${rulesets_path}")"
+              abort("signed administrator ruleset ID is not one unique active public tag ruleset") unless matches.length == 1
+            ' "${rulesets_path}" "${expected_ruleset_id}"
 
-            while IFS= read -r ruleset_id; do
-              [[ -n "${ruleset_id}" ]] || continue
-              details_path="${RUNNER_TEMP}/vifty-release-ruleset-final-${ruleset_id}.json"
-              candidate_path="${RUNNER_TEMP}/vifty-release-ruleset-evidence-${ruleset_id}.json"
-              gh api "repos/${GITHUB_REPOSITORY}/rulesets/${ruleset_id}" > "${details_path}"
-              if ruby -rjson -e '
-                ruleset = JSON.parse(File.read(ARGV.fetch(0)))
-                expected_id = Integer(ARGV.fetch(1), 10)
-                tag = ARGV.fetch(2)
-                repository = ARGV.fetch(3)
-                output_path = ARGV.fetch(4)
-                full_ref = "refs/tags/#{tag}"
-                flags = File::FNM_PATHNAME | File::FNM_EXTGLOB
-                matches = lambda do |pattern|
-                  pattern == "~ALL" ||
-                    File.fnmatch?(pattern, full_ref, flags)
-                end
-                ref_name = ruleset.dig("conditions", "ref_name")
-                includes = ref_name.is_a?(Hash) ? ref_name["include"] : nil
-                excludes = ref_name.is_a?(Hash) ? ref_name["exclude"] : nil
-                bypass_actors = ruleset["bypass_actors"]
-                rule_types = Array(ruleset["rules"]).filter_map { |rule| rule["type"] }.uniq.sort
-                matched_includes = includes.is_a?(Array) ? includes.select { |pattern| matches.call(pattern) } : []
-                matched_excludes = excludes.is_a?(Array) ? excludes.select { |pattern| matches.call(pattern) } : []
-                valid = ruleset["id"] == expected_id &&
-                  ruleset["name"].is_a?(String) && !ruleset["name"].empty? &&
-                  ruleset["target"] == "tag" &&
-                  ruleset["enforcement"] == "active" &&
-                  bypass_actors.is_a?(Array) && bypass_actors.empty? &&
-                  includes.is_a?(Array) && !matched_includes.empty? &&
-                  excludes.is_a?(Array) && matched_excludes.empty? &&
-                  rule_types.include?("update") && rule_types.include?("deletion")
-                exit 1 unless valid
-                evidence = {
-                  "schemaVersion" => 1,
-                  "repository" => repository,
-                  "releaseTag" => tag,
-                  "releaseRef" => full_ref,
-                  "rulesetID" => expected_id,
-                  "rulesetName" => ruleset.fetch("name"),
-                  "target" => "tag",
-                  "enforcement" => "active",
-                  "matchedIncludePatterns" => matched_includes.sort,
-                  "matchedExcludePatterns" => [],
-                  "ruleTypes" => rule_types,
-                  "bypassActors" => [],
-                  "preventsUpdate" => true,
-                  "preventsDeletion" => true,
-                  "apiVisibilityComplete" => true,
-                  "verified" => true,
-                  "readOnly" => true
-                }
-                File.write(output_path, JSON.pretty_generate(evidence) + "\n")
-              ' "${details_path}" "${ruleset_id}" "${RELEASE_TAG}" "${GITHUB_REPOSITORY}" "${candidate_path}"; then
-                matching_evidence_paths+=("${candidate_path}")
-              fi
-            done <<< "${ruleset_ids}"
-
-            if [[ "${#matching_evidence_paths[@]}" -eq 0 ]]; then
-              echo "No visible active no-bypass tag ruleset prevents both updates and deletion for ${RELEASE_TAG}." >&2
-              return 1
-            fi
-            cp "${matching_evidence_paths[0]}" "${RULESET_EVIDENCE_PATH}"
+            details_path="${RUNNER_TEMP}/vifty-release-ruleset-final-${expected_ruleset_id}.json"
+            builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+              /usr/bin/curl --disable --fail --silent --show-error \
+                --header @- \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                -H 'Cache-Control: no-cache' \
+                -H 'Pragma: no-cache' \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets/${expected_ruleset_id}" \
+                > "${details_path}"
+            ruby -rjson -e '
+              ruleset = JSON.parse(File.read(ARGV.fetch(0)))
+              expected_id = Integer(ARGV.fetch(1), 10)
+              expected_updated_at = ARGV.fetch(2)
+              tag = ARGV.fetch(3)
+              repository = ARGV.fetch(4)
+              output_path = ARGV.fetch(5)
+              full_ref = "refs/tags/#{tag}"
+              ref_name = ruleset.dig("conditions", "ref_name")
+              includes = ref_name.is_a?(Hash) ? ref_name["include"] : nil
+              excludes = ref_name.is_a?(Hash) ? ref_name["exclude"] : nil
+              rule_types = Array(ruleset["rules"]).map { |rule| rule["type"] }.compact.uniq.sort
+              matched_includes = includes == ["refs/tags/v*"] ? includes : []
+              matched_excludes = excludes == [] ? [] : Array(excludes)
+              valid = ruleset["id"] == expected_id &&
+                ruleset["name"].is_a?(String) && !ruleset["name"].empty? &&
+                ruleset["target"] == "tag" && ruleset["enforcement"] == "active" &&
+                ruleset["updated_at"] == expected_updated_at &&
+                ruleset["current_user_can_bypass"] == "never" &&
+                includes == ["refs/tags/v*"] && matched_includes == ["refs/tags/v*"] &&
+                excludes == [] && matched_excludes.empty? &&
+                rule_types.include?("update") && rule_types.include?("deletion")
+              abort("signed administrator ruleset no longer has public update/deletion coverage") unless valid
+              evidence = {
+                "schemaVersion" => 3,
+                "repository" => repository,
+                "releaseTag" => tag,
+                "releaseRef" => full_ref,
+                "rulesetID" => expected_id,
+                "rulesetName" => ruleset.fetch("name"),
+                "rulesetUpdatedAt" => ruleset.fetch("updated_at"),
+                "currentUserCanBypass" => ruleset.fetch("current_user_can_bypass"),
+                "target" => "tag",
+                "enforcement" => "active",
+                "matchedIncludePatterns" => matched_includes.sort,
+                "matchedExcludePatterns" => [],
+                "ruleTypes" => rule_types,
+                "bypassActorsVerified" => false,
+                "updateRulePresent" => true,
+                "deletionRulePresent" => true,
+                "publicRuleCoverageVerified" => true,
+                "verified" => true,
+                "readOnly" => true
+              }
+              File.write(output_path, JSON.pretty_generate(evidence) + "\n")
+            ' "${details_path}" "${expected_ruleset_id}" "${expected_ruleset_updated_at}" "${RELEASE_TAG}" "${GITHUB_REPOSITORY}" "${RULESET_EVIDENCE_PATH}"
             chmod 444 "${RULESET_EVIDENCE_PATH}"
           }
 
-          write_immutable_tag_ruleset_evidence
-
+          TRUSTED_ROOT="${GITHUB_WORKSPACE}/.build/trusted-release-source"
           (
-            cd "${GITHUB_WORKSPACE}/.build/trusted-release-source"
+            cd "${TRUSTED_ROOT}"
             trusted_status="$(git status --porcelain=v1 --untracked-files=all)"
             test -z "${trusted_status}"
             shasum -a 256 -c "${RUNNER_TEMP}/vifty-trusted-release-tools.sha256"
           )
-          ditto -c -k --keepParent "${INPUT_DIR}/Vifty.app" "${ZIP_PATH}"
-          shasum -a 256 "${ZIP_PATH}" | tee "${CHECKSUM_PATH}"
-          EXPECTED_SHA="$(awk '{print $1}' "${CHECKSUM_PATH}")"
-          TRUSTED_ROOT="${GITHUB_WORKSPACE}/.build/trusted-release-source"
           git -C "${TRUSTED_ROOT}" fetch --force origin \
             "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          GH_TOKEN="${RELEASE_GH_TOKEN}" \
+            VIFTY_RELEASE_PROVENANCE_ROOT="${TRUSTED_ROOT}" \
+            VIFTY_RELEASE_MANIFEST_BASE_REF="${GITHUB_SHA}^" \
+            VIFTY_REQUIRE_RELEASE_MANIFEST_BASE=1 \
+            VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT="${TRUSTED_ROOT}" \
+            "${TRUSTED_ROOT}/scripts/check-release-provenance.sh" \
+              --tag "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --main-ref "${GITHUB_SHA}" \
+              --trusted-workflow-ref "${GITHUB_SHA}" \
+              --manifest "${TRUSTED_ROOT}/.github/release-manifest.json" \
+              --allowed-signers "${TRUSTED_ROOT}/.github/release-signers.allowed" \
+              --governance-evidence-output "${GOVERNANCE_EVIDENCE_PATH}" \
+              --json > "${PROVENANCE_PATH}"
+          chmod 444 "${PROVENANCE_PATH}" "${GOVERNANCE_EVIDENCE_PATH}"
+          SIGNED_RULESET_FACTS="$(ruby -rjson -rdigest -e '
+            provenance = JSON.parse(File.read(ARGV.fetch(0)))
+            validation = provenance.fetch("administratorGovernanceValidation")
+            evidence = provenance.fetch("administratorGovernanceEvidence")
+            abort("signed administrator governance provenance is incomplete") unless
+              provenance["schemaVersion"] == 3 &&
+              provenance["dataSource"] == "github-api-live" &&
+              provenance["liveRemoteTagReadback"] == true &&
+              provenance["liveSourceCIReadback"] == true &&
+              validation["status"] == "passed" &&
+              validation["evidenceSHA256"].is_a?(String) &&
+              validation["evidenceSHA256"] == Digest::SHA256.file(ARGV.fetch(1)).hexdigest &&
+              evidence.dig("tagRulesetEvidence", "rulesetID") == validation["rulesetID"] &&
+              evidence.dig("tagRulesetEvidence", "rulesetUpdatedAt") == validation["rulesetUpdatedAt"] &&
+              validation["currentUserCanBypass"] == "never" &&
+              evidence.dig("tagRulesetEvidence", "currentUserCanBypass") == "never"
+            print [validation.fetch("rulesetID"), validation.fetch("rulesetUpdatedAt")].join("\t")
+          ' "${PROVENANCE_PATH}" "${GOVERNANCE_EVIDENCE_PATH}")"
+          IFS=$'\t' read -r SIGNED_RULESET_ID SIGNED_RULESET_UPDATED_AT <<< "${SIGNED_RULESET_FACTS}"
+          write_public_tag_rule_coverage_evidence "${SIGNED_RULESET_ID}" "${SIGNED_RULESET_UPDATED_AT}"
+
+          ditto -c -k --keepParent --norsrc --noextattr --noqtn --noacl \
+            "${CANDIDATE_APP}" "${ZIP_PATH}"
+          shasum -a 256 "${ZIP_PATH}" | tee "${CHECKSUM_PATH}"
+          EXPECTED_SHA="$(awk '{print $1}' "${CHECKSUM_PATH}")"
           VIFTY_RELEASE_ARTIFACT_ROOT="${TRUSTED_ROOT}" \
             VIFTY_RELEASE_MANIFEST_BASE_REF="${GITHUB_SHA}^" \
             VIFTY_REQUIRE_RELEASE_MANIFEST_BASE=1 \
@@ -477,31 +585,25 @@ jobs:
             bash "${TRUSTED_ROOT}/scripts/write-release-checklist.sh" \
               --version "${VERSION}" \
               --output "${RELEASE_CHECKLIST_PATH}"
-          VIFTY_RELEASE_PROVENANCE_ROOT="${TRUSTED_ROOT}" \
-            VIFTY_RELEASE_MANIFEST_BASE_REF="${GITHUB_SHA}^" \
-            VIFTY_REQUIRE_RELEASE_MANIFEST_BASE=1 \
-            VIFTY_RELEASE_SOURCE_REPOSITORY_ROOT="${TRUSTED_ROOT}" \
-            bash "${TRUSTED_ROOT}/scripts/check-release-provenance.sh" \
-              --tag "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --main-ref "${GITHUB_SHA}" \
-              --trusted-workflow-ref "${GITHUB_SHA}" \
-              --manifest "${TRUSTED_ROOT}/.github/release-manifest.json" \
-              --allowed-signers "${TRUSTED_ROOT}/.github/release-signers.allowed" \
-              --json > "${PROVENANCE_PATH}"
-          chmod 444 "${PROVENANCE_PATH}"
           ruby -rjson -rdigest -e '
-            manifest_path, provenance_path, ruleset_path, environment_path, version, workflow_sha, artifact_sha, output_path = ARGV
+            manifest_path, provenance_path, ruleset_path, environment_path, version, workflow_sha, artifact_sha, output_path, governance_path, admission_path = ARGV
             manifest = JSON.parse(File.read(manifest_path))
             provenance = JSON.parse(File.read(provenance_path))
             ruleset_evidence = JSON.parse(File.read(ruleset_path))
             environment_evidence = JSON.parse(File.read(environment_path))
+            governance_evidence = JSON.parse(File.read(governance_path))
+            governance_validation = provenance["administratorGovernanceValidation"]
+            admission = JSON.parse(File.read(admission_path))
+            admission_validation = admission["administratorGovernanceValidation"]
             candidate = manifest["candidate"]
             abort("trusted manifest candidate does not match publication version") unless candidate && candidate["version"] == version
             release_tag = candidate.fetch("tag")
             oid = /\A[0-9a-f]{40}\z/
-            provenance_valid = provenance["schemaVersion"] == 1 &&
+            provenance_valid = provenance["schemaVersion"] == 3 &&
               provenance["status"] == "passed" &&
+              provenance["dataSource"] == "github-api-live" &&
+              provenance["liveRemoteTagReadback"] == true &&
+              provenance["liveSourceCIReadback"] == true &&
               provenance["tag"] == release_tag &&
               provenance["version"] == version &&
               provenance["build"] == candidate.fetch("build") &&
@@ -510,74 +612,122 @@ jobs:
               provenance["tagObjectSHA"].to_s.match?(oid) &&
               provenance["tagCommitSHA"].to_s.match?(oid) &&
               provenance["signatureVerified"] == true &&
+              provenance["administratorGovernanceEvidence"] == governance_evidence &&
               provenance["readOnly"] == true
             abort("final signed-tag provenance does not bind the publication candidate") unless provenance_valid
-            ruleset_valid = ruleset_evidence["schemaVersion"] == 1 &&
+            governance_sha = Digest::SHA256.file(governance_path).hexdigest
+            governance_valid = governance_validation.is_a?(Hash) &&
+              governance_validation["schemaVersion"] == 1 &&
+              governance_validation["status"] == "passed" &&
+              governance_validation["repository"] == ENV.fetch("GITHUB_REPOSITORY") &&
+              governance_validation["releaseTag"] == release_tag &&
+              governance_validation["releaseCommitSHA"] == provenance["tagCommitSHA"] &&
+              governance_validation["rulesetID"].is_a?(Integer) && governance_validation["rulesetID"].positive? &&
+              governance_validation["rulesetUpdatedAt"].is_a?(String) &&
+              governance_validation["currentUserCanBypass"] == "never" &&
+              governance_validation["evidenceAgeSeconds"].is_a?(Integer) &&
+              governance_validation["evidenceAgeSeconds"].between?(0, 900) &&
+              governance_validation["evidenceSHA256"] == governance_sha &&
+              governance_validation["governanceToolSHA256"] == governance_evidence.dig("governanceTool", "sha256") &&
+              governance_validation["readOnly"] == true &&
+              governance_evidence["evidenceScope"] == "administrator-pretag" &&
+              governance_evidence["expectedMainSHA"] == provenance["tagCommitSHA"] &&
+              governance_evidence.dig("releaseEnvironmentEvidence", "evidenceScope") == "administrator-full" &&
+              governance_evidence.dig("releaseEnvironmentEvidence", "requiredBranchCommitSHA") == provenance["tagCommitSHA"] &&
+              governance_evidence.dig("tagRulesetEvidence", "rulesetID") == governance_validation["rulesetID"] &&
+              governance_evidence.dig("tagRulesetEvidence", "rulesetUpdatedAt") == governance_validation["rulesetUpdatedAt"] &&
+              governance_evidence.dig("tagRulesetEvidence", "currentUserCanBypass") == "never" &&
+              governance_evidence.dig("tagRulesetEvidence", "bypassActorsVerified") == true &&
+              governance_evidence.dig("tagRulesetEvidence", "bypassActors") == [] &&
+              governance_evidence.dig("releaseSecrets", "environmentShadowNames") == [] &&
+              governance_evidence["readOnly"] == true
+            abort("signed administrator governance evidence is incomplete or not bound to the release tag") unless governance_valid
+            admission_valid = admission["schemaVersion"] == 3 &&
+              admission["status"] == "passed" &&
+              admission["dataSource"] == "github-api-live" &&
+              admission["liveRemoteTagReadback"] == true &&
+              admission["liveSourceCIReadback"] == true &&
+              admission["tag"] == release_tag &&
+              admission["tagObjectSHA"] == provenance["tagObjectSHA"] &&
+              admission["tagCommitSHA"] == provenance["tagCommitSHA"] &&
+              admission["checkoutCommitSHA"] == workflow_sha &&
+              admission["mainRef"] == workflow_sha &&
+              admission["signatureVerified"] == true &&
+              admission["administratorGovernanceEvidence"] == governance_evidence &&
+              admission_validation.is_a?(Hash) &&
+              admission_validation["status"] == "passed" &&
+              admission_validation["currentFreshnessVerified"] == true &&
+              admission_validation["validatedAt"].is_a?(String) &&
+              admission_validation["currentEvidenceAgeSeconds"].is_a?(Integer) &&
+              admission_validation["currentEvidenceAgeSeconds"].between?(0, 900) &&
+              admission_validation["evidenceSHA256"] == governance_sha &&
+              admission["readOnly"] == true
+            abort("release admission did not bind current-fresh governance to this exact tag/workflow commit") unless admission_valid
+            ruleset_valid = ruleset_evidence["schemaVersion"] == 3 &&
               ruleset_evidence["repository"] == ENV.fetch("GITHUB_REPOSITORY") &&
               ruleset_evidence["releaseTag"] == release_tag &&
               ruleset_evidence["releaseRef"] == "refs/tags/#{release_tag}" &&
               ruleset_evidence["rulesetID"].is_a?(Integer) && ruleset_evidence["rulesetID"].positive? &&
+              ruleset_evidence["rulesetID"] == governance_validation["rulesetID"] &&
               ruleset_evidence["rulesetName"].is_a?(String) && !ruleset_evidence["rulesetName"].empty? &&
+              ruleset_evidence["rulesetUpdatedAt"] == governance_validation["rulesetUpdatedAt"] &&
+              ruleset_evidence["currentUserCanBypass"] == "never" &&
               ruleset_evidence["target"] == "tag" &&
               ruleset_evidence["enforcement"] == "active" &&
               Array(ruleset_evidence["matchedIncludePatterns"]).any? &&
               ruleset_evidence["matchedExcludePatterns"] == [] &&
-              ruleset_evidence["bypassActors"] == [] &&
+              ruleset_evidence["bypassActorsVerified"] == false &&
               Array(ruleset_evidence["ruleTypes"]).include?("update") &&
               Array(ruleset_evidence["ruleTypes"]).include?("deletion") &&
-              ruleset_evidence["preventsUpdate"] == true &&
-              ruleset_evidence["preventsDeletion"] == true &&
-              ruleset_evidence["apiVisibilityComplete"] == true &&
+              ruleset_evidence["updateRulePresent"] == true &&
+              ruleset_evidence["deletionRulePresent"] == true &&
+              ruleset_evidence["publicRuleCoverageVerified"] == true &&
               ruleset_evidence["verified"] == true &&
               ruleset_evidence["readOnly"] == true
-            abort("immutable tag ruleset evidence is incomplete or does not bind the publication tag") unless ruleset_valid
-            branch_approval_count = environment_evidence.dig("requiredBranchProtection", "requiredApprovingReviewCount")
-            expected_branch_protection = {
-              "strictStatusChecks" => true,
+            abort("public tag-rule coverage evidence is incomplete or does not bind the publication tag") unless ruleset_valid
+            expected_public_branch_protection = {
+              "statusCheckEnforcementLevel" => "everyone",
               "requiredStatusCheck" => {
                 "context" => "SwiftPM checks",
                 "appID" => 15_368
-              },
-              "enforceAdministrators" => true,
-              "requiredApprovingReviewCount" => branch_approval_count,
-              "dismissStaleReviews" => true,
-              "requireCodeOwnerReviews" => true,
-              "requireLastPushApproval" => true,
-              "pullRequestBypassAllowances" => {
-                "users" => [],
-                "teams" => [],
-                "apps" => []
-              },
-              "requireConversationResolution" => true,
-              "allowForcePushes" => false,
-              "allowDeletions" => false
+              }
             }
-            repository_owner = ENV.fetch("GITHUB_REPOSITORY").split("/", 2).fetch(0)
-            eligible_users = environment_evidence["eligibleNonOwnerUsers"]
-            environment_valid = environment_evidence["schemaVersion"] == 2 &&
+            expected_release_tag_deployment_policy = {
+              "policyCount" => 1,
+              "branchPolicyCount" => 0,
+              "tagPolicyCount" => 1,
+              "requiredTagPattern" => "v*",
+              "policies" => [{"type" => "tag", "name" => "v*"}]
+            }
+            environment_valid = environment_evidence["schemaVersion"] == 5 &&
               environment_evidence["status"] == "passed" &&
+              environment_evidence["releaseAuthorized"] == true &&
+              environment_evidence["dataSource"] == "github-api-live" &&
+              environment_evidence["evidenceScope"] == "workflow-public" &&
+              environment_evidence["privilegedSettingsVerified"] == false &&
               environment_evidence["environment"] == "release" &&
-              eligible_users.is_a?(Array) && !eligible_users.empty? &&
-              eligible_users.all? { |reviewer|
-                reviewer.is_a?(Hash) && reviewer["type"] == "User" &&
-                  reviewer["login"].is_a?(String) && !reviewer["login"].empty? &&
-                  !reviewer["login"].casecmp?(repository_owner) &&
-                  reviewer["id"].is_a?(Integer) && reviewer["id"].positive?
-              } &&
-              environment_evidence["eligibleNonOwnerReviewer"] == true &&
-              environment_evidence["teamReviewerEligibilityAssumed"] == false &&
-              environment_evidence["preventSelfReview"] == true &&
+              environment_evidence["releaseGovernanceMode"] == "solo-maintainer" &&
+              environment_evidence["requiredReviewerGate"] == false &&
+              environment_evidence["requiredReviewers"] == [] &&
+              environment_evidence["preventSelfReview"] == false &&
               environment_evidence["administratorsCanBypass"] == false &&
               environment_evidence["deploymentBranchPolicy"] == {
-                "protected_branches" => true,
-                "custom_branch_policies" => false
+                "protected_branches" => false,
+                "custom_branch_policies" => true
               } &&
+              environment_evidence["releaseTagDeploymentPolicy"] == expected_release_tag_deployment_policy &&
               environment_evidence["requiredBranch"] == "main" &&
+              environment_evidence["requiredBranchCommitSHA"] == workflow_sha &&
               environment_evidence["requiredBranchProtected"] == true &&
-              branch_approval_count.is_a?(Integer) && branch_approval_count >= 1 &&
-              environment_evidence["requiredBranchProtection"] == expected_branch_protection &&
+              environment_evidence["requiredBranchProtection"] == expected_public_branch_protection &&
+              environment_evidence["operatorOnlyChecks"] == [
+                "pull-request-required-zero-approvals-no-bypass",
+                "conversation-resolution",
+                "force-push-disabled",
+                "deletion-disabled"
+              ] &&
               environment_evidence["readOnly"] == true
-            abort("release environment evidence is incomplete or does not prove the reviewed gate") unless environment_valid
+            abort("public release governance evidence is incomplete or overclaims privileged settings") unless environment_valid
             load File.expand_path("../scripts/lib/release_artifact_contract.rb", File.dirname(manifest_path))
             repository = File.expand_path("..", File.dirname(manifest_path))
             snapshot_errors = []
@@ -611,8 +761,8 @@ jobs:
               override: artifact_sha
             )
             contract = {
-              "schemaVersion" => 2,
-              "schemaID" => "https://vifty.local/contracts/release-publication-v2.json",
+              "schemaVersion" => 3,
+              "schemaID" => "https://vifty.local/contracts/release-publication-v3.json",
               "workflowSourceSHA" => workflow_sha,
               "releaseManifestSHA256" => Digest::SHA256.hexdigest(tagged_manifest_bytes),
               "releaseManifestSchemaVersion" => tagged_manifest.fetch("schemaVersion"),
@@ -623,7 +773,25 @@ jobs:
               "tagObjectSHA" => provenance.fetch("tagObjectSHA"),
               "tagCommitSHA" => provenance.fetch("tagCommitSHA"),
               "tagSignatureVerified" => true,
-              "protectedTagEnforcementVerified" => true,
+              "administratorGovernanceVerified" => true,
+              "administratorGovernanceEvidence" => {
+                "fileName" => File.basename(governance_path),
+                "sha256" => governance_sha,
+                "validation" => governance_validation,
+                "readOnly" => true
+              },
+              "releaseAdmissionProvenance" => {
+                "fileName" => File.basename(admission_path),
+                "sha256" => Digest::SHA256.file(admission_path).hexdigest,
+                "currentFreshnessVerified" => true,
+                "validatedAt" => admission_validation.fetch("validatedAt"),
+                "currentEvidenceAgeSeconds" => admission_validation.fetch("currentEvidenceAgeSeconds"),
+                "tagObjectSHA" => admission.fetch("tagObjectSHA"),
+                "tagCommitSHA" => admission.fetch("tagCommitSHA"),
+                "evidenceSHA256" => admission_validation.fetch("evidenceSHA256"),
+                "readOnly" => true
+              },
+              "publicTagRuleCoverageVerified" => true,
               "protectedTagRulesetEvidence" => ruleset_evidence,
               "releaseEnvironmentEvidence" => {
                 "fileName" => File.basename(environment_path),
@@ -656,14 +824,14 @@ jobs:
               "summarySchemaID" => "https://vifty.local/schemas/release-artifact-summary.schema.json",
               "requiredChecks" => ViftyReleaseArtifactContract::REQUIRED_CHECK_NAMES,
               "checklist" => {
-                "title" => "# Vifty #{version} Developer ID Release Checklist",
+                "title" => "# Vifty #{version} Release Checklist",
                 "verifiedHeading" => "## Verified By The Release Workflow",
                 "followUpHeading" => "## Required Post-Publication Follow-Up"
               },
               "readOnly" => true
             }
             File.write(output_path, JSON.pretty_generate(contract) + "\n")
-          ' "${TRUSTED_ROOT}/.github/release-manifest.json" "${PROVENANCE_PATH}" "${RULESET_EVIDENCE_PATH}" "${ENVIRONMENT_EVIDENCE_PATH}" "${VERSION}" "${GITHUB_SHA}" "${EXPECTED_SHA}" "${PUBLICATION_CONTRACT_PATH}"
+          ' "${TRUSTED_ROOT}/.github/release-manifest.json" "${PROVENANCE_PATH}" "${RULESET_EVIDENCE_PATH}" "${ENVIRONMENT_EVIDENCE_PATH}" "${VERSION}" "${GITHUB_SHA}" "${EXPECTED_SHA}" "${PUBLICATION_CONTRACT_PATH}" "${GOVERNANCE_EVIDENCE_PATH}" "${ADMISSION_PROVENANCE_PATH}"
 
       - name: Remove signing material
         if: always()
@@ -679,26 +847,28 @@ jobs:
       - name: Upload verified release assets for publication
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: vifty-release-${{ github.run_id }}-${{ github.run_attempt }}
+          name: vifty-release-${{ github.run_id }}
           path: .build/release-output
           if-no-files-found: error
           retention-days: 90
+          overwrite: true
 
   publish:
     name: Publish verified GitHub release
     needs: sign-notarize
+    if: ${{ github.run_attempt == 1 }}
     runs-on: macos-15
     timeout-minutes: 10
     permissions:
       contents: write
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
       - name: Download verified release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: vifty-release-${{ github.run_id }}-${{ github.run_attempt }}
+          name: vifty-release-${{ github.run_id }}
           path: .build/release-assets
 
       - name: Recheck downloaded asset identity
@@ -711,12 +881,16 @@ jobs:
           RELEASE_CHECKLIST_PATH=".build/release-assets/Vifty-v${VERSION}-release-checklist.md"
           PUBLICATION_CONTRACT_PATH=".build/release-assets/release-publication-contract.json"
           ENVIRONMENT_EVIDENCE_PATH=".build/release-assets/release-environment-readback.json"
+          GOVERNANCE_EVIDENCE_PATH=".build/release-assets/administrator-governance-evidence.json"
+          ADMISSION_PROVENANCE_PATH=".build/release-assets/release-admission-provenance.json"
           test -f "${ZIP_PATH}"
           test -f "${CHECKSUM_PATH}"
           test -f "${SUMMARY_PATH}"
           test -f "${RELEASE_CHECKLIST_PATH}"
           test -f "${PUBLICATION_CONTRACT_PATH}"
           test -f "${ENVIRONMENT_EVIDENCE_PATH}"
+          test -f "${GOVERNANCE_EVIDENCE_PATH}"
+          test -f "${ADMISSION_PROVENANCE_PATH}"
           EXPECTED_SHA="$(ruby -e '
             line = File.readlines(ARGV.fetch(0), chomp: true).reject(&:empty?)
             abort("checksum sidecar must contain exactly one non-empty line") unless line.length == 1
@@ -726,92 +900,154 @@ jobs:
             print match[1]
           ' "${CHECKSUM_PATH}" "${ZIP_PATH}")"
           test "$(shasum -a 256 "${ZIP_PATH}" | awk '{print $1}')" = "${EXPECTED_SHA}"
-          ruby -rjson -rdigest -e '
+          ruby -rjson -rdigest -rtime -e '
             data = JSON.parse(File.read(ARGV.fetch(0)))
             contract = JSON.parse(File.read(ARGV.fetch(4)))
             environment_evidence = JSON.parse(File.read(ARGV.fetch(10)))
+            governance_evidence = JSON.parse(File.read(ARGV.fetch(11)))
+            admission = JSON.parse(File.read(ARGV.fetch(12)))
             version = ARGV.fetch(1)
             artifact = File.basename(ARGV.fetch(2))
             sha = ARGV.fetch(3)
             oid = /\A[0-9a-f]{40}\z/
             ruleset_evidence = contract["protectedTagRulesetEvidence"]
+            governance_contract = contract["administratorGovernanceEvidence"]
+            governance_validation = governance_contract.is_a?(Hash) ? governance_contract["validation"] : nil
+            governance_sha = Digest::SHA256.file(ARGV.fetch(11)).hexdigest
+            admission_contract = contract["releaseAdmissionProvenance"]
+            admission_validation = admission["administratorGovernanceValidation"]
+            admission_sha = Digest::SHA256.file(ARGV.fetch(12)).hexdigest
+            governance_valid = governance_contract.is_a?(Hash) && governance_validation.is_a?(Hash) &&
+              governance_contract["fileName"] == File.basename(ARGV.fetch(11)) &&
+              governance_contract["sha256"] == governance_sha &&
+              governance_contract["readOnly"] == true &&
+              governance_validation["schemaVersion"] == 1 &&
+              governance_validation["status"] == "passed" &&
+              governance_validation["repository"] == ARGV.fetch(9) &&
+              governance_validation["releaseTag"] == ARGV.fetch(8) &&
+              governance_validation["releaseCommitSHA"] == contract["tagCommitSHA"] &&
+              governance_validation["rulesetID"].is_a?(Integer) && governance_validation["rulesetID"].positive? &&
+              governance_validation["rulesetUpdatedAt"].is_a?(String) &&
+              governance_validation["currentUserCanBypass"] == "never" &&
+              governance_validation["evidenceAgeSeconds"].is_a?(Integer) &&
+              governance_validation["evidenceAgeSeconds"].between?(0, 900) &&
+              governance_validation["evidenceSHA256"] == governance_sha &&
+              governance_validation["governanceToolSHA256"] == governance_evidence.dig("governanceTool", "sha256") &&
+              governance_validation["readOnly"] == true &&
+              governance_evidence["evidenceScope"] == "administrator-pretag" &&
+              governance_evidence["releaseTag"] == ARGV.fetch(8) &&
+              governance_evidence["expectedMainSHA"] == contract["tagCommitSHA"] &&
+              governance_evidence.dig("releaseEnvironmentEvidence", "evidenceScope") == "administrator-full" &&
+              governance_evidence.dig("releaseEnvironmentEvidence", "requiredBranchCommitSHA") == contract["tagCommitSHA"] &&
+              governance_evidence.dig("tagRulesetEvidence", "rulesetID") == governance_validation["rulesetID"] &&
+              governance_evidence.dig("tagRulesetEvidence", "rulesetUpdatedAt") == governance_validation["rulesetUpdatedAt"] &&
+              governance_evidence.dig("tagRulesetEvidence", "currentUserCanBypass") == "never" &&
+              governance_evidence.dig("tagRulesetEvidence", "bypassActorsVerified") == true &&
+              governance_evidence.dig("tagRulesetEvidence", "bypassActors") == [] &&
+              governance_evidence.dig("releaseSecrets", "environmentShadowNames") == [] &&
+              governance_evidence["readOnly"] == true
             ruleset_valid = ruleset_evidence.is_a?(Hash) &&
-              ruleset_evidence["schemaVersion"] == 1 &&
+              ruleset_evidence["schemaVersion"] == 3 &&
               ruleset_evidence["repository"] == ARGV.fetch(9) &&
               ruleset_evidence["releaseTag"] == ARGV.fetch(8) &&
               ruleset_evidence["releaseRef"] == "refs/tags/#{ARGV.fetch(8)}" &&
               ruleset_evidence["rulesetID"].is_a?(Integer) && ruleset_evidence["rulesetID"].positive? &&
+              ruleset_evidence["rulesetID"] == governance_validation["rulesetID"] &&
               ruleset_evidence["rulesetName"].is_a?(String) && !ruleset_evidence["rulesetName"].empty? &&
+              ruleset_evidence["rulesetUpdatedAt"] == governance_validation["rulesetUpdatedAt"] &&
+              ruleset_evidence["currentUserCanBypass"] == "never" &&
               ruleset_evidence["target"] == "tag" &&
               ruleset_evidence["enforcement"] == "active" &&
               Array(ruleset_evidence["matchedIncludePatterns"]).any? &&
               ruleset_evidence["matchedExcludePatterns"] == [] &&
-              ruleset_evidence["bypassActors"] == [] &&
+              ruleset_evidence["bypassActorsVerified"] == false &&
               Array(ruleset_evidence["ruleTypes"]).include?("update") &&
               Array(ruleset_evidence["ruleTypes"]).include?("deletion") &&
-              ruleset_evidence["preventsUpdate"] == true &&
-              ruleset_evidence["preventsDeletion"] == true &&
-              ruleset_evidence["apiVisibilityComplete"] == true &&
+              ruleset_evidence["updateRulePresent"] == true &&
+              ruleset_evidence["deletionRulePresent"] == true &&
+              ruleset_evidence["publicRuleCoverageVerified"] == true &&
               ruleset_evidence["verified"] == true &&
               ruleset_evidence["readOnly"] == true
             environment_contract = contract["releaseEnvironmentEvidence"]
             environment_sha = Digest::SHA256.file(ARGV.fetch(10)).hexdigest
             abort("environment evidence SHA-256 mismatch") unless
               environment_contract.is_a?(Hash) && environment_contract["sha256"] == environment_sha
-            branch_approval_count = environment_evidence.dig("requiredBranchProtection", "requiredApprovingReviewCount")
-            expected_branch_protection = {
-              "strictStatusChecks" => true,
+            expected_public_branch_protection = {
+              "statusCheckEnforcementLevel" => "everyone",
               "requiredStatusCheck" => {
                 "context" => "SwiftPM checks",
                 "appID" => 15_368
-              },
-              "enforceAdministrators" => true,
-              "requiredApprovingReviewCount" => branch_approval_count,
-              "dismissStaleReviews" => true,
-              "requireCodeOwnerReviews" => true,
-              "requireLastPushApproval" => true,
-              "pullRequestBypassAllowances" => {
-                "users" => [],
-                "teams" => [],
-                "apps" => []
-              },
-              "requireConversationResolution" => true,
-              "allowForcePushes" => false,
-              "allowDeletions" => false
+              }
             }
-            repository_owner = ARGV.fetch(9).split("/", 2).fetch(0)
-            eligible_users = environment_evidence["eligibleNonOwnerUsers"]
             environment_valid = environment_contract["fileName"] == File.basename(ARGV.fetch(10)) &&
-              environment_contract["schemaVersion"] == 2 &&
+              environment_contract["schemaVersion"] == 5 &&
               environment_contract["environment"] == "release" &&
               environment_contract["requiredBranch"] == "main" &&
               environment_contract["status"] == "passed" &&
               environment_contract["readOnly"] == true &&
-              environment_evidence["schemaVersion"] == 2 &&
+              environment_evidence["schemaVersion"] == 5 &&
               environment_evidence["status"] == "passed" &&
+              environment_evidence["releaseAuthorized"] == true &&
+              environment_evidence["dataSource"] == "github-api-live" &&
+              environment_evidence["evidenceScope"] == "workflow-public" &&
+              environment_evidence["privilegedSettingsVerified"] == false &&
               environment_evidence["environment"] == "release" &&
-              eligible_users.is_a?(Array) && !eligible_users.empty? &&
-              eligible_users.all? { |reviewer|
-                reviewer.is_a?(Hash) && reviewer["type"] == "User" &&
-                  reviewer["login"].is_a?(String) && !reviewer["login"].empty? &&
-                  !reviewer["login"].casecmp?(repository_owner) &&
-                  reviewer["id"].is_a?(Integer) && reviewer["id"].positive?
-              } &&
-              environment_evidence["eligibleNonOwnerReviewer"] == true &&
-              environment_evidence["teamReviewerEligibilityAssumed"] == false &&
-              environment_evidence["preventSelfReview"] == true &&
+              environment_evidence["releaseGovernanceMode"] == "solo-maintainer" &&
+              environment_evidence["requiredReviewerGate"] == false &&
+              environment_evidence["requiredReviewers"] == [] &&
+              environment_evidence["preventSelfReview"] == false &&
               environment_evidence["administratorsCanBypass"] == false &&
               environment_evidence["deploymentBranchPolicy"] == {
-                "protected_branches" => true,
-                "custom_branch_policies" => false
+                "protected_branches" => false,
+                "custom_branch_policies" => true
+              } &&
+              environment_evidence["releaseTagDeploymentPolicy"] == {
+                "policyCount" => 1,
+                "branchPolicyCount" => 0,
+                "tagPolicyCount" => 1,
+                "requiredTagPattern" => "v*",
+                "policies" => [{"type" => "tag", "name" => "v*"}]
               } &&
               environment_evidence["requiredBranch"] == "main" &&
+              environment_evidence["requiredBranchCommitSHA"] == ARGV.fetch(5) &&
               environment_evidence["requiredBranchProtected"] == true &&
-              branch_approval_count.is_a?(Integer) && branch_approval_count >= 1 &&
-              environment_evidence["requiredBranchProtection"] == expected_branch_protection &&
+              environment_evidence["requiredBranchProtection"] == expected_public_branch_protection &&
+              environment_evidence["operatorOnlyChecks"] == [
+                "pull-request-required-zero-approvals-no-bypass",
+                "conversation-resolution",
+                "force-push-disabled",
+                "deletion-disabled"
+              ] &&
               environment_evidence["readOnly"] == true
-            contract_valid = contract["schemaVersion"] == 2 &&
-              contract["schemaID"] == "https://vifty.local/contracts/release-publication-v2.json" &&
+            admission_valid = admission_contract.is_a?(Hash) && admission_validation.is_a?(Hash) &&
+              admission_contract["fileName"] == File.basename(ARGV.fetch(12)) &&
+              admission_contract["sha256"] == admission_sha &&
+              admission_contract["currentFreshnessVerified"] == true &&
+              admission_contract["validatedAt"] == admission_validation["validatedAt"] &&
+              admission_contract["currentEvidenceAgeSeconds"] == admission_validation["currentEvidenceAgeSeconds"] &&
+              admission_contract["tagObjectSHA"] == contract["tagObjectSHA"] &&
+              admission_contract["tagCommitSHA"] == contract["tagCommitSHA"] &&
+              admission_contract["evidenceSHA256"] == governance_sha &&
+              admission_contract["readOnly"] == true &&
+              admission["schemaVersion"] == 3 && admission["status"] == "passed" &&
+              admission["dataSource"] == "github-api-live" &&
+              admission["liveRemoteTagReadback"] == true &&
+              admission["liveSourceCIReadback"] == true &&
+              admission["tag"] == ARGV.fetch(8) &&
+              admission["tagObjectSHA"] == contract["tagObjectSHA"] &&
+              admission["tagCommitSHA"] == contract["tagCommitSHA"] &&
+              admission["checkoutCommitSHA"] == ARGV.fetch(5) &&
+              admission["mainRef"] == ARGV.fetch(5) &&
+              admission["signatureVerified"] == true &&
+              admission["administratorGovernanceEvidence"] == governance_evidence &&
+              admission_validation["status"] == "passed" &&
+              admission_validation["currentFreshnessVerified"] == true &&
+              admission_validation["currentEvidenceAgeSeconds"].is_a?(Integer) &&
+              admission_validation["currentEvidenceAgeSeconds"].between?(0, 900) &&
+              admission_validation["evidenceSHA256"] == governance_sha &&
+              admission["readOnly"] == true
+            contract_valid = contract["schemaVersion"] == 3 &&
+              contract["schemaID"] == "https://vifty.local/contracts/release-publication-v3.json" &&
               contract["workflowSourceSHA"] == ARGV.fetch(5) &&
               contract["releaseVersion"] == version &&
               contract["releaseTag"] == ARGV.fetch(8) &&
@@ -821,7 +1057,10 @@ jobs:
               contract["tagObjectSHA"].to_s.match?(oid) &&
               contract["tagCommitSHA"].to_s.match?(oid) &&
               contract["tagSignatureVerified"] == true &&
-              contract["protectedTagEnforcementVerified"] == true &&
+              contract["administratorGovernanceVerified"] == true &&
+              governance_valid &&
+              admission_valid &&
+              contract["publicTagRuleCoverageVerified"] == true &&
               ruleset_valid &&
               environment_valid &&
               contract["artifactSHA256"] == sha &&
@@ -867,7 +1106,7 @@ jobs:
               data["notarizationChecksSkipped"] == false &&
               checks_valid
             abort("release verifier summary does not satisfy the full v2 publication contract") unless valid
-          ' "${SUMMARY_PATH}" "${VERSION}" "${ZIP_PATH}" "${EXPECTED_SHA}" "${PUBLICATION_CONTRACT_PATH}" "${GITHUB_SHA}" "${CHECKSUM_PATH}" "${RELEASE_CHECKLIST_PATH}" "${RELEASE_TAG}" "${GITHUB_REPOSITORY}" "${ENVIRONMENT_EVIDENCE_PATH}"
+          ' "${SUMMARY_PATH}" "${VERSION}" "${ZIP_PATH}" "${EXPECTED_SHA}" "${PUBLICATION_CONTRACT_PATH}" "${GITHUB_SHA}" "${CHECKSUM_PATH}" "${RELEASE_CHECKLIST_PATH}" "${RELEASE_TAG}" "${GITHUB_REPOSITORY}" "${ENVIRONMENT_EVIDENCE_PATH}" "${GOVERNANCE_EVIDENCE_PATH}" "${ADMISSION_PROVENANCE_PATH}"
           ruby -rjson -e '
             text = File.read(ARGV.fetch(0))
             version = ARGV.fetch(1)
@@ -895,13 +1134,21 @@ jobs:
             puts "TAG_OBJECT_SHA=#{contract.fetch("tagObjectSHA")}"
             puts "TAG_COMMIT_SHA=#{contract.fetch("tagCommitSHA")}"
             puts "PROTECTED_TAG_RULESET_ID=#{contract.fetch("protectedTagRulesetEvidence").fetch("rulesetID")}"
+            puts "PROTECTED_TAG_RULESET_UPDATED_AT=#{contract.fetch("protectedTagRulesetEvidence").fetch("rulesetUpdatedAt")}"
           ' "${PUBLICATION_CONTRACT_PATH}" >> "${GITHUB_ENV}"
+          unset RELEASE_GH_TOKEN
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          RELEASE_GH_TOKEN="${GH_TOKEN:?}"
+          unset GH_TOKEN GITHUB_TOKEN
+
+          release_gh() {
+            GH_TOKEN="${RELEASE_GH_TOKEN}" gh "$@"
+          }
 
           verify_remote_tag_identity() {
             local expected_tag_object="$1"
@@ -909,7 +1156,7 @@ jobs:
             local ref_facts ref_type ref_sha tag_facts current_type current_sha
             local depth=0
 
-            ref_facts="$(gh api \
+            ref_facts="$(release_gh api --hostname github.com \
               "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" \
               --jq '.object.type + "\t" + .object.sha')"
             IFS=$'\t' read -r ref_type ref_sha <<< "${ref_facts}"
@@ -926,7 +1173,7 @@ jobs:
                 echo "Remote ${RELEASE_TAG} tag chain exceeds the reviewed peel depth." >&2
                 return 1
               fi
-              tag_facts="$(gh api \
+              tag_facts="$(release_gh api --hostname github.com \
                 "repos/${GITHUB_REPOSITORY}/git/tags/${current_sha}" \
                 --jq '.object.type + "\t" + .object.sha')"
               IFS=$'\t' read -r current_type current_sha <<< "${tag_facts}"
@@ -939,50 +1186,64 @@ jobs:
 
           verify_immutable_tag_ruleset() {
             local expected_ruleset_id="${1:-}"
+            local expected_ruleset_updated_at="${2:-}"
             local rulesets_path="${RUNNER_TEMP}/vifty-release-rulesets.json"
             local details_path ruleset_ids ruleset_id
             local -a matching_ruleset_ids=()
 
-            gh api --paginate --slurp \
-              "repos/${GITHUB_REPOSITORY}/rulesets?includes_parents=true&per_page=100" \
-              > "${rulesets_path}"
+            builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+              /usr/bin/curl --disable --fail --silent --show-error \
+                --header @- \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                -H 'Cache-Control: no-cache' \
+                -H 'Pragma: no-cache' \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets?includes_parents=true&per_page=100" \
+                > "${rulesets_path}"
             ruleset_ids="$(ruby -rjson -e '
-              pages = JSON.parse(File.read(ARGV.fetch(0)))
-              abort("ruleset listing must be paginated arrays") unless pages.is_a?(Array) && pages.all? { |page| page.is_a?(Array) }
-              ids = pages.flatten(1).filter_map do |ruleset|
+              rulesets = JSON.parse(File.read(ARGV.fetch(0)))
+              abort("public ruleset listing must be an array smaller than the requested page") unless rulesets.is_a?(Array) && rulesets.length < 100
+              ids = rulesets.map do |ruleset|
                 next unless ruleset["target"] == "tag" && ruleset["enforcement"] == "active"
                 id = ruleset["id"]
                 abort("active tag ruleset is missing an integer id") unless id.is_a?(Integer) && id.positive?
                 id
-              end
+              end.compact
               puts ids.uniq.sort
             ' "${rulesets_path}")"
 
             while IFS= read -r ruleset_id; do
               [[ -n "${ruleset_id}" ]] || continue
               details_path="${RUNNER_TEMP}/vifty-release-ruleset-${ruleset_id}.json"
-              gh api "repos/${GITHUB_REPOSITORY}/rulesets/${ruleset_id}" > "${details_path}"
+              builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+                /usr/bin/curl --disable --fail --silent --show-error \
+                  --header @- \
+                  -H 'Accept: application/vnd.github+json' \
+                  -H 'X-GitHub-Api-Version: 2022-11-28' \
+                  -H 'Cache-Control: no-cache' \
+                  -H 'Pragma: no-cache' \
+                  "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets/${ruleset_id}" \
+                  > "${details_path}"
               if ruby -rjson -e '
                 ruleset = JSON.parse(File.read(ARGV.fetch(0)))
                 tag = ARGV.fetch(1)
+                expected_id = ARGV.fetch(2)
+                expected_updated_at = ARGV.fetch(3)
                 full_ref = "refs/tags/#{tag}"
-                flags = File::FNM_PATHNAME | File::FNM_EXTGLOB
-                matches = lambda do |pattern|
-                  pattern == "~ALL" ||
-                    File.fnmatch?(pattern, full_ref, flags)
-                end
                 ref_name = ruleset.dig("conditions", "ref_name")
                 includes = ref_name.is_a?(Hash) ? ref_name["include"] : nil
                 excludes = ref_name.is_a?(Hash) ? ref_name["exclude"] : nil
-                rule_types = Array(ruleset["rules"]).filter_map { |rule| rule["type"] }
+                rule_types = Array(ruleset["rules"]).map { |rule| rule["type"] }.compact
                 valid = ruleset["target"] == "tag" &&
                   ruleset["enforcement"] == "active" &&
-                  ruleset["bypass_actors"].is_a?(Array) && ruleset["bypass_actors"].empty? &&
-                  includes.is_a?(Array) && includes.any? { |pattern| matches.call(pattern) } &&
-                  excludes.is_a?(Array) && excludes.none? { |pattern| matches.call(pattern) } &&
+                  (expected_id.empty? || ruleset["id"] == Integer(expected_id, 10)) &&
+                  (expected_updated_at.empty? || ruleset["updated_at"] == expected_updated_at) &&
+                  ruleset["current_user_can_bypass"] == "never" &&
+                  includes == ["refs/tags/v*"] &&
+                  excludes == [] &&
                   rule_types.include?("update") && rule_types.include?("deletion")
                 exit(valid ? 0 : 1)
-              ' "${details_path}" "${RELEASE_TAG}"; then
+              ' "${details_path}" "${RELEASE_TAG}" "${expected_ruleset_id}" "${expected_ruleset_updated_at}"; then
                 matching_ruleset_ids+=("${ruleset_id}")
               fi
             done <<< "${ruleset_ids}"
@@ -994,12 +1255,12 @@ jobs:
                   return 0
                 fi
               done
-              echo "The verified immutable tag ruleset ${expected_ruleset_id} no longer protects ${RELEASE_TAG}." >&2
+              echo "The recorded public update/deletion tag ruleset ${expected_ruleset_id} no longer covers ${RELEASE_TAG}." >&2
               return 1
             fi
 
             if [[ "${#matching_ruleset_ids[@]}" -eq 0 ]]; then
-              echo "No active no-bypass tag ruleset prevents both updates and deletion for ${RELEASE_TAG}." >&2
+              echo "No publicly visible active tag ruleset contains both update and deletion rules for ${RELEASE_TAG}." >&2
               return 1
             fi
             printf '%s\n' "${matching_ruleset_ids[0]}"
@@ -1008,7 +1269,7 @@ jobs:
           query_release_by_tag() {
             local destination="$1"
             local pages_path="${destination}.pages"
-            gh api --paginate --slurp \
+            release_gh api --hostname github.com --paginate --slurp \
               "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
               > "${pages_path}" || return 1
             ruby -rjson -e '
@@ -1024,7 +1285,7 @@ jobs:
           query_release_by_id() {
             local release_id="$1"
             local destination="$2"
-            gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}" > "${destination}"
+            release_gh api --hostname github.com "repos/${GITHUB_REPOSITORY}/releases/${release_id}" > "${destination}"
           }
 
           capture_owned_draft_release_id() {
@@ -1066,28 +1327,133 @@ jobs:
             local release_id="$2"
             local expected_draft="$3"
             local expected_title="$4"
-            shift 4
+            local expected_body_path="$5"
+            local expected_assets_path="$6"
             ruby -rjson -e '
               release = JSON.parse(File.read(ARGV.fetch(0)))
               expected_id = Integer(ARGV.fetch(1), 10)
               expected_draft = ARGV.fetch(2) == "true"
               expected_title = ARGV.fetch(3)
               expected_tag = ARGV.fetch(4)
-              marker = ARGV.fetch(5)
-              expected_assets = ARGV.drop(6).sort
-              actual_assets = Array(release["assets"]).filter_map { |asset| asset["name"] }.sort
+              expected_body = File.binread(ARGV.fetch(5))
+              expected_assets = JSON.parse(File.read(ARGV.fetch(6)))
+              abort("expected asset identity file must be an array") unless expected_assets.is_a?(Array)
+              select_identity = lambda do |asset|
+                {
+                  "id" => asset["id"],
+                  "name" => asset["name"],
+                  "size" => asset["size"],
+                  "state" => asset["state"],
+                  "digest" => asset["digest"]
+                }
+              end
+              actual_assets = Array(release["assets"]).map { |asset| select_identity.call(asset) }
+              expected_assets = expected_assets.map { |asset| select_identity.call(asset) }
+              actual_assets.sort_by! { |asset| asset.fetch("id") }
+              expected_assets.sort_by! { |asset| asset.fetch("id") }
+              abort("release immutable-id readback mismatch") unless release["id"] == expected_id
+              abort("release tag readback mismatch") unless release["tag_name"] == expected_tag
+              abort("release draft-state readback mismatch") unless release["draft"] == expected_draft
+              abort("release prerelease-state readback mismatch") unless release["prerelease"] == false
+              abort("release title readback mismatch") unless release["name"] == expected_title
+              abort("release body readback mismatch") unless release["body"].is_a?(String) && release["body"].b == expected_body
+              abort("release asset immutable identity/digest readback mismatch") unless actual_assets == expected_assets
+            ' "${state_path}" "${release_id}" "${expected_draft}" "${expected_title}" \
+              "${RELEASE_TAG}" "${expected_body_path}" "${expected_assets_path}"
+          }
+
+          query_release_by_id_for_convergence() {
+            local release_id="$1"
+            local destination="$2"
+            local temporary_path="${destination}.tmp"
+            local http_status
+
+            rm -f "${temporary_path}"
+            if ! http_status="$(
+              builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+                /usr/bin/curl --disable --silent --show-error \
+                  --header @- \
+                  --header 'Accept: application/vnd.github+json' \
+                  --header 'X-GitHub-Api-Version: 2022-11-28' \
+                  --header 'Cache-Control: no-cache' \
+                  --header 'Pragma: no-cache' \
+                  --output "${temporary_path}" \
+                  --write-out '%{http_code}' \
+                  --url "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}"
+            )"; then
+              rm -f "${temporary_path}"
+              echo "Release ID ${release_id} convergence readback failed before an HTTP status was available." >&2
+              return 1
+            fi
+
+            case "${http_status}" in
+              200)
+                mv "${temporary_path}" "${destination}"
+                return 0
+                ;;
+              404|429|5??)
+                rm -f "${temporary_path}"
+                return 75
+                ;;
+              *)
+                rm -f "${temporary_path}"
+                echo "Release ID ${release_id} convergence readback returned non-retryable HTTP ${http_status}." >&2
+                return 1
+                ;;
+            esac
+          }
+
+          verify_release_convergence_identity() {
+            local state_path="$1"
+            local release_id="$2"
+            ruby -rjson -e '
+              release = JSON.parse(File.read(ARGV.fetch(0)))
+              marker = ARGV.fetch(3)
               body = release["body"]
               marker_valid = body.is_a?(String) &&
                 body.scan(Regexp.escape(marker)).length == 1 &&
                 body.lines.map(&:strip).include?(marker)
-              abort("release immutable-id readback mismatch") unless release["id"] == expected_id
-              abort("release tag readback mismatch") unless release["tag_name"] == expected_tag
-              abort("release draft-state readback mismatch") unless release["draft"] == expected_draft
-              abort("release title readback mismatch") unless release["name"] == expected_title
-              abort("release ownership marker readback mismatch") unless marker_valid
-              abort("release asset readback mismatch") unless actual_assets == expected_assets
-            ' "${state_path}" "${release_id}" "${expected_draft}" "${expected_title}" \
-              "${RELEASE_TAG}" "${RELEASE_MARKER}" "$@"
+              valid = release["id"] == Integer(ARGV.fetch(1), 10) &&
+                release["tag_name"] == ARGV.fetch(2) &&
+                marker_valid
+              exit(valid ? 0 : 1)
+            ' "${state_path}" "${release_id}" "${RELEASE_TAG}" "${RELEASE_MARKER}"
+          }
+
+          wait_for_release_state_by_id() {
+            local destination="$1"
+            local release_id="$2"
+            local expected_draft="$3"
+            local expected_title="$4"
+            local expected_body_path="$5"
+            local expected_assets_path="$6"
+            local deadline=$((SECONDS + 60))
+            local query_status
+
+            while true; do
+              if query_release_by_id_for_convergence "${release_id}" "${destination}"; then
+                if ! verify_release_convergence_identity "${destination}" "${release_id}"; then
+                  echo "Release ID ${release_id} convergence readback changed immutable ID, tag, or ownership marker." >&2
+                  return 1
+                fi
+                if verify_release_state "${destination}" "${release_id}" "${expected_draft}" \
+                  "${expected_title}" "${expected_body_path}" "${expected_assets_path}" 2>/dev/null; then
+                  return 0
+                fi
+                query_status=76
+              else
+                query_status=$?
+                if [[ "${query_status}" -ne 75 ]]; then
+                  return 1
+                fi
+              fi
+
+              if (( SECONDS >= deadline )); then
+                echo "Release ID ${release_id} did not converge to the exact expected state within 60 seconds." >&2
+                return 1
+              fi
+              /bin/sleep 2
+            done
           }
 
           verify_release_owned_for_containment() {
@@ -1129,58 +1495,103 @@ jobs:
               "${DRAFT_TITLE}" "${FINAL_TITLE}"
           }
 
+          wait_for_release_contained_by_id() {
+            local destination="$1"
+            local release_id="$2"
+            local containment_deadline=$((SECONDS + 60))
+            local query_status
+
+            while true; do
+              if query_release_by_id_for_convergence "${release_id}" "${destination}"; then
+                if ! verify_release_owned_for_containment "${destination}" "${release_id}"; then
+                  echo "Containment readback for release ID ${release_id} changed immutable ID, tag, title, or ownership marker." >&2
+                  return 1
+                fi
+                if verify_release_contained "${destination}" "${release_id}" 2>/dev/null; then
+                  return 0
+                fi
+                query_status=76
+              else
+                query_status=$?
+                if [[ "${query_status}" -ne 75 ]]; then
+                  return 1
+                fi
+              fi
+
+              if (( SECONDS >= containment_deadline )); then
+                echo "Release ID ${release_id} did not converge to verified draft containment within 60 seconds." >&2
+                return 1
+              fi
+              /bin/sleep 2
+            done
+          }
+
           upload_release_asset_by_id() {
             local asset_path="$1"
             local asset_label="$2"
-            shift 2
-            local -a expected_assets=("$@")
-            local asset_name query upload_status query_status cleanup_status sequence
+            local asset_name query upload_status query_status sequence
             local upload_response upload_state
 
             asset_name="$(basename "${asset_path}")"
-            sequence="${#expected_assets[@]}"
+            sequence="$(ruby -rjson -e 'data = JSON.parse(File.read(ARGV.fetch(0))); abort unless data.is_a?(Array); print data.length' "${EXPECTED_ASSETS_PATH}")"
             upload_response="${RUNNER_TEMP}/vifty-release-upload-${sequence}-response.json"
             upload_state="${RUNNER_TEMP}/vifty-release-upload-${sequence}-state.json"
             query="$(ruby -ruri -e '
               print URI.encode_www_form("name" => ARGV.fetch(0), "label" => ARGV.fetch(1))
             ' "${asset_name}" "${asset_label}")"
 
-            UPLOAD_AUTH_CONFIG="${RUNNER_TEMP}/vifty-release-upload-auth.config"
-            if ! (
-              umask 077
-              printf 'header = "Authorization: Bearer %s"\n' "${GH_TOKEN}" > "${UPLOAD_AUTH_CONFIG}"
-            ); then
-              return 1
-            fi
-            if /usr/bin/curl --fail-with-body --silent --show-error --location \
-              --config "${UPLOAD_AUTH_CONFIG}" \
-              --header "Accept: application/vnd.github+json" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              --header "Content-Type: application/octet-stream" \
-              --request POST \
-              --data-binary "@${asset_path}" \
-              --url "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?${query}" \
-              > "${upload_response}"; then
+            if builtin printf 'Authorization: Bearer %s\n' "${RELEASE_GH_TOKEN}" |
+              /usr/bin/curl --disable --fail-with-body --silent --show-error \
+                --header @- \
+                --header "Accept: application/vnd.github+json" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                --header "Content-Type: application/octet-stream" \
+                --request POST \
+                --data-binary "@${asset_path}" \
+                --url "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?${query}" \
+                > "${upload_response}"; then
               upload_status=0
             else
               upload_status=$?
             fi
-            if rm -f "${UPLOAD_AUTH_CONFIG}"; then
-              cleanup_status=0
-            else
-              cleanup_status=$?
-            fi
-            UPLOAD_AUTH_CONFIG=""
 
-            if query_release_by_id "${RELEASE_ID}" "${upload_state}"; then
+            if [[ "${upload_status}" -eq 0 ]]; then
+              if ! ruby -rjson -rdigest -e '
+                response_path, asset_path, expected_assets_path = ARGV
+                response = JSON.parse(File.read(response_path))
+                expected = JSON.parse(File.read(expected_assets_path))
+                abort("expected asset identity file must be an array") unless expected.is_a?(Array)
+                name = File.basename(asset_path)
+                size = File.size(asset_path)
+                digest = "sha256:#{Digest::SHA256.file(asset_path).hexdigest}"
+                id = response["id"]
+                valid = id.is_a?(Integer) && id.positive? &&
+                  response["name"] == name && response["size"] == size &&
+                  response["state"] == "uploaded" && response["digest"] == digest
+                abort("upload response does not bind immutable asset ID/name/size/state/digest") unless valid
+                abort("upload response reused an asset ID or name") if expected.any? { |item| item["id"] == id || item["name"] == name }
+                expected << {
+                  "id" => id,
+                  "name" => name,
+                  "size" => size,
+                  "state" => "uploaded",
+                  "digest" => digest
+                }
+                File.write(expected_assets_path, JSON.pretty_generate(expected) + "\n")
+              ' "${upload_response}" "${asset_path}" "${EXPECTED_ASSETS_PATH}"; then
+                upload_status=1
+              fi
+            fi
+
+            if wait_for_release_state_by_id "${upload_state}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
+              "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
               query_status=0
             else
               query_status=$?
             fi
             if [[ "${upload_status}" -ne 0 ]] || [[ "${query_status}" -ne 0 ]] || \
-               [[ "${cleanup_status}" -ne 0 ]] || \
                ! verify_release_state "${upload_state}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
-                 "${expected_assets[@]}"; then
+                 "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
               echo "Asset upload for ${asset_name} was ambiguous or its immutable-ID post-state mismatched." >&2
               return 1
             fi
@@ -1213,7 +1624,7 @@ jobs:
               return 1
             fi
 
-            if gh api --method PATCH \
+            if release_gh api --hostname github.com --method PATCH \
               "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
               -F draft=true > "${containment_response}"; then
               mutation_status=0
@@ -1221,7 +1632,7 @@ jobs:
               mutation_status=$?
             fi
 
-            if query_release_by_id "${RELEASE_ID}" "${containment_state}"; then
+            if wait_for_release_contained_by_id "${containment_state}" "${RELEASE_ID}"; then
               query_status=0
             else
               query_status=$?
@@ -1240,30 +1651,19 @@ jobs:
 
           containment_guard() {
             local original_status=$?
-            local auth_cleanup_status
             trap - EXIT
             trap '' INT TERM
-            if rm -f "${UPLOAD_AUTH_CONFIG:-}"; then
-              auth_cleanup_status=0
-            else
-              auth_cleanup_status=$?
-            fi
-            UPLOAD_AUTH_CONFIG=""
             if [[ "${CONTAINMENT_REQUIRED}" == "1" ]]; then
               if ! contain_release_by_id; then
                 echo "HARD FAILURE: publication failed and release containment was not verified." >&2
                 exit 97
               fi
             fi
-            if [[ "${auth_cleanup_status}" -ne 0 ]]; then
-              echo "HARD FAILURE: temporary GitHub upload authentication material could not be removed." >&2
-              exit 98
-            fi
             exit "${original_status}"
           }
 
           verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_SHA}"
-          RULESET_ID="$(verify_immutable_tag_ruleset "${PROTECTED_TAG_RULESET_ID}")"
+          RULESET_ID="$(verify_immutable_tag_ruleset "${PROTECTED_TAG_RULESET_ID}" "${PROTECTED_TAG_RULESET_UPDATED_AT}")"
 
           PRECREATE_STATE="${RUNNER_TEMP}/vifty-release-precreate-state.json"
           if query_release_by_tag "${PRECREATE_STATE}"; then
@@ -1284,6 +1684,9 @@ jobs:
           FINAL_TITLE="Vifty ${VERSION}"
           CREATE_PAYLOAD="${RUNNER_TEMP}/vifty-release-create.json"
           CREATE_RESPONSE="${RUNNER_TEMP}/vifty-release-create-response.json"
+          EXPECTED_BODY_PATH="${RUNNER_TEMP}/vifty-release-expected-body.txt"
+          EXPECTED_ASSETS_PATH="${RUNNER_TEMP}/vifty-release-expected-assets.json"
+          printf '[]\n' > "${EXPECTED_ASSETS_PATH}"
           ruby -rjson -e '
             checklist_path, output_path, tag, title, marker = ARGV
             body = File.read(checklist_path).rstrip + "\n\n" + marker + "\n"
@@ -1299,13 +1702,12 @@ jobs:
           ' "${RELEASE_CHECKLIST_PATH}" "${CREATE_PAYLOAD}" "${RELEASE_TAG}" "${DRAFT_TITLE}" "${RELEASE_MARKER}"
 
           RELEASE_ID=""
-          UPLOAD_AUTH_CONFIG=""
           CONTAINMENT_REQUIRED=1
           trap containment_guard EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
 
-          if gh api --method POST \
+          if release_gh api --hostname github.com --method POST \
             "repos/${GITHUB_REPOSITORY}/releases" \
             --input "${CREATE_PAYLOAD}" > "${CREATE_RESPONSE}"; then
             CREATE_STATUS=0
@@ -1316,7 +1718,20 @@ jobs:
           CREATE_RESPONSE_STATUS=1
           if [[ -s "${CREATE_RESPONSE}" ]]; then
             if RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"; then
-              CREATE_RESPONSE_STATUS=0
+              if ruby -rjson -e '
+                release = JSON.parse(File.read(ARGV.fetch(0)))
+                payload = JSON.parse(File.read(ARGV.fetch(1)))
+                body = release["body"]
+                abort("draft creation response is missing its exact body") unless body.is_a?(String)
+                submitted_body = payload["body"]
+                abort("draft creation payload is missing its exact body") unless submitted_body.is_a?(String)
+                abort("draft creation response does not preserve the submitted body prefix") unless
+                  body.b.start_with?(submitted_body.b)
+                abort("draft creation response unexpectedly marked prerelease") unless release["prerelease"] == false
+                File.binwrite(ARGV.fetch(2), body.b)
+              ' "${CREATE_RESPONSE}" "${CREATE_PAYLOAD}" "${EXPECTED_BODY_PATH}"; then
+                CREATE_RESPONSE_STATUS=0
+              fi
             else
               RELEASE_ID=""
             fi
@@ -1324,71 +1739,69 @@ jobs:
 
           CREATED_STATE="${RUNNER_TEMP}/vifty-release-created-state.json"
           if [[ -n "${RELEASE_ID}" ]]; then
-            if query_release_by_id "${RELEASE_ID}" "${CREATED_STATE}"; then
+            if wait_for_release_state_by_id "${CREATED_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
+              "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
               CREATE_QUERY_STATUS=0
             else
               CREATE_QUERY_STATUS=$?
             fi
           else
-            if discover_owned_draft_by_tag "${CREATED_STATE}"; then
-              CREATE_QUERY_STATUS=0
-              RELEASE_ID="$(capture_owned_draft_release_id "${CREATED_STATE}")"
-            else
-              CREATE_QUERY_STATUS=$?
-            fi
+            CREATE_QUERY_STATUS=1
           fi
           if [[ "${CREATE_STATUS}" -ne 0 ]] || \
              [[ "${CREATE_RESPONSE_STATUS}" -ne 0 ]] || \
              [[ "${CREATE_QUERY_STATUS}" -ne 0 ]] || \
              [[ -z "${RELEASE_ID}" ]] || \
-             ! verify_release_state "${CREATED_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}"; then
+             ! verify_release_state "${CREATED_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
+               "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
             echo "REST draft creation was ambiguous or its direct immutable-ID/marker post-state mismatched; enforcing owned-only containment." >&2
             exit 1
           fi
 
-          UPLOADED_ASSETS=()
-          EXPECTED_ASSETS=("${UPLOADED_ASSETS[@]}" "$(basename "${ZIP_PATH}")")
-          if ! upload_release_asset_by_id "${ZIP_PATH}" "Vifty ${VERSION} notarized app" "${EXPECTED_ASSETS[@]}"; then
+          if ! upload_release_asset_by_id "${ZIP_PATH}" "Vifty ${VERSION} notarized app"; then
             exit 1
           fi
-          UPLOADED_ASSETS=("${EXPECTED_ASSETS[@]}")
 
-          EXPECTED_ASSETS=("${UPLOADED_ASSETS[@]}" "$(basename "${CHECKSUM_PATH}")")
-          if ! upload_release_asset_by_id "${CHECKSUM_PATH}" "Vifty ${VERSION} SHA-256 checksum" "${EXPECTED_ASSETS[@]}"; then
+          if ! upload_release_asset_by_id "${CHECKSUM_PATH}" "Vifty ${VERSION} SHA-256 checksum"; then
             exit 1
           fi
-          UPLOADED_ASSETS=("${EXPECTED_ASSETS[@]}")
 
-          EXPECTED_ASSETS=("${UPLOADED_ASSETS[@]}" "$(basename "${SUMMARY_PATH}")")
-          if ! upload_release_asset_by_id "${SUMMARY_PATH}" "Vifty ${VERSION} release artifact verification summary" "${EXPECTED_ASSETS[@]}"; then
+          if ! upload_release_asset_by_id "${SUMMARY_PATH}" "Vifty ${VERSION} release artifact verification summary"; then
             exit 1
           fi
-          UPLOADED_ASSETS=("${EXPECTED_ASSETS[@]}")
 
-          EXPECTED_ASSETS=("${UPLOADED_ASSETS[@]}" "$(basename "${RELEASE_CHECKLIST_PATH}")")
-          if ! upload_release_asset_by_id "${RELEASE_CHECKLIST_PATH}" "Vifty ${VERSION} release checklist" "${EXPECTED_ASSETS[@]}"; then
+          if ! upload_release_asset_by_id "${RELEASE_CHECKLIST_PATH}" "Vifty ${VERSION} release checklist"; then
             exit 1
           fi
-          UPLOADED_ASSETS=("${EXPECTED_ASSETS[@]}")
 
           if ! verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_SHA}" || \
-             ! verify_immutable_tag_ruleset "${RULESET_ID}" > /dev/null; then
+             ! verify_immutable_tag_ruleset "${RULESET_ID}" "${PROTECTED_TAG_RULESET_UPDATED_AT}" > /dev/null; then
             echo "Tag identity or immutable ruleset changed before promotion; enforcing containment." >&2
             exit 1
           fi
 
+          PREPROMOTION_STATE="${RUNNER_TEMP}/vifty-release-prepromotion-state.json"
+          if ! query_release_by_id "${RELEASE_ID}" "${PREPROMOTION_STATE}" || \
+             ! verify_release_state "${PREPROMOTION_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
+               "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
+            echo "Draft body or immutable asset identity changed before promotion; enforcing containment." >&2
+            exit 1
+          fi
+
           PROMOTION_RESPONSE="${RUNNER_TEMP}/vifty-release-promotion-response.json"
-          if gh api --method PATCH \
+          if release_gh api --hostname github.com --method PATCH \
             "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -f name="${FINAL_TITLE}" \
-            -F draft=false > "${PROMOTION_RESPONSE}"; then
+            -F draft=false \
+            -F prerelease=false > "${PROMOTION_RESPONSE}"; then
             PROMOTION_STATUS=0
           else
             PROMOTION_STATUS=$?
           fi
 
           PUBLISHED_STATE="${RUNNER_TEMP}/vifty-release-published-state.json"
-          if query_release_by_id "${RELEASE_ID}" "${PUBLISHED_STATE}"; then
+          if wait_for_release_state_by_id "${PUBLISHED_STATE}" "${RELEASE_ID}" false "${FINAL_TITLE}" \
+            "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
             PUBLISHED_QUERY_STATUS=0
           else
             PUBLISHED_QUERY_STATUS=$?
@@ -1396,13 +1809,14 @@ jobs:
           if [[ "${PROMOTION_STATUS}" -ne 0 ]] || \
              [[ "${PUBLISHED_QUERY_STATUS}" -ne 0 ]] || \
              ! verify_release_state "${PUBLISHED_STATE}" "${RELEASE_ID}" false "${FINAL_TITLE}" \
-               "${UPLOADED_ASSETS[@]}" || \
+               "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}" || \
              ! verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_SHA}" || \
-             ! verify_immutable_tag_ruleset "${RULESET_ID}" > /dev/null; then
+             ! verify_immutable_tag_ruleset "${RULESET_ID}" "${PROTECTED_TAG_RULESET_UPDATED_AT}" > /dev/null; then
             echo "Promotion was ambiguous or its immutable-ID/tag/ruleset post-state mismatched; enforcing containment." >&2
             exit 1
           fi
 
           CONTAINMENT_REQUIRED=0
           trap - EXIT INT TERM
+          unset RELEASE_GH_TOKEN
           echo "Published verified GitHub release ID ${RELEASE_ID} for ${RELEASE_TAG}."

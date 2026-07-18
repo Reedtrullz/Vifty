@@ -546,38 +546,136 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let result = try harness.runReleaseSecretChecker(["--secret-list-file", secretList.path])
 
         XCTAssertEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stdout.contains("Release environment secrets OK for release"))
+        XCTAssertTrue(result.stdout.contains("Release repository secrets OK"))
         XCTAssertTrue(result.stdout.contains("6 required names"))
+        XCTAssertTrue(result.stdout.contains("Shadow check OK for release"))
     }
 
-    func testReleaseSecretPreflightUsesReleaseEnvironmentAndFailsClosedWhenItIsAbsent() throws {
+    func testReleaseSecretFixtureRequiresExplicitEnvironmentList() throws {
         let harness = try ReleaseMetadataHarness()
-        let fakeBin = harness.rootURL.appendingPathComponent("fake-bin", isDirectory: true)
-        try FileManager.default.createDirectory(at: fakeBin, withIntermediateDirectories: true)
+        let secretList = try harness.writeRequiredSecretList()
+
+        let result = try harness.runReleaseSecretChecker(
+            ["--secret-list-file", secretList.path],
+            addExplicitEmptyEnvironmentFixture: false
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("requires --environment-secret-list-file"))
+    }
+
+    func testReleaseSecretEnvironmentFixtureRequiresRepositoryList() throws {
+        let harness = try ReleaseMetadataHarness()
+        let environmentList = harness.rootURL.appendingPathComponent("release-environment-secrets.tsv")
+        try "".write(to: environmentList, atomically: true, encoding: .utf8)
+
+        let result = try harness.runReleaseSecretChecker(
+            ["--environment-secret-list-file", environmentList.path],
+            addExplicitEmptyEnvironmentFixture: false
+        )
+
+        XCTAssertEqual(result.exitCode, 64)
+        XCTAssertTrue(result.stderr.contains("--environment-secret-list-file requires --secret-list-file"))
+        XCTAssertTrue(result.stderr.contains("fixture arguments must be supplied together"))
+    }
+
+    func testReleaseSecretPreflightUsesRepositoryScopeAndFailsClosedWhenItIsUnreadable() throws {
+        let harness = try ReleaseMetadataHarness()
         let argumentsFile = harness.rootURL.appendingPathComponent("gh-arguments.txt")
-        let fakeGH = fakeBin.appendingPathComponent("gh")
-        try """
-        #!/bin/sh
-        printf '%s\n' "$@" > "$VIFTY_GH_ARGUMENTS_FILE"
-        exit 1
-        """.write(to: fakeGH, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeGH.path)
 
         let result = try harness.runReleaseSecretChecker(
             ["--repo", "Reedtrullz/Vifty"],
             environment: [
-                "PATH": "\(fakeBin.path):/usr/bin:/bin",
                 "VIFTY_GH_ARGUMENTS_FILE": argumentsFile.path
-            ]
+            ],
+            fakeGitHubCLI: """
+            #!/bin/bash
+            printf '%s\\n' "$@" > "$VIFTY_GH_ARGUMENTS_FILE"
+            exit 1
+            """
         )
 
         XCTAssertEqual(result.exitCode, 69)
         XCTAssertEqual(
             try String(contentsOf: argumentsFile, encoding: .utf8),
-            "secret\nlist\n--env\nrelease\n--repo\nReedtrullz/Vifty\n"
+            "secret\nlist\n--repo\ngithub.com/Reedtrullz/Vifty\n--json\nname\n--jq\n.[].name\n"
         )
-        XCTAssertTrue(result.stderr.contains("could not list GitHub Actions secrets for environment release"))
-        XCTAssertTrue(result.stderr.contains("repository-scoped secrets do not satisfy this release gate"))
+        XCTAssertTrue(result.stderr.contains("could not list GitHub Actions repository secrets for Reedtrullz/Vifty"))
+        XCTAssertTrue(result.stderr.contains("repository must be readable"))
+    }
+
+    func testReleaseSecretPreflightFailsClosedWhenEnvironmentScopeIsUnreadableAfterRepositorySuccess() throws {
+        let harness = try ReleaseMetadataHarness()
+        let argumentsFile = harness.rootURL.appendingPathComponent("gh-arguments.txt")
+
+        let result = try harness.runReleaseSecretChecker(
+            ["--repo", "Reedtrullz/Vifty"],
+            environment: [
+                "VIFTY_GH_ARGUMENTS_FILE": argumentsFile.path
+            ],
+            fakeGitHubCLI: """
+            #!/bin/bash
+            {
+              printf 'call'
+              for argument in "$@"; do
+                printf '\\t%s' "$argument"
+              done
+              printf '\\n'
+            } >> "$VIFTY_GH_ARGUMENTS_FILE"
+
+            if [ "$1" = "secret" ] && [ "$2" = "list" ] && [ "$3" = "--repo" ]; then
+              printf '%s\\n' \\
+                APPLE_TEAM_ID \\
+                APPLE_ID \\
+                APPLE_APP_SPECIFIC_PASSWORD \\
+                DEVELOPER_ID_APPLICATION_IDENTITY \\
+                DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 \\
+                DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD
+              exit 0
+            fi
+
+            if [ "$1" = "secret" ] && [ "$2" = "list" ] && [ "$3" = "--env" ]; then
+              exit 1
+            fi
+
+            exit 2
+            """
+        )
+
+        XCTAssertEqual(result.exitCode, 69)
+        let calls = try String(contentsOf: argumentsFile, encoding: .utf8)
+        XCTAssertTrue(calls.contains("call\tsecret\tlist\t--repo\tgithub.com/Reedtrullz/Vifty\t--json\tname\t--jq\t.[].name\n"))
+        XCTAssertTrue(calls.contains("call\tsecret\tlist\t--env\trelease\t--repo\tgithub.com/Reedtrullz/Vifty\t--json\tname\t--jq\t.[].name\n"))
+        XCTAssertTrue(result.stderr.contains("could not list GitHub Actions environment secrets for Reedtrullz/Vifty/release"))
+        XCTAssertTrue(result.stderr.contains("environment must exist and be readable"))
+        XCTAssertFalse(result.stdout.contains("Shadow check OK"))
+    }
+
+    func testReleaseSecretPreflightRejectsEnvironmentShadowing() throws {
+        let harness = try ReleaseMetadataHarness()
+        let secretList = try harness.writeSecretList(contents: """
+        APPLE_TEAM_ID\t2026-06-11T10:00:00Z
+        APPLE_ID\t2026-06-11T10:00:00Z
+        APPLE_APP_SPECIFIC_PASSWORD\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_IDENTITY\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64\t2026-06-11T10:00:00Z
+        DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD\t2026-06-11T10:00:00Z
+        """)
+        let environmentList = harness.rootURL.appendingPathComponent("release-environment-secrets.tsv")
+        try "APPLE_ID\t2026-07-17T10:00:00Z\n".write(
+            to: environmentList,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try harness.runReleaseSecretChecker([
+            "--secret-list-file", secretList.path,
+            "--environment-secret-list-file", environmentList.path
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("Environment secret shadows repository release secret: APPLE_ID"))
+        XCTAssertTrue(result.stderr.contains("Remove same-name secrets from the GitHub release environment"))
     }
 
     func testReleaseSecretPreflightRejectsMissingSecretNames() throws {
@@ -608,8 +706,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
-            headBranch: "main",
-            event: "workflow_dispatch",
+            headBranch: "v1.0.0",
+            event: "push",
             displayTitle: "Release v1.0.0",
             attempt: 1
         )
@@ -652,20 +750,20 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("exact manifest run 2") == true)
     }
 
-    func testReleaseReadinessAcceptsMainDispatchWhenTagCommitIsItsAncestor() throws {
+    func testReleaseReadinessRejectsTagPushRunFromLaterMainCommit() throws {
         let harness = try ReleaseMetadataHarness(
             publishedTagTrust: "signed-verified",
             signedTagBoundary: "1.0.0"
         )
         let sourceSHA = try harness.initializeGitRepoWithTaggedCommit(tag: "v1.0.0")
         try harness.rewritePublishedSourceCommit(sourceSHA)
-        let dispatchSHA = try harness.appendGitCommit()
+        let laterSHA = try harness.appendGitCommit()
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseRunList = try harness.writeReleaseRunList(
-            sourceSHA: dispatchSHA,
+            sourceSHA: laterSHA,
             headBranch: "main",
-            event: "workflow_dispatch",
+            event: "push",
             displayTitle: "Release v1.0.0",
             attempt: 1
         )
@@ -683,18 +781,18 @@ final class ReleaseMetadataScriptTests: XCTestCase {
             "--json"
         ])
 
-        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        XCTAssertNotEqual(result.exitCode, 0, result.stderr)
         let summary = try decodeReadinessSummary(result.stdout)
-        XCTAssertEqual(summary["status"] as? String, "ready")
+        XCTAssertEqual(summary["status"] as? String, "blocked")
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertEqual(checkStatus(named: "release-workflow", in: checks), "blocked")
         XCTAssertTrue(
             checkMessage(named: "release-workflow", in: checks)?
-                .contains("https://github.com/Reedtrullz/Vifty/actions/runs/2") == true
+                .contains("does not equal exact signed tag commit \(sourceSHA)") == true
         )
-        XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("dispatch source \(dispatchSHA)") == true)
     }
 
-    func testReleaseReadinessRejectsTagPushRunForSignedManifestRelease() throws {
+    func testReleaseReadinessRejectsMainRefEvenWhenItStillMatchesSignedTagCommit() throws {
         let sourceSHA = String(repeating: "b", count: 40)
         let harness = try ReleaseMetadataHarness(
             publishedSourceCommit: sourceSHA,
@@ -703,7 +801,52 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         )
         let secretList = try harness.writeRequiredSecretList()
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
-        let releaseRunList = try harness.writeReleaseRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(
+            sourceSHA: sourceSHA,
+            headBranch: "main",
+            event: "push",
+            displayTitle: "Release v1.0.0",
+            attempt: 1
+        )
+        let releaseView = try harness.writeReleaseView(
+            body: "<!-- vifty-release-owner:2:1:\(String(repeating: "a", count: 64)) -->"
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-workflow"])
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertTrue(
+            checkMessage(named: "release-workflow", in: checks)?
+                .contains("headBranch \"main\" is not immutable tag v1.0.0") == true
+        )
+    }
+
+    func testReleaseReadinessRejectsWorkflowDispatchRunForSignedManifestRelease() throws {
+        let sourceSHA = String(repeating: "b", count: 40)
+        let harness = try ReleaseMetadataHarness(
+            publishedSourceCommit: sourceSHA,
+            publishedTagTrust: "signed-verified",
+            signedTagBoundary: "1.0.0"
+        )
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(
+            sourceSHA: sourceSHA,
+            event: "workflow_dispatch",
+            displayTitle: "Release v1.0.0",
+            attempt: 1
+        )
         let releaseView = try harness.writeReleaseView(
             body: "<!-- vifty-release-owner:2:1:\(String(repeating: "a", count: 64)) -->"
         )
@@ -723,8 +866,46 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertEqual(summary["blockers"] as? [String], ["release-workflow"])
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
         let message = try XCTUnwrap(checkMessage(named: "release-workflow", in: checks))
-        XCTAssertTrue(message.contains("event \"push\" is not workflow_dispatch"))
-        XCTAssertTrue(message.contains("headBranch \"v1.0.0\" is not main"))
+        XCTAssertTrue(message.contains("event \"workflow_dispatch\" is not push"))
+    }
+
+    func testReleaseReadinessRejectsRerunForSignedManifestRelease() throws {
+        let sourceSHA = String(repeating: "b", count: 40)
+        let harness = try ReleaseMetadataHarness(
+            publishedSourceCommit: sourceSHA,
+            publishedTagTrust: "signed-verified",
+            signedTagBoundary: "1.0.0"
+        )
+        let secretList = try harness.writeRequiredSecretList()
+        let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
+        let releaseRunList = try harness.writeReleaseRunList(
+            sourceSHA: sourceSHA,
+            event: "push",
+            displayTitle: "Release v1.0.0",
+            attempt: 2
+        )
+        let releaseView = try harness.writeReleaseView(
+            body: "<!-- vifty-release-owner:2:2:\(String(repeating: "a", count: 64)) -->"
+        )
+
+        let result = try harness.runReleaseReadiness([
+            "--version", "1.0.0",
+            "--source-sha", sourceSHA,
+            "--secret-list-file", secretList.path,
+            "--ci-run-list-file", ciRunList.path,
+            "--release-run-list-file", releaseRunList.path,
+            "--release-view-file", releaseView.path,
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 1)
+        let summary = try decodeReadinessSummary(result.stdout)
+        XCTAssertEqual(summary["blockers"] as? [String], ["release-workflow"])
+        let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
+        XCTAssertTrue(
+            checkMessage(named: "release-workflow", in: checks)?
+                .contains("attempt 2 is not first attempt 1") == true
+        )
     }
 
     func testReleaseReadinessRejectsWrongManifestRunIDs() throws {
@@ -739,8 +920,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
             databaseID: 98,
-            headBranch: "main",
-            event: "workflow_dispatch",
+            headBranch: "v1.0.0",
+            event: "push",
             displayTitle: "Release v1.0.0",
             attempt: 1
         )
@@ -766,7 +947,7 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("manifest ID 2, found 0") == true)
     }
 
-    func testReleaseReadinessRejectsDispatchTitleAndReleaseOwnerMarkerDrift() throws {
+    func testReleaseReadinessRejectsTagPushTitleAndReleaseOwnerMarkerDrift() throws {
         let sourceSHA = String(repeating: "b", count: 40)
         let harness = try ReleaseMetadataHarness(
             publishedSourceCommit: sourceSHA,
@@ -777,8 +958,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let ciRunList = try harness.writeCIRunList(sourceSHA: sourceSHA)
         let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
-            headBranch: "main",
-            event: "workflow_dispatch",
+            headBranch: "v1.0.0",
+            event: "push",
             displayTitle: "Release v9.9.9",
             attempt: 1
         )
@@ -800,7 +981,10 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         let summary = try decodeReadinessSummary(result.stdout)
         XCTAssertEqual(summary["blockers"] as? [String], ["release-workflow", "github-release"])
         let checks = try XCTUnwrap(summary["checks"] as? [[String: Any]])
-        XCTAssertTrue(checkMessage(named: "release-workflow", in: checks)?.contains("does not bind input v1.0.0") == true)
+        XCTAssertTrue(
+            checkMessage(named: "release-workflow", in: checks)?
+                .contains("displayTitle \"Release v9.9.9\" is not \"Release v1.0.0\"") == true
+        )
         XCTAssertTrue(checkMessage(named: "github-release", in: checks)?.contains("marker run 99 does not match manifest run 2") == true)
     }
 
@@ -818,8 +1002,8 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         )
         let releaseRunList = try harness.writeReleaseRunList(
             sourceSHA: sourceSHA,
-            headBranch: "main",
-            event: "workflow_dispatch",
+            headBranch: "v1.0.0",
+            event: "push",
             displayTitle: "Release v1.0.0",
             attempt: 1,
             path: ".github/workflows/not-release.yml"
@@ -1541,7 +1725,13 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Wrote"))
 
         let checklist = try String(contentsOf: output, encoding: .utf8)
-        XCTAssertTrue(checklist.contains("# Vifty 1.2.3 Release Checklist"))
+        XCTAssertEqual(checklist.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init), "# Vifty 1.2.3 Release Checklist")
+        let releaseWorkflow = try String(
+            contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                .appendingPathComponent(".github/workflows/release.yml"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(releaseWorkflow.contains("\"title\" => \"# Vifty #{version} Release Checklist\""))
         XCTAssertTrue(checklist.contains("Verified By The Release Workflow"))
         XCTAssertTrue(checklist.contains("Required Post-Publication Follow-Up"))
         XCTAssertTrue(checklist.contains("Vifty-v1.2.3.zip"))
@@ -2067,20 +2257,72 @@ private final class ReleaseMetadataHarness {
 
     func runReleaseSecretChecker(
         _ arguments: [String],
-        environment: [String: String] = [:]
+        environment: [String: String] = [:],
+        addExplicitEmptyEnvironmentFixture: Bool = true,
+        fakeGitHubCLI: String? = nil
     ) throws -> ReleaseMetadataProcessResult {
-        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        var scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("scripts/check-release-secrets.sh")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: scriptURL.path))
 
+        if let fakeGitHubCLI {
+            let fakeGitHubCLIURL = rootURL.appendingPathComponent("fixture-gh")
+            try fakeGitHubCLI.write(to: fakeGitHubCLIURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: fakeGitHubCLIURL.path
+            )
+
+            let fixtureScriptURL = rootURL.appendingPathComponent("check-release-secrets-fixture.sh")
+            var fixtureScript = try String(contentsOf: scriptURL, encoding: .utf8)
+            let resolver = """
+            GH_BIN=""
+            for gh_candidate in /opt/homebrew/bin/gh /usr/local/bin/gh /usr/bin/gh; do
+            """
+            let escapedFakeGitHubCLIPath = fakeGitHubCLIURL.path
+                .replacingOccurrences(of: "'", with: "'\"'\"'")
+            let fixtureResolver = """
+            GH_BIN=""
+            for gh_candidate in '\(escapedFakeGitHubCLIPath)'; do
+            """
+            XCTAssertTrue(fixtureScript.contains(resolver))
+           fixtureScript = fixtureScript.replacingOccurrences(of: resolver, with: fixtureResolver)
+            let productionGHPin = #"""
+  unverified_gh_bin="${GH_BIN}"
+  TOOLCHAIN_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/vifty-release-secrets-gh.XXXXXX")"
+  /bin/chmod 700 "${TOOLCHAIN_SCRATCH}"
+  GH_BIN="${TOOLCHAIN_SCRATCH}/pinned-gh"
+  /usr/bin/ruby "${GH_TOOLCHAIN_VERIFIER_PATH}" \
+    --policy "${GH_TOOLCHAIN_POLICY_PATH}" \
+    --source "${unverified_gh_bin}" \
+    --destination "${GH_BIN}" >/dev/null
+"""#
+            XCTAssertTrue(fixtureScript.contains(productionGHPin))
+            fixtureScript = fixtureScript.replacingOccurrences(
+                of: productionGHPin,
+                with: "  true # fixture gh is isolated by this test harness\n"
+            )
+            try fixtureScript.write(to: fixtureScriptURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: fixtureScriptURL.path
+            )
+            scriptURL = fixtureScriptURL
+        }
+
         let process = Process()
         process.executableURL = scriptURL
-        process.arguments = arguments
+        process.arguments = try argumentsWithExplicitEnvironmentSecretFixture(
+            arguments,
+            enabled: addExplicitEmptyEnvironmentFixture
+        )
+        var checkerEnvironment = environment
+        checkerEnvironment["VIFTY_RELEASE_METADATA_ROOT"] = rootURL.path
+        if fakeGitHubCLI != nil {
+            checkerEnvironment["GH_TOKEN"] = "fixture-token"
+        }
         process.environment = ProcessInfo.processInfo.environment.merging(
-            environment.merging(
-                ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
-                uniquingKeysWith: { old, _ in old }
-            ),
+            checkerEnvironment,
             uniquingKeysWith: { _, new in new }
         )
 
@@ -2106,7 +2348,7 @@ private final class ReleaseMetadataHarness {
 
         let process = Process()
         process.executableURL = scriptURL
-        process.arguments = arguments
+        process.arguments = try argumentsWithExplicitEnvironmentSecretFixture(arguments, enabled: true)
         process.environment = ProcessInfo.processInfo.environment.merging(
             ["VIFTY_RELEASE_METADATA_ROOT": rootURL.path],
             uniquingKeysWith: { _, new in new }
@@ -2125,6 +2367,22 @@ private final class ReleaseMetadataHarness {
             stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             exitCode: process.terminationStatus
         )
+    }
+
+    private func argumentsWithExplicitEnvironmentSecretFixture(
+        _ arguments: [String],
+        enabled: Bool
+    ) throws -> [String] {
+        guard enabled,
+              arguments.contains("--secret-list-file"),
+              !arguments.contains("--environment-secret-list-file") else {
+            return arguments
+        }
+        let environmentList = rootURL.appendingPathComponent("release-environment-secrets-empty.tsv")
+        if !FileManager.default.fileExists(atPath: environmentList.path) {
+            try "".write(to: environmentList, atomically: true, encoding: .utf8)
+        }
+        return arguments + ["--environment-secret-list-file", environmentList.path]
     }
 
     func runReleaseChecklistWriter(
@@ -2205,13 +2463,13 @@ private final class ReleaseMetadataHarness {
     }
 
     func appendGitCommit() throws -> String {
-        try "dispatch source\n".write(
+        try "later source\n".write(
             to: rootURL.appendingPathComponent("release-dispatch-source.txt"),
             atomically: true,
             encoding: .utf8
         )
         _ = try runGit(["add", "release-dispatch-source.txt"])
-        _ = try runGit(["commit", "-m", "dispatch source"])
+        _ = try runGit(["commit", "-m", "later source"])
         return try runGit(["rev-parse", "HEAD"]).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -2735,7 +2993,7 @@ private final class ReleaseMetadataHarness {
         \(node24RuntimeLines)jobs:
           signed-notarized-app:
             env:
-        \(swiftBuildPathEnvLine)      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        \(swiftBuildPathEnvLine)      RELEASE_TAG: ${{ github.ref_name }}
             steps:
         \(swiftBuildPathSetupStep)
               - name: Validate release version

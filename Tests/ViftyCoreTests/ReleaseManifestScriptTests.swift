@@ -497,7 +497,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
                   - name: Check out signed release tag without credentials
                     uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
                     with:
-                      ref: refs/tags/${{ inputs.tag }}
+                      ref: refs/tags/${{ github.ref_name }}
                       fetch-depth: 0
                       persist-credentials: false
             """
@@ -597,19 +597,79 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("secret context references must match"), result.stderr)
     }
 
-    func testWorkflowContractRejectsRepositoryScopedReleaseSecretPreflight() throws {
+    func testWorkflowContractRejectsMissingEnvironmentShadowCheck() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseSecretChecker {
             $0.replacingOccurrences(
-                of: "gh secret list --env \"${ENVIRONMENT_NAME}\" --repo \"${REPO}\"",
-                with: "gh secret list --repo \"${REPO}\""
+                of: "safe_gh secret list --env \"${ENVIRONMENT_NAME}\" --repo \"github.com/${REPO}\"",
+                with: "safe_gh secret list --repo \"github.com/${REPO}\""
             )
         }
 
         let result = try fixture.runChecker()
 
         XCTAssertNotEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stderr.contains("release-secret operator preflight must default to the release environment"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("release-secret operator preflight must require repository names and reject same-name environment shadows"), result.stderr)
+    }
+
+    func testWorkflowContractRejectsGovernanceCheckerWithoutExplicitPosttagState() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseGovernanceChecker {
+            $0.replacingOccurrences(
+                of: #"posttag_mode ? "administrator-posttag" : "administrator-pretag""#,
+                with: #""administrator-pretag""#
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "exact-ref pre-tag absence or exact-object post-tag presence"
+            ),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsMatchingRefPushHelperLookup() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutatePushDispatchHelper {
+            $0.replacingOccurrences(
+                of: #""repos/${REPOSITORY}/git/ref/${namespace}/${name}""#,
+                with: #""repos/${REPOSITORY}/git/matching-refs/${namespace}/${name}""#
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "exact absent-ref compare-and-swap creation"
+            ),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsPushHelperRetryAuthorization() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutatePushDispatchHelper {
+            $0.replacingOccurrences(
+                of: #""receiptAuthorizesRetry" => false"#,
+                with: #""receiptAuthorizesRetry" => true"#
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "never authorize retry or resume"
+            ),
+            result.stderr
+        )
     }
 
     func testWorkflowContractRejectsInvalidShellSyntaxOutsideProtectedJobs() throws {
@@ -716,7 +776,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
     func testWorkflowContractRejectsAdditionalPermissionScope() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
-            let marker = "  sign-notarize:\n    name: Sign and notarize inventoried candidate\n    needs: prepare-candidate\n    runs-on: macos-15\n    timeout-minutes: 25\n    environment: release\n    permissions:\n      actions: read\n      contents: read"
+            let marker = "  sign-notarize:\n    name: Sign and notarize inventoried candidate\n    needs: prepare-candidate\n    if: ${{ github.run_attempt == 1 }}\n    runs-on: macos-15\n    timeout-minutes: 25\n    environment: release\n    permissions:\n      actions: read\n      contents: read"
             let replacement = marker + "\n      id-token: write"
             return workflow.replacingOccurrences(of: marker, with: replacement)
         }
@@ -731,7 +791,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "bash \"${TRUSTED_ROOT}/scripts/check-release-environment.sh\"",
+                of: "\"${TRUSTED_ROOT}/scripts/check-release-environment.sh\"",
                 with: "true # release environment check removed"
             )
         }
@@ -740,7 +800,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
 
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(
-            result.stderr.contains("fail closed on trusted release-environment API readback") ||
+            result.stderr.contains("fail closed on public release-governance readback") ||
                 result.stderr.contains("reviewed normalized step mapping hash"),
             result.stderr
         )
@@ -782,26 +842,127 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("publish step") && result.stderr.contains("reviewed normalized step mapping hash"), result.stderr)
     }
 
-    func testWorkflowContractRejectsTagPushReleaseTrigger() throws {
+    func testWorkflowContractRequiresExactTagPushReleaseTrigger() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "\"on\":\n  workflow_dispatch:",
-                with: "\"on\":\n  push:\n    tags: [\"v*\"]\n  workflow_dispatch:"
+                of: "\"on\":\n  push:\n    tags:\n      - \"v*\"",
+                with: "\"on\":\n  push:\n    tags:\n      - \"release/*\"\n  workflow_dispatch:"
             )
         }
 
         let result = try fixture.runChecker()
 
         XCTAssertNotEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stderr.contains("main-only workflow_dispatch"), result.stderr)
+        XCTAssertTrue(
+            result.stderr.contains("release workflow must trigger only on pushed tags matching v*"),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRequiresPushedTagRunName() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                of: "run-name: Release ${{ github.ref_name }}",
+                with: "run-name: Release ${{ github.sha }}"
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                ".github/workflows/release.yml run-name must bind the exact pushed tag ref name"
+            ),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsMutableOrRerunTagPushContext() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow
+                .replacingOccurrences(
+                    of: #"test "${GITHUB_EVENT_NAME}" = "push""#,
+                    with: #"test "${GITHUB_EVENT_NAME}" = "workflow_dispatch""#
+                )
+                .replacingOccurrences(
+                    of: #"test "${GITHUB_RUN_ATTEMPT}" = "1""#,
+                    with: #"test "${GITHUB_RUN_ATTEMPT}" -ge "1""#
+                )
+                .replacingOccurrences(
+                    of: #"test "${GITHUB_REF_TYPE}" = "tag""#,
+                    with: #"test "${GITHUB_REF_TYPE}" = "branch""#
+                )
+                .replacingOccurrences(
+                    of: #"test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}""#,
+                    with: #"test "${GITHUB_REF_NAME}" = "main""#
+                )
+                .replacingOccurrences(
+                    of: #"test "${GITHUB_REF}" = "refs/tags/${RELEASE_TAG}""#,
+                    with: #"test "${GITHUB_REF}" = "refs/heads/main""#
+                )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "prepare-candidate must fail closed outside the first attempt of an exact immutable signed-tag push"
+            ),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsMissingFirstAttemptJobGates() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow
+                .replacingOccurrences(
+                    of: "    if: ${{ github.run_attempt == 1 }}\n    runs-on: macos-15",
+                    with: "    runs-on: macos-15"
+                )
+                .replacingOccurrences(
+                    of: "    if: ${{ github.run_attempt == 1 }}\n    runs-on: ubuntu-latest",
+                    with: "    runs-on: ubuntu-latest"
+                )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stderr.contains("sign-notarize must refuse workflow reruns"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("publish must refuse workflow reruns"), result.stderr)
+    }
+
+    func testWorkflowContractRejectsMutableCheckoutRef() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                    of: "ref: refs/tags/${{ github.ref_name }}",
+                    with: "ref: main"
+                )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "prepare-candidate checkout must bind the exact immutable pushed tag with full history and no persisted credentials"
+            ),
+            result.stderr
+        )
     }
 
     func testWorkflowContractRejectsCandidateOnlyProtectedProvenance() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "bash \"${TRUSTED_ROOT}/scripts/check-release-provenance.sh\"",
+                of: "\"${TRUSTED_ROOT}/scripts/check-release-provenance.sh\"",
                 with: "bash scripts/check-release-provenance.sh"
             )
         }
@@ -809,7 +970,27 @@ final class ReleaseManifestScriptTests: XCTestCase {
         let result = try fixture.runChecker()
 
         XCTAssertNotEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stderr.contains("rerun trusted github.sha provenance before secrets"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("rerun trusted github.sha provenance before secret-consuming steps"), result.stderr)
+    }
+
+    func testWorkflowContractRejectsOrdinaryBashForProtectedReleaseEntrypoint() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                of: "\"${TRUSTED_ROOT}/scripts/check-release-environment.sh\"",
+                with: "bash \"${TRUSTED_ROOT}/scripts/check-release-environment.sh\""
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "execute protected release entrypoints directly so their privileged-shell shebang cannot be bypassed"
+            ),
+            result.stderr
+        )
     }
 
     func testWorkflowContractRejectsPublicationContractWithoutExactTagObjectBinding() throws {
@@ -825,7 +1006,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
 
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(
-            result.stderr.contains("bind final verified annotated-tag object/commit identity"),
+            result.stderr.contains("bind final annotated-tag identity"),
             result.stderr
         )
     }
@@ -861,7 +1042,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
 
             XCTAssertNotEqual(result.exitCode, 0, "removing \(clause) must fail")
             XCTAssertTrue(
-                result.stderr.contains("bind verifier summary tag/source/kind/manifest to peeled dispatch contract"),
+                result.stderr.contains("publish must bind verifier summary tag/source/kind/manifest to peeled pushed-tag contract"),
                 result.stderr
             )
         }
@@ -871,11 +1052,8 @@ final class ReleaseManifestScriptTests: XCTestCase {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: """
-                          if ! verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_SHA}" || \\
-                             ! verify_immutable_tag_ruleset "${RULESET_ID}" > /dev/null; then
-                """,
-                with: "          if ! verify_immutable_tag_ruleset \"${RULESET_ID}\" > /dev/null; then"
+                of: #"verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_SHA}""#,
+                with: "true # removed remote tag identity readback"
             )
         }
 
@@ -889,12 +1067,12 @@ final class ReleaseManifestScriptTests: XCTestCase {
         )
     }
 
-    func testWorkflowContractRejectsMissingProtectedTagEnforcementPrerequisite() throws {
+    func testWorkflowContractRejectsMissingPublicTagRuleCoveragePrerequisite() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "\"protectedTagEnforcementVerified\" => true",
-                with: "\"protectedTagEnforcementVerified\" => false"
+                of: "\"publicTagRuleCoverageVerified\" => true",
+                with: "\"publicTagRuleCoverageVerified\" => false"
             )
         }
 
@@ -902,8 +1080,27 @@ final class ReleaseManifestScriptTests: XCTestCase {
 
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(
-            result.stderr.contains("semantic no-bypass update/deletion ruleset evidence") ||
+            result.stderr.contains("honest public update/deletion ruleset evidence") ||
                 result.stderr.contains("semantic ruleset evidence"),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsMissingSignedAdministratorGovernanceBinding() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                of: "\"administratorGovernanceVerified\" => true",
+                with: "\"administratorGovernanceVerified\" => false"
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains("signed administrator-pretag evidence") ||
+                result.stderr.contains("reviewed normalized step mapping hash"),
             result.stderr
         )
     }
@@ -921,7 +1118,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
 
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(
-            result.stderr.contains("active no-bypass tag ruleset"),
+            result.stderr.contains("public update/deletion tag-rule coverage"),
             result.stderr
         )
     }
@@ -1146,6 +1343,33 @@ private final class WorkflowContractFixture {
             at: repositoryRoot.appendingPathComponent("scripts/check-release-secrets.sh"),
             to: rootURL.appendingPathComponent("scripts/check-release-secrets.sh")
         )
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appendingPathComponent("scripts/check-release-environment.sh"),
+            to: rootURL.appendingPathComponent("scripts/check-release-environment.sh")
+        )
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appendingPathComponent("scripts/check-release-governance.sh"),
+            to: rootURL.appendingPathComponent("scripts/check-release-governance.sh")
+        )
+        for script in [
+            "check-release-prep-diff.sh",
+            "check-release-provenance.sh",
+            "create-signed-release-tag.sh",
+            "push-and-dispatch-signed-release-tag.sh",
+            "release-candidate-inventory.rb",
+            "write-release-checklist.sh",
+            "validate-release-governance-evidence.rb",
+            "verify-release-gh-toolchain.rb"
+        ] {
+            try FileManager.default.copyItem(
+                at: repositoryRoot.appendingPathComponent("scripts/\(script)"),
+                to: rootURL.appendingPathComponent("scripts/\(script)")
+            )
+        }
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appendingPathComponent(".github/release-gh-toolchain.json"),
+            to: rootURL.appendingPathComponent(".github/release-gh-toolchain.json")
+        )
     }
 
     deinit {
@@ -1173,6 +1397,24 @@ private final class WorkflowContractFixture {
         let original = try String(contentsOf: url, encoding: .utf8)
         let updated = mutation(original)
         XCTAssertNotEqual(updated, original, "release-secret fixture mutation did not match its marker")
+        try updated.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    func mutateReleaseGovernanceChecker(_ mutation: (String) -> String) throws {
+        let url = rootURL.appendingPathComponent("scripts/check-release-governance.sh")
+        let original = try String(contentsOf: url, encoding: .utf8)
+        let updated = mutation(original)
+        XCTAssertNotEqual(updated, original, "release-governance fixture mutation did not match its marker")
+        try updated.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    func mutatePushDispatchHelper(_ mutation: (String) -> String) throws {
+        let url = rootURL.appendingPathComponent(
+            "scripts/push-and-dispatch-signed-release-tag.sh"
+        )
+        let original = try String(contentsOf: url, encoding: .utf8)
+        let updated = mutation(original)
+        XCTAssertNotEqual(updated, original, "push-dispatch fixture mutation did not match its marker")
         try updated.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -1228,10 +1470,40 @@ private final class ReleaseManifestFixture {
             to: rootURL.appendingPathComponent(".github/release-manifest.json")
         )
         baseManifestURL = rootURL.appendingPathComponent("base-release-manifest.json")
-        try FileManager.default.copyItem(
-            at: repositoryRoot.appendingPathComponent(".github/release-manifest.json"),
-            to: baseManifestURL
+        let repositoryManifest = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(
+                    contentsOf: repositoryRoot
+                        .appendingPathComponent(".github/release-manifest.json")
+                )
+            ) as? [String: Any]
         )
+        var fixtureManifest = repositoryManifest
+        let currentPublished = try XCTUnwrap(
+            repositoryManifest["publishedRelease"] as? [String: Any]
+        )
+        let historical = try XCTUnwrap(
+            repositoryManifest["historicalReleases"] as? [[String: Any]]
+        )
+        let grandfatheredPublished = if currentPublished["version"] as? String == "1.3.2" {
+            currentPublished
+        } else {
+            try XCTUnwrap(
+                historical.first { $0["version"] as? String == "1.3.2" },
+                "release-manifest fixtures require the immutable v1.3.2 boundary"
+            )
+        }
+        fixtureManifest["historicalReleases"] = []
+        fixtureManifest["publishedRelease"] = grandfatheredPublished
+        fixtureManifest["candidate"] = NSNull()
+        let fixtureData = try JSONSerialization.data(
+            withJSONObject: fixtureManifest,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try fixtureData.write(
+            to: rootURL.appendingPathComponent(".github/release-manifest.json")
+        )
+        try fixtureData.write(to: baseManifestURL)
         try FileManager.default.copyItem(
             at: repositoryRoot.appendingPathComponent("docs/schemas/release-manifest.schema.json"),
             to: rootURL.appendingPathComponent("docs/schemas/release-manifest.schema.json")

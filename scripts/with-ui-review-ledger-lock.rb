@@ -30,11 +30,13 @@ process_group_alive = lambda do |group_id|
   true
 rescue Errno::ESRCH
   false
+rescue Errno::EPERM
+  true
 end
 signal_process_group = lambda do |signal, group_id|
   Process.kill(signal, -group_id)
   true
-rescue Errno::ESRCH
+rescue Errno::ESRCH, Errno::EPERM
   false
 end
 begin

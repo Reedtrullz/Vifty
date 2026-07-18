@@ -47,7 +47,7 @@ UI_REVIEW_SOURCE_COMMIT="$(git rev-parse HEAD)" make ui-review-write-checkpoint
 
 The writer requires the exact Git repository root, binds the supplied source commit to `HEAD`, and rejects every source-affecting worktree change. Only the canonical checkpoint output and tracked `docs/images/vifty-screenshot.png` may be locally changed; ignored local evidence remains outside Git status. It reruns the existing automated verifier with the exact AX collector, snapshots every manifest/product/report/PNG/raw/sealed input before verification, and refuses publication if any identity or hash changes afterward. Its strict schema requires exactly 50 canonically ordered, path-free rows (9 fixture, 28 visual, and 13 Accessibility), SHA-256 capture-ID projections, manifest and product hashes, final zero-mutation aggregates, and a byte-exact `main-1180x820-light` canonical hero binding. It never copies a raw capture ID, reviewer identity, or human attestation from the local ledger. Visual review remains pending with prior evidence marked superseded; VoiceOver remains pending with the owner's `skipped-by-owner` decision and no speech, focus, rotor, grouping, traversal, pronunciation, or announcement claim.
 
-No [automated-checkpoint.json](automated-checkpoint.json) is valid or committed until a new exact-binary 50-row recapture passes. The checkpoint is a portable integrity summary, not the full evidence bundle, hardware compatibility proof, or release-readiness proof.
+The committed [automated-checkpoint.json](automated-checkpoint.json) is valid only for its exact historical source `6ac429cbacf7cc3358c74493ab7461a43fa40275`: all 50 automated rows passed and its canonical hero is byte-identical to `docs/images/vifty-screenshot.png`. Current `HEAD` differs, so it is not current-source UI evidence. A replacement checkpoint may be committed only after a new exact-binary 50-row recapture passes. Every checkpoint is a portable integrity summary, not the full evidence bundle, a human visual or VoiceOver attestation, hardware compatibility proof, or release-readiness proof.
 
 ## Explicit capture modes
 
@@ -145,9 +145,9 @@ scripts/run-ui-review-fixture.sh \
 
 The verifier binds canonical requests, direct executable SHA/PID/window identity, final safety reports, native geometry, decoded canonical PNG pixels, raw and sealed AX hashes, the read-only action record, and release-marker exclusion. Duplicate, transparent, solid, malformed, escaped, symlinked, orphaned, or tampered evidence fails closed.
 
-### Current evidence state — recapture required
+### Current evidence state — historical checkpoint; recapture required
 
-The remediation source changed after the last 50-row capture and seven-batch visual review. Those executable-bound rows and every prior visual result are historical and superseded; none transfers to the current source. The committed manifest is therefore reset to the empty pending template, and no portable automated checkpoint exists yet.
+The remediation source changed after the last 50-row capture and seven-batch visual review. Those executable-bound rows and every prior visual result are historical and superseded; none transfers to the current source. The committed request manifest is therefore reset to the empty pending template. A portable automated checkpoint does exist for exact historical source `6ac429cbacf7cc3358c74493ab7461a43fa40275`, but it does not transfer to current `HEAD`.
 
 The next valid checkpoint requires a new build, a fresh local 50-row ledger, an automated-verifier pass, and a path-free `automated-checkpoint.json` bound to that source commit and product hashes. Until that happens, do not describe the current source as having passed automated UI evidence, visual review, or VoiceOver review. The owner chose to skip VoiceOver, so that gate remains pending with no human VoiceOver claims.
 

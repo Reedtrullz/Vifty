@@ -9,6 +9,7 @@ RELEASE_READINESS_SCHEMA_ID="https://vifty.local/schemas/release-readiness.schem
 REPO=""
 VERSION=""
 SECRET_LIST_FILE=""
+ENVIRONMENT_SECRET_LIST_FILE=""
 RELEASE_VIEW_FILE=""
 CI_RUN_LIST_FILE=""
 RELEASE_RUN_LIST_FILE=""
@@ -21,7 +22,7 @@ JSON_OUTPUT=false
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--mode developer-id|source-first] [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--unsigned-dev-artifact-file path] [--unsigned-dev-checksum-file path] [--json]
+Usage: scripts/check-release-readiness.sh [--mode developer-id|source-first] [--version version] [--repo owner/name] [--source-sha sha] [--require-source-ref ref-or-sha] [--secret-list-file path] [--environment-secret-list-file path] [--ci-run-list-file path] [--release-run-list-file path] [--release-view-file path] [--unsigned-dev-artifact-file path] [--unsigned-dev-checksum-file path] [--json]
 
 Runs a read-only release trust preflight. The script validates local release
 metadata, verifies source CI for the release tag commit, and inspects GitHub
@@ -43,8 +44,11 @@ Options:
   --source-sha sha           Override the release tag commit SHA, mainly for tests.
   --require-source-ref ref   Block if the release tag commit does not match this
                              ref or commit SHA, such as origin/main.
-  --secret-list-file path    Read pre-captured `gh secret list --env release`
+  --secret-list-file path    Read pre-captured `gh secret list --repo ...`
                              output for tests.
+  --environment-secret-list-file path
+                             Read pre-captured `gh secret list --env release`
+                             output for tests; required with --secret-list-file.
   --ci-run-list-file path    Read pre-captured `gh run list --json ...` output.
   --release-run-list-file path
                              Read pre-captured Release workflow `gh run list`
@@ -109,6 +113,14 @@ while [ "$#" -gt 0 ]; do
         exit 64
       fi
       SECRET_LIST_FILE="$2"
+      shift 2
+      ;;
+    --environment-secret-list-file)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --environment-secret-list-file requires a value" >&2
+        exit 64
+      fi
+      ENVIRONMENT_SECRET_LIST_FILE="$2"
       shift 2
       ;;
     --release-view-file)
@@ -588,11 +600,13 @@ else
         problems << "status is #{status || "unknown"}/#{conclusion || "unknown"}" unless status == "completed" && conclusion == "success"
         head_sha = value.call("headSha", "head_sha").to_s.downcase
         if tag_trust == "signed-verified"
-          problems << "event #{event.inspect} is not workflow_dispatch" unless event == "workflow_dispatch"
-          problems << "headBranch #{head_branch.inspect} is not main" unless head_branch == "main"
-          problems << "displayTitle #{display_title.inspect} does not bind input #{tag}" unless display_title == "Release #{tag}"
+          problems << "event #{event.inspect} is not push" unless event == "push"
+          problems << "headBranch #{head_branch.inspect} is not immutable tag #{tag}" unless head_branch == tag
+          expected_title = "Release #{tag}"
+          problems << "displayTitle #{display_title.inspect} is not #{expected_title.inspect}" unless display_title == expected_title
           problems << "headSha #{head_sha.inspect} is not a full commit SHA" unless head_sha.match?(/\A[0-9a-f]{40}\z/)
-          problems << "attempt #{attempt.inspect} is not a positive integer" unless attempt.is_a?(Integer) && attempt.positive?
+          problems << "headSha #{head_sha.inspect} does not equal exact signed tag commit #{source_sha}" unless head_sha == source_sha
+          problems << "attempt #{attempt.inspect} is not first attempt 1" unless attempt == 1
         elsif tag_trust == "historical-unsigned"
           problems << "event #{event.inspect} is not push" unless event == "push"
           problems << "headBranch #{head_branch.inspect} is not #{tag}" unless head_branch == tag
@@ -605,20 +619,7 @@ else
         puts [head_sha, attempt, detail].join("\x1f")
       ' "${TAG}" "${resolved_source_sha}" "${MANIFEST_RELEASE_WORKFLOW_RUN_ID}" "${MANIFEST_TAG_TRUST}" <<< "${release_run_json}" 2>&1)"; then
         IFS=$'\x1f' read -r release_run_head_sha VERIFIED_RELEASE_RUN_ATTEMPT release_run_url <<< "${release_run_facts}"
-        release_run_ancestry_valid=true
-        if [ "${MANIFEST_TAG_TRUST}" = "signed-verified" ] && [ "${release_run_head_sha}" != "$(printf '%s' "${resolved_source_sha}" | tr '[:upper:]' '[:lower:]')" ]; then
-          release_run_ancestry_valid=false
-          if command -v git >/dev/null 2>&1 &&
-             git rev-parse --verify "${release_run_head_sha}^{commit}" >/dev/null 2>&1 &&
-             git merge-base --is-ancestor "${resolved_source_sha}" "${release_run_head_sha}"; then
-            release_run_ancestry_valid=true
-          fi
-        fi
-        if [ "${release_run_ancestry_valid}" = true ]; then
-          add_check "release-workflow" "passed" "Release workflow passed for ${TAG} using exact manifest run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID}; dispatch source ${release_run_head_sha}: ${release_run_url}"
-        else
-          add_check "release-workflow" "blocked" "Release workflow run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID} dispatched from ${release_run_head_sha}, but ${TAG} commit ${resolved_source_sha} is not a locally provable ancestor. Fetch the dispatch main commit before retrying."
-        fi
+        add_check "release-workflow" "passed" "Release workflow passed for ${TAG} using exact manifest run ${MANIFEST_RELEASE_WORKFLOW_RUN_ID}; tag-push commit ${release_run_head_sha}: ${release_run_url}"
       else
         add_check "release-workflow" "blocked" "${release_run_facts}"
       fi
@@ -635,6 +636,9 @@ if [ "${RELEASE_MODE}" = "developer-id" ]; then
   fi
   if [ -n "${SECRET_LIST_FILE}" ]; then
     secret_args+=(--secret-list-file "${SECRET_LIST_FILE}")
+  fi
+  if [ -n "${ENVIRONMENT_SECRET_LIST_FILE}" ]; then
+    secret_args+=(--environment-secret-list-file "${ENVIRONMENT_SECRET_LIST_FILE}")
   fi
 
   if secret_output="$(VIFTY_RELEASE_METADATA_ROOT="${ROOT_DIR}" "${SCRIPT_DIR}/check-release-secrets.sh" "${secret_args[@]}" 2>&1)"; then

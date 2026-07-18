@@ -155,6 +155,8 @@ Public releases should be:
 6. published as `Vifty-v<version>.zip` with a SHA-256 checksum;
 7. validated on real hardware through `scripts/collect-validation-evidence.sh`, including `review-summary.tsv`, `review-summary.json`, `install-provenance.tsv`, `bundle-executables.tsv`, `schema-resources.tsv`, `capabilities-schema-resources.tsv`, `capabilities-contract.tsv`, `viftyctl-audit.json`, optional `release-artifact-summary.json` / `release-artifact-summary.tsv` with installed-app version matching, optional `release-checklist.md` / `release-checklist.tsv` with checklist version/follow-up checks, app/CLI/helper/daemon signing evidence, bundled LaunchDaemon TeamID evidence, the release verifier result when available, and a reviewed `review-result.json` declaring `schemaID: https://vifty.local/schemas/validation-review-result.schema.json`.
 
+The local one-shot release transaction has a deliberate human trust root. GitHub can verify the signed annotated tag, embedded administrator governance, actor/ref/commit, push event, and run attempt, but it cannot attest that `scripts/push-and-dispatch-signed-release-tag.sh` ran or that its local `retired.json` and `receipt.json` exist. The sole signer/repository administrator is explicitly trusted not to substitute a raw tag push or out-of-band GitHub Release mutation. Such a bypass is unsupported and lacks the local transaction guarantee even if remote admission passes; it does not make manual dispatch or rerun acceptable.
+
 Ad-hoc CI artifacts, local builds, and source-first unsigned-dev convenience zips are useful for development and tester convenience, but they are not a substitute for signed, notarized public releases.
 
 ### Canonical v1.3.2 migration identity

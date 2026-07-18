@@ -45,6 +45,7 @@ manifest = JSON.parse(File.read(File.join(root, ".github/release-manifest.json")
 product = manifest.fetch("product")
 policy = manifest.fetch("releasePolicy")
 published = manifest.fetch("publishedRelease")
+candidate = manifest["candidate"]
 
 files = [
   "README.md",
@@ -81,6 +82,16 @@ block = <<~MARKDOWN.chomp
   > Separate exact-build claims: installed release review `#{published.fetch("installedReleaseReview")}`; #{manual_compatibility_fact}.
   #{end_marker}
 MARKDOWN
+
+release_status_metadata_fact = if candidate
+  "Release candidate metadata in `Resources/Info.plist` is staged at " \
+    "`#{candidate.fetch("version")}` build `#{candidate.fetch("build")}`, while " \
+    "`Casks/vifty.rb` remains pinned to published `#{published.fetch("version")}` " \
+    "with SHA-256 `#{published.fetch("sha256")}`"
+else
+  "Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at " \
+    "`#{published.fetch("version")}` build `#{published.fetch("build")}`"
+end
 
 failures = []
 files.each do |relative_path|
@@ -119,7 +130,7 @@ current_requirements = {
     "`#{published.fetch("tag")}` is the current published Developer ID release.",
     "The public `#{published.fetch("artifact")}` and checked-in cask both resolve to SHA-256 `#{published.fetch("sha256")}`.",
     "**Published Developer ID release:** `#{published.fetch("tag")}`",
-    "Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `#{published.fetch("version")}` build `#{published.fetch("build")}`"
+    release_status_metadata_fact
   ],
   "docs/trust-model.md" => [
     "The exact `#{published.fetch("tag")}` public artifact passes release-level signing/notarization checks"

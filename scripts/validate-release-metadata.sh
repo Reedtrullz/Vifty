@@ -297,7 +297,8 @@ fi
 if ! grep -Fq 'git verify-tag "${RELEASE_TAG}"' "${RELEASE_WORKFLOW}" &&
    ! { { grep -Fq 'gpg.ssh.allowedSignersFile=.github/release-signers.allowed' "${RELEASE_WORKFLOW}" ||
          grep -Fq 'gpg.ssh.allowedSignersFile="${TRUSTED_SIGNERS}"' "${RELEASE_WORKFLOW}"; } &&
-       grep -Fq 'verify-tag "${RELEASE_TAG}"' "${RELEASE_WORKFLOW}"; }; then
+       { grep -Fq 'verify-tag "${RELEASE_TAG}"' "${RELEASE_WORKFLOW}" ||
+         grep -Fq 'verify-tag "${TAG_OBJECT}"' "${RELEASE_WORKFLOW}"; }; }; then
   echo "error: ${RELEASE_WORKFLOW} must cryptographically verify the signed release tag" >&2
   exit 1
 fi
@@ -456,7 +457,8 @@ if [[ "$(grep -Fc 'verify_remote_tag_identity "${TAG_OBJECT_SHA}" "${TAG_COMMIT_
   exit 1
 fi
 
-if ! grep -Fq 'gh api --method POST' "${RELEASE_WORKFLOW}" ||
+if ! { grep -Fq 'gh api --method POST' "${RELEASE_WORKFLOW}" ||
+       grep -Fq 'gh api --hostname github.com --method POST' "${RELEASE_WORKFLOW}"; } ||
    ! grep -Fq '"repos/${GITHUB_REPOSITORY}/releases"' "${RELEASE_WORKFLOW}" ||
    ! grep -Fq 'RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"' "${RELEASE_WORKFLOW}"; then
   echo "error: ${RELEASE_WORKFLOW} must REST-create the draft and capture its immutable release ID directly" >&2
