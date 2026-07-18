@@ -365,6 +365,48 @@ final class ReleasePushDispatchScriptTests: XCTestCase {
         XCTAssertEqual(receipt["triggerCorrelation"] as? String, "observed-unverified")
     }
 
+    func testStaticWorkflowNameMismatchFailsBeforeRemoteMutation() throws {
+        let fixture = try ReleasePushDispatchFixture()
+        try "workflow-name-mismatch".write(
+            to: fixture.modeURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try fixture.runHelper()
+
+        XCTAssertNotEqual(result.exitCode, 0, result.stdout)
+        XCTAssertTrue(result.stderr.contains("release workflow name mismatch"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.tagPushedURL.path))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: fixture.retirementMarkerURL.path)
+        )
+        XCTAssertNil(try fixture.remoteTagObject())
+    }
+
+    func testDynamicRunNameMismatchFailsAfterRetiringTag() throws {
+        let fixture = try ReleasePushDispatchFixture()
+        try "run-name-mismatch".write(
+            to: fixture.modeURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try fixture.runHelper()
+
+        XCTAssertNotEqual(result.exitCode, 0, result.stdout)
+        XCTAssertTrue(result.stderr.contains("workflow run does not bind"), result.stderr)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.tagPushedURL.path))
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: fixture.retirementMarkerURL.path)
+        )
+        let receipt = try fixture.receipt()
+        XCTAssertEqual(receipt["status"] as? String, "tag-push-run-mismatched")
+        XCTAssertEqual(receipt["workflowRunObserved"] as? Bool, true)
+        XCTAssertEqual(receipt["workflowRunVerified"] as? Bool, false)
+        XCTAssertEqual(receipt["receiptAuthorizesRetry"] as? Bool, false)
+    }
+
     func testSecondAttemptWorkflowRunIsRejectedWithoutRerun() throws {
         let fixture = try ReleasePushDispatchFixture()
         try "run-attempt-two".write(
@@ -1073,8 +1115,12 @@ private final class ReleasePushDispatchFixture {
                     fi
                     ;;
                   repos/Reedtrullz/Vifty/actions/workflows/release.yml)
-                    /usr/bin/printf '%s\\n' \
-                      '{"id":77,"path":".github/workflows/release.yml","state":"active"}'
+                    workflow_name="Release"
+                    [[ "${mode}" != "workflow-name-mismatch" ]] || \
+                      workflow_name="Unexpected Release"
+                    /usr/bin/printf \
+                      '{"id":77,"name":"%s","path":".github/workflows/release.yml","state":"active"}\\n' \
+                      "${workflow_name}"
                     ;;
                   repos/Reedtrullz/Vifty/actions/runs/555)
                     head_sha="\(commitSHA)"
@@ -1082,10 +1128,12 @@ private final class ReleasePushDispatchFixture {
                       head_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
                     run_attempt=1
                     [[ "${mode}" != "run-attempt-two" ]] || run_attempt=2
+                    run_name="Release \(tag)"
+                    [[ "${mode}" != "run-name-mismatch" ]] || run_name="Release"
                     created_at="$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)"
                     /usr/bin/printf \
-                      '{"id":555,"name":"Release","path":".github/workflows/release.yml","display_title":"Release \(tag)","event":"push","head_branch":"\(tag)","head_sha":"%s","run_attempt":%s,"workflow_id":77,"actor":{"id":12345,"login":"Reedtrullz"},"repository":{"full_name":"Reedtrullz/Vifty"},"created_at":"%s","html_url":"https://github.com/Reedtrullz/Vifty/actions/runs/555"}\\n' \
-                      "${head_sha}" "${run_attempt}" "${created_at}"
+                      '{"id":555,"name":"%s","path":".github/workflows/release.yml","display_title":"Release \(tag)","event":"push","head_branch":"\(tag)","head_sha":"%s","run_attempt":%s,"workflow_id":77,"actor":{"id":12345,"login":"Reedtrullz"},"repository":{"full_name":"Reedtrullz/Vifty"},"created_at":"%s","html_url":"https://github.com/Reedtrullz/Vifty/actions/runs/555"}\\n' \
+                      "${run_name}" "${head_sha}" "${run_attempt}" "${created_at}"
                     ;;
                   repos/Reedtrullz/Vifty/git/tags/\(tagObjectSHA))
                     /usr/bin/printf '%s\\n' \

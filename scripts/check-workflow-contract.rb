@@ -677,7 +677,8 @@ else
     push_dispatch_helper_text.include?('"repos/${REPOSITORY}/actions/runs/${RUN_ID}"') &&
     push_dispatch_helper_text.include?('run["id"] == run_id.to_i') &&
     push_dispatch_helper_text.include?('run["workflow_id"] == workflow_id.to_i') &&
-    push_dispatch_helper_text.include?('run["name"] == "Release"') &&
+    push_dispatch_helper_text.include?('workflow["name"] == "Release"') &&
+    push_dispatch_helper_text.include?('run["name"] == "Release #{tag}"') &&
     push_dispatch_helper_text.include?('run["path"] == ".github/workflows/release.yml"') &&
     push_dispatch_helper_text.include?('run["display_title"] == "Release #{tag}"') &&
     push_dispatch_helper_text.include?('run["event"] == "push"') &&
@@ -998,7 +999,7 @@ else
     expected_step_hashes = {
       "Check out trusted release tooling" => "b513361ad57276908ad99e1cf84fe4d93af1cad5e81363a7b22c8487980b9021",
       "Inventory trusted release tooling" => "f8bf25f7e3bba872bcb11b2f0aea575cb502e9f534f372298d3d50efbadf1ffc",
-      "Verify release environment protection" => "0fdba6ffd9ea491017eda7058c693d7cdedb682128f2c61622281f8995f0f617",
+      "Verify release environment protection" => "8a8583cbe1bf9b64edc0f2176cfd016a767e050b5692432a0d32d170a3ad4b7a",
       "Download inventoried candidate" => "48f99fd7a3190b1f735782e9d60f242586636e8a999f4aad431ce9681c1ea829",
       "Verify candidate and trusted tool inventories before secret-consuming steps" => "78e3046f2cb66c12079b9d9fe2a27d343d47cdaa6355959ee1ec535e5801ade2",
       "Require signing and notarization secrets" => "e5421852d3202b04e2aa2ac167915e6806b53a64a257eb6322f60ebfb1e2d892",
@@ -1053,9 +1054,19 @@ else
     environment_step = steps.find { |step| step.is_a?(Hash) && step["name"] == "Verify release environment protection" }
     environment_run = environment_step.is_a?(Hash) ? environment_step["run"].to_s : ""
     environment_env = environment_step.is_a?(Hash) ? environment_step["env"] : nil
+    trusted_environment_invocation = <<~'SHELL'.strip
+      (
+        cd "${TRUSTED_ROOT}"
+        GH_TOKEN="${RELEASE_GH_TOKEN}" \
+          "${TRUSTED_ROOT}/scripts/check-release-environment.sh" \
+    SHELL
+    unless environment_run.include?(trusted_environment_invocation)
+      errors << "sign-notarize release-environment checker must execute from the exact trusted worktree"
+    end
     unless environment_env == { "GH_TOKEN" => "${{ github.token }}" } &&
            environment_run.include?('VIFTY_WORKFLOW_CONTRACT_ROOT="${TRUSTED_ROOT}"') &&
            environment_run.include?('ruby "${TRUSTED_ROOT}/scripts/check-workflow-contract.rb"') &&
+           environment_run.include?('cd "${TRUSTED_ROOT}"') &&
            environment_run.include?('"${TRUSTED_ROOT}/scripts/check-release-environment.sh"') &&
            environment_run.include?('--environment release') &&
            environment_run.include?('--branch main') &&

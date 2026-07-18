@@ -871,6 +871,7 @@ active_release_workflow_id() {
     "repos/${REPOSITORY}/actions/workflows/release.yml")"
   "${RUBY_BIN}" -rjson -e '
     workflow = JSON.parse(STDIN.read)
+    abort("release workflow name mismatch") unless workflow["name"] == "Release"
     abort("release workflow path mismatch") unless workflow["path"] == ".github/workflows/release.yml"
     abort("release workflow is not active") unless workflow["state"] == "active"
     id = workflow["id"]
@@ -1347,7 +1348,7 @@ for ((attempt = 1; attempt <= 30; attempt++)); do
     signed_actor = JSON.parse(File.read(evidence_path)).fetch("authenticatedActor")
     abort("release run ID mismatch") unless run["id"] == run_id.to_i
     abort("release workflow ID mismatch") unless run["workflow_id"] == workflow_id.to_i
-    abort("release workflow name mismatch") unless run["name"] == "Release"
+    abort("release run name mismatch") unless run["name"] == "Release #{tag}"
     abort("release workflow path mismatch") unless run["path"] == ".github/workflows/release.yml"
     abort("release run title mismatch") unless run["display_title"] == "Release #{tag}"
     abort("release run event mismatch") unless run["event"] == "push"
