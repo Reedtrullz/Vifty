@@ -728,6 +728,100 @@ final class ViftyReviewFixtureTests: XCTestCase {
         )
     }
 
+    func testHealthyGeneralSettingsFixtureShowsDeterministicAvailableUpdateWithoutRequests() async throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = try writeExecutableFixture(in: root)
+        let request = try fixtureRequest(
+            root: root,
+            captureID: "settings-update-available",
+            surface: .settingsGeneral,
+            window: .native
+        )
+        let runtime = try ViftyReviewFixtureRuntime(
+            request: request,
+            executableURL: executable,
+            processIdentifier: 813
+        )
+
+        let release = SoftwareUpdateRelease(
+            version: ViftyReleaseVersion(major: 1, minor: 3, patch: 3)
+        )
+        XCTAssertEqual(runtime.softwareUpdates.status, .updateAvailable(release))
+        XCTAssertEqual(runtime.softwareUpdates.availableRelease, release)
+        XCTAssertEqual(runtime.softwareUpdates.primaryActionTitle, "Update to latest version")
+        XCTAssertTrue(runtime.softwareUpdates.canCheck)
+        XCTAssertTrue(runtime.softwareUpdates.automaticChecksEnabled)
+
+        try await runtime.prepare()
+        let recorder = runtime.recorder.snapshot()
+        XCTAssertTrue(recorder.attemptedExternalMutations.isEmpty)
+        XCTAssertTrue(recorder.realControlPathConstructions.isEmpty)
+        XCTAssertFalse(runtime.model.isRunning)
+    }
+
+    func testNonGeneralFixtureUsesUnavailableNoNetworkUpdateController() throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = try writeExecutableFixture(in: root)
+        let request = try fixtureRequest(
+            root: root,
+            captureID: "main-update-unavailable"
+        )
+        let runtime = try ViftyReviewFixtureRuntime(
+            request: request,
+            executableURL: executable,
+            processIdentifier: 814
+        )
+
+        XCTAssertEqual(runtime.softwareUpdates.status, .unavailable)
+        XCTAssertFalse(runtime.softwareUpdates.canCheck)
+        XCTAssertTrue(runtime.recorder.snapshot().attemptedExternalMutations.isEmpty)
+    }
+
+    func testFixtureUpdateActionsRecordUnsafeAttemptsBeforeNetworkOrBrowserUse() async throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = try writeExecutableFixture(in: root)
+
+        let pageRuntime = try ViftyReviewFixtureRuntime(
+            request: fixtureRequest(
+                root: root.appendingPathComponent("page", isDirectory: true),
+                captureID: "settings-update-page",
+                surface: .settingsGeneral,
+                window: .native
+            ),
+            executableURL: executable,
+            processIdentifier: 815
+        )
+        await pageRuntime.softwareUpdates.performPrimaryAction()
+        XCTAssertEqual(
+            pageRuntime.recorder.snapshot().attemptedExternalMutations,
+            ["software-update-release-page"]
+        )
+
+        let checkRuntime = try ViftyReviewFixtureRuntime(
+            request: fixtureRequest(
+                root: root.appendingPathComponent("check", isDirectory: true),
+                captureID: "settings-update-check",
+                surface: .settingsGeneral,
+                window: .native
+            ),
+            executableURL: executable,
+            processIdentifier: 816
+        )
+        await checkRuntime.softwareUpdates.checkNow()
+        XCTAssertEqual(
+            checkRuntime.recorder.snapshot().attemptedExternalMutations,
+            ["software-update-state-write"]
+        )
+        XCTAssertFalse(
+            checkRuntime.recorder.snapshot().attemptedExternalMutations.contains(
+                "software-update-network-request"
+            )
+        )
+    }
+
     func testFixtureArgumentsAreAbsentWithoutExplicitFlagAndRejectUnknownState() throws {
         XCTAssertNil(try ViftyReviewFixtureRequest.parse(arguments: ["Vifty"]))
         XCTAssertThrowsError(

@@ -75,6 +75,10 @@ enum ViftyAccessibilityIdentifier {
     static let settingsTabAgentWorkflows = "vifty.ax.settings.tab.agent-workflows"
     static let settingsPaneGeneral = "vifty.ax.settings.pane.general"
     static let settingsLaunchAtLogin = "vifty.ax.settings.general.launch-at-login"
+    static let settingsUpdateAutomatic = "vifty.ax.settings.general.update.automatic"
+    static let settingsUpdateStatus = "vifty.ax.settings.general.update.status"
+    static let settingsUpdateCheck = "vifty.ax.settings.general.update.check"
+    static let settingsUpdateLatest = "vifty.ax.settings.general.update.latest"
 
     static let mainScroll = "vifty.ax.scroll.main"
     static let mainScrollEnd = "vifty.ax.scroll.main.end"

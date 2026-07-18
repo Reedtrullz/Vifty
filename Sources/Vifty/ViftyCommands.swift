@@ -2,7 +2,9 @@ import SwiftUI
 
 struct ViftyCommands: Commands {
     @ObservedObject var model: AppModel
+    @ObservedObject var softwareUpdates: SoftwareUpdateController
     let openWindow: OpenWindowAction
+    let openSettings: OpenSettingsAction
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
@@ -10,6 +12,15 @@ struct ViftyCommands: Commands {
                 openWindow(id: "main")
             }
             .keyboardShortcut("0", modifiers: .command)
+
+            Button(softwareUpdates.menuActionTitle) {
+                openSettings()
+                Task {
+                    await softwareUpdates.performPrimaryAction()
+                }
+            }
+            .disabled(!softwareUpdates.canCheck || softwareUpdates.isChecking)
+            .help(softwareUpdates.primaryActionHint)
         }
 
         CommandMenu("Control") {

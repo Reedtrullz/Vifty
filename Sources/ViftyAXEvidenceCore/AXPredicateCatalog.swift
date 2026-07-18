@@ -66,6 +66,10 @@ public enum AXEvidenceIdentifier {
     public static let settingsTabAgentWorkflows = "vifty.ax.settings.tab.agent-workflows"
     public static let settingsPaneGeneral = "vifty.ax.settings.pane.general"
     public static let settingsLaunchAtLogin = "vifty.ax.settings.general.launch-at-login"
+    public static let settingsUpdateAutomatic = "vifty.ax.settings.general.update.automatic"
+    public static let settingsUpdateStatus = "vifty.ax.settings.general.update.status"
+    public static let settingsUpdateCheck = "vifty.ax.settings.general.update.check"
+    public static let settingsUpdateLatest = "vifty.ax.settings.general.update.latest"
 
     public static let mainScroll = "vifty.ax.scroll.main"
     public static let mainScrollEnd = "vifty.ax.scroll.main.end"
@@ -100,6 +104,12 @@ public enum AXPredicateError: Error, Equatable {
 }
 
 public enum AXPredicateCatalog {
+    private static let updateLatestHelp =
+        "Opens Vifty's fixed GitHub release page in your default browser. "
+        + "Vifty does not download or install the update."
+    private static let updateRefreshHelp =
+        "Refreshes GitHub release availability without downloading or installing."
+
     public static let ids = [
         "confirmed-owner-headline",
         "correct-per-fan-target",
@@ -736,6 +746,147 @@ public enum AXPredicateCatalog {
         if let pane, let lastTab = tabs.last {
             require(lastTab.order < pane.order, "selected Settings pane must follow tab controls", &failures)
         }
+        validateSoftwareUpdateControls(
+            capture,
+            root: root,
+            pane: pane,
+            paths: &paths,
+            failures: &failures
+        )
+    }
+
+    private static func validateSoftwareUpdateControls(
+        _ capture: AXRawCapture,
+        root: AXObservation?,
+        pane: AXObservation?,
+        paths: inout [String],
+        failures: inout [String]
+    ) {
+        let automatic = unique(
+            AXEvidenceIdentifier.settingsUpdateAutomatic,
+            in: capture,
+            failures: &failures
+        )
+        let status = unique(
+            AXEvidenceIdentifier.settingsUpdateStatus,
+            in: capture,
+            failures: &failures
+        )
+        let latest = unique(
+            AXEvidenceIdentifier.settingsUpdateLatest,
+            in: capture,
+            failures: &failures
+        )
+        let refresh = unique(
+            AXEvidenceIdentifier.settingsUpdateCheck,
+            in: capture,
+            failures: &failures
+        )
+        let launchAtLogin = unique(
+            AXEvidenceIdentifier.settingsLaunchAtLogin,
+            in: capture,
+            failures: &failures
+        )
+
+        requireNode(
+            automatic,
+            role: "AXCheckBox",
+            label: "Automatically check for updates",
+            value: nil,
+            failures: &failures
+        )
+        require(automatic?.enabled == true, "automatic update checks must be enabled", &failures)
+        require(automatic?.selected == true, "automatic update checks must be on", &failures)
+        require(automatic?.actions == ["AXPress"], "automatic update check action set mismatch", &failures)
+
+        requireNode(
+            status,
+            role: "AXStaticText",
+            label: "Vifty 1.3.3 is available.",
+            value: nil,
+            failures: &failures
+        )
+        requireNode(
+            latest,
+            role: "AXButton",
+            label: "Update to latest version",
+            value: nil,
+            failures: &failures
+        )
+        require(latest?.enabled == true, "Update to latest version must be enabled", &failures)
+        require(latest?.actions == ["AXPress"], "Update to latest version action set mismatch", &failures)
+        require(latest?.help == updateLatestHelp, "Update to latest version help mismatch", &failures)
+
+        requireNode(
+            refresh,
+            role: "AXButton",
+            label: "Check now",
+            value: nil,
+            failures: &failures
+        )
+        require(refresh?.enabled == true, "Check now must be enabled", &failures)
+        require(refresh?.actions == ["AXPress"], "Check now action set mismatch", &failures)
+        require(refresh?.help == updateRefreshHelp, "Check now help mismatch", &failures)
+
+        requireNode(
+            launchAtLogin,
+            role: "AXCheckBox",
+            label: "Start Vifty at startup",
+            value: nil,
+            failures: &failures
+        )
+        require(launchAtLogin?.selected != true, "fixture launch-at-login control must be off", &failures)
+
+        let updateNodes = [automatic, status, latest, refresh].compactMap { $0 }
+        for node in updateNodes {
+            requireDescendant(node, of: pane, failures: &failures)
+        }
+        requireDescendant(launchAtLogin, of: pane, failures: &failures)
+        if updateNodes.count == 4 {
+            require(
+                updateNodes.map(\.order) == updateNodes.map(\.order).sorted(),
+                "software update controls are not in logical order",
+                &failures
+            )
+        }
+        if let refresh, let launchAtLogin {
+            require(
+                refresh.order < launchAtLogin.order,
+                "software update controls must precede Login settings",
+                &failures
+            )
+        }
+
+        if let latestFrame = latest.flatMap(frame),
+           let refreshFrame = refresh.flatMap(frame),
+           let rootFrame = root.flatMap(frame) {
+            require(
+                latestFrame.width > 0 && latestFrame.height > 0
+                    && refreshFrame.width > 0 && refreshFrame.height > 0,
+                "software update buttons must have positive frames",
+                &failures
+            )
+            require(
+                contains(rootFrame, latestFrame, tolerance: 0.5)
+                    && contains(rootFrame, refreshFrame, tolerance: 0.5),
+                "software update buttons must be visible inside the capture root",
+                &failures
+            )
+            require(
+                latestFrame.x + latestFrame.width <= refreshFrame.x + 0.5,
+                "Update to latest version must be visually left of Check now",
+                &failures
+            )
+        } else {
+            require(
+                false,
+                "software update buttons and capture root must expose frames",
+                &failures
+            )
+        }
+
+        paths.append(contentsOf: [automatic, status, latest, refresh, launchAtLogin]
+            .compactMap { $0?.path })
     }
 
     private static func validateNoDuplicateChartElements(

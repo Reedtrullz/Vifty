@@ -165,6 +165,10 @@ public final class HelperMaintenanceAuthorityStore: @unchecked Sendable {
                 throw HelperMaintenanceAuthorityStoreError.invalidReceipt(
                     "encoded size exceeds \(maximumBytes) bytes"
                 )
+            case .lockUnavailable(let name):
+                throw HelperMaintenanceAuthorityStoreError.ioFailure(
+                    "secure file \(name) is locked"
+                )
             case .ioFailure(let reason):
                 throw HelperMaintenanceAuthorityStoreError.ioFailure(reason)
             }

@@ -44,6 +44,7 @@ The [historical README image](docs/images/vifty-screenshot.png) is byte-bound as
 - **Codex usage tracking** — optional menu-bar field reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage as text or a compact battery-style gauge, reset countdown or reset time, credits, monthly limits, and source without storing API keys. Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage.
 - **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
 - **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
+- **Update availability checks** — future exact Developer ID builds can check GitHub's fixed latest-release endpoint at most daily, with an opt-out and an **Update to latest version** browser handoff; Vifty does not silently download or replace the app.
 - **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
 - **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
 
@@ -86,7 +87,7 @@ An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the G
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
-Auto-update is not enabled in `v1.3.2` or in source-first/unsigned-dev builds. See [docs/auto-update.md](docs/auto-update.md) for the separate Sparkle trust plan.
+The exact public `v1.3.2` binary cannot gain the update checker retroactively, so the first public release containing it must be installed manually. Current source enables future exact Developer ID builds to check GitHub's fixed latest-release endpoint at most daily, with an opt-out, and to open the matching fixed tag page through **Update to latest version**. This validates availability metadata and expected filenames only; it does not verify archive bytes, checksum contents, a signed tag, or notarization. Local ad-hoc, CI, source-first, and unsigned-dev builds make no update requests. This is a browser handoff only: Vifty does not download executable assets, silently replace the app, or yet provide a Sparkle installer. See [docs/auto-update.md](docs/auto-update.md).
 
 ### Install trust levels
 
@@ -255,7 +256,8 @@ For the detailed privileged-helper and agent-control boundaries, see [docs/trust
 - If temperature sensors disappear mid-curve, Vifty restores Auto.
 - An unclean-exit marker (`~/Library/Application Support/Vifty/manual-control-active`) is written while manual control is active; the next launch restores Auto before continuing.
 - Curve profiles are stored in `~/Library/Application Support/Vifty/curve-profiles.json` with a `.bak` backup before each save.
-- Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export.
+- Power, thermal, and telemetry-history data stay on the Mac. Trend sparklines and readouts are rendered from the in-memory rolling buffer only; there are no analytics, accounts, cloud dependencies, or persistent telemetry export.
+- In future exact Developer ID builds, the opt-out release checker may make one automatic HTTPS request per 24 hours to `api.github.com`, plus user-requested **Check now** calls. GitHub receives normal request metadata such as the public IP address, request timing, and a Vifty version-bearing User-Agent. Vifty sends no account, fan, sensor, power, Codex, profile, or analytics payload; local ad-hoc, CI, source-first, and unsigned-dev builds make no update requests. **Update to latest version** opens a fixed GitHub release tag page and does not download or install the app.
 - Codex usage display is optional. When selected as a standalone mode or as one field in a custom menu-bar summary, Vifty asks the local Codex CLI/app-server for account rate-limit data when available and otherwise reads local Codex session logs; Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
 - Local notifications use macOS UserNotifications only. They are opt-in, rate-limited, and do not add analytics, network calls, or persistent telemetry export.
 

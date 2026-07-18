@@ -200,14 +200,17 @@ enum ViftySettingsTab: String, CaseIterable, Identifiable, Sendable {
 
 struct ViftySettingsView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var softwareUpdates: SoftwareUpdateController
     @Environment(\.viftyTextScale) private var textScale
     @State private var selectedTab: ViftySettingsTab
 
     init(
         model: AppModel,
+        softwareUpdates: SoftwareUpdateController,
         initialTab: ViftySettingsTab = .general
     ) {
         self.model = model
+        self.softwareUpdates = softwareUpdates
         _selectedTab = State(initialValue: initialTab)
     }
 
@@ -280,7 +283,7 @@ struct ViftySettingsView: View {
     private var selectedPane: some View {
         switch selectedTab {
         case .general:
-            SettingsGeneralView(model: model)
+            SettingsGeneralView(model: model, softwareUpdates: softwareUpdates)
         case .menuBar:
             SettingsMenuBarView(model: model)
         case .notifications:

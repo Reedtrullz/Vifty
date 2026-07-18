@@ -285,6 +285,63 @@ final class AXEvidencePredicateTests: XCTestCase {
         XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
     }
 
+    func testSettingsLogicalTraversalRequiresAvailableUpdateSemanticsOrderAndVisibility() throws {
+        var capture = validCapture("settings-logical-traversal")
+        XCTAssertTrue(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+
+        let automaticID = AXEvidenceIdentifier.settingsUpdateAutomatic
+        let statusID = AXEvidenceIdentifier.settingsUpdateStatus
+        let latestID = AXEvidenceIdentifier.settingsUpdateLatest
+        let refreshID = AXEvidenceIdentifier.settingsUpdateCheck
+
+        let automaticIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == automaticID }
+        )
+        capture.observations[automaticIndex].selected = false
+        XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+
+        capture = validCapture("settings-logical-traversal")
+        let statusIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == statusID }
+        )
+        capture.observations[statusIndex].label = "Vifty is up to date."
+        XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+
+        capture = validCapture("settings-logical-traversal")
+        var latestIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == latestID }
+        )
+        capture.observations[latestIndex].help = "Downloads and installs automatically."
+        XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+
+        capture = validCapture("settings-logical-traversal")
+        latestIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == latestID }
+        )
+        let refreshIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == refreshID }
+        )
+        capture.observations[latestIndex].identifier = refreshID
+        capture.observations[latestIndex].label = "Check now"
+        capture.observations[latestIndex].description = "Check now"
+        capture.observations[latestIndex].help =
+            "Refreshes GitHub release availability without downloading or installing."
+        capture.observations[refreshIndex].identifier = latestID
+        capture.observations[refreshIndex].label = "Update to latest version"
+        capture.observations[refreshIndex].description = "Update to latest version"
+        capture.observations[refreshIndex].help =
+            "Opens Vifty's fixed GitHub release page in your default browser. "
+            + "Vifty does not download or install the update."
+        XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+
+        capture = validCapture("settings-logical-traversal")
+        latestIndex = try XCTUnwrap(
+            capture.observations.firstIndex { $0.identifier == latestID }
+        )
+        capture.observations[latestIndex].position = AXPoint(x: 990, y: 220)
+        XCTAssertFalse(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
+    }
+
     func testNoDuplicateChartElementsRequiresOneScopeAndSixCanonicalControls() throws {
         var capture = validCapture("no-duplicate-chart-elements")
         XCTAssertTrue(try AXPredicateCatalog.evaluate(id: capture.request.checkID, capture: capture).passed)
@@ -786,7 +843,12 @@ final class AXEvidencePredicateTests: XCTestCase {
                 observation(2, "0/1", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabMenuBar, label: "Menu Bar", value: .string("Not selected"), actions: ["AXPress"]),
                 observation(3, "0/2", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabNotifications, label: "Notifications", value: .string("Not selected"), actions: ["AXPress"]),
                 observation(4, "0/3", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabAgentWorkflows, label: "Agent Workflows", value: .string("Not selected"), actions: ["AXPress"]),
-                observation(5, "1", role: "AXGroup", identifier: AXEvidenceIdentifier.settingsPaneGeneral, label: "General settings")
+                observation(5, "1", role: "AXGroup", identifier: AXEvidenceIdentifier.settingsPaneGeneral, label: "General settings"),
+                observation(6, "1/0", role: "AXCheckBox", identifier: AXEvidenceIdentifier.settingsUpdateAutomatic, label: "Automatically check for updates", selected: true, actions: ["AXPress"], position: AXPoint(x: 130, y: 160), size: AXSize(width: 300, height: 22)),
+                observation(7, "1/1", role: "AXStaticText", identifier: AXEvidenceIdentifier.settingsUpdateStatus, label: "Vifty 1.3.3 is available.", position: AXPoint(x: 130, y: 190), size: AXSize(width: 300, height: 18)),
+                observation(8, "1/2", role: "AXButton", identifier: AXEvidenceIdentifier.settingsUpdateLatest, label: "Update to latest version", help: "Opens Vifty's fixed GitHub release page in your default browser. Vifty does not download or install the update.", actions: ["AXPress"], position: AXPoint(x: 130, y: 220), size: AXSize(width: 190, height: 28)),
+                observation(9, "1/3", role: "AXButton", identifier: AXEvidenceIdentifier.settingsUpdateCheck, label: "Check now", help: "Refreshes GitHub release availability without downloading or installing.", actions: ["AXPress"], position: AXPoint(x: 330, y: 220), size: AXSize(width: 90, height: 28)),
+                observation(10, "1/4", role: "AXCheckBox", identifier: AXEvidenceIdentifier.settingsLaunchAtLogin, label: "Start Vifty at startup", selected: false, actions: ["AXPress"], position: AXPoint(x: 130, y: 360), size: AXSize(width: 250, height: 22))
             ])
         default:
             guard let contract = AXPredicateCatalog.scrollContract(for: id) else {
@@ -892,6 +954,7 @@ final class AXEvidencePredicateTests: XCTestCase {
         identifier: String,
         label: String? = nil,
         value: AXTypedValue? = nil,
+        help: String? = nil,
         selected: Bool? = nil,
         actions: [String] = [],
         position: AXPoint? = nil,
@@ -905,6 +968,7 @@ final class AXEvidencePredicateTests: XCTestCase {
             identifier: identifier,
             description: label,
             label: label,
+            help: help,
             value: value,
             enabled: true,
             selected: selected,

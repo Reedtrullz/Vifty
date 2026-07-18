@@ -37,6 +37,10 @@ final class ViftyAccessibilitySemanticsTests: XCTestCase {
         XCTAssertEqual(ViftyAccessibilityIdentifier.settingsTabAgentWorkflows, AXEvidenceIdentifier.settingsTabAgentWorkflows)
         XCTAssertEqual(ViftyAccessibilityIdentifier.settingsPaneGeneral, AXEvidenceIdentifier.settingsPaneGeneral)
         XCTAssertEqual(ViftyAccessibilityIdentifier.settingsLaunchAtLogin, AXEvidenceIdentifier.settingsLaunchAtLogin)
+        XCTAssertEqual(ViftyAccessibilityIdentifier.settingsUpdateAutomatic, AXEvidenceIdentifier.settingsUpdateAutomatic)
+        XCTAssertEqual(ViftyAccessibilityIdentifier.settingsUpdateStatus, AXEvidenceIdentifier.settingsUpdateStatus)
+        XCTAssertEqual(ViftyAccessibilityIdentifier.settingsUpdateCheck, AXEvidenceIdentifier.settingsUpdateCheck)
+        XCTAssertEqual(ViftyAccessibilityIdentifier.settingsUpdateLatest, AXEvidenceIdentifier.settingsUpdateLatest)
         XCTAssertEqual(ViftyAccessibilityIdentifier.mainScroll, AXEvidenceIdentifier.mainScroll)
         XCTAssertEqual(ViftyAccessibilityIdentifier.mainScrollEnd, AXEvidenceIdentifier.mainScrollEnd)
 
@@ -127,6 +131,25 @@ final class ViftyAccessibilitySemanticsTests: XCTestCase {
         XCTAssertTrue(general.contains(
             ".accessibilityIdentifier(ViftyAccessibilityIdentifier.settingsLaunchAtLogin)"
         ))
+    }
+
+    func testSoftwareUpdateControlsHaveStableAccessibilitySemantics() throws {
+        let general = try read("Sources/Vifty/SettingsGeneralView.swift")
+
+        XCTAssertTrue(general.contains("ViftyAccessibilityIdentifier.settingsUpdateAutomatic"))
+        XCTAssertTrue(general.contains("ViftyAccessibilityIdentifier.settingsUpdateStatus"))
+        XCTAssertTrue(general.contains("ViftyAccessibilityIdentifier.settingsUpdateCheck"))
+        XCTAssertTrue(general.contains("ViftyAccessibilityIdentifier.settingsUpdateLatest"))
+        XCTAssertTrue(general.contains("notification: .announcementRequested"))
+        XCTAssertTrue(general.contains(".onChange(of: softwareUpdates.errorAnnouncement?.id)"))
+        XCTAssertTrue(general.contains(".accessibilityHint(softwareUpdates.primaryActionHint)"))
+        XCTAssertEqual(
+            general.components(
+                separatedBy: "Refreshes GitHub release availability without downloading or installing."
+            ).count - 1,
+            2,
+            "The refresh button's AX hint and AppKit help must stay byte-identical."
+        )
     }
 
     func testTemperatureMetricPresentationKeepsSelectedAndHighestRolesSeparate() throws {
@@ -371,7 +394,8 @@ final class ViftyAccessibilitySemanticsTests: XCTestCase {
             "curveChart", "curveSeparateFans", "sensorList", "temperatureMetrics", "curveSensorMetric",
             "highestTemperatureMetric", "notifications", "notificationOpenSettings",
             "notificationSendTest", "settings", "settingsTabs", "settingsPaneGeneral",
-            "settingsLaunchAtLogin",
+            "settingsLaunchAtLogin", "settingsUpdateAutomatic", "settingsUpdateStatus",
+            "settingsUpdateCheck", "settingsUpdateLatest",
             "mainScroll", "mainScrollEnd"
         ] {
             XCTAssertTrue(joined.contains("ViftyAccessibilityIdentifier.\(identifierName)"), identifierName)

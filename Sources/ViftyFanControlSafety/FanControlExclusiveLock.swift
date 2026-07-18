@@ -237,6 +237,8 @@ public final class FanControlExclusiveLock: @unchecked Sendable {
                 return .unsafePath(reason)
             case .fileTooLarge(let name, let maximumBytes):
                 return .unsafePath("lock file \(name) exceeds \(maximumBytes) bytes")
+            case .lockUnavailable:
+                return .alreadyOwned
             case .ioFailure(let reason):
                 return .ioFailure(reason)
             }

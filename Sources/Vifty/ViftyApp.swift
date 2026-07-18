@@ -6,7 +6,9 @@ import ViftyCore
 struct ViftyApp: App {
     @NSApplicationDelegateAdaptor(ViftyAppDelegate.self) private var appDelegate
     @StateObject private var model: AppModel
+    @StateObject private var softwareUpdates: SoftwareUpdateController
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 #if DEBUG
     private let reviewFixtureRuntime: ViftyReviewFixtureRuntime?
 #endif
@@ -42,7 +44,26 @@ struct ViftyApp: App {
         let model = AppModel()
 #endif
         _model = StateObject(wrappedValue: model)
+#if DEBUG
+        let usesInertSoftwareUpdates = helperServiceRequest != nil
+            || helperServiceBridgeError != nil
+#else
+        let usesInertSoftwareUpdates = helperServiceRequest != nil
+            || helperServiceBridgeError != nil
+#endif
+#if DEBUG
+        let softwareUpdates = reviewFixtureRuntime?.softwareUpdates
+            ?? (usesInertSoftwareUpdates
+                ? SoftwareUpdateController.inert()
+                : SoftwareUpdateController.live())
+#else
+        let softwareUpdates = usesInertSoftwareUpdates
+            ? SoftwareUpdateController.inert()
+            : SoftwareUpdateController.live()
+#endif
+        _softwareUpdates = StateObject(wrappedValue: softwareUpdates)
         appDelegate.model = model
+        appDelegate.softwareUpdates = softwareUpdates
         appDelegate.helperServiceRequest = helperServiceRequest
         appDelegate.helperServiceBridgeError = helperServiceBridgeError
         if helperServiceRequest != nil || helperServiceBridgeError != nil {
@@ -97,10 +118,20 @@ struct ViftyApp: App {
         .commands {
 #if DEBUG
             if reviewFixtureRuntime == nil {
-                ViftyCommands(model: model, openWindow: openWindow)
+                ViftyCommands(
+                    model: model,
+                    softwareUpdates: softwareUpdates,
+                    openWindow: openWindow,
+                    openSettings: openSettings
+                )
             }
 #else
-            ViftyCommands(model: model, openWindow: openWindow)
+            ViftyCommands(
+                model: model,
+                softwareUpdates: softwareUpdates,
+                openWindow: openWindow,
+                openSettings: openSettings
+            )
 #endif
         }
 
@@ -115,6 +146,7 @@ struct ViftyApp: App {
                         ) {
                             ViftySettingsView(
                                 model: model,
+                                softwareUpdates: softwareUpdates,
                                 initialTab: settingsTab
                             )
                         }
@@ -122,10 +154,10 @@ struct ViftyApp: App {
                         EmptyView()
                     }
                 } else {
-                    ViftySettingsView(model: model)
+                    ViftySettingsView(model: model, softwareUpdates: softwareUpdates)
                 }
 #else
-                ViftySettingsView(model: model)
+                ViftySettingsView(model: model, softwareUpdates: softwareUpdates)
 #endif
             }
             .viftyTextScale(model.textScale)
@@ -167,6 +199,7 @@ struct ViftyApp: App {
 @MainActor
 final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
+    weak var softwareUpdates: SoftwareUpdateController?
     var helperServiceRequest: HelperServiceManagementRequest?
     var helperServiceBridgeError: Error?
 #if DEBUG
@@ -219,6 +252,7 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
         guard reviewFixtureRuntime == nil else { return }
 #endif
         guard let model else { return }
+        softwareUpdates?.start()
         statusItemController = ViftyStatusItemController(
             model: model,
             openMainWindow: { [weak self] in
@@ -270,6 +304,10 @@ final class ViftyAppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         return .terminateLater
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        softwareUpdates?.stop()
     }
 
     private func openMainWindow() {

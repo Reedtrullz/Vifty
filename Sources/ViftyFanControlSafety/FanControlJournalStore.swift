@@ -292,6 +292,8 @@ public final class FanControlJournalStore: @unchecked Sendable {
                 throw FanControlJournalStoreError.invalidRecord(
                     "encoded size exceeds \(maximumBytes) bytes"
                 )
+            case .lockUnavailable(let name):
+                throw FanControlJournalStoreError.ioFailure("secure file \(name) is locked")
             case .ioFailure(let reason):
                 throw FanControlJournalStoreError.ioFailure(reason)
             }

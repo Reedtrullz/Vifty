@@ -12,10 +12,13 @@ final class AppArchitectureBoundaryTests: XCTestCase {
 
         XCTAssertTrue(app.contains("Window(\"Vifty\", id: \"main\")"))
         XCTAssertTrue(app.contains("Settings {"))
-        XCTAssertTrue(app.contains("ViftySettingsView(model: model)"))
+        XCTAssertTrue(app.contains("ViftySettingsView(model: model, softwareUpdates: softwareUpdates)"))
         XCTAssertEqual(app.components(separatedBy: "model.start()").count - 1, 1)
         XCTAssertFalse(content.contains("model.start()"))
         XCTAssertFalse(menu.contains("model.start()"))
+        XCTAssertTrue(app.contains("softwareUpdates?.start()"))
+        XCTAssertTrue(app.contains("softwareUpdates?.stop()"))
+        XCTAssertTrue(app.contains("SoftwareUpdateController.inert()"))
     }
 
     func testAppActivationRefreshesExternalSettingsWithoutRunningInFixtureMode() throws {
@@ -164,6 +167,7 @@ final class AppArchitectureBoundaryTests: XCTestCase {
         XCTAssertTrue(fixture.hasPrefix("#if DEBUG\n"))
         XCTAssertTrue(fixture.hasSuffix("#endif\n"))
         XCTAssertTrue(app.contains("let model = reviewFixtureRuntime?.model ?? AppModel()"))
+        XCTAssertTrue(app.contains("reviewFixtureRuntime?.softwareUpdates"))
         XCTAssertTrue(app.contains("guard reviewFixtureRuntime == nil else { return }\n#endif\n        model.start()"))
         XCTAssertTrue(app.contains("guard reviewFixtureRuntime == nil else { return }"))
         XCTAssertTrue(app.contains("try reviewFixtureRuntime.finalize()"))

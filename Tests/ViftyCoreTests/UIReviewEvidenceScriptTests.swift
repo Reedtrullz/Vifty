@@ -1893,6 +1893,66 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
         XCTAssertTrue(rejected.output.contains("does not match the independently recomputed AX predicate"), rejected.output)
     }
 
+    func testAutomatedVerifierIndependentlyRejectsTamperedUpdateControlHelp() throws {
+        let fixture = try populatedFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        var manifest = fixture.manifest
+        manifest["status"] = "pending"
+        try installSealedAccessibilityEvidence(fixture: fixture, manifest: &manifest)
+        try markSystemSettingVisualRowsPending(manifest: &manifest)
+
+        let rowID = "settings-logical-traversal"
+        let rows = try XCTUnwrap(manifest["accessibilityChecks"] as? [[String: Any]])
+        let row = try XCTUnwrap(rows.first { $0["id"] as? String == rowID })
+        let captureID = try XCTUnwrap(row["captureID"] as? String)
+        var ledger = try XCTUnwrap(manifest["captureLedger"] as? [String: Any])
+        var capture = try XCTUnwrap(ledger[captureID] as? [String: Any])
+        var accessibility = try XCTUnwrap(capture["accessibility"] as? [String: Any])
+        let rawURL = fixture.evidence.appendingPathComponent(
+            try XCTUnwrap(accessibility["rawArtifact"] as? String)
+        )
+        var raw = try readJSON(rawURL)
+        var observations = try XCTUnwrap(raw["observations"] as? [[String: Any]])
+        let latestIndex = try XCTUnwrap(
+            observations.firstIndex {
+                $0["identifier"] as? String == AXEvidenceIdentifier.settingsUpdateLatest
+            }
+        )
+        observations[latestIndex]["help"] = "Downloads and installs automatically."
+        raw["observations"] = observations
+        try writeJSON(raw, to: rawURL)
+        let changedRawSHA = try sha256(rawURL)
+        accessibility["rawSHA256"] = changedRawSHA
+
+        let sealedURL = fixture.evidence.appendingPathComponent(
+            try XCTUnwrap(accessibility["artifact"] as? String)
+        )
+        var sealed = try readJSON(sealedURL)
+        var rawBinding = try XCTUnwrap(sealed["rawCapture"] as? [String: Any])
+        rawBinding["sha256"] = changedRawSHA
+        sealed["rawCapture"] = rawBinding
+        try writeJSON(sealed, to: sealedURL)
+        accessibility["sha256"] = try sha256(sealedURL)
+        capture["accessibility"] = accessibility
+        ledger[captureID] = capture
+        manifest["captureLedger"] = ledger
+        try writeJSON(manifest, to: fixture.manifestURL)
+
+        let rejected = try runVerifier(
+            manifest: fixture.manifestURL,
+            evidenceDirectory: fixture.evidence,
+            releaseBinary: fixture.releaseBinary,
+            debugExecutable: fixture.debugExecutable,
+            collectorExecutable: fixture.collectorExecutable,
+            verificationMode: "--verify-automated"
+        )
+
+        XCTAssertNotEqual(rejected.status, 0, rejected.output)
+        XCTAssertTrue(rejected.output.contains("independently recomputed AX predicate failed"), rejected.output)
+        XCTAssertTrue(rejected.output.contains("Update to latest version help mismatch"), rejected.output)
+        XCTAssertTrue(rejected.output.contains("does not match the independently recomputed AX predicate"), rejected.output)
+    }
+
     func testAutomatedVerifierIndependentlyRejectsOffscreenSeparateFanCurvesToggle() throws {
         let fixture = try populatedFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
@@ -4013,7 +4073,12 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
                 axObservation(2, "0/1", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabMenuBar, label: "Menu Bar", value: .string("Not selected"), actions: ["AXPress"]),
                 axObservation(3, "0/2", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabNotifications, label: "Notifications", value: .string("Not selected"), actions: ["AXPress"]),
                 axObservation(4, "0/3", role: "AXButton", identifier: AXEvidenceIdentifier.settingsTabAgentWorkflows, label: "Agent Workflows", value: .string("Not selected"), actions: ["AXPress"]),
-                axObservation(5, "1", role: "AXGroup", identifier: AXEvidenceIdentifier.settingsPaneGeneral, label: "General settings")
+                axObservation(5, "1", role: "AXGroup", identifier: AXEvidenceIdentifier.settingsPaneGeneral, label: "General settings"),
+                axObservation(6, "1/0", role: "AXCheckBox", identifier: AXEvidenceIdentifier.settingsUpdateAutomatic, label: "Automatically check for updates", selected: true, actions: ["AXPress"], position: AXPoint(x: 130, y: 160), size: AXSize(width: 300, height: 22)),
+                axObservation(7, "1/1", role: "AXStaticText", identifier: AXEvidenceIdentifier.settingsUpdateStatus, label: "Vifty 1.3.3 is available.", position: AXPoint(x: 130, y: 190), size: AXSize(width: 300, height: 18)),
+                axObservation(8, "1/2", role: "AXButton", identifier: AXEvidenceIdentifier.settingsUpdateLatest, label: "Update to latest version", help: "Opens Vifty's fixed GitHub release page in your default browser. Vifty does not download or install the update.", actions: ["AXPress"], position: AXPoint(x: 130, y: 220), size: AXSize(width: 190, height: 28)),
+                axObservation(9, "1/3", role: "AXButton", identifier: AXEvidenceIdentifier.settingsUpdateCheck, label: "Check now", help: "Refreshes GitHub release availability without downloading or installing.", actions: ["AXPress"], position: AXPoint(x: 330, y: 220), size: AXSize(width: 90, height: 28)),
+                axObservation(10, "1/4", role: "AXCheckBox", identifier: AXEvidenceIdentifier.settingsLaunchAtLogin, label: "Start Vifty at startup", selected: false, actions: ["AXPress"], position: AXPoint(x: 130, y: 360), size: AXSize(width: 250, height: 22))
             ], [])
         default:
             let contract = try XCTUnwrap(AXPredicateCatalog.scrollContract(for: id))
@@ -4108,6 +4173,7 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
         identifier: String,
         label: String? = nil,
         value: AXTypedValue? = nil,
+        help: String? = nil,
         selected: Bool? = nil,
         actions: [String] = [],
         position: AXPoint? = nil,
@@ -4121,6 +4187,7 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
             identifier: identifier,
             description: label,
             label: label,
+            help: help,
             value: value,
             enabled: true,
             selected: selected,

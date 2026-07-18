@@ -38,7 +38,7 @@ Release lanes:
 2. **Source release:** `v1.1.1` remains the published source-first fallback. Do not claim it or any unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
-Auto-update status: unavailable in `v1.3.2`, source-first, and unsigned-dev builds. Vifty should use Sparkle only in a separately reviewed Developer ID signed/notarized release with signed appcast metadata; see [auto-update.md](auto-update.md).
+Update status: the exact public `v1.3.2` binary has no update checker and cannot gain one retroactively. Current source contains an advisory release-availability checker for the first future exact Developer ID release, which must be installed manually. Eligible builds may check only the fixed GitHub latest-release endpoint at most daily with an opt-out; availability metadata is accepted only when its stable version and exact four canonical uploaded nonempty asset records validate, and **Update to latest version** opens the locally constructed tag page. The checker does not download or install executable code, and its filename/size checks are not archive, checksum, signed-tag, or notarization proof. Local ad-hoc, CI, source-first, and unsigned-dev builds make zero update requests. A future Sparkle signed-appcast installer remains separate work and must use Vifty's existing app-replacement transaction; see [auto-update.md](auto-update.md).
 
 Public release facts:
 
@@ -129,7 +129,7 @@ For the `v1.1.0` helper issue, use these checks only to reproduce and audit the 
 
 Before pushing a Developer ID tag:
 
-1. Keep Sparkle/update metadata out of `Resources/Info.plist` unless a separate signed-appcast release has been reviewed.
+1. Keep Sparkle installation metadata out of `Resources/Info.plist` unless a separate signed-appcast installer release has been reviewed. The advisory GitHub release checker is not an in-place installer and does not authorize `SUFeedURL` or `SUPublicEDKey`.
 2. Keep `.github/workflows/release.yml` strict about Developer ID signing, `VIFTY_XPC_ALLOWED_TEAM_ID`, notarization, stapling, Gatekeeper, artifact verification, and release checklist publication.
 3. Prepare the manifest/Info.plist/changelog candidate, keep the cask on the exact published manifest version/SHA, merge the prep through protected `main`, and require CI to pass on that exact merged SHA.
 4. Verify the six required repository-scoped secret names and the local signing/notarization path without storing certificate material, passwords, or secret values in the repo or Obsidian. The name-only preflight must also confirm that the `release` environment contains no same-name shadow. The workflow contract constrains every secret reference to the protected `sign-notarize` job.

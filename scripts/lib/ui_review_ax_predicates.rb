@@ -55,6 +55,11 @@ module ViftyUIReview
       settings_tab_notifications: "vifty.ax.settings.tab.notifications",
       settings_tab_agent_workflows: "vifty.ax.settings.tab.agent-workflows",
       settings_pane_general: "vifty.ax.settings.pane.general",
+      settings_launch_at_login: "vifty.ax.settings.general.launch-at-login",
+      settings_update_automatic: "vifty.ax.settings.general.update.automatic",
+      settings_update_status: "vifty.ax.settings.general.update.status",
+      settings_update_check: "vifty.ax.settings.general.update.check",
+      settings_update_latest: "vifty.ax.settings.general.update.latest",
       main_scroll: "vifty.ax.scroll.main",
       main_scroll_end: "vifty.ax.scroll.main.end",
       settings_general_scroll: "vifty.ax.scroll.settings.general",
@@ -88,6 +93,11 @@ module ViftyUIReview
         "Start 55 °C, 2100 RPM; Ramp 70 °C, 4200 RPM; High 85 °C, 6400 RPM"
       ]
     ].freeze
+
+    UPDATE_LATEST_HELP = "Opens Vifty's fixed GitHub release page in your default browser. " \
+                         "Vifty does not download or install the update."
+    UPDATE_REFRESH_HELP =
+      "Refreshes GitHub release availability without downloading or installing."
 
     SCROLL_CONTRACTS = {
       "compact-main-scroll-reachable" => [ID[:main_scroll], ID[:main_scroll_end]],
@@ -575,6 +585,88 @@ module ViftyUIReview
       if pane && tabs.last
         require_condition(tabs.last["order"] < pane["order"], "selected Settings pane must follow tab controls", failures)
       end
+      validate_software_update_controls(capture, root, pane, paths, failures)
+    end
+
+    def validate_software_update_controls(capture, root, pane, paths, failures)
+      automatic = unique(ID[:settings_update_automatic], capture, failures)
+      status = unique(ID[:settings_update_status], capture, failures)
+      latest = unique(ID[:settings_update_latest], capture, failures)
+      refresh = unique(ID[:settings_update_check], capture, failures)
+      launch_at_login = unique(ID[:settings_launch_at_login], capture, failures)
+
+      require_node(automatic, "AXCheckBox", "Automatically check for updates", nil, failures)
+      require_condition(automatic && automatic["enabled"] == true, "automatic update checks must be enabled", failures)
+      require_condition(automatic && automatic["selected"] == true, "automatic update checks must be on", failures)
+      require_condition(automatic && automatic["actions"] == ["AXPress"], "automatic update check action set mismatch", failures)
+
+      require_node(status, "AXStaticText", "Vifty 1.3.3 is available.", nil, failures)
+      require_node(latest, "AXButton", "Update to latest version", nil, failures)
+      require_condition(latest && latest["enabled"] == true, "Update to latest version must be enabled", failures)
+      require_condition(latest && latest["actions"] == ["AXPress"], "Update to latest version action set mismatch", failures)
+      require_condition(latest && latest["help"] == UPDATE_LATEST_HELP, "Update to latest version help mismatch", failures)
+
+      require_node(refresh, "AXButton", "Check now", nil, failures)
+      require_condition(refresh && refresh["enabled"] == true, "Check now must be enabled", failures)
+      require_condition(refresh && refresh["actions"] == ["AXPress"], "Check now action set mismatch", failures)
+      require_condition(refresh && refresh["help"] == UPDATE_REFRESH_HELP, "Check now help mismatch", failures)
+
+      require_node(launch_at_login, "AXCheckBox", "Start Vifty at startup", nil, failures)
+      require_condition(
+        launch_at_login && launch_at_login["selected"] != true,
+        "fixture launch-at-login control must be off",
+        failures
+      )
+
+      update_nodes = [automatic, status, latest, refresh].compact
+      update_nodes.each { |node| require_descendant(node, pane, failures) }
+      require_descendant(launch_at_login, pane, failures)
+      if update_nodes.length == 4
+        orders = update_nodes.map { |node| node["order"] }
+        require_condition(
+          orders.all? { |order| swift_int?(order) } && orders == orders.sort,
+          "software update controls are not in logical order",
+          failures
+        )
+      end
+      if refresh && launch_at_login
+        require_condition(
+          refresh["order"] < launch_at_login["order"],
+          "software update controls must precede Login settings",
+          failures
+        )
+      end
+
+      latest_frame = observation_frame(latest)
+      refresh_frame = observation_frame(refresh)
+      root_frame = observation_frame(root)
+      if latest_frame && refresh_frame && root_frame
+        require_condition(
+          latest_frame["width"].positive? && latest_frame["height"].positive? &&
+            refresh_frame["width"].positive? && refresh_frame["height"].positive?,
+          "software update buttons must have positive frames",
+          failures
+        )
+        require_condition(
+          frame_contains?(root_frame, latest_frame, 0.5) &&
+            frame_contains?(root_frame, refresh_frame, 0.5),
+          "software update buttons must be visible inside the capture root",
+          failures
+        )
+        require_condition(
+          latest_frame["x"] + latest_frame["width"] <= refresh_frame["x"] + 0.5,
+          "Update to latest version must be visually left of Check now",
+          failures
+        )
+      else
+        require_condition(
+          false,
+          "software update buttons and capture root must expose frames",
+          failures
+        )
+      end
+
+      paths.concat([automatic, status, latest, refresh, launch_at_login].compact.map { |item| item["path"] })
     end
 
     def validate_no_duplicate_chart_elements(capture, failures)

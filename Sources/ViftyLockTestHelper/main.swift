@@ -5,6 +5,7 @@ import ViftyFanControlSafety
 enum LockHelperMode: String {
     case attempt
     case holdUntilReleased
+    case attemptFileLock
 }
 
 func fail(_ message: String, code: Int32 = 1) -> Never {
@@ -16,10 +17,25 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 guard arguments.count >= 3,
       let mode = LockHelperMode(rawValue: arguments[0]),
       let ownerID = uid_t(arguments[2]) else {
-    fail("Usage: ViftyLockTestHelper attempt|holdUntilReleased <lock-path> <owner-uid> [ready-path release-path]", code: 64)
+    fail("Usage: ViftyLockTestHelper attempt|holdUntilReleased|attemptFileLock <lock-path> <owner-uid> [ready-path release-path]", code: 64)
 }
 
 let lockURL = URL(fileURLWithPath: arguments[1], isDirectory: false)
+if mode == .attemptFileLock {
+    let descriptor = Darwin.open(
+        lockURL.path,
+        O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_EXLOCK | O_NONBLOCK
+    )
+    guard descriptor >= 0 else {
+        if errno == EWOULDBLOCK || errno == EAGAIN {
+            exit(75)
+        }
+        fail("Unable to open file lock: \(String(cString: strerror(errno)))")
+    }
+    defer { close(descriptor) }
+    exit(0)
+}
+
 let guardURL = ProcessInfo.processInfo.environment["VIFTY_LOCK_TEST_GUARD_PATH"]
     .map { URL(fileURLWithPath: $0, isDirectory: false) }
 do {
@@ -42,6 +58,8 @@ do {
         }
         _ = lock.url
         _exit(0)
+    case .attemptFileLock:
+        preconditionFailure("handled before constructing the fan-control lock")
     }
 } catch FanControlExclusiveLockError.alreadyOwned {
     exit(75)

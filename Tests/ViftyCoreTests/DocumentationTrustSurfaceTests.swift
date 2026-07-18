@@ -938,7 +938,8 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(readme.contains("subtle in-memory trend sparklines for recent selected temperature, fan RPM, power flow, and thermal-pressure state"))
         XCTAssertTrue(readme.contains("samples stay local and reset with the app"))
         XCTAssertTrue(readme.contains("Trend sparklines and readouts are rendered from the in-memory rolling buffer only"))
-        XCTAssertTrue(readme.contains("no analytics, accounts, network uploads, cloud dependencies, or persistent telemetry export"))
+        XCTAssertTrue(readme.contains("no analytics, accounts, cloud dependencies, or persistent telemetry export"))
+        XCTAssertTrue(readme.contains("Vifty sends no account, fan, sensor, power, Codex, profile, or analytics payload"))
         XCTAssertTrue(readme.contains("Codex usage display is optional. When selected as a standalone mode or as one field in a custom menu-bar summary"))
         XCTAssertTrue(readme.contains("Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time"))
         XCTAssertTrue(readme.contains("Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage."))
@@ -1001,8 +1002,13 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
 
         XCTAssertTrue(readme.contains("[docs/auto-update.md](docs/auto-update.md)"))
         XCTAssertTrue(releaseStatus.contains("[auto-update.md](auto-update.md)"))
-        XCTAssertTrue(autoUpdate.contains("Auto-update is not enabled for `v1.3.2`, `v1.1.1` source-first, or unsigned-dev builds."))
-        XCTAssertTrue(autoUpdate.contains("Do not attach an updater to `Vifty-v<version>-unsigned-dev.zip`"))
+        XCTAssertTrue(autoUpdate.contains("Auto-update is not enabled for `v1.3.2`"))
+        XCTAssertTrue(autoUpdate.contains("exact public binary does not contain update checking"))
+        XCTAssertTrue(autoUpdate.contains("other ineligible builds make zero update requests"))
+        XCTAssertTrue(autoUpdate.contains("https://api.github.com/repos/Reedtrullz/Vifty/releases/latest"))
+        XCTAssertTrue(autoUpdate.contains("exactly four uploaded, nonempty canonical assets"))
+        XCTAssertTrue(autoUpdate.contains("Update to latest version"))
+        XCTAssertTrue(autoUpdate.contains("never downloads the archive"))
         XCTAssertTrue(autoUpdate.contains("Sparkle 2"))
         XCTAssertTrue(autoUpdate.contains("Developer ID signed, notarized, stapled"))
         XCTAssertTrue(autoUpdate.contains("EdDSA-signed appcast"))
@@ -1012,7 +1018,10 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(autoUpdate.contains("`SUVerifyUpdateBeforeExtraction`"))
         XCTAssertTrue(autoUpdate.contains("canonical `Vifty-v<version>.zip`"))
         XCTAssertTrue(autoUpdate.contains("Homebrew checksum handoff"))
-        XCTAssertTrue(autoUpdate.contains("No updater network checks should run in source-first mode."))
+        XCTAssertTrue(autoUpdate.contains("public IP address, request timing"))
+        XCTAssertTrue(autoUpdate.contains("no account, fan, sensor, power, Codex, profile, or analytics payload"))
+        XCTAssertTrue(autoUpdate.contains("software-update.json"))
+        XCTAssertTrue(autoUpdate.contains("only one running Vifty instance owns this state and request lane"))
     }
 
     func testReleaseDocsIncludeFutureAutoUpdateReadinessChecks() throws {
@@ -1020,15 +1029,16 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         let trustModel = try read("docs/trust-model.md")
 
         XCTAssertTrue(release.contains("[auto-update.md](auto-update.md)"))
-        XCTAssertTrue(release.contains("Sparkle auto-update is separate trusted-release work"))
-        XCTAssertTrue(release.contains("Do not enable Sparkle for source-first, unsigned-dev, or the current `v1.3.2` artifact."))
+        XCTAssertTrue(release.contains("Release-availability checking and in-place installation are separate trusted-release work"))
+        XCTAssertTrue(release.contains("checker is absent from the current `v1.3.2` artifact"))
         XCTAssertTrue(release.contains("SUFeedURL"))
         XCTAssertTrue(release.contains("SUPublicEDKey"))
         XCTAssertTrue(release.contains("generate_appcast"))
         XCTAssertTrue(release.contains("signed appcast"))
         XCTAssertTrue(release.contains("canonical `Vifty-v<version>.zip`"))
         XCTAssertTrue(trustModel.contains("[auto-update.md](auto-update.md)"))
-        XCTAssertTrue(trustModel.contains("Auto-update installs executable code and therefore belongs only to the future trusted binary lane."))
+        XCTAssertTrue(trustModel.contains("Current source separates advisory checking from executable installation"))
+        XCTAssertTrue(trustModel.contains("Any Sparkle signed-appcast implementation must enter the App Replacement Boundary"))
     }
 
     func testSourceFirstInfoPlistDoesNotAdvertiseSparkleFeed() throws {

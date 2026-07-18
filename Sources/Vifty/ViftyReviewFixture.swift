@@ -748,6 +748,7 @@ final class ViftyReviewFixtureRuntime {
     let request: ViftyReviewFixtureRequest
     let route: ViftyReviewFixtureRoute
     let model: AppModel
+    let softwareUpdates: SoftwareUpdateController
     let recorder: ViftyReviewFixtureRecorder
     let daemonInstaller: DaemonInstaller
     let launchCoordinator = ViftyReviewFixtureLaunchCoordinator()
@@ -813,6 +814,11 @@ final class ViftyReviewFixtureRuntime {
         buildProvenance = embeddedProvenance
         recorder = ViftyReviewFixtureRecorder()
         definition = ViftyReviewFixtureDefinition.resolve(request.state)
+        softwareUpdates = ViftyReviewSoftwareUpdateFixture.make(
+            request: request,
+            capturedAt: definition.capturedAt,
+            recorder: recorder
+        )
 
         let hardware = ViftyReviewHardware(
             snapshot: definition.snapshot,
@@ -1396,6 +1402,94 @@ private final class ViftyReviewFixtureWindowObserverView: NSView {
     private func emitObservation() {
         guard let window else { return }
         onWindowObservation?(window)
+    }
+}
+
+private enum ViftyReviewSoftwareUpdateFixture {
+    private static let currentVersion = ViftyReleaseVersion(major: 1, minor: 3, patch: 2)
+    private static let availableRelease = SoftwareUpdateRelease(
+        version: ViftyReleaseVersion(major: 1, minor: 3, patch: 3)
+    )
+
+    @MainActor
+    static func make(
+        request: ViftyReviewFixtureRequest,
+        capturedAt: Date,
+        recorder: ViftyReviewFixtureRecorder
+    ) -> SoftwareUpdateController {
+        let showsAvailableUpdate = request.state == .healthyAuto
+            && request.surface == .settingsGeneral
+        var snapshot = SoftwareUpdateStoreSnapshot.defaults
+        if showsAvailableUpdate {
+            snapshot.cachedRelease = availableRelease
+        }
+
+        return SoftwareUpdateController(
+            configuration: .resolve(
+                bundleIdentifier: showsAvailableUpdate
+                    ? SoftwareUpdateConfiguration.bundleIdentifier
+                    : nil,
+                bundleVersion: showsAvailableUpdate ? currentVersion.description : nil,
+                signatureIsEligible: showsAvailableUpdate
+            ),
+            client: ViftyReviewSoftwareUpdateClient(recorder: recorder),
+            store: ViftyReviewSoftwareUpdateStore(
+                snapshot: snapshot,
+                recorder: recorder
+            ),
+            pageOpener: ViftyReviewSoftwareUpdatePageOpener(recorder: recorder),
+            now: { capturedAt },
+            monotonicNow: { 1_000 },
+            sleep: { _ in throw CancellationError() }
+        )
+    }
+}
+
+private struct ViftyReviewSoftwareUpdateClient: SoftwareUpdateReleaseFetching {
+    let recorder: ViftyReviewFixtureRecorder
+
+    func fetchLatest(
+        currentVersion: ViftyReleaseVersion,
+        etag: String?
+    ) async throws -> SoftwareUpdateFetchResult {
+        recorder.recordExternalMutation("software-update-network-request")
+        throw ViftyReviewFixtureError.prohibitedOperation("software-update-network-request")
+    }
+}
+
+private final class ViftyReviewSoftwareUpdateStore: SoftwareUpdateStateStoring, @unchecked Sendable {
+    private let snapshot: SoftwareUpdateStoreSnapshot
+    private let recorder: ViftyReviewFixtureRecorder
+
+    init(
+        snapshot: SoftwareUpdateStoreSnapshot,
+        recorder: ViftyReviewFixtureRecorder
+    ) {
+        self.snapshot = snapshot
+        self.recorder = recorder
+    }
+
+    func load() -> SoftwareUpdateStoreSnapshot {
+        snapshot
+    }
+
+    func save(_ snapshot: SoftwareUpdateStoreSnapshot) throws {
+        recorder.recordExternalMutation("software-update-state-write")
+        throw ViftyReviewFixtureError.prohibitedOperation("software-update-state-write")
+    }
+}
+
+@MainActor
+private final class ViftyReviewSoftwareUpdatePageOpener: SoftwareUpdatePageOpening {
+    private let recorder: ViftyReviewFixtureRecorder
+
+    init(recorder: ViftyReviewFixtureRecorder) {
+        self.recorder = recorder
+    }
+
+    func open(_ url: URL) -> Bool {
+        recorder.recordExternalMutation("software-update-release-page")
+        return false
     }
 }
 

@@ -130,12 +130,13 @@ Agents should run `viftyctl diagnose --json` before long build/test workloads, u
 
 ## Local Data and Privacy
 
-Vifty has no analytics, Vifty-owned accounts, cloud sync, or background network dependency. The optional **Codex usage** menu-bar field is separate: when selected alone or inside a custom menu-bar summary, it asks the local Codex CLI/app-server for account rate-limit data if available, then falls back to local Codex session logs. Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
+Vifty has no analytics, Vifty-owned accounts, cloud sync, or Vifty-operated cloud service. Future exact Developer ID builds may make a bounded release-availability request to the fixed GitHub latest-release endpoint: automatic checking is opt-out and runs at most once per 24 hours, while **Check now** is explicit. GitHub receives normal HTTPS request metadata such as the public IP address, request timing, and a Vifty version-bearing User-Agent; Vifty sends no account, fan, sensor, power, Codex, profile, or analytics payload. Local ad-hoc, CI, source-first, unsigned-dev, and other ineligible builds make zero update requests. The optional **Codex usage** menu-bar field is separate: when selected alone or inside a custom menu-bar summary, it asks the local Codex CLI/app-server for account rate-limit data if available, then falls back to local Codex session logs. Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, and a 30 second to 5 minute refresh cadence without storing Codex credentials or API keys.
 
 Local files:
 
 - curve profiles and backups live under `~/Library/Application Support/Vifty/`;
 - manual-control markers live under the same app support directory;
+- the update opt-out, check timestamps, HTTP ETag, and last validated release version live in the private `software-update.json` file under the same directory; no release payload, executable, credentials, or telemetry are stored there;
 - agent lease/audit state is local, permission-restricted, and bounded to the most recent 2,000 audit events by default;
 - telemetry history and trend visualizations are derived from an in-memory rolling sample buffer only; Vifty does not persist or export those samples.
 
@@ -178,7 +179,9 @@ The generated fact block above is authoritative for the current public version, 
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 
-Auto-update installs executable code and therefore belongs only to the future trusted binary lane. See [auto-update.md](auto-update.md) for the Sparkle appcast, EdDSA signing, Developer ID, notarization, and source-first exclusion rules.
+Current source separates advisory checking from executable installation. A future exact Developer ID build may validate stable version and expected asset-name/size metadata from the fixed GitHub latest-release response and open only a locally constructed tag page; it does not trust API-supplied links, verify archive/checksum contents, claim signed-tag or notarization proof, download assets, replace `Vifty.app`, or modify the helper. The exact public `v1.3.2` build cannot gain that code, so the first checker-aware public release must be installed manually. Source-first, unsigned-dev, local ad-hoc, and CI builds make no requests.
+
+An in-place auto-update installs executable code and therefore remains future trusted-binary work. Any Sparkle signed-appcast implementation must enter the App Replacement Boundary above: daemon quiescence, complete Auto/System proof, no active lease or manual marker, root-ledger durability, post-swap validation, and rollback cannot be bypassed by the updater framework. See [auto-update.md](auto-update.md) for the advisory checker boundary and future Sparkle appcast, EdDSA signing, Developer ID, notarization, and source-first exclusion rules.
 
 ## What To Report Privately
 

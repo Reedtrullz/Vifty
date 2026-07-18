@@ -5,6 +5,7 @@ public enum SecureStorageError: Error, Equatable, LocalizedError, Sendable {
     case invalidPath(String)
     case unsafePath(String)
     case fileTooLarge(name: String, maximumBytes: Int)
+    case lockUnavailable(name: String)
     case ioFailure(String)
 
     public var errorDescription: String? {
@@ -15,6 +16,8 @@ public enum SecureStorageError: Error, Equatable, LocalizedError, Sendable {
             "Unsafe secure-storage path: \(reason)"
         case .fileTooLarge(let name, let maximumBytes):
             "Secure-storage file \(name) exceeds \(maximumBytes) bytes."
+        case .lockUnavailable(let name):
+            "Secure-storage file \(name) is already locked."
         case .ioFailure(let reason):
             "Secure-storage I/O failed: \(reason)"
         }
@@ -213,6 +216,17 @@ public final class SecureStorageDirectory: @unchecked Sendable {
     }
 
     public func validatePathIdentity() throws {
+        try validatePathIdentity(requiresExactLeafMode: requiresExactMode)
+    }
+
+    /// Revalidates the same descriptor-anchored directory generation while
+    /// permitting only owner-safe leaf permission drift. This lets callers
+    /// distinguish a migratable legacy mode from a replaced directory.
+    public func validatePathIdentityAllowingSafeLeafModeDrift() throws {
+        try validatePathIdentity(requiresExactLeafMode: false)
+    }
+
+    private func validatePathIdentity(requiresExactLeafMode: Bool) throws {
         try Self.validateRootDescriptor(descriptors[0])
         for index in componentNames.indices {
             try Self.validateDirectoryEntry(
@@ -221,10 +235,83 @@ public final class SecureStorageDirectory: @unchecked Sendable {
                 component: componentNames[index],
                 requiredOwnerID: requiredOwnerID,
                 requiredMode: requiredMode,
-                requiresExactMode: requiresExactMode,
+                requiresExactMode: requiresExactLeafMode,
                 isLeaf: index == componentNames.count - 1
             )
         }
+    }
+
+    /// Tightens the retained leaf directory to its configured private mode.
+    /// Callers may open a legacy directory with `requiresExactMode: false`,
+    /// validate every path component without following links, then migrate the
+    /// leaf without falling back to a path-based chmod.
+    public func tightenDirectoryPermissions() throws {
+        try validatePathIdentityAllowingSafeLeafModeDrift()
+        guard fchmod(leafDescriptor, requiredMode) == 0 else {
+            throw Self.posixFailure("tighten managed directory permissions")
+        }
+        try validatePathIdentity(requiresExactLeafMode: true)
+    }
+
+    /// Tightens one existing, owned, single-link regular file relative to the
+    /// retained directory. Unsafe file types, owners, links, replacements, and
+    /// group/world-writable legacy modes are rejected before permissions are
+    /// changed or content can be trusted.
+    public func tightenRegularFilePermissions(
+        named name: String,
+        requiredMode: mode_t = 0o600
+    ) throws {
+        try validateFileArguments(name: name, maximumBytes: 1, requiredMode: requiredMode)
+        try validatePathIdentity()
+        guard let pathMetadata = try entryMetadata(named: name) else { return }
+        guard pathMetadata.st_mode & S_IFMT == S_IFREG else {
+            throw SecureStorageError.unsafePath("secure file \(name) is not a regular file")
+        }
+        guard pathMetadata.st_uid == requiredOwnerID else {
+            throw SecureStorageError.unsafePath("secure file \(name) has the wrong owner")
+        }
+        guard pathMetadata.st_nlink == 1 else {
+            throw SecureStorageError.unsafePath("secure file \(name) has multiple hard links")
+        }
+        guard pathMetadata.st_mode & 0o022 == 0 else {
+            throw SecureStorageError.unsafePath(
+                "secure file \(name) has group- or world-writable permissions"
+            )
+        }
+
+        let descriptor = openat(leafDescriptor, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard descriptor >= 0 else {
+            throw Self.posixFailure("open secure file \(name) for permission migration")
+        }
+        defer { close(descriptor) }
+
+        var openedMetadata = stat()
+        guard fstat(descriptor, &openedMetadata) == 0 else {
+            throw Self.posixFailure("inspect secure file \(name) for permission migration")
+        }
+        guard Self.sameIdentity(pathMetadata, openedMetadata) else {
+            throw SecureStorageError.unsafePath(
+                "secure file \(name) changed while its permissions were being migrated"
+            )
+        }
+        guard openedMetadata.st_mode & 0o022 == 0 else {
+            throw SecureStorageError.unsafePath(
+                "secure file \(name) became group- or world-writable during migration"
+            )
+        }
+        guard fchmod(descriptor, requiredMode) == 0 else {
+            throw Self.posixFailure("tighten secure file \(name) permissions")
+        }
+        var tightenedMetadata = stat()
+        guard fstat(descriptor, &tightenedMetadata) == 0 else {
+            throw Self.posixFailure("reinspect secure file \(name) after permission migration")
+        }
+        try validateRegularFileMetadata(
+            tightenedMetadata,
+            name: name,
+            requiredMode: requiredMode
+        )
+        try validatePathIdentity()
     }
 
     public func readRegularFile(
@@ -514,10 +601,15 @@ public final class SecureStorageDirectory: @unchecked Sendable {
 
     /// Opens or creates a private regular file relative to the retained leaf.
     /// The caller owns the returned descriptor.
+    /// Opens one validated regular file relative to the retained directory.
+    /// `exclusiveLock` adds an atomic, nonblocking BSD descriptor lock during
+    /// `openat`; contention is reported as `lockUnavailable` and closing the
+    /// returned descriptor releases the lock.
     public func openRegularFileDescriptor(
         named name: String,
         requiredMode: mode_t = 0o600,
-        createIfMissing: Bool
+        createIfMissing: Bool,
+        exclusiveLock: Bool = false
     ) throws -> Int32 {
         try validateFileArguments(name: name, maximumBytes: 1, requiredMode: requiredMode)
         try validatePathIdentity()
@@ -532,13 +624,43 @@ public final class SecureStorageDirectory: @unchecked Sendable {
             throw SecureStorageError.ioFailure("secure file \(name) is missing")
         }
 
-        let flags = originalMetadata == nil
-            ? O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW
-            : O_RDWR | O_CLOEXEC | O_NOFOLLOW
-        let descriptor = openat(leafDescriptor, name, flags, requiredMode)
-        guard descriptor >= 0 else { throw Self.posixFailure("open secure file \(name)") }
+        let lockFlags = exclusiveLock ? O_EXLOCK | O_NONBLOCK : 0
+        var wasCreated = originalMetadata == nil
+        var descriptor = openat(
+            leafDescriptor,
+            name,
+            wasCreated
+                ? O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW | lockFlags
+                : O_RDWR | O_CLOEXEC | O_NOFOLLOW | lockFlags,
+            requiredMode
+        )
+        if descriptor < 0, wasCreated, errno == EEXIST {
+            wasCreated = false
+            guard let racedMetadata = try entryMetadata(named: name) else {
+                throw SecureStorageError.unsafePath(
+                    "secure file \(name) disappeared during concurrent creation"
+                )
+            }
+            try validateRegularFileMetadata(
+                racedMetadata,
+                name: name,
+                requiredMode: requiredMode
+            )
+            descriptor = openat(
+                leafDescriptor,
+                name,
+                O_RDWR | O_CLOEXEC | O_NOFOLLOW | lockFlags,
+                requiredMode
+            )
+        }
+        guard descriptor >= 0 else {
+            if exclusiveLock, errno == EWOULDBLOCK || errno == EAGAIN {
+                throw SecureStorageError.lockUnavailable(name: name)
+            }
+            throw Self.posixFailure("open secure file \(name)")
+        }
         do {
-            if originalMetadata == nil {
+            if wasCreated {
                 guard fchmod(descriptor, requiredMode) == 0 else {
                     throw Self.posixFailure("chmod secure file \(name)")
                 }
