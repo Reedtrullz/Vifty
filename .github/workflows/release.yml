@@ -470,7 +470,7 @@ jobs:
                 -H 'Pragma: no-cache' \
                 "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets/${expected_ruleset_id}" \
                 > "${details_path}"
-            ruby -rjson -e '
+            ruby -rjson -rtime -e '
               ruleset = JSON.parse(File.read(ARGV.fetch(0)))
               expected_id = Integer(ARGV.fetch(1), 10)
               expected_updated_at = ARGV.fetch(2)
@@ -484,10 +484,19 @@ jobs:
               rule_types = Array(ruleset["rules"]).map { |rule| rule["type"] }.compact.uniq.sort
               matched_includes = includes == ["refs/tags/v*"] ? includes : []
               matched_excludes = excludes == [] ? [] : Array(excludes)
+              raw_updated_at = ruleset["updated_at"]
+              abort("public ruleset updated_at must be an exact ISO-8601 timestamp with timezone") unless
+                raw_updated_at.is_a?(String) &&
+                raw_updated_at.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})\z/)
+              begin
+                live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601(9)
+              rescue ArgumentError
+                abort("public ruleset updated_at must be a valid ISO-8601 timestamp with timezone")
+              end
               valid = ruleset["id"] == expected_id &&
                 ruleset["name"].is_a?(String) && !ruleset["name"].empty? &&
                 ruleset["target"] == "tag" && ruleset["enforcement"] == "active" &&
-                ruleset["updated_at"] == expected_updated_at &&
+                live_updated_at == expected_updated_at &&
                 ruleset["current_user_can_bypass"] == "never" &&
                 includes == ["refs/tags/v*"] && matched_includes == ["refs/tags/v*"] &&
                 excludes == [] && matched_excludes.empty? &&
@@ -500,7 +509,7 @@ jobs:
                 "releaseRef" => full_ref,
                 "rulesetID" => expected_id,
                 "rulesetName" => ruleset.fetch("name"),
-                "rulesetUpdatedAt" => ruleset.fetch("updated_at"),
+                "rulesetUpdatedAt" => live_updated_at,
                 "currentUserCanBypass" => ruleset.fetch("current_user_can_bypass"),
                 "target" => "tag",
                 "enforcement" => "active",
@@ -1224,7 +1233,7 @@ jobs:
                   -H 'Pragma: no-cache' \
                   "https://api.github.com/repos/${GITHUB_REPOSITORY}/rulesets/${ruleset_id}" \
                   > "${details_path}"
-              if ruby -rjson -e '
+              if ruby -rjson -rtime -e '
                 ruleset = JSON.parse(File.read(ARGV.fetch(0)))
                 tag = ARGV.fetch(1)
                 expected_id = ARGV.fetch(2)
@@ -1234,10 +1243,19 @@ jobs:
                 includes = ref_name.is_a?(Hash) ? ref_name["include"] : nil
                 excludes = ref_name.is_a?(Hash) ? ref_name["exclude"] : nil
                 rule_types = Array(ruleset["rules"]).map { |rule| rule["type"] }.compact
+                raw_updated_at = ruleset["updated_at"]
+                exit 1 unless
+                  raw_updated_at.is_a?(String) &&
+                  raw_updated_at.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})\z/)
+                begin
+                  live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601(9)
+                rescue ArgumentError
+                  exit 1
+                end
                 valid = ruleset["target"] == "tag" &&
                   ruleset["enforcement"] == "active" &&
                   (expected_id.empty? || ruleset["id"] == Integer(expected_id, 10)) &&
-                  (expected_updated_at.empty? || ruleset["updated_at"] == expected_updated_at) &&
+                  (expected_updated_at.empty? || live_updated_at == expected_updated_at) &&
                   ruleset["current_user_can_bypass"] == "never" &&
                   includes == ["refs/tags/v*"] &&
                   excludes == [] &&

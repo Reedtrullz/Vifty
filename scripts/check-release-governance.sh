@@ -379,9 +379,14 @@ collect_matching_ruleset_evidence() {
       abort("active tag ruleset bypass_actors must be visible") unless bypass.is_a?(Array)
       abort("active tag ruleset rules must be visible objects") unless
         rules.is_a?(Array) && rules.all? { |rule| rule.is_a?(Hash) && rule["type"].is_a?(String) }
-      abort("active tag ruleset updated_at must be an exact UTC timestamp") unless
-        updated_at.is_a?(String) && updated_at.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/) &&
-        Time.iso8601(updated_at).utc.iso8601 == updated_at
+      abort("active tag ruleset updated_at must be an exact ISO-8601 timestamp with timezone") unless
+        updated_at.is_a?(String) &&
+        updated_at.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})\z/)
+      begin
+        canonical_updated_at = Time.iso8601(updated_at).utc.iso8601(9)
+      rescue ArgumentError
+        abort("active tag ruleset updated_at must be a valid ISO-8601 timestamp with timezone")
+      end
       abort("active tag ruleset current_user_can_bypass must be visible") unless current_user_can_bypass.is_a?(String)
       rule_types = rules.map { |rule| rule.fetch("type") }.uniq.sort
       exit 10 unless includes == ["refs/tags/v*"] && excludes == []
@@ -394,7 +399,7 @@ collect_matching_ruleset_evidence() {
         "releaseRef" => full_ref,
         "rulesetID" => ruleset.fetch("id"),
         "rulesetName" => ruleset.fetch("name"),
-        "rulesetUpdatedAt" => updated_at,
+        "rulesetUpdatedAt" => canonical_updated_at,
         "currentUserCanBypass" => current_user_can_bypass,
         "target" => "tag",
         "enforcement" => "active",

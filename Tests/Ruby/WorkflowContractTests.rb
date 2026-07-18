@@ -228,8 +228,20 @@ class WorkflowContractTests < Minitest::Test
 
   def test_rejects_public_ruleset_revision_binding_drift
     mutate_release_workflow(
-      'ruleset["updated_at"] == expected_updated_at',
-      'ruleset["updated_at"].is_a?(String)'
+      'live_updated_at == expected_updated_at',
+      'live_updated_at.is_a?(String)'
+    )
+
+    assert_contract_failure(
+      "sign-notarize must bind final annotated-tag identity and honest public update/deletion " \
+      "ruleset evidence into the publication contract"
+    )
+  end
+
+  def test_rejects_public_ruleset_revision_canonicalization_drift
+    mutate_release_workflow(
+      'live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601(9)',
+      'live_updated_at = Time.iso8601(raw_updated_at).utc.iso8601'
     )
 
     assert_contract_failure(

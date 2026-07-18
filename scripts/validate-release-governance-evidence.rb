@@ -100,6 +100,21 @@ rescue ArgumentError
   fail_evidence("#{label} is not a valid UTC timestamp")
 end
 
+def parse_ruleset_revision(value, label)
+  unless value.is_a?(String) &&
+         value.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{9})?Z\z/)
+    fail_evidence(
+      "#{label} must be canonical UTC with whole-second or nanosecond precision"
+    )
+  end
+  parsed = Time.iso8601(value).utc
+  precision = value.include?(".") ? 9 : 0
+  fail_evidence("#{label} must be a canonical UTC timestamp") unless parsed.iso8601(precision) == value
+  parsed
+rescue ArgumentError
+  fail_evidence("#{label} is not a valid UTC timestamp")
+end
+
 def git_output(root, *arguments)
   stdout, stderr, status = Open3.capture3("/usr/bin/git", "-C", root, *arguments)
   fail_evidence("git #{arguments.join(' ')} failed: #{stderr.strip}") unless status.success?
@@ -313,7 +328,7 @@ begin
   ruleset_id = ruleset["rulesetID"]
   fail_evidence("tagRulesetEvidence.rulesetID must be a positive integer") unless ruleset_id.is_a?(Integer) && ruleset_id.positive?
   fail_evidence("tagRulesetEvidence.rulesetName must be non-empty") unless ruleset["rulesetName"].is_a?(String) && !ruleset["rulesetName"].empty?
-  ruleset_updated_at = parse_utc_time(
+  ruleset_updated_at = parse_ruleset_revision(
     ruleset["rulesetUpdatedAt"],
     "tagRulesetEvidence.rulesetUpdatedAt"
   )
@@ -321,7 +336,7 @@ begin
   require_exact(
     ruleset,
     "rulesetUpdatedAt",
-    ruleset_updated_at.iso8601,
+    ruleset_updated_at.iso8601(ruleset.fetch("rulesetUpdatedAt").include?(".") ? 9 : 0),
     "tagRulesetEvidence.rulesetUpdatedAt"
   )
   require_exact(ruleset, "currentUserCanBypass", "never", "tagRulesetEvidence.currentUserCanBypass")
