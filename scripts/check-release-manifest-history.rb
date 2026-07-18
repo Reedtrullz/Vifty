@@ -48,6 +48,11 @@ def deep_sort(value)
   end
 end
 
+def semver(value)
+  match = /\A(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\z/.match(value.to_s)
+  match&.captures&.map(&:to_i)
+end
+
 current = read_manifest(options.fetch(:current), "current")
 
 if options[:allow_initial_v132]
@@ -80,6 +85,37 @@ current_published = current.fetch("publishedRelease")
 if current_published == base_published
   unless current_history.length == base_history.length
     abort("error: historicalReleases may grow only when publishedRelease changes")
+  end
+
+  base_candidate = base["candidate"]
+  current_candidate = current["candidate"]
+  if base_candidate.is_a?(Hash) && current_candidate != base_candidate
+    unless current_candidate.is_a?(Hash)
+      abort("error: unpromoted trusted base candidate may be cleared only by promotion")
+    end
+
+    base_candidate_version = semver(base_candidate["version"])
+    current_candidate_version = semver(current_candidate["version"])
+    unless base_candidate_version &&
+           current_candidate_version &&
+           (base_candidate_version <=> current_candidate_version) == -1
+      abort(
+        "error: replacement candidate version #{current_candidate["version"]} " \
+        "must be newer than trusted base candidate #{base_candidate["version"]}"
+      )
+    end
+
+    base_candidate_build = base_candidate["build"]
+    current_candidate_build = current_candidate["build"]
+    unless base_candidate_build.is_a?(Integer) &&
+           base_candidate_build.positive? &&
+           current_candidate_build.is_a?(Integer) &&
+           current_candidate_build > base_candidate_build
+      abort(
+        "error: replacement candidate build #{current_candidate_build} " \
+        "must be greater than trusted base candidate build #{base_candidate_build}"
+      )
+    end
   end
 else
   unless current_history.length == base_history.length + 1 && current_history.last == base_published
