@@ -547,6 +547,8 @@ final class ReleaseEnvironmentScriptTests: XCTestCase {
         XCTAssertTrue(workflow.contains("vifty-release-environment-readback.json"))
         XCTAssertTrue(workflow.contains("--workflow-public"))
         XCTAssertTrue(workflow.contains("--expected-branch-sha \"${GITHUB_SHA}\""))
+        XCTAssertTrue(workflow.contains("cd \"${TRUSTED_ROOT}\""))
+        XCTAssertTrue(workflow.contains("\"${TRUSTED_ROOT}/scripts/check-release-environment.sh\""))
         XCTAssertTrue(workflow.contains("releaseEnvironmentEvidence"))
         XCTAssertTrue(workflow.contains(#"environment_evidence["evidenceScope"] == "workflow-public""#))
         XCTAssertTrue(workflow.contains(#"environment_evidence["privilegedSettingsVerified"] == false"#))

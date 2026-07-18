@@ -201,6 +201,121 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("historicalReleases must be append-ordered by increasing version and build"), result.stderr)
     }
 
+    func testHistoryCheckerAcceptsUnchangedTrustedCandidate() throws {
+        let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = self.candidateEntry(version: "1.3.3", build: 8)
+        }
+        try fixture.snapshotCurrentAsBase()
+
+        let result = try fixture.runHistoryChecker()
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+    }
+
+    func testHistoryCheckerAcceptsFirstCandidateAfterNullBase() throws {
+        let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = NSNull()
+        }
+        try fixture.snapshotCurrentAsBase()
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = self.candidateEntry(version: "1.3.3", build: 8)
+        }
+
+        let result = try fixture.runHistoryChecker()
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+    }
+
+    func testHistoryCheckerAcceptsStrictlyNewerCandidateReplacement() throws {
+        let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = self.candidateEntry(version: "1.4.0", build: 8)
+        }
+        try fixture.snapshotCurrentAsBase()
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = self.candidateEntry(version: "1.4.1", build: 9)
+        }
+
+        let result = try fixture.runHistoryChecker()
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+    }
+
+    func testHistoryCheckerRejectsReplacementCandidateVersionThatDoesNotIncrease() throws {
+        for replacementVersion in ["1.3.9", "1.4.0"] {
+            let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+            try fixture.mutateManifest { manifest in
+                manifest["candidate"] = self.candidateEntry(version: "1.4.0", build: 8)
+            }
+            try fixture.snapshotCurrentAsBase()
+            try fixture.mutateManifest { manifest in
+                manifest["candidate"] = self.candidateEntry(
+                    version: replacementVersion,
+                    build: 9
+                )
+            }
+
+            let result = try fixture.runHistoryChecker()
+
+            XCTAssertNotEqual(result.exitCode, 0)
+            XCTAssertTrue(
+                result.stderr.contains(
+                    "replacement candidate version \(replacementVersion) must be newer than trusted base candidate 1.4.0"
+                ),
+                result.stderr
+            )
+        }
+    }
+
+    func testHistoryCheckerRejectsReplacementCandidateBuildThatDoesNotIncrease() throws {
+        for replacementBuild in [8, 9] {
+            let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+            try fixture.mutateManifest { manifest in
+                manifest["candidate"] = self.candidateEntry(version: "1.4.0", build: 9)
+            }
+            try fixture.snapshotCurrentAsBase()
+            try fixture.mutateManifest { manifest in
+                manifest["candidate"] = self.candidateEntry(
+                    version: "1.4.1",
+                    build: replacementBuild
+                )
+            }
+
+            let result = try fixture.runHistoryChecker()
+
+            XCTAssertNotEqual(result.exitCode, 0)
+            XCTAssertTrue(
+                result.stderr.contains(
+                    "replacement candidate build \(replacementBuild) must be greater than trusted base candidate build 9"
+                ),
+                result.stderr
+            )
+        }
+    }
+
+    func testHistoryCheckerRejectsClearingUnpromotedCandidate() throws {
+        let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = self.candidateEntry(version: "1.3.3", build: 8)
+        }
+        try fixture.snapshotCurrentAsBase()
+        try fixture.mutateManifest { manifest in
+            manifest["candidate"] = NSNull()
+        }
+
+        let result = try fixture.runHistoryChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains(
+                "unpromoted trusted base candidate may be cleared only by promotion"
+            ),
+            result.stderr
+        )
+    }
+
     func testHistoryCheckerAcceptsExactTrustedCandidatePromotion() throws {
         let fixture = try ReleaseManifestFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateManifest { manifest in

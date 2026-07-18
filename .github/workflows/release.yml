@@ -226,14 +226,17 @@ jobs:
           )
           VIFTY_WORKFLOW_CONTRACT_ROOT="${TRUSTED_ROOT}" \
             ruby "${TRUSTED_ROOT}/scripts/check-workflow-contract.rb"
-          GH_TOKEN="${RELEASE_GH_TOKEN}" \
-            "${TRUSTED_ROOT}/scripts/check-release-environment.sh" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --environment release \
-            --branch main \
-            --workflow-public \
-            --expected-branch-sha "${GITHUB_SHA}" \
-            --output "${RUNNER_TEMP}/vifty-release-environment-readback.json"
+          (
+            cd "${TRUSTED_ROOT}"
+            GH_TOKEN="${RELEASE_GH_TOKEN}" \
+              "${TRUSTED_ROOT}/scripts/check-release-environment.sh" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --environment release \
+              --branch main \
+              --workflow-public \
+              --expected-branch-sha "${GITHUB_SHA}" \
+              --output "${RUNNER_TEMP}/vifty-release-environment-readback.json"
+          )
           unset RELEASE_GH_TOKEN
 
       - name: Download inventoried candidate

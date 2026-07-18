@@ -112,7 +112,7 @@ final class ReleaseProvenanceScriptTests: XCTestCase {
         let result = try fixture.runChecker()
 
         XCTAssertNotEqual(result.exitCode, 0)
-        XCTAssertTrue(result.stderr.contains("does not match v1.3.3 commit"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("does not match \(fixture.tag) commit"), result.stderr)
     }
 
     func testCheckerRejectsTrustedWorkflowRefAfterSignedTagCommit() throws {
@@ -191,11 +191,11 @@ final class ReleaseProvenanceScriptTests: XCTestCase {
 
     func testCheckerRejectsGovernanceOutputInsideGitMetadataWithoutChangingTagRef() throws {
         let fixture = try ReleaseProvenanceFixture()
-        let tagRef = fixture.rootURL.appendingPathComponent(".git/refs/tags/v1.3.3")
+        let tagRef = fixture.rootURL.appendingPathComponent(".git/refs/tags/\(fixture.tag)")
         let original = try Data(contentsOf: tagRef)
 
         let result = try fixture.runChecker(
-            governanceEvidenceOutputArgument: ".git/refs/tags/v1.3.3"
+            governanceEvidenceOutputArgument: ".git/refs/tags/\(fixture.tag)"
         )
 
         XCTAssertEqual(result.exitCode, 65)
@@ -364,6 +364,7 @@ private struct RecordedGitHubCall {
 private final class ReleaseProvenanceFixture {
     let rootURL: URL
     let commitSHA: String
+    private(set) var tag = ""
 
     private let ciRunsURL: URL
     private let remoteRefsURL: URL
@@ -443,15 +444,26 @@ private final class ReleaseProvenanceFixture {
             arguments: ["-c", "commit.gpgsign=false", "commit", "-m", "trusted release base"],
             currentDirectory: rootURL
         )
-        try Self.writeCandidateManifest(at: rootURL.appendingPathComponent(".github/release-manifest.json"))
+        let candidate = try Self.writeCandidateManifest(
+            at: rootURL.appendingPathComponent(".github/release-manifest.json")
+        )
+        tag = candidate.tag
         try Self.runRequired(
             executable: "/usr/libexec/PlistBuddy",
-            arguments: ["-c", "Set :CFBundleShortVersionString 1.3.3", rootURL.appendingPathComponent("Resources/Info.plist").path],
+            arguments: [
+                "-c",
+                "Set :CFBundleShortVersionString \(candidate.version)",
+                rootURL.appendingPathComponent("Resources/Info.plist").path
+            ],
             currentDirectory: rootURL
         )
         try Self.runRequired(
             executable: "/usr/libexec/PlistBuddy",
-            arguments: ["-c", "Set :CFBundleVersion 8", rootURL.appendingPathComponent("Resources/Info.plist").path],
+            arguments: [
+                "-c",
+                "Set :CFBundleVersion \(candidate.build)",
+                rootURL.appendingPathComponent("Resources/Info.plist").path
+            ],
             currentDirectory: rootURL
         )
         if changeSignerPolicyInCandidate {
@@ -474,7 +486,8 @@ private final class ReleaseProvenanceFixture {
         try Self.writeGovernanceEvidence(
             at: governanceEvidenceURL,
             rootURL: rootURL,
-            commitSHA: commitSHA
+            commitSHA: commitSHA,
+            tag: tag
         )
         let governanceBytes = try Data(contentsOf: governanceEvidenceURL)
         let tagMessage = "candidate\n\nVifty-Release-Governance-Base64: \(governanceBytes.base64EncodedString())"
@@ -484,10 +497,10 @@ private final class ReleaseProvenanceFixture {
                 "-c", "gpg.format=ssh",
                 "-c", "gpg.ssh.program=/usr/bin/ssh-keygen",
                 "-c", "user.signingkey=\(supportURL.appendingPathComponent("release-signing-key").path)",
-                "tag", "-s", "v1.3.3", "-m", tagMessage
+                "tag", "-s", tag, "-m", tagMessage
             ]
         } else {
-            tagArguments = ["-c", "tag.gpgSign=false", "tag", "-a", "v1.3.3", "-m", tagMessage]
+            tagArguments = ["-c", "tag.gpgSign=false", "tag", "-a", tag, "-m", tagMessage]
         }
         try Self.runRequired(
             executable: "/usr/bin/git",
@@ -496,7 +509,7 @@ private final class ReleaseProvenanceFixture {
         )
         let tagObjectSHA = try Self.capture(
             executable: "/usr/bin/git",
-            arguments: ["rev-parse", "v1.3.3^{tag}"],
+            arguments: ["rev-parse", "\(tag)^{tag}"],
             currentDirectory: rootURL
         ).trimmingCharacters(in: .whitespacesAndNewlines)
         try Self.writeJSON(
@@ -504,7 +517,7 @@ private final class ReleaseProvenanceFixture {
             to: remoteRefsURL
         )
         if liveGitHubMode != nil {
-            try "v1.3.3\n".write(
+            try "\(tag)\n".write(
                 to: supportURL.appendingPathComponent("tag-name"),
                 atomically: true,
                 encoding: .utf8
@@ -601,7 +614,7 @@ private final class ReleaseProvenanceFixture {
     }
 
     func runChecker(
-        tag: String = "v1.3.3",
+        tag: String? = nil,
         json: Bool = false,
         trustedWorkflowRef: String? = nil,
         governanceEvidenceOutput: URL? = nil,
@@ -616,7 +629,7 @@ private final class ReleaseProvenanceFixture {
         process.executableURL = rootURL.appendingPathComponent("scripts/check-release-provenance.sh")
         process.currentDirectoryURL = currentDirectoryURL ?? rootURL
         var arguments = [
-            "--tag", tag,
+            "--tag", tag ?? self.tag,
             "--main-ref", "main"
         ]
         if includeCIRunsFixture {
@@ -840,17 +853,45 @@ private final class ReleaseProvenanceFixture {
         )
     }
 
-    private static func writeCandidateManifest(at url: URL) throws {
+    private static func writeCandidateManifest(
+        at url: URL
+    ) throws -> (version: String, build: Int, tag: String) {
         let data = try Data(contentsOf: url)
         var manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
+        let base = (manifest["candidate"] as? [String: Any]) ?? published
+        let baseVersion = try XCTUnwrap(base["version"] as? String)
+        let versionComponents = baseVersion.split(
+            separator: ".",
+            omittingEmptySubsequences: false
+        ).compactMap { Int($0) }
+        guard versionComponents.count == 3 else {
+            throw NSError(
+                domain: "ReleaseProvenanceFixture",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "base release version is not numeric SemVer"]
+            )
+        }
+        let (nextPatch, versionOverflow) = versionComponents[2].addingReportingOverflow(1)
+        let baseBuild = try XCTUnwrap(base["build"] as? Int)
+        let (candidateBuild, buildOverflow) = baseBuild.addingReportingOverflow(1)
+        guard !versionOverflow, !buildOverflow else {
+            throw NSError(
+                domain: "ReleaseProvenanceFixture",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "base release identity cannot be incremented"]
+            )
+        }
+        let candidateVersion = "\(versionComponents[0]).\(versionComponents[1]).\(nextPatch)"
+        let candidateTag = "v\(candidateVersion)"
         manifest["candidate"] = [
-            "version": "1.3.3",
-            "build": 8,
-            "tag": "v1.3.3",
-            "artifact": "Vifty-v1.3.3.zip",
-            "checksumAsset": "Vifty-v1.3.3.zip.sha256",
-            "artifactSummary": "Vifty-v1.3.3-artifact-summary.json",
-            "releaseChecklist": "Vifty-v1.3.3-release-checklist.md",
+            "version": candidateVersion,
+            "build": candidateBuild,
+            "tag": candidateTag,
+            "artifact": "Vifty-\(candidateTag).zip",
+            "checksumAsset": "Vifty-\(candidateTag).zip.sha256",
+            "artifactSummary": "Vifty-\(candidateTag)-artifact-summary.json",
+            "releaseChecklist": "Vifty-\(candidateTag)-release-checklist.md",
             "sha256": NSNull(),
             "artifactTrust": "pending",
             "signingTrust": "pending",
@@ -860,12 +901,14 @@ private final class ReleaseProvenanceFixture {
             "manualCompatibilityScope": NSNull()
         ]
         try writeJSON(manifest, to: url)
+        return (candidateVersion, candidateBuild, candidateTag)
     }
 
     private static func writeGovernanceEvidence(
         at url: URL,
         rootURL: URL,
-        commitSHA: String
+        commitSHA: String,
+        tag: String
     ) throws {
         let toolSHA = try capture(
             executable: "/usr/bin/shasum",
@@ -906,7 +949,7 @@ private final class ReleaseProvenanceFixture {
             "dataSource": "github-api-live",
             "liveAuthenticatedGitHubReadback": true,
             "repository": "Reedtrullz/Vifty",
-            "releaseTag": "v1.3.3",
+            "releaseTag": tag,
             "expectedMainSHA": commitSHA,
             "observationStartedAt": observedAt,
             "observedAt": observedAt,
@@ -985,8 +1028,8 @@ private final class ReleaseProvenanceFixture {
             "tagRulesetEvidence": [
                 "schemaVersion": 1,
                 "repository": "Reedtrullz/Vifty",
-                "releaseTag": "v1.3.3",
-                "releaseRef": "refs/tags/v1.3.3",
+                "releaseTag": tag,
+                "releaseRef": "refs/tags/\(tag)",
                 "rulesetID": 18_940_029,
                 "rulesetName": "Immutable Vifty release tags",
                 "rulesetUpdatedAt": "2026-01-01T00:00:00Z",

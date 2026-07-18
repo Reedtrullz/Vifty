@@ -84,6 +84,19 @@ class WorkflowContractTests < Minitest::Test
     )
   end
 
+  def test_rejects_release_environment_checker_outside_trusted_worktree
+    mutate_release_workflow(
+      "            cd \"${TRUSTED_ROOT}\"\n" \
+      "            GH_TOKEN=\"${RELEASE_GH_TOKEN}\"",
+      "            cd \"${GITHUB_WORKSPACE}\"\n" \
+      "            GH_TOKEN=\"${RELEASE_GH_TOKEN}\""
+    )
+
+    assert_contract_failure(
+      "sign-notarize release-environment checker must execute from the exact trusted worktree"
+    )
+  end
+
   def test_rejects_checkout_not_bound_to_exact_pushed_tag
     mutate_release_workflow(
       '          ref: refs/tags/${{ github.ref_name }}',
