@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-18
+
+### Added
+
+- Added a daemon-owned protocol-v2 fan-control transaction engine with single-writer locking, durable recovery journals, complete-fan-set verification, transactional rollback, and confirmed Auto/System restoration.
+- Added clearer draft, applying, daemon-confirmed, agent-owned, drift, and recovery states, including requested-versus-effective per-fan targets and curves.
+- Added semantic text sizing, notification authorization guidance, contrast/transparency-aware presentation, and native scrollable Settings.
+- Added advisory update checks for eligible Developer ID builds, with opt-out daily scheduling, strict stable-release metadata validation, and a locally constructed GitHub release-page handoff. Vifty never downloads or installs executable code.
+- Added a no-network operator path for manually supplied, manifest-promoted v1.4.0-or-newer release archives, with SHA/tag binding, safe extraction, signing/notarization/Gatekeeper verification, and the existing fail-closed replacement transaction.
+- Added source-bound fixture, Accessibility-tree, and visual-review tooling for deterministic automated UI evidence.
+
+### Changed
+
+- Helper repair, uninstall, app replacement, and termination now share an authenticated Auto-aware lifecycle that proves the service offline and the complete fan set OS-managed before destructive work.
+- `viftyctl run` now resolves the child before cooling, supervises its process group, forwards handled signals, bounds descendant cleanup, restores Auto after cleanup, and reports lifecycle failures.
+- Profile editing and recovery, selected-versus-hottest temperature semantics, telemetry smoothing labels, compact layouts, and effective per-fan summaries now describe the underlying state more accurately.
+- Release automation now accepts only the first automatic push run for an exact signed `v*` tag and binds exact-main CI, pinned release tooling, administrator governance evidence, candidate inventory, signing, notarization, stapling, Gatekeeper, and canonical assets. Manual dispatch and reruns are rejected.
+
+### Fixed
+
+- Startup recovery now completes before polling or saved-mode application, and Auto preempts stale manual or agent work so suspended operations cannot reclaim control.
+- Partial multi-fan writes, failed restoration, helper mismatch, and ambiguous app replacement now retain durable recovery ownership and block unsafe follow-on actions.
+- Profile backup recovery, sorted curve points, private storage, and explicit dirty, overwrite, and failure states prevent silent loss or misleading profile state.
+- App quit and replacement no longer fall through to forced process termination when Auto-aware shutdown cannot be confirmed.
+
+### Security
+
+- Display-only, synthesized, missing, or partial telemetry can no longer authorize fan writes; mutations require fresh eligibility, allowlisted and clamped commands, exclusive ownership, durable prewrite state, readback, and verified rollback.
+- XPC clients, helper maintenance, and replacement transactions now bind authenticated component and caller identity, single-use authority, private no-follow storage, and crash-recoverable ledgers.
+- Release tooling now verifies tag-only environment admission, an empty-bypass immutable `v*` tag ruleset, repository-secret scope, first-parent release tools, signed-tag provenance, and the one-shot retired-tag operator boundary.
+
+### Scope
+
+- These source capabilities do not by themselves prove publication, notarization, Homebrew promotion, installation, hardware compatibility, human visual review, or VoiceOver validation for the exact v1.4.0 build 8 artifact. Update checks remain advisory; automatic download and in-place updating are not implemented.
+
 ## [1.3.2] - 2026-07-13
 
 ### Fixed
