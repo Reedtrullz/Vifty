@@ -1576,6 +1576,10 @@ final class HelperLifecycleScriptTests: XCTestCase {
         XCTAssertTrue(lifecycle.contains("identity[\"bundleVersion\"] == expected_version"))
         XCTAssertTrue(lifecycle.contains("identity[\"bundleBuild\"] == expected_build"))
         XCTAssertTrue(lifecycle.contains("identity[\"kind\"] == \"developer-id\" && identity[\"teamID\"] == expected_team"))
+        XCTAssertTrue(lifecycle.contains("if ! bundle_version=\"$(/usr/bin/plutil -extract CFBundleShortVersionString"))
+        XCTAssertTrue(lifecycle.contains("if ! bundle_build=\"$(/usr/bin/plutil -extract CFBundleVersion"))
+        XCTAssertFalse(lifecycle.contains("CFBundleShortVersionString raw -o - \"${app}/Contents/Info.plist\" 2>/dev/null || true"))
+        XCTAssertFalse(lifecycle.contains("CFBundleVersion raw -o - \"${app}/Contents/Info.plist\" 2>/dev/null || true"))
     }
 
     private func read(_ path: String) throws -> String {

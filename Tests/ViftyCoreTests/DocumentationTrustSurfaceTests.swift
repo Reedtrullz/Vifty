@@ -1049,7 +1049,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(release.contains("same Auto/System replacement preflight, authority freeze, exact root snapshot, post-swap verification, and rollback transaction"))
         XCTAssertTrue(trustModel.contains("The public-archive lane is an explicit operator bridge, not an app-controlled downloader"))
         XCTAssertTrue(trustModel.contains("requires the exact manifest-pinned SHA-256"))
-        XCTAssertTrue(trustModel.contains("and a no-skip public verifier result"))
+        XCTAssertTrue(trustModel.contains("a no-skip public verifier result and independent extracted-bundle checks"))
     }
 
     func testSourceFirstInfoPlistDoesNotAdvertiseSparkleFeed() throws {

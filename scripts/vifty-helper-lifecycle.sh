@@ -1054,8 +1054,12 @@ capture_bundle_binding() {
       team_id=""
     fi
   fi
-  bundle_version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "${app}/Contents/Info.plist" 2>/dev/null || true)"
-  bundle_build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "${app}/Contents/Info.plist" 2>/dev/null || true)"
+  if ! bundle_version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "${app}/Contents/Info.plist" 2>/dev/null)"; then
+    bundle_version=""
+  fi
+  if ! bundle_build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "${app}/Contents/Info.plist" 2>/dev/null)"; then
+    bundle_build=""
+  fi
   /usr/bin/ruby -rjson -rdigest -e '
     root, kind, team_id, main_id, ctl_id, daemon_id, helper_id, bundle_version, bundle_build = ARGV
     components = {
