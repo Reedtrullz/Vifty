@@ -867,18 +867,17 @@ private final class GovernanceTagFixture {
     }
 
     func amendCandidateWithUnchangedBundleBuild() throws {
-        let manifest = try XCTUnwrap(
-            JSONSerialization.jsonObject(
-                with: Data(
-                    contentsOf: repositoryURL.appendingPathComponent(
-                        ".github/release-manifest.json"
-                    )
-                )
+        let parentPlist = try git("show", "HEAD^:Resources/Info.plist")
+        try Self.requireSuccess(parentPlist, "read first-parent fixture Info.plist")
+        let parentProperties = try XCTUnwrap(
+            PropertyListSerialization.propertyList(
+                from: Data(parentPlist.stdout.utf8),
+                options: [],
+                format: nil
             ) as? [String: Any]
         )
-        let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
-        let publishedBuild = try XCTUnwrap(published["build"] as? Int)
-        try editInfoPlist("Set :CFBundleVersion \(publishedBuild)")
+        let parentBuild = try XCTUnwrap(parentProperties["CFBundleVersion"] as? String)
+        try editInfoPlist("Set :CFBundleVersion \(parentBuild)")
         try amendCandidate(staging: ["Resources/Info.plist"])
     }
 
@@ -1104,9 +1103,19 @@ private final class GovernanceTagFixture {
         )
         let published = try XCTUnwrap(manifest["publishedRelease"] as? [String: Any])
         let publishedBuild = try XCTUnwrap(published["build"] as? Int)
+        let baseInfoPlist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(
+                from: Data(contentsOf: repositoryURL.appendingPathComponent("Resources/Info.plist")),
+                options: [],
+                format: nil
+            ) as? [String: Any]
+        )
+        let baseBuildString = try XCTUnwrap(baseInfoPlist["CFBundleVersion"] as? String)
+        let baseBuild = try XCTUnwrap(Int(baseBuildString))
+        let candidateBuild = max(publishedBuild, baseBuild) + 1
         manifest["candidate"] = [
             "version": String(tag.dropFirst()),
-            "build": publishedBuild + 1,
+            "build": candidateBuild,
             "tag": tag,
             "artifact": "Vifty-\(tag).zip",
             "checksumAsset": "Vifty-\(tag).zip.sha256",
@@ -1139,7 +1148,7 @@ private final class GovernanceTagFixture {
         try Self.requireSuccess(
             try Self.run(
                 "/usr/libexec/PlistBuddy",
-                ["-c", "Set :CFBundleVersion \(publishedBuild + 1)", infoPlistURL.path],
+                ["-c", "Set :CFBundleVersion \(candidateBuild)", infoPlistURL.path],
                 currentDirectory: repositoryURL
             ),
             "set fixture candidate build"
