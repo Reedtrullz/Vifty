@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-07-19
+
+### Fixed
+
+- Invoke the protected release-environment checker from the exact nested trusted Git worktree so its fail-closed source binding succeeds before any Apple signing or notarization secret is consumed.
+- Validate the static GitHub workflow identity `Release` separately from the dynamic per-tag run name `Release vX.Y.Z`, avoiding false one-shot trigger-correlation failures.
+- Advance replacement release candidates and release/provenance fixtures monotonically from the retired v1.4.0 candidate.
+- Keep release documentation and manifest assertions aligned with the current published entry without inheriting v1.3.2-only installed or hardware claims.
+
+### Scope
+
+- `v1.4.0` was retired without publication after its immutable first-attempt tag-push transaction failed before signing or notarization. `v1.4.1` carries forward the complete v1.4.0 source changes; no v1.4.0 GitHub Release or Homebrew promotion exists.
+
 ## [1.4.0] - 2026-07-18
 
 ### Added
