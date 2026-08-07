@@ -73,6 +73,7 @@ enum ViftyAccessibilityIdentifier {
     static let settingsTabMenuBar = "vifty.ax.settings.tab.menu-bar"
     static let settingsTabNotifications = "vifty.ax.settings.tab.notifications"
     static let settingsTabAgentWorkflows = "vifty.ax.settings.tab.agent-workflows"
+    static let agentCoolingEnabled = "vifty.ax.settings.agent-workflows.agent-cooling-enabled"
     static let settingsPaneGeneral = "vifty.ax.settings.pane.general"
     static let settingsLaunchAtLogin = "vifty.ax.settings.general.launch-at-login"
     static let settingsUpdateAutomatic = "vifty.ax.settings.general.update.automatic"

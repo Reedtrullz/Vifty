@@ -143,6 +143,28 @@ final class ViftyDaemonClientTests: XCTestCase {
         XCTAssertEqual(connection.invalidateCount, 1)
     }
 
+    func testSetAgentControlEnabledSendsToggleAndReturnsDecodedStatus() async throws {
+        let proxy = FakeDaemonProxy()
+        let status = AgentControlStatus(
+            enabled: false,
+            activeLease: nil,
+            lastDecision: nil,
+            lastErrorCode: nil,
+            policy: AgentControlPolicy(enabled: false).snapshot
+        )
+        proxy.setAgentControlEnabledHandler = { enabled, reply in
+            XCTAssertEqual(enabled, false)
+            reply(XPCAgentControlCoding.encode(status), nil)
+        }
+        let connection = FakeDaemonConnection(proxy: proxy)
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+
+        let decoded = try await client.setAgentControlEnabled(false)
+
+        XCTAssertEqual(decoded, status)
+        XCTAssertEqual(connection.invalidateCount, 1)
+    }
+
     func testAgentMutationsUseOnlyProtocolV2SelectorsOnOneConnection() async throws {
         let legacyPrepareCalled = SendableTestFlag()
         let legacyRestoreCalled = SendableTestFlag()
@@ -558,6 +580,7 @@ private final class FakeDaemonProxy: ViftyDaemonProtocol, @unchecked Sendable {
     var snapshotHandler: ((@escaping (NSDictionary?, String?) -> Void) -> Void)?
     var agentControlStatusHandler: (@Sendable (@escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var agentControlAuditHandler: (@Sendable (Int, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
+    var setAgentControlEnabledHandler: (@Sendable (Bool, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var prepareAgentControlHandler: (@Sendable (NSDictionary, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var restoreAgentControlHandler: (@Sendable (String, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
     var prepareAgentControlV2Handler: (@Sendable (NSDictionary, @escaping @Sendable (NSDictionary?, String?) -> Void) -> Void)?
@@ -585,6 +608,10 @@ private final class FakeDaemonProxy: ViftyDaemonProtocol, @unchecked Sendable {
 
     func agentControlAudit(_ limit: Int, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
         agentControlAuditHandler?(limit, reply)
+    }
+
+    func setAgentControlEnabled(_ enabled: Bool, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {
+        setAgentControlEnabledHandler?(enabled, reply)
     }
 
     func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void) {

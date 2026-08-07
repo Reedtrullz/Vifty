@@ -11,6 +11,7 @@ public enum ViftyDaemonConstants {
     func snapshot(reply: @escaping (NSDictionary?, String?) -> Void)
     func agentControlStatus(reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func agentControlAudit(_ limit: Int, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
+    func setAgentControlEnabled(_ enabled: Bool, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func prepareAgentControl(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func restoreAgentControl(_ reason: String, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)
     func prepareAgentControlV2(_ request: NSDictionary, reply: @escaping @Sendable (NSDictionary?, String?) -> Void)

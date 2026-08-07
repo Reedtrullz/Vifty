@@ -108,6 +108,11 @@ public actor FanControlArbiter {
         let transactionID: String
 
         if let existingRecord {
+            if case .manual = existingRecord.owner, request.unreadableJournalRecoveryAuthority == nil {
+                throw ViftyError.helperRejected(
+                    "A manual fan-control session is active; Auto restore requires explicit operator confirmation."
+                )
+            }
             expectedFanIDs = Array(
                 Set(existingRecord.expectedFanIDs).union(request.expectedFanIDs)
             ).sorted()

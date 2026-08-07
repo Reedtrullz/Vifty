@@ -58,6 +58,9 @@ Agents should treat `viftyctl` as a local safety contract:
 6. Always include a non-blank human-readable `--reason` and a stable non-blank `--idempotency-key` when preparing directly.
 7. Do not pass `--idempotency-key` to `restore-auto`; restore is intentionally tied to the supervised lifecycle, not a scoped key.
 8. After a successful direct `restore-auto`, re-run `diagnose --json`; the CLI clears the same local `manualControlActive` marker that diagnose uses as the restore-first gate.
+9. `restore-auto` refuses to override an active manual fan-control session (the user's Fixed/Curve choice) unless a human passes `--operator`. Agents must not pass `--operator`; if restore is refused with a manual-session message, stop and ask the user rather than overriding their control.
+
+The user can disable agent cooling entirely in Vifty → Settings → Agent Workflows → **Allow agent cooling requests**. Disabling restores Auto immediately if a lease is active and persists the disabled policy in the daemon's root-owned store; `policy.enabled` then reports `false` on every status, capabilities, and diagnose readback, and `prepare`/`run` are denied until the user re-enables it. Treat `policy.enabled: false` as a hard stop and never re-enable it from an agent.
 
 Vifty never exposes raw SMC writes through `viftyctl`. Agents request intent: workload type, maximum duration, maximum RPM percent, and reason. The daemon evaluates policy, writes bounded fan targets if allowed, records the lease, and owns expiry.
 

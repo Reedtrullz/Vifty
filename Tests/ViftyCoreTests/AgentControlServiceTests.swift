@@ -90,6 +90,163 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertTrue(audit.contains("\"message\":\"Build\""))
     }
 
+    func testSetPolicyEnabledPersistsToggleAndReflectsInStatus() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+
+        let disabled = try await service.setPolicyEnabled(false)
+
+        XCTAssertEqual(disabled.policy?.enabled, false)
+        XCTAssertEqual(try store.loadAgentControlEnabled(), false)
+        let status = try await service.status()
+        XCTAssertEqual(status.policy?.enabled, false)
+    }
+
+    func testDisablingPolicyWhileLeaseActiveRestoresAutoAndPersistsDisabled() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "key"
+        )
+        let prepared = try await service.prepare(request)
+        XCTAssertNotNil(prepared.activeLease)
+
+        let disabled = try await service.setPolicyEnabled(false)
+
+        XCTAssertNil(disabled.activeLease)
+        XCTAssertEqual(disabled.policy?.enabled, false)
+        XCTAssertNil(try store.loadActiveLease())
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredFanIDs, [0])
+        XCTAssertEqual(try store.loadAgentControlEnabled(), false)
+    }
+
+    func testServiceLoadsPersistedPolicyEnabledAtInit() async throws {
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+        try store.saveAgentControlEnabled(false)
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) }
+        )
+
+        let status = await service.status()
+
+        XCTAssertEqual(status.policy?.enabled, false)
+    }
+
+    func testLeaseExpiryUsesMonotonicDecisionClockNotWallClockRollback() async throws {
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let wall = AgentControlTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let monotonic = AgentControlTestClock(now: Date(timeIntervalSince1970: 1_000))
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { wall.now },
+            decisionClock: { monotonic.now },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "key"
+        )
+        let prepared = try await service.prepare(request)
+        XCTAssertEqual(prepared.activeLease?.expiresAt, Date(timeIntervalSince1970: 1_600))
+
+        // The wall clock rolls back, but the monotonic decision clock advances
+        // past the 600-second expiry; the lease must not be extended.
+        wall.now = Date(timeIntervalSince1970: 900)
+        monotonic.now = Date(timeIntervalSince1970: 1_700)
+
+        let status = await service.status()
+        XCTAssertEqual(status.activeLease?.isActive(at: monotonic.now), false)
+
+        // A new request must not be treated as an active lease: the monotonic
+        // clock sees an expired lease even though the wall clock rolled back.
+        let second = try await service.prepare(AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Second build",
+            idempotencyKey: "other-key"
+        ))
+        XCTAssertEqual(second.lastDecision?.errorCode, .policyDenied)
+        XCTAssertTrue(second.lastDecision?.message.contains("expired") == true)
+    }
+
+    func testStartupRecoveryClampsPersistedLeaseRemainingAfterClockRollback() async throws {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let store = AgentControlStore(directory: temporaryDirectory())
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 1_800,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "key"
+        )
+        try store.saveActiveLease(AgentCoolingLease(
+            id: "lease-1",
+            request: request,
+            createdAt: startedAt,
+            expiresAt: startedAt.addingTimeInterval(1_800),
+            targetRPMByFanID: [0: 3_750]
+        ))
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [
+            Self.fan(id: 0, minimumRPM: 1_500, maximumRPM: 4_500)
+        ]))
+        await hardware.failNextRestoreAuto()
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 900) }
+        )
+
+        do {
+            _ = try await service.recoverOnStartup()
+            XCTFail("Expected restore failure to surface")
+        } catch {
+            // The persisted lease must have been clamped to at most the policy
+            // cap measured from the recovery instant (900 + 600) before the
+            // restore attempt, so a wall-clock rollback cannot stretch it.
+            let clamped = try XCTUnwrap(try store.loadActiveLease())
+            XCTAssertEqual(clamped.expiresAt, Date(timeIntervalSince1970: 2_700))
+        }
+    }
+
     func testPrepareNormalizesMetadataBeforeSavingLeaseAndAudit() async throws {
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let directory = temporaryDirectory()

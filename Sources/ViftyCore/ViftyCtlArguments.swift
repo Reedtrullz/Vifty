@@ -7,7 +7,7 @@ public enum ViftyCtlCommand: Equatable, Sendable {
     case diagnose(json: Bool, requireSafe: Bool = false)
     case audit(limit: Int, json: Bool)
     case prepare(AgentControlRequest, json: Bool, force: Bool)
-    case restoreAuto(reason: String, json: Bool)
+    case restoreAuto(reason: String, json: Bool, operatorOverride: Bool)
     case run(AgentControlRequest, childArguments: [String], json: Bool, force: Bool)
     case helperMaintenancePrepare(operation: HelperMaintenanceOperation)
     case helperMaintenanceConsume(operation: HelperMaintenanceOperation, reportPath: String)
@@ -44,7 +44,7 @@ public enum ViftyCtlArguments {
             try validateRequestOptions(rest)
             return .prepare(try parseRequest(rest), json: rest.contains("--json"), force: rest.contains("--force"))
         case "restore-auto":
-            try validateOptions(rest, flagOnly: ["--json"], valueFlags: ["--reason"])
+            try validateOptions(rest, flagOnly: ["--json", "--operator"], valueFlags: ["--reason"])
             return .restoreAuto(
                 reason: try optionalTrimmedValue(
                     for: "--reason",
@@ -52,7 +52,8 @@ public enum ViftyCtlArguments {
                     error: .invalidReason,
                     maximumLength: AgentControlRequest.maximumReasonLength
                 ) ?? "manual restore",
-                json: rest.contains("--json")
+                json: rest.contains("--json"),
+                operatorOverride: rest.contains("--operator")
             )
         case "run":
             guard let separatorIndex = rest.firstIndex(of: "--") else {

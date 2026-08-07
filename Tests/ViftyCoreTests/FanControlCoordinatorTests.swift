@@ -481,7 +481,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(restoreRequests.count, 1)
         XCTAssertEqual(restoreRequests[0].expectedFanIDs, [])
         XCTAssertTrue(restoreRequests[0].allowRestoreAllTrustedFans)
-        XCTAssertNil(restoreRequests[0].unreadableJournalRecoveryAuthority)
+        XCTAssertEqual(restoreRequests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
         let legacyRestoreCallCount = await hardware.legacyRestoreCallCount
         XCTAssertEqual(legacyRestoreCallCount, 0)
     }
@@ -512,7 +512,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(requests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
     }
 
-    func testFailedExplicitAutoDoesNotReuseOperatorAuthorityOnBackgroundRetry() async throws {
+    func testFailedExplicitAutoRetriesBackgroundRestoreWithPendingOperatorIntent() async throws {
         let snapshot = HardwareSnapshot(
             fans: [Self.fan()],
             temperatureSensors: [],
@@ -542,7 +542,7 @@ final class FanControlCoordinatorTests: XCTestCase {
         let requests = await hardware.restoreRequests
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests[0].unreadableJournalRecoveryAuthority, .explicitOperator)
-        XCTAssertNil(requests[1].unreadableJournalRecoveryAuthority)
+        XCTAssertEqual(requests[1].unreadableJournalRecoveryAuthority, .explicitOperator)
     }
 
     func testExplicitAutoUsesDaemonAuthoritativeRestoreWhenClientSnapshotHasNoFans() async throws {

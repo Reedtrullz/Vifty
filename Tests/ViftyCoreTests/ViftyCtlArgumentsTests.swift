@@ -361,7 +361,21 @@ final class ViftyCtlArgumentsTests: XCTestCase {
             "--json"
         ])
 
-        XCTAssertEqual(command, .restoreAuto(reason: "done", json: true))
+        XCTAssertEqual(command, .restoreAuto(reason: "done", json: true, operatorOverride: false))
+    }
+
+    func testRestoreAutoParsesOperatorOverrideFlag() throws {
+        let command = try ViftyCtlArguments.parse([
+            "restore-auto",
+            "--reason", "operator recovery",
+            "--operator",
+            "--json"
+        ])
+
+        XCTAssertEqual(
+            command,
+            .restoreAuto(reason: "operator recovery", json: true, operatorOverride: true)
+        )
     }
 
     func testRestoreAutoRejectsWhitespaceOnlyReason() {

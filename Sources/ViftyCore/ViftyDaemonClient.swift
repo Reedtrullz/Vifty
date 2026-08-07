@@ -110,6 +110,23 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         }
     }
 
+    public func setAgentControlEnabled(_ enabled: Bool) async throws -> AgentControlStatus {
+        try await withProxy { proxy, finish in
+            proxy.setAgentControlEnabled(enabled) { dictionary, error in
+                if let error {
+                    finish(.failure(ViftyError.helperRejected(error)))
+                    return
+                }
+                guard let dictionary,
+                      let status = XPCAgentControlCoding.decodeStatus(dictionary) else {
+                    finish(.failure(ViftyError.helperRejected("Daemon returned an invalid agent-control status.")))
+                    return
+                }
+                finish(.success(status))
+            }
+        }
+    }
+
     public func prepareAgentControl(_ request: AgentControlRequest) async throws -> AgentControlStatus {
         try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
             proxy.prepareAgentControlV2(XPCAgentControlCoding.encode(request)) { dictionary, error in

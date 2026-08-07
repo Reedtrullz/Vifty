@@ -23,6 +23,17 @@ struct SettingsAgentWorkflowView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Section("Agent Cooling") {
+                Toggle("Allow agent cooling requests", isOn: agentCoolingBinding())
+                    .help(
+                        model.agentCoolingEnabled == nil
+                            ? "The daemon is unavailable; the current policy cannot be read."
+                            : "Turning this off restores Auto immediately and refuses new cooling leases until re-enabled."
+                    )
+                    .disabled(model.agentCoolingEnabled == nil)
+                    .accessibilityIdentifier(ViftyAccessibilityIdentifier.agentCoolingEnabled)
+            }
+
             Section("Commands") {
                 Menu {
                     ForEach(AgentWorkflowSupport.WorkloadCommandMode.allCases) { mode in
@@ -30,9 +41,10 @@ struct SettingsAgentWorkflowView: View {
                             ForEach(AgentWorkflowSupport.safeWorkloadCommandTemplates) { template in
                                 Button(template.title) {
                                     copyAgentWorkflowCommand(template, mode)
-                                }
-                            }
-                        }
+            }
+        }
+    }
+
                     }
                 } label: {
                     Label("Copy Command", systemImage: "terminal")
@@ -69,6 +81,15 @@ struct SettingsAgentWorkflowView: View {
         .onDisappear {
             copiedFeedbackScheduler.cancel()
         }
+    }
+
+    private func agentCoolingBinding() -> Binding<Bool> {
+        Binding(
+            get: { model.agentCoolingEnabled == true },
+            set: { enabled in
+                Task { await model.setAgentCoolingEnabled(enabled) }
+            }
+        )
     }
 
     private func copyAgentWorkflowRule() {
