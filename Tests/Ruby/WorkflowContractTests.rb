@@ -4,6 +4,7 @@ require "fileutils"
 require "json"
 require "minitest/autorun"
 require "open3"
+require "shellwords"
 require "tmpdir"
 
 class WorkflowContractTests < Minitest::Test
@@ -312,6 +313,361 @@ class WorkflowContractTests < Minitest::Test
     )
   end
 
+  def test_created_draft_response_captures_repository_scoped_immutable_id_before_marker_validation
+    code = release_inline_ruby(
+      "capture_created_release_id()",
+      "capture_owned_draft_release_id()"
+    )
+    response = {
+      "id" => 356_237_268,
+      "url" => "https://api.github.com/repos/Reedtrullz/Vifty/releases/356237268",
+      "assets_url" => "https://api.github.com/repos/Reedtrullz/Vifty/releases/356237268/assets",
+      "upload_url" => "https://uploads.github.com/repos/Reedtrullz/Vifty/releases/356237268/assets{?name,label}",
+      "tag_name" => "v1.4.2",
+      "draft" => true,
+      "prerelease" => false,
+      "assets" => []
+    }
+
+    path = write_json_fixture("created-draft.json", response)
+    stdout, stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "Reedtrullz/Vifty", "v1.4.2"
+    )
+
+    assert_predicate status, :success?, stderr
+    assert_equal "356237268", stdout
+
+    response["draft"] = false
+    response["prerelease"] = true
+    response["assets"] = [{ "id" => 1 }]
+    response["name"] = "unexpected mutable state"
+    path = write_json_fixture("anomalous-created-release.json", response)
+    stdout, stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "Reedtrullz/Vifty", "v1.4.2"
+    )
+
+    assert_predicate status, :success?, stderr
+    assert_equal "356237268", stdout,
+      "repository-scoped immutable ID retention must not depend on mutable publication state"
+
+    response["url"] = "https://api.github.com/repos/other/repository/releases/356237268"
+    path = write_json_fixture("wrong-repository-draft.json", response)
+    _stdout, stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "Reedtrullz/Vifty", "v1.4.2"
+    )
+
+    refute_predicate status, :success?
+    assert_includes stderr, "repository-scoped ID/tag identity"
+  end
+
+  def test_owned_draft_marker_count_is_literal_exact_and_single
+    code = release_inline_ruby(
+      "capture_owned_draft_release_id()",
+      "discover_owned_release_by_tag_for_containment()"
+    )
+    marker = "<!-- vifty-release-owner:29668876169:1:b5627041 -->"
+    title = "Vifty 1.4.2 [draft b5627041]"
+    response = {
+      "id" => 356_237_268,
+      "tag_name" => "v1.4.2",
+      "draft" => true,
+      "name" => title,
+      "body" => "release checklist\n\n#{marker}\n",
+      "assets" => []
+    }
+
+    assert_equal 1, response.fetch("body").scan(marker).length
+    assert_equal 0, response.fetch("body").scan(Regexp.escape(marker)).length,
+      "escaped String scan must reproduce the retired v1.4.1 validator bug"
+
+    path = write_json_fixture("owned-draft.json", response)
+    stdout, stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "v1.4.2", title, marker
+    )
+    assert_predicate status, :success?, stderr
+    assert_equal "356237268", stdout
+
+    response["body"] = "#{marker}\n#{marker}\n"
+    path = write_json_fixture("duplicate-marker-draft.json", response)
+    _stdout, _stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "v1.4.2", title, marker
+    )
+    refute_predicate status, :success?
+
+    response["body"] = "prefix #{marker} suffix\n"
+    path = write_json_fixture("inline-marker-draft.json", response)
+    _stdout, _stderr, status = Open3.capture3(
+      "/usr/bin/ruby", "-rjson", "-e", code,
+      path, "v1.4.2", title, marker
+    )
+    refute_predicate status, :success?
+  end
+
+  def test_post_creation_release_discovery_retries_empty_then_visible_and_fails_closed_on_persistent_absence
+    function = release_shell_function(
+      "wait_for_owned_release_by_tag_for_containment()",
+      "verify_release_state()"
+    )
+    destination = File.join(@fixture_root, "discovered-draft.json")
+    retry_script = <<~BASH
+      set -euo pipefail
+      RELEASE_TAG=v1.4.2
+      attempts=0
+      discover_owned_release_by_tag_for_containment() {
+        attempts=$((attempts + 1))
+        if [[ "${attempts}" -eq 1 ]]; then
+          return 3
+        fi
+        printf '{}\n' > "$1"
+        return 0
+      }
+      #{function}
+      wait_for_owned_release_by_tag_for_containment #{Shellwords.escape(destination)}
+      test "${attempts}" -eq 2
+    BASH
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", retry_script)
+    assert_predicate status, :success?, stderr
+
+    absence_script = <<~BASH
+      set -euo pipefail
+      RELEASE_TAG=v1.4.2
+      discover_owned_release_by_tag_for_containment() {
+        SECONDS="${deadline}"
+        return 3
+      }
+      #{function}
+      if wait_for_owned_release_by_tag_for_containment #{Shellwords.escape(destination)}; then
+        exit 99
+      fi
+    BASH
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", absence_script)
+    assert_predicate status, :success?, stderr
+    assert_includes stderr, "could not prove post-creation absence or exact marker ownership"
+  end
+
+  def test_containment_retries_owned_id_before_patch_and_never_patches_unproved_ownership
+    ownership_wait = release_shell_function(
+      "wait_for_release_owned_for_containment()",
+      "wait_for_release_contained_by_id()"
+    )
+    containment = release_shell_function(
+      "contain_release_by_id()",
+      "containment_guard()"
+    )
+    runner_temp = Shellwords.escape(@fixture_root)
+
+    success_script = <<~BASH
+      set -euo pipefail
+      RUNNER_TEMP=#{runner_temp}
+      RELEASE_ID=356237268
+      RELEASE_TAG=v1.4.2
+      GITHUB_REPOSITORY=Reedtrullz/Vifty
+      query_attempts=0
+      patch_attempts=0
+      query_release_by_id_for_convergence() {
+        query_attempts=$((query_attempts + 1))
+        if [[ "${query_attempts}" -eq 1 ]]; then
+          return 75
+        fi
+        printf '{}\n' > "$2"
+      }
+      verify_release_owned_for_containment() { return 0; }
+      release_gh() { patch_attempts=$((patch_attempts + 1)); printf '{}\n'; }
+      wait_for_release_contained_by_id() { printf '{}\n' > "$1"; }
+      verify_release_contained() { return 0; }
+      wait_for_owned_release_by_tag_for_containment() { return 1; }
+      capture_created_release_id() { return 1; }
+      #{ownership_wait}
+      #{containment}
+      contain_release_by_id
+      test "${query_attempts}" -eq 2
+      test "${patch_attempts}" -eq 1
+    BASH
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", success_script)
+    assert_predicate status, :success?, stderr
+
+    persistent_script = <<~BASH
+      set -euo pipefail
+      RUNNER_TEMP=#{runner_temp}
+      RELEASE_ID=356237268
+      RELEASE_TAG=v1.4.2
+      GITHUB_REPOSITORY=Reedtrullz/Vifty
+      patch_attempts=0
+      query_release_by_id_for_convergence() { SECONDS="${deadline}"; return 75; }
+      verify_release_owned_for_containment() { return 0; }
+      release_gh() { patch_attempts=$((patch_attempts + 1)); printf '{}\n'; }
+      wait_for_release_contained_by_id() { return 0; }
+      verify_release_contained() { return 0; }
+      wait_for_owned_release_by_tag_for_containment() { return 1; }
+      capture_created_release_id() { return 1; }
+      #{ownership_wait}
+      #{containment}
+      if contain_release_by_id; then
+        exit 99
+      fi
+      test "${patch_attempts}" -eq 0
+    BASH
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", persistent_script)
+    assert_predicate status, :success?, stderr
+    assert_includes stderr, "no mutation was attempted"
+
+    mismatch_script = <<~BASH
+      set -euo pipefail
+      RUNNER_TEMP=#{runner_temp}
+      RELEASE_ID=356237268
+      RELEASE_TAG=v1.4.2
+      GITHUB_REPOSITORY=Reedtrullz/Vifty
+      patch_attempts=0
+      query_release_by_id_for_convergence() { printf '{}\n' > "$2"; }
+      verify_release_owned_for_containment() { return 1; }
+      release_gh() { patch_attempts=$((patch_attempts + 1)); printf '{}\n'; }
+      wait_for_release_contained_by_id() { return 0; }
+      verify_release_contained() { return 0; }
+      wait_for_owned_release_by_tag_for_containment() { return 1; }
+      capture_created_release_id() { return 1; }
+      #{ownership_wait}
+      #{containment}
+      if contain_release_by_id; then
+        exit 99
+      fi
+      test "${patch_attempts}" -eq 0
+    BASH
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", mismatch_script)
+    assert_predicate status, :success?, stderr
+    assert_includes stderr, "changed immutable ID, tag, title, or ownership marker"
+  end
+
+  def test_ambiguous_creation_with_retained_id_enters_containment_without_state_poll
+    creation_state = release_shell_function(
+      'CREATED_STATE="${RUNNER_TEMP}/vifty-release-created-state.json"',
+      'if ! upload_release_asset_by_id "${ZIP_PATH}"'
+    )
+    contained_path = File.join(@fixture_root, "creation-contained")
+    wait_called_path = File.join(@fixture_root, "creation-wait-called")
+    verify_called_path = File.join(@fixture_root, "creation-verify-called")
+    script = <<~BASH
+      set -uo pipefail
+      RUNNER_TEMP=#{Shellwords.escape(@fixture_root)}
+      CREATE_STATUS=0
+      CREATE_RESPONSE_STATUS=1
+      CREATE_QUERY_STATUS=99
+      RELEASE_ID=356237268
+      DRAFT_TITLE='Vifty 1.4.2 [draft nonce]'
+      EXPECTED_BODY_PATH=#{Shellwords.escape(File.join(@fixture_root, "missing-body"))}
+      EXPECTED_ASSETS_PATH=#{Shellwords.escape(File.join(@fixture_root, "expected-assets"))}
+      containment_guard() { printf 'contained\n' > #{Shellwords.escape(contained_path)}; }
+      wait_for_release_state_by_id() {
+        printf 'called\n' > #{Shellwords.escape(wait_called_path)}
+        return 0
+      }
+      verify_release_state() {
+        printf 'called\n' > #{Shellwords.escape(verify_called_path)}
+        return 0
+      }
+      trap containment_guard EXIT
+      #{creation_state}
+      exit 99
+    BASH
+
+    _stdout, stderr, status = Open3.capture3("/bin/bash", "-c", script)
+
+    refute_predicate status, :success?
+    assert_equal "contained\n", File.binread(contained_path), stderr
+    refute File.exist?(wait_called_path), "creation convergence poll unexpectedly ran"
+    refute File.exist?(verify_called_path), "creation state verification unexpectedly ran"
+  end
+
+  def test_rejects_escaped_string_marker_scan_regression
+    mutate_all_release_workflow(
+      "body.scan(marker).length == 1",
+      "body.scan(Regexp.escape(marker)).length == 1"
+    )
+
+    assert_contract_failure(
+      "publish may discover an ambiguous draft by tag only with exact immutable-ID/tag/draft/title/marker ownership proof"
+    )
+  end
+
+  def test_rejects_clearing_captured_release_id_after_marker_validation_failure
+    mutate_release_workflow(
+      "              fi\n            fi\n          fi\n\n          CREATED_STATE=",
+      "              fi\n            else\n              RELEASE_ID=\"\"\n            fi\n          fi\n\n          CREATED_STATE="
+    )
+
+    assert_contract_failure(
+      "publish must REST-create the marked draft, capture its immutable ID directly, and forbid " \
+      "tag-based release mutation"
+    )
+  end
+
+  def test_rejects_coupling_immutable_release_id_retention_to_mutable_draft_state
+    mutate_release_workflow(
+      'release["tag_name"] == tag',
+      'release["tag_name"] == tag && release["draft"] == true'
+    )
+
+    assert_contract_failure(
+      "publish must retain the repository-scoped created release ID independently of mutable " \
+      "draft, publication, asset, title, or body state"
+    )
+  end
+
+  def test_rejects_single_by_id_read_before_containment_patch
+    mutate_release_workflow(
+      'wait_for_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"',
+      'query_release_by_id "${RELEASE_ID}" "${ownership_state}" && ' \
+      'verify_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"'
+    )
+
+    assert_contract_failure(
+      "publish containment must prove owned immutable-ID state with bounded GET-only retries " \
+      "before its single re-draft mutation"
+    )
+  end
+
+  def test_rejects_creation_state_poll_guarded_only_by_retained_id
+    mutate_release_workflow(
+      "if [[ \"${CREATE_STATUS}\" -eq 0 ]] && \\\n" \
+      "             [[ \"${CREATE_RESPONSE_STATUS}\" -eq 0 ]] && \\\n" \
+      "             [[ -n \"${RELEASE_ID}\" ]]; then",
+      'if [[ -n "${RELEASE_ID}" ]]; then'
+    )
+
+    assert_contract_failure(
+      "publish must enter containment immediately after ambiguous creation instead of polling " \
+      "state without a validated direct response body"
+    )
+  end
+
+  def test_rejects_single_empty_release_list_as_post_creation_containment_proof
+    mutate_release_workflow(
+      'wait_for_owned_release_by_tag_for_containment "${discovered_state}"',
+      'discover_owned_release_by_tag_for_containment "${discovered_state}"'
+    )
+
+    assert_contract_failure(
+      "publish must re-draft by immutable release ID on every ambiguous failure and hard-fail " \
+      "unless containment readback succeeds"
+    )
+  end
+
+  def test_rejects_losing_discovery_exit_status_after_failed_if_condition
+    mutate_release_workflow(
+      "              else\n                discovery_status=$?\n              fi",
+      "              fi\n              discovery_status=$?"
+    )
+
+    assert_contract_failure(
+      "publish must re-draft by immutable release ID on every ambiguous failure and hard-fail " \
+      "unless containment readback succeeds"
+    )
+  end
+
   def test_rejects_prerelease_readback_drift
     mutate_all_release_workflow(
       'release["prerelease"] == false',
@@ -362,8 +718,22 @@ class WorkflowContractTests < Minitest::Test
 
   def test_rejects_unbounded_release_state_convergence
     mutate_release_workflow(
-      '            local deadline=$((SECONDS + 60))',
-      '            local deadline=$((SECONDS + 600))'
+      "          wait_for_release_state_by_id() {\n" \
+      "            local destination=\"$1\"\n" \
+      "            local release_id=\"$2\"\n" \
+      "            local expected_draft=\"$3\"\n" \
+      "            local expected_title=\"$4\"\n" \
+      "            local expected_body_path=\"$5\"\n" \
+      "            local expected_assets_path=\"$6\"\n" \
+      "            local deadline=$((SECONDS + 60))",
+      "          wait_for_release_state_by_id() {\n" \
+      "            local destination=\"$1\"\n" \
+      "            local release_id=\"$2\"\n" \
+      "            local expected_draft=\"$3\"\n" \
+      "            local expected_title=\"$4\"\n" \
+      "            local expected_body_path=\"$5\"\n" \
+      "            local expected_assets_path=\"$6\"\n" \
+      "            local deadline=$((SECONDS + 600))"
     )
 
     assert_contract_failure(
@@ -764,6 +1134,33 @@ class WorkflowContractTests < Minitest::Test
     updated = original.sub(needle, replacement)
     refute_equal original, updated
     File.binwrite(path, updated)
+  end
+
+  def release_inline_ruby(function_name, next_function_name)
+    workflow = File.binread(release_workflow_path)
+    start_index = workflow.index(function_name)
+    refute_nil start_index, "missing #{function_name} in release workflow"
+    end_index = workflow.index(next_function_name, start_index + function_name.length)
+    refute_nil end_index, "missing #{next_function_name} after #{function_name}"
+    function_text = workflow[start_index...end_index]
+    match = function_text.match(/ruby -rjson -e '\n(?<code>.*?)\n\s*' "\$\{state_path\}"/m)
+    refute_nil match, "could not extract inline Ruby from #{function_name}"
+    match[:code]
+  end
+
+  def release_shell_function(function_name, next_function_name)
+    workflow = File.binread(release_workflow_path)
+    start_index = workflow.index(function_name)
+    refute_nil start_index, "missing #{function_name} in release workflow"
+    end_index = workflow.index(next_function_name, start_index + function_name.length)
+    refute_nil end_index, "missing #{next_function_name} after #{function_name}"
+    workflow[start_index...end_index]
+  end
+
+  def write_json_fixture(name, value)
+    path = File.join(@fixture_root, name)
+    File.binwrite(path, JSON.generate(value) + "\n")
+    path
   end
 
   def assert_contract_failure(diagnostic)
