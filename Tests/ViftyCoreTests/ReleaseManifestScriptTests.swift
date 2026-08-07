@@ -1400,7 +1400,7 @@ final class ReleaseManifestScriptTests: XCTestCase {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "RELEASE_ID=\"$(capture_owned_draft_release_id \"${CREATE_RESPONSE}\")\"",
+                of: "RELEASE_ID=\"$(capture_created_release_id \"${CREATE_RESPONSE}\")\"",
                 with: "RELEASE_ID=\"123\""
             )
         }
@@ -1414,12 +1414,12 @@ final class ReleaseManifestScriptTests: XCTestCase {
         )
     }
 
-    func testWorkflowContractRejectsMarkerBlindAmbiguousDraftDiscovery() throws {
+    func testWorkflowContractRejectsEscapedStringMarkerScanRegression() throws {
         let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
         try fixture.mutateReleaseWorkflow { workflow in
             workflow.replacingOccurrences(
-                of: "body.scan(Regexp.escape(marker)).length == 1",
-                with: "body.include?(marker)"
+                of: "body.scan(marker).length == 1",
+                with: "body.scan(Regexp.escape(marker)).length == 1"
             )
         }
 
@@ -1428,6 +1428,42 @@ final class ReleaseManifestScriptTests: XCTestCase {
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(
             result.stderr.contains("exact immutable-ID/tag/draft/title/marker ownership proof"),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsClearingCapturedReleaseIDAfterOwnershipMismatch() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                of: "              fi\n            fi\n          fi\n\n          CREATED_STATE=",
+                with: "              fi\n            else\n              RELEASE_ID=\"\"\n            fi\n          fi\n\n          CREATED_STATE="
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains("capture its immutable ID directly"),
+            result.stderr
+        )
+    }
+
+    func testWorkflowContractRejectsSingleEmptyPostCreationListAsContainmentProof() throws {
+        let fixture = try WorkflowContractFixture(repositoryRoot: repositoryRoot)
+        try fixture.mutateReleaseWorkflow { workflow in
+            workflow.replacingOccurrences(
+                of: "wait_for_owned_release_by_tag_for_containment \"${discovered_state}\"",
+                with: "discover_owned_release_by_tag_for_containment \"${discovered_state}\""
+            )
+        }
+
+        let result = try fixture.runChecker()
+
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.stderr.contains("hard-fail unless containment readback succeeds"),
             result.stderr
         )
     }
