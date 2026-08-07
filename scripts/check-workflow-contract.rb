@@ -178,7 +178,7 @@ expected_job_wrappers = {
     "swiftpm" => {
       "name" => "SwiftPM checks",
       "runs-on" => "macos-15",
-      "timeout-minutes" => 35
+      "timeout-minutes" => 60
     }
   },
   "release.yml" => {
