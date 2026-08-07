@@ -14,7 +14,7 @@ Sources/ViftyCore/AgentControlPolicy.swift  @Reedtrullz
 Sources/ViftyCore/AgentControlService.swift  @Reedtrullz
 Sources/ViftyCore/AgentControlStore.swift  @Reedtrullz
 Sources/ViftyCore/ViftyCtlArguments.swift  @Reedtrullz
-Sources/ViftyCore/ViftyCtlReadinessReport.swift  @Reedtrullz
+Sources/ViftyCore/AgentDiagnostics.swift  @Reedtrullz
 Sources/ViftyCore/ViftyCtlRunner.swift  @Reedtrullz
 Sources/ViftyCtl/  @Reedtrullz
 

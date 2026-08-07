@@ -1359,7 +1359,7 @@ final class DocumentationTrustSurfaceTests: XCTestCase {
         XCTAssertTrue(codeowners.contains("Sources/ViftyCore/AgentControlService.swift"))
         XCTAssertTrue(codeowners.contains("Sources/ViftyCore/AgentControlStore.swift"))
         XCTAssertTrue(codeowners.contains("Sources/ViftyCore/ViftyCtlArguments.swift"))
-        XCTAssertTrue(codeowners.contains("Sources/ViftyCore/ViftyCtlReadinessReport.swift"))
+        XCTAssertTrue(codeowners.contains("Sources/ViftyCore/AgentDiagnostics.swift"))
         XCTAssertTrue(codeowners.contains("Sources/ViftyCore/ViftyCtlRunner.swift"))
         XCTAssertTrue(codeowners.contains("Sources/ViftyCtl/"))
         XCTAssertTrue(codeowners.contains("# Agent-facing contracts and examples"))
