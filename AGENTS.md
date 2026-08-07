@@ -23,6 +23,17 @@ AI coding instructions for working in this repository.
 
 ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target needs explicit linking).
 
+## Entry Points
+
+| Target | Entry Point | Launches |
+|--------|-------------|----------|
+| `Vifty` | `Sources/Vifty/ViftyApp.swift` (`@main struct ViftyApp: App`) | SwiftUI menu bar app + main window |
+| `ViftyDaemon` | `Sources/ViftyDaemon/main.swift` | Privileged XPC Mach service daemon (root SMC fan writes) |
+| `ViftyCtl` | `Sources/ViftyCtl/main.swift` (`ViftyCtlMain.run()`) | Agent-friendly JSON CLI (`viftyctl`) |
+| `ViftyHelper` | `Sources/ViftyHelper/main.swift` (`HelperCommandRunner.live`) | Debug CLI: `probe`, `readKey`, `setFixed`, `auto`, `smcDiagnostics` |
+| `ViftyAXCollector` | `Sources/ViftyAXCollector/main.swift` (`AXCollectorCLI.run()`) | Accessibility evidence collector (debug/UI review fixtures only) |
+| `ViftyLockTestHelper` | `Sources/ViftyLockTestHelper/main.swift` | Test-only lock helper (not shipped) |
+
 ## Key Files
 
 - `Sources/ViftyCore/Models.swift` — All data types: Fan, TemperatureSensor, HardwareSnapshot, FanCurve, CurveProfile, FanMode, FanCommand, ControlState, ViftyError.
@@ -41,7 +52,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `Sources/ViftyCore/ThermalPressure.swift` — macOS thermal-pressure state model and display helpers.
 - `Sources/ViftyCore/TelemetryHistory.swift` — In-memory rolling telemetry sample buffer.
 - `Sources/ViftyCore/ViftyCtlArguments.swift` — pure parser for the bundled agent CLI, including read-only audit export options.
-- `Sources/ViftyCore/ViftyCtlReadinessReport.swift` — machine-readable `viftyctl diagnose` report for hardware/agent readiness.
+- `Sources/ViftyCore/AgentDiagnostics.swift` — machine-readable `viftyctl diagnose` report, recovery steps, and agent safe-cooling rule.
 - `Sources/ViftyCore/ViftyCtlRunner.swift` — testable command runner used by `viftyctl`, including structured capabilities, read-only audit export, and retry handling.
 - `Sources/ViftyCore/XPCAuditTokenCoding.swift` — audit-token byte bridge used by the daemon XPC identity extractor.
 - `Sources/ViftyCore/ViftyDaemonClient.swift` — XPC client that talks to the privileged daemon.
@@ -101,6 +112,32 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `scripts/build-installer-pkg.sh` — unsigned local `.pkg` builder for reusable installs.
 - `docs/release.md` — Developer ID/notarized release checklist and required GitHub secrets.
 
+## Cross-Target Boundaries
+
+ViftyCore is the shared library consumed by Vifty app, ViftyDaemon, ViftyHelper, and ViftyCtl.
+
+**Protocol layer**
+- `HardwareService` protocol — single abstraction for all fan control
+- `FanControlCoordinator` actor — mode state, curve-to-fixed-RPM resolution, RPM clamping, per-fan overrides, unclean-exit recovery
+
+**XPC / IPC**
+- `ViftyDaemonProtocol` — @objc XPC protocol (snapshot, fan control, agent lease, helper maintenance)
+- `XPCSnapshotCoding` / `XPCFanControlCoding` / `XPCAgentControlCoding` — NSDictionary encode/decode bridges
+- `ViftyDaemonClient` — XPC client used by app (via `RealMacHardwareService`) and `viftyctl`
+
+**SMC layer**
+- `SMCClient` — IOKit connection, read/write allowlist (`isAllowedWriteKey` enforces `F{n}Md`/`F{n}md`, `F{n}Tg`, `Ftst` only)
+- `FanInfoReader` — Pure SMC fan parser for hardware mode/target
+
+**Agent control**
+- `AgentControlModels` — Codable request/decision/lease/policy types
+- `AgentControlPolicy` — daemon-side policy enforcement (RPM bounds, duration cap, cooldown)
+- `AgentControlService` — daemon-owned lease lifecycle (prepare/restore/monitor/expire)
+
+**Data models**
+- `Models.swift` — `Fan`, `TemperatureSensor`, `HardwareSnapshot`, `FanCommand`, `FanMode`, `ViftyError`, ownership/transaction types
+- `ThermalPressure` — cross-target read-only telemetry
+
 ## Architecture Rules
 
 1. **Curve resolution happens in `FanControlCoordinator`** — the daemon only receives resolved `fixedRPM` commands. Never pass `temperatureCurve` across XPC.
@@ -128,6 +165,31 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 23. **Release metadata must stay aligned** — for Developer ID releases, `Resources/Info.plist`, `Casks/vifty.rb`, and `.github/workflows/release.yml` must agree on the version, `Vifty-v<version>.zip` artifact name, cask SHA shape, notarization/stapling workflow gates, release verifier signature/notarization checks, and Gatekeeper assessment. Run `scripts/validate-release-metadata.sh` when touching release files, use `scripts/update-cask-checksum.sh --checksum-file <path> --version <version>` for the atomic post-release cask version/SHA handoff after manifest promotion, and use `scripts/verify-release-artifact.sh --team-id <TEAMID>` after the notarized release artifact and cask SHA are published. Source-first unsigned builds must use `Vifty-v<version>-unsigned-dev.zip` and must not update or repoint the Homebrew cask.
 24. **Update checks are advisory and release-gated** — only the exact Developer ID signed Vifty identity may call the fixed GitHub latest-release endpoint, at most daily by default with an opt-out. Accept only stable semantic-version availability metadata with the exact four canonical uploaded nonempty asset records, construct the tag-page URL locally, and never present those filename/size checks as archive, checksum-content, signed-tag, or notarization proof. One interprocess owner holds the private update state and request lane. Never trust API-supplied links, download executable assets, replace the app, or mutate helper/fan state. Local ad-hoc, CI, source-first, unsigned-dev, and debug fixture builds must make zero update requests. Any future in-place updater must enter the existing fail-closed replacement transaction rather than bypass it.
 25. **Public-archive installation is explicit and manifest-pinned** — `scripts/install-vifty.sh --public-release-archive` accepts only an operator-supplied absolute canonical zip selected from the reviewed checkout's current `publishedRelease`. It must require the exact pinned archive SHA and no-skip Developer ID/signature/notarization verification, use bounded safe extraction, and enter the unchanged fail-closed replacement transaction. It must never select a candidate or historical entry, accept a direct app/URL/SHA override, download an asset, or be called by the advisory checker. This manual bridge is not Sparkle or automatic update.
+
+## Anti-Patterns from Source Comments
+
+### Absolute agent prohibitions
+- Never call `ViftyHelper setFixed`, `ViftyHelper auto`, `sudo`, raw SMC tools, direct fan RPM writes, or unguarded `viftyctl prepare` from an agent (`AgentDiagnostics.swift`)
+- Do not request cooling, use uncooled fallback, or call direct SMC/helper commands while repair is pending (`AgentDiagnostics.swift`)
+- Do not catch a guarded-run failure and rerun the same workload without Vifty (`AgentDiagnostics.swift`)
+- Do not request cooling when state is `blocked`, `safeToRequestCooling` is false, `daemonControlPathReady` is false, `manualControlActive` is true, or `coolingBlockerIDs` is non-empty (`AgentDiagnostics.swift`)
+
+### Hardware/fan safety
+- Local mode state alone is never sufficient confirmation — ownership requires fresh daemon readback (`HardwareService.swift:234`)
+- A successful write call alone is never a receipt — SMC writes require confirmed readback (`FanMutationReceipt.swift:4`)
+- Once opened, a renamed or substituted journal path is never silently adopted (`FanControlJournalStore.swift:54`)
+- POSIX record locks are process-scoped, so the same process must never open the lock inode through a differently cased/path-aliased spelling (`FanControlExclusiveLock.swift:71`)
+- Startup performs exactly one recovery attempt and never schedules an automatic retry (`DaemonService.swift:133`)
+
+### Data integrity
+- The source is never accumulated in memory and is never removed — atomic file copy semantics (`SecureStorageDirectory.swift:449`)
+- Corrupt primary must never destroy the last recoverable copy — backup-before-overwrite invariant (`CurveProfileStore.swift:146`)
+- A maintenance token is not a bearer secret and is never trusted from JSON alone — daemon retains authoritative copy (`HelperMaintenanceModels.swift:141`)
+
+### Agent workflow gates
+- Do not request cooling until `policy.enabled` and `policyStatusAvailable` are true (`AgentDiagnostics.swift`)
+- Do not run fan-write smoke until reviewed readiness is safe (`AgentDiagnostics.swift`)
+- Keep unsupported machines on read-only diagnostics; do not retry fan writes (`HelperHealthPresentation.swift:100`)
 
 ## Testing
 
@@ -192,6 +254,22 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - Bundle identifier: `tech.reidar.vifty` (app), `tech.reidar.vifty.daemon` (Mach service).
 - Release hardening knob: `make app CONFIGURATION=release SIGNING_IDENTITY="<identity>" VIFTY_XPC_ALLOWED_TEAM_ID="<TEAMID>"`.
 - UI-facing persistence uses `Codable` + JSON files in `~/Library/Application Support/Vifty/` (see `CurveProfileStore`, `AppPreferencesStore`, and `SoftwareUpdateStore`). No UserDefaults for structured data except legacy migration reads. Saving a profile with an existing name overwrites it; no duplicate names are permitted.
+
+## Documentation Map
+
+| Doc | Audience | Purpose |
+|-----|----------|---------|
+| `docs/trust-model.md` | End users | Plain-language trust boundaries for helper, SMC, agent-control, local data, release signing |
+| `docs/safe-agent-cooling.md` | End users / agents | Operational runbook: readiness gate, guarded-run preference, conservative limits, blocked/restore-failure handling |
+| `docs/agent-integrations.md` | End users / agents | Copy/paste guarded-run instructions for Codex, Claude Code, Cursor, shell runners |
+| `docs/agent-workflows.md` | End users / agents | Stable `viftyctl` agent contract, JSON decision rules, workload examples |
+| `docs/compatibility.md` | End users | Supported-hardware validation status and report procedure |
+| `docs/hardware-validation.md` | End users | Hardware validation report template and requirements |
+| `docs/unsupported-hardware.md` | End users | Safe-block policy for unsupported Macs |
+| `docs/release.md` | Maintainers | Developer ID/notarized release checklist and required GitHub secrets |
+| `docs/release-status.md` | Public | Point-in-time release trust status, source-first history, Homebrew trust |
+
+Safety rules in AGENTS.md are the canonical developer reference. User-facing docs (`docs/*.md`) may present the same rules in operational or plain-language form; they are not duplicates.
 
 ## New Feature Checklist
 
