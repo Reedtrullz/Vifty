@@ -275,7 +275,7 @@ final class MakefileTrustGateTests: XCTestCase {
     func testCIHasEnoughTimeAndUsesOnlyExactTreeToolchainScopedSwiftPMCaches() throws {
         let workflow = try read(".github/workflows/ci.yml")
 
-        XCTAssertTrue(workflow.contains("timeout-minutes: 35"), workflow)
+        XCTAssertTrue(workflow.contains("timeout-minutes: 60"), workflow)
         XCTAssertTrue(workflow.contains("id: swiftpm"), workflow)
         XCTAssertTrue(workflow.contains("xcodebuild -version"), workflow)
         XCTAssertTrue(workflow.contains("swift --version"), workflow)
