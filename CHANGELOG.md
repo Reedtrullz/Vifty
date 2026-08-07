@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-08-07
+
+### Fixed
+
+- Require exact immutable repository-scoped release ID plus tag/title/ownership-marker matching on every created draft and by-tag readback, bust GitHub release-list API caching during containment, and wait for convergence before any publish mutation, so a transient publish failure fails closed instead of losing the draft or publishing without proof.
+- Consolidate the machine-readable `viftyctl diagnose` report, operator recovery steps, and agent safe-cooling rule into a single maintained diagnostics module with the same JSON contract and fixtures.
+- Keep the full documentation/evidence trust test suite and release-metadata/validation script coverage in the release gate after the diagnostics consolidation.
+
+### Scope
+
+- `v1.4.1` was retired without publication after its immutable first-attempt tag-push transaction failed at the publish step; no v1.4.1 GitHub Release or Homebrew promotion exists. `v1.4.2` carries forward the complete v1.4.0/v1.4.1 source changes plus the publish containment fix.
+
 ## [1.4.1] - 2026-07-19
 
 ### Fixed
