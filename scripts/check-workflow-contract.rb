@@ -1256,7 +1256,7 @@ else
     expected_step_hashes = {
       "Download verified release assets" => "2efd54639fbb126e0ce7aa6fcb477987a276e7b0a98d6ecfb745a1b25df99dc8",
       "Recheck downloaded asset identity" => "aa5a51382d16e1ad1b73abec06a173c75673c05b43bad9ccf55e664aa7573c00",
-      "Publish GitHub release" => "6cfcb858c1f9e062754cd855400f815626db74295c828e4ec5fdfd5c977570ae"
+      "Publish GitHub release" => "c6973fdcbfdca69f26527ae1792153c4de039bd9818a2d10f646d80de25424e4"
     }
     names = steps.map { |step| step.is_a?(Hash) ? step["name"] : nil }
     errors << "publish step set must match the reviewed allowlist exactly" unless names == expected_step_hashes.keys
@@ -1379,13 +1379,53 @@ else
            publish_run_text.include?('--input "${CREATE_PAYLOAD}" > "${CREATE_RESPONSE}"') &&
            publish_run_text.include?('body.b.start_with?(submitted_body.b)') &&
            publish_run_text.include?('release["prerelease"] == false') &&
-           publish_run_text.include?('RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"') &&
+           publish_run_text.include?("capture_created_release_id()") &&
+           publish_run_text.include?('release["url"] == api_base') &&
+           publish_run_text.include?('release["assets_url"] == "#{api_base}/assets"') &&
+           publish_run_text.include?('release["upload_url"] == upload_url') &&
+           publish_run_text.include?('RELEASE_ID="$(capture_created_release_id "${CREATE_RESPONSE}")"') &&
+           publish_run_text.include?('capture_owned_draft_release_id "${CREATE_RESPONSE}" > /dev/null') &&
+           !publish_run_text.match?(/else\s+RELEASE_ID=""/) &&
            publish_run_text.include?('wait_for_release_state_by_id "${PUBLISHED_STATE}" "${RELEASE_ID}" false "${FINAL_TITLE}"') &&
            publish_run_text.include?('"repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"') &&
            publish_run_text.include?('-F draft=false') &&
            publish_run_text.include?('-F prerelease=false') &&
            !publish_run_text.match?(/gh release (?:create|edit|upload|delete)/)
       errors << "publish must REST-create the marked draft, capture its immutable ID directly, and forbid tag-based release mutation"
+    end
+    created_release_capture_start = publish_run_text.index("capture_created_release_id()")
+    created_release_capture_end = publish_run_text.index("capture_owned_draft_release_id()")
+    created_release_capture_text = if created_release_capture_start && created_release_capture_end &&
+                                      created_release_capture_start < created_release_capture_end
+                                     publish_run_text[created_release_capture_start...created_release_capture_end]
+                                   else
+                                     ""
+                                   end
+    unless created_release_capture_text.include?('id.is_a?(Integer) && id.positive?') &&
+           created_release_capture_text.include?('release["url"] == api_base') &&
+           created_release_capture_text.include?('release["assets_url"] == "#{api_base}/assets"') &&
+           created_release_capture_text.include?('release["upload_url"] == upload_url') &&
+           created_release_capture_text.include?('release["tag_name"] == tag') &&
+           !created_release_capture_text.include?('release["draft"]') &&
+           !created_release_capture_text.include?('release["prerelease"]') &&
+           !created_release_capture_text.include?('release["assets"]') &&
+           !created_release_capture_text.include?('release["name"]') &&
+           !created_release_capture_text.include?('release["body"]')
+      errors << "publish must retain the repository-scoped created release ID independently of mutable draft, publication, asset, title, or body state"
+    end
+    created_state_start = publish_run_text.index('CREATED_STATE="${RUNNER_TEMP}/vifty-release-created-state.json"')
+    created_state_end = publish_run_text.index('if ! upload_release_asset_by_id "${ZIP_PATH}"', created_state_start || 0)
+    created_state_text = if created_state_start && created_state_end && created_state_start < created_state_end
+                           publish_run_text[created_state_start...created_state_end]
+                         else
+                           ""
+                         end
+    unless created_state_text.include?('if [[ "${CREATE_STATUS}" -eq 0 ]] &&') &&
+           created_state_text.include?('[[ "${CREATE_RESPONSE_STATUS}" -eq 0 ]] &&') &&
+           created_state_text.include?('[[ -n "${RELEASE_ID}" ]]; then') &&
+           created_state_text.include?('wait_for_release_state_by_id "${CREATED_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}"') &&
+           !created_state_text.include?('if [[ -n "${RELEASE_ID}" ]]; then')
+      errors << "publish must enter containment immediately after ambiguous creation instead of polling state without a validated direct response body"
     end
     errors << "publish must pin every GitHub CLI API call to github.com" if publish_run_text.scan(/gh api(?! --hostname github\.com)/).any?
     unless publish_run_text.include?("upload_release_asset_by_id()") &&
@@ -1410,7 +1450,7 @@ else
            convergence_text.include?('verify_release_convergence_identity') &&
            convergence_text.include?('release["id"] == Integer(ARGV.fetch(1), 10)') &&
            convergence_text.include?('release["tag_name"] == ARGV.fetch(2)') &&
-           convergence_text.include?('body.scan(Regexp.escape(marker)).length == 1') &&
+           convergence_text.include?('body.scan(marker).length == 1') &&
            !convergence_text.include?('--method POST') &&
            !convergence_text.include?('--method PATCH') &&
            !convergence_text.include?('--request POST') &&
@@ -1428,18 +1468,27 @@ else
            publish_run_text.include?('verify_release_state "${PUBLISHED_STATE}"')
       errors << "publish must bind exact returned body plus immutable asset IDs, sizes, states, and digests through promotion readback"
     end
-    unless publish_run_text.include?("discover_owned_draft_by_tag()") &&
+    unless publish_run_text.include?("discover_owned_release_by_tag_for_containment()") &&
            publish_run_text.include?("capture_owned_draft_release_id()") &&
-           publish_run_text.include?('body.scan(Regexp.escape(marker)).length == 1') &&
+           publish_run_text.scan('body.scan(marker).length == 1').length == 4 &&
+           !publish_run_text.include?('body.scan(Regexp.escape(marker)).length == 1') &&
            publish_run_text.include?('release["name"] == ARGV.fetch(2)') &&
            publish_run_text.include?('Array(release["assets"]).empty?') &&
-           publish_run_text.include?('verify_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"') &&
+           publish_run_text.include?('discovered_release_id="$(capture_created_release_id "${destination}")"') &&
+           publish_run_text.include?('wait_for_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"') &&
            publish_run_text.include?("no mutation was attempted")
       errors << "publish may discover an ambiguous draft by tag only with exact immutable-ID/tag/draft/title/marker ownership proof"
     end
     unless publish_run_text.include?("contain_release_by_id()") &&
            publish_run_text.include?("verify_release_contained()") &&
+           publish_run_text.include?("wait_for_release_owned_for_containment()") &&
            publish_run_text.include?("wait_for_release_contained_by_id()") &&
+           publish_run_text.include?("wait_for_owned_release_by_tag_for_containment()") &&
+           publish_run_text.include?('local deadline=$((SECONDS + 60))') &&
+           publish_run_text.include?("if discover_owned_release_by_tag_for_containment \"${destination}\"; then\n      return 0\n    else\n      discovery_status=$?\n    fi") &&
+           publish_run_text.include?('wait_for_owned_release_by_tag_for_containment "${discovered_state}"') &&
+           publish_run_text.include?('Containment could not prove post-creation absence or exact marker ownership') &&
+           !publish_run_text.include?('Containment readback confirms that no release exists') &&
            publish_run_text.include?("CONTAINMENT_REQUIRED=1") &&
            publish_run_text.include?("trap containment_guard EXIT") &&
            publish_run_text.include?("trap 'exit 130' INT") &&
@@ -1452,6 +1501,33 @@ else
            publish_run_text.include?("exit 97") &&
            !publish_run_text.include?("|| true")
       errors << "publish must re-draft by immutable release ID on every ambiguous failure and hard-fail unless containment readback succeeds"
+    end
+    containment_ownership_wait_start = publish_run_text.index("wait_for_release_owned_for_containment()")
+    containment_ownership_wait_end = publish_run_text.index("wait_for_release_contained_by_id()")
+    containment_ownership_wait_text = if containment_ownership_wait_start && containment_ownership_wait_end &&
+                                         containment_ownership_wait_start < containment_ownership_wait_end
+                                        publish_run_text[containment_ownership_wait_start...containment_ownership_wait_end]
+                                      else
+                                        ""
+                                      end
+    containment_function_start = publish_run_text.index("contain_release_by_id()")
+    containment_function_text = containment_function_start ? publish_run_text[containment_function_start..] : ""
+    ownership_call_index = containment_function_text.index(
+      'wait_for_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"'
+    )
+    containment_patch_index = containment_function_text.index(
+      'release_gh api --hostname github.com --method PATCH'
+    )
+    unless containment_ownership_wait_text.include?('local deadline=$((SECONDS + 60))') &&
+           containment_ownership_wait_text.include?('query_release_by_id_for_convergence "${release_id}" "${destination}"') &&
+           containment_ownership_wait_text.include?('verify_release_owned_for_containment "${destination}" "${release_id}"') &&
+           containment_ownership_wait_text.include?('no mutation was attempted') &&
+           containment_ownership_wait_text.include?('/bin/sleep 2') &&
+           !containment_ownership_wait_text.include?('--method POST') &&
+           !containment_ownership_wait_text.include?('--method PATCH') &&
+           !containment_ownership_wait_text.include?('--request POST') &&
+           ownership_call_index && containment_patch_index && ownership_call_index < containment_patch_index
+      errors << "publish containment must prove owned immutable-ID state with bounded GET-only retries before its single re-draft mutation"
     end
     containment_wait_start = publish_run_text.index("wait_for_release_contained_by_id()")
     containment_wait_end = publish_run_text.index("upload_release_asset_by_id()")
