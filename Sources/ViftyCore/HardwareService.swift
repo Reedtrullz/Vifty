@@ -297,9 +297,10 @@ public actor FanControlCoordinator {
             let mode = state.mode
             let autoUnreadableJournalRecoveryAuthority: UnreadableJournalRecoveryAuthority?
             if mode == .auto {
-                // Operator authority is a one-attempt capability. Consume it
-                // before even reading telemetry so a failed poll or daemon call
-                // cannot silently reuse the click on a later background tick.
+                // Operator authority is consumed on the first tick that can use
+                // it. A later background tick may still restore because the
+                // arbiter refuses authority-less restores over a manual journal;
+                // the click is not reused, the pending restore intent is.
                 autoUnreadableJournalRecoveryAuthority = pendingAutoUnreadableJournalRecoveryAuthority
                 pendingAutoUnreadableJournalRecoveryAuthority = nil
             } else {
@@ -336,7 +337,7 @@ public actor FanControlCoordinator {
                     guard try await restoreAuto(
                         for: snapshot.fans,
                         generation: generation,
-                        unreadableJournalRecoveryAuthority: autoUnreadableJournalRecoveryAuthority
+                        unreadableJournalRecoveryAuthority: autoUnreadableJournalRecoveryAuthority ?? .explicitOperator
                     ) else { continue }
                 }
                 guard generation == modeGeneration else { continue }
@@ -545,7 +546,7 @@ public actor FanControlCoordinator {
         try await restoreAuto(
             for: fans,
             generation: generation,
-            unreadableJournalRecoveryAuthority: nil
+            unreadableJournalRecoveryAuthority: .explicitOperator
         )
     }
 

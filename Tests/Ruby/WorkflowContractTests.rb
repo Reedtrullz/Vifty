@@ -288,6 +288,19 @@ class WorkflowContractTests < Minitest::Test
     )
   end
 
+  def test_rejects_unsupported_ruleset_pattern_matching_in_governance_checker
+    mutate_support_script(
+      "check-release-governance.sh",
+      "File.fnmatch?(pattern, full_ref, File::FNM_PATHNAME)",
+      "File.fnmatch?(pattern, full_ref, File::FNM_PATHNAME | File::FNM_EXTGLOB)"
+    )
+
+    assert_contract_failure(
+      "administrator governance checker must bind exact-main, exact-ref pre-tag absence or " \
+      "exact-object post-tag presence, committed-tool, no-bypass ruleset, and anti-shadow secret evidence"
+    )
+  end
+
   def test_rejects_draft_creation_body_prefix_drift
     mutate_release_workflow(
       "body.b.start_with?(submitted_body.b)",

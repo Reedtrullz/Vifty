@@ -102,6 +102,32 @@ final class AgentControlStoreTests: XCTestCase {
         XCTAssertEqual(permissions?.intValue, 0o600)
     }
 
+    func testPolicyEnabledRoundTripsAndDefaultsToNilWhenAbsent() throws {
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+
+        XCTAssertNil(try store.loadAgentControlEnabled())
+
+        try store.saveAgentControlEnabled(false)
+        XCTAssertEqual(try store.loadAgentControlEnabled(), false)
+
+        try store.saveAgentControlEnabled(true)
+        XCTAssertEqual(try store.loadAgentControlEnabled(), true)
+    }
+
+    func testPolicyEnabledFileIsCreatedWithRestrictedPermissions() throws {
+        let directory = temporaryDirectory()
+        let store = AgentControlStore(directory: directory)
+
+        try store.saveAgentControlEnabled(false)
+
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: directory.appendingPathComponent("policy-enabled.json").path
+        )
+        let permissions = attributes[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.intValue, 0o600)
+    }
+
     func testExistingAuditFileWithUnsafePermissionsIsRejectedWithoutRepair() throws {
         let directory = temporaryDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

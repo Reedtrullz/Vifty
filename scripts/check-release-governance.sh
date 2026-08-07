@@ -389,9 +389,11 @@ collect_matching_ruleset_evidence() {
       end
       abort("active tag ruleset current_user_can_bypass must be visible") unless current_user_can_bypass.is_a?(String)
       rule_types = rules.map { |rule| rule.fetch("type") }.uniq.sort
-      exit 10 unless includes == ["refs/tags/v*"] && excludes == []
+      matches_ref = includes.any? { |pattern| File.fnmatch?(pattern, full_ref, File::FNM_PATHNAME) } &&
+        !excludes.any? { |pattern| File.fnmatch?(pattern, full_ref, File::FNM_PATHNAME) }
+      exit 10 unless matches_ref
       matched_includes = includes
-      matched_excludes = []
+      matched_excludes = excludes
       evidence = {
         "schemaVersion" => 1,
         "repository" => repository,

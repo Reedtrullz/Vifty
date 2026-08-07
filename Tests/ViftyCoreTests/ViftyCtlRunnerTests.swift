@@ -1535,14 +1535,37 @@ final class ViftyCtlRunnerTests: XCTestCase {
             manualControlClearer: {}
         )
 
-        let result = try await runner.run(.restoreAuto(reason: "done", json: true))
+        let result = try await runner.run(.restoreAuto(reason: "done", json: true, operatorOverride: false))
 
         XCTAssertEqual(result.exitCode, 0)
         let restoreReasons = await client.restoreReasons
         let restoreAuthorities = await client.restoreAuthorities
         XCTAssertEqual(restoreReasons, ["done"])
-        XCTAssertEqual(restoreAuthorities, [.explicitOperator])
+        XCTAssertEqual(restoreAuthorities, [nil])
         XCTAssertEqual(processRunner.runCallCount, 0)
+    }
+
+    func testRestoreAutoOperatorOverridePassesExplicitOperatorAuthority() async throws {
+        let client = FakeAgentControlClient(status: AgentControlStatus(
+            enabled: true,
+            activeLease: nil,
+            lastDecision: nil,
+            lastErrorCode: nil,
+            policy: AgentControlPolicy(enabled: true).snapshot
+        ))
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            manualControlClearer: {}
+        )
+
+        let result = try await runner.run(
+            .restoreAuto(reason: "operator recovery", json: true, operatorOverride: true)
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        let restoreAuthorities = await client.restoreAuthorities
+        XCTAssertEqual(restoreAuthorities, [.explicitOperator])
     }
 
     func testRestoreAutoClearsManualControlMarkerAfterSuccessfulDaemonRestore() async throws {
@@ -1570,7 +1593,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
             ViftyCtlRecommendedAgentAction.restoreAutoBeforeRequestingCooling.rawValue
         )
 
-        let restore = try await runner.run(.restoreAuto(reason: "clear manual marker", json: true))
+        let restore = try await runner.run(
+            .restoreAuto(reason: "clear manual marker", json: true, operatorOverride: false)
+        )
         XCTAssertEqual(restore.exitCode, 0)
         let restoreData = try XCTUnwrap(restore.stdout.data(using: .utf8))
         let restoreJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: restoreData) as? [String: Any])
@@ -1600,7 +1625,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
 
-        let result = try await runner.run(.restoreAuto(reason: "done", json: true))
+        let result = try await runner.run(.restoreAuto(reason: "done", json: true, operatorOverride: false))
 
         XCTAssertEqual(result.exitCode, 1)
         XCTAssertEqual(result.stderr, "")

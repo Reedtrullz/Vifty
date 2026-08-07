@@ -1426,10 +1426,10 @@ public struct ViftyCtlRunner: Sendable {
                     stdout: stdout,
                     exitCode: prepareSucceeded(status, request: request) ? 0 : 1
                 )
-            case .restoreAuto(let reason, let json):
+            case .restoreAuto(let reason, let json, let operatorOverride):
                 let status = try await client.restore(
                     reason: reason,
-                    unreadableJournalRecoveryAuthority: .explicitOperator
+                    unreadableJournalRecoveryAuthority: operatorOverride ? .explicitOperator : nil
                 )
                 manualControlClearer()
                 let stdout = try formatStatus(status, json: json)
@@ -1607,7 +1607,7 @@ public struct ViftyCtlRunner: Sendable {
              .audit(_, let json):
             return json
         case .prepare(_, let json, _),
-             .restoreAuto(_, let json):
+             .restoreAuto(_, let json, _):
             return json
         case .run(_, _, let json, _):
             return json

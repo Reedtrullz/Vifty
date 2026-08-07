@@ -182,6 +182,27 @@ final class ReleaseGovernanceScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("found 2"), result.stderr)
     }
 
+    func testAdministratorPreTagGateRejectsAdditionalBroaderMatchingRuleset() throws {
+        let fixture = try ReleaseGovernanceFixture()
+        try fixture.appendRuleset([
+            "id": 18_940_032,
+            "name": "Broader tag ruleset that also matches the release ref",
+            "target": "tag",
+            "enforcement": "active",
+            "conditions": ["ref_name": ["include": ["refs/tags/*"], "exclude": []]],
+            "bypass_actors": [],
+            "rules": [["type": "update"], ["type": "deletion"]],
+            "updated_at": "2026-01-01T00:00:00Z",
+            "current_user_can_bypass": "never"
+        ])
+
+        let result = try runChecker(fixture)
+
+        XCTAssertEqual(result.exitCode, 65)
+        XCTAssertTrue(result.stderr.contains("expected exactly one active tag ruleset"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("found 2"), result.stderr)
+    }
+
     func testAdministratorPreTagGateRejectsExpectedMainDrift() throws {
         let fixture = try ReleaseGovernanceFixture()
 

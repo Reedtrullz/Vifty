@@ -29,11 +29,23 @@ public enum AgentControlDefaultScheduler {
 }
 
 public actor AgentControlService {
+    /// A wall-clock-independent date source: advances only with system uptime,
+    /// so lease expiry, cooldown, and monitor scheduling cannot be stretched by
+    /// NTP corrections or manual clock changes while the daemon is running.
+    /// Persisted timestamps remain wall-clock `Date` values; startup recovery
+    /// clamps their remaining duration so a rollback across a restart is bounded.
+    public static let monotonicDecisionClock: @Sendable () -> Date = {
+        let anchorWall = Date()
+        let anchorUptime = ProcessInfo.processInfo.systemUptime
+        return { anchorWall.addingTimeInterval(ProcessInfo.processInfo.systemUptime - anchorUptime) }
+    }()
+
     private let hardware: HardwareService
-    private let policy: AgentControlPolicy
+    private var policy: AgentControlPolicy
     private let store: any AgentControlPersisting
     private let thermalReader: @Sendable () -> ThermalPressure
     private let now: @Sendable () -> Date
+    private let decisionClock: @Sendable () -> Date
     private let leaseID: @Sendable () -> String
     private let expiryScheduler: AgentControlExpiryScheduler
 
@@ -54,6 +66,7 @@ public actor AgentControlService {
         store: any AgentControlPersisting = AgentControlStore(),
         thermalReader: @escaping @Sendable () -> ThermalPressure = { ThermalPressureReader.read() },
         now: @escaping @Sendable () -> Date = { Date() },
+        decisionClock: (@Sendable () -> Date)? = nil,
         leaseID: @escaping @Sendable () -> String = { UUID().uuidString },
         expiryScheduler: @escaping AgentControlExpiryScheduler = AgentControlDefaultScheduler.schedule(after:operation:),
         automaticallySchedulePersistedLeaseMonitor: Bool = true
@@ -63,6 +76,7 @@ public actor AgentControlService {
         self.store = store
         self.thermalReader = thermalReader
         self.now = now
+        self.decisionClock = decisionClock ?? now
         self.leaseID = leaseID
         self.expiryScheduler = expiryScheduler
         do {
@@ -71,6 +85,9 @@ public actor AgentControlService {
         } catch {
             self.activeLease = nil
             self.persistenceLoadErrorMessage = error.localizedDescription
+        }
+        if let storedEnabled = try? store.loadAgentControlEnabled() {
+            self.policy.enabled = storedEnabled
         }
         self.scheduledExpiry = nil
         if automaticallySchedulePersistedLeaseMonitor, let activeLease {
@@ -91,6 +108,19 @@ public actor AgentControlService {
         )
     }
 
+    /// User-controlled kill switch. Disabling while a lease is active first
+    /// restores Auto (the safety path) and then persists the disabled policy;
+    /// agents see `policy.enabled` and `enabled` flip to false on every status,
+    /// capabilities, and diagnose readback.
+    public func setPolicyEnabled(_ enabled: Bool) async throws -> AgentControlStatus {
+        if !enabled, activeLease != nil {
+            _ = try await restoreAuto(reason: "Agent control disabled by user")
+        }
+        policy.enabled = enabled
+        try store.saveAgentControlEnabled(enabled)
+        return status()
+    }
+
     public func auditEvents(limit: Int = AgentControlStore.defaultMaximumAuditEvents) throws -> [AgentControlAuditEvent] {
         try store.loadRecentAuditEvents(limit: limit)
     }
@@ -105,6 +135,24 @@ public actor AgentControlService {
             || ownership.owner != nil
             || ownership.recoveryPending
         guard needsRecovery else { return status() }
+
+        // A wall-clock rollback across a daemon restart must not extend a
+        // persisted lease beyond the policy cap: clamp any remaining duration
+        // to the maximum lease length measured from this recovery instant.
+        if let lease = activeLease,
+           lease.isActive(at: decisionClock()),
+           lease.expiresAt.timeIntervalSince(decisionClock()) > Double(policy.maxDurationSeconds) {
+            var clamped = lease
+            // Shift both timestamps so the stored lease still satisfies the
+            // duration invariant while its remaining life is bounded from the
+            // recovery instant, preventing a wall-clock rollback from stretching
+            // a persisted lease beyond the policy cap.
+            let boundedDuration = Double(min(lease.request.durationSeconds, policy.maxDurationSeconds))
+            clamped.createdAt = decisionClock()
+            clamped.expiresAt = decisionClock().addingTimeInterval(boundedDuration)
+            try store.saveActiveLease(clamped)
+            activeLease = clamped
+        }
 
         let durableExpectedFanIDs = Array(
             Set(ownership.expectedFanIDs)
@@ -153,13 +201,13 @@ public actor AgentControlService {
 
         if let lease = activeLease,
            lease.request.idempotencyKey == request.idempotencyKey,
-           lease.isActive(at: now()) {
+           lease.isActive(at: decisionClock()) {
             return status()
         }
 
         if let lease = activeLease,
            lease.restoredAt == nil {
-            let message = lease.isActive(at: now())
+            let message = lease.isActive(at: decisionClock())
                 ? "Agent cooling lease already active. Restore Auto before starting a new lease."
                 : "Agent cooling lease expired but Auto restore has not completed. Restore Auto before starting a new lease."
             let decision = AgentControlDecision.denied(
@@ -173,8 +221,8 @@ public actor AgentControlService {
         }
 
         if let lastPrepare = lastPrepareCompletedAt,
-           now().timeIntervalSince(lastPrepare) < Double(policy.prepareCooldownSeconds) {
-            let elapsed = now().timeIntervalSince(lastPrepare)
+           decisionClock().timeIntervalSince(lastPrepare) < Double(policy.prepareCooldownSeconds) {
+            let elapsed = decisionClock().timeIntervalSince(lastPrepare)
             let remaining = max(1, Int(ceil(Double(policy.prepareCooldownSeconds) - elapsed)))
             let decision = AgentControlDecision.denied(
                 .prepareRateLimited,
@@ -329,7 +377,7 @@ public actor AgentControlService {
         }
 
         scheduleMonitor(for: lease)
-        lastPrepareCompletedAt = now()
+        lastPrepareCompletedAt = decisionClock()
         appendAudit(action: "prepare", leaseID: lease.id, message: request.reason)
         return status()
     }
@@ -434,9 +482,13 @@ public actor AgentControlService {
             throw error
         }
 
-        if let lease {
-            appendAudit(action: "restore-auto", leaseID: lease.id, message: request.reason)
-        }
+        appendAudit(
+            action: "restore-auto",
+            leaseID: lease?.id,
+            message: lease == nil
+                ? "\(request.reason) (transaction \(request.transactionID))"
+                : request.reason
+        )
         cancelScheduledExpiry()
         activeLease = nil
         persistenceLoadErrorMessage = nil
@@ -474,7 +526,7 @@ public actor AgentControlService {
     private func scheduleMonitor(for lease: AgentCoolingLease) {
         guard activeLease?.id == lease.id else { return }
         cancelScheduledExpiry()
-        let delay = max(0, min(lease.expiresAt.timeIntervalSince(now()), monitorIntervalSeconds))
+        let delay = max(0, min(lease.expiresAt.timeIntervalSince(decisionClock()), monitorIntervalSeconds))
         let leaseID = lease.id
         scheduledExpiry = expiryScheduler(delay) { [weak self] in
             await self?.monitorLease(id: leaseID)
@@ -494,7 +546,7 @@ public actor AgentControlService {
     private func monitorLease(id: String) async {
         guard let lease = activeLease, lease.id == id else { return }
 
-        guard lease.isActive(at: now()) else {
+        guard lease.isActive(at: decisionClock()) else {
             await restoreFromMonitor(reason: "Agent cooling lease expired", leaseID: id, snapshot: nil)
             return
         }

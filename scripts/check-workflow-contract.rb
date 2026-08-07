@@ -178,7 +178,7 @@ expected_job_wrappers = {
     "swiftpm" => {
       "name" => "SwiftPM checks",
       "runs-on" => "macos-15",
-      "timeout-minutes" => 35
+      "timeout-minutes" => 60
     }
   },
   "release.yml" => {
@@ -371,7 +371,7 @@ else
          release_governance_checker_text.include?('"rulesetUpdatedAt" => canonical_updated_at') &&
          release_governance_checker_text.include?('"currentUserCanBypass" => current_user_can_bypass') &&
          release_governance_checker_text.include?('current_user_can_bypass == "never"') &&
-         release_governance_checker_text.include?('includes == ["refs/tags/v*"] && excludes == []') &&
+         release_governance_checker_text.include?('File.fnmatch?(pattern, full_ref, File::FNM_PATHNAME)') &&
          !release_governance_checker_text.include?("FNM_EXTGLOB") &&
          release_governance_checker_text.include?('safe_gh api --hostname github.com user') &&
          release_governance_checker_text.include?('"authenticatedActor" => actor && {') &&

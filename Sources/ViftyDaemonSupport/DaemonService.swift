@@ -128,6 +128,7 @@ public final class DaemonService: NSObject, ViftyDaemonProtocol, @unchecked Send
         let agentControl = AgentControlService(
             hardware: hardware,
             policy: AgentControlPolicy(enabled: true),
+            decisionClock: AgentControlService.monotonicDecisionClock,
             automaticallySchedulePersistedLeaseMonitor: false
         )
         // Startup performs exactly one recovery attempt and never schedules an
@@ -205,6 +206,28 @@ public final class DaemonService: NSObject, ViftyDaemonProtocol, @unchecked Send
         Task {
             do {
                 reply(XPCAgentControlCoding.encodeAuditEvents(try await agentControl.auditEvents(limit: limit)), nil)
+            } catch {
+                reply(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    public func setAgentControlEnabled(
+        _ enabled: Bool,
+        reply: @escaping @Sendable (NSDictionary?, String?) -> Void
+    ) {
+        let maintenancePermit: FanControlMutationPermit?
+        do {
+            maintenancePermit = try maintenanceCoordinator?.beginExternalMutation()
+        } catch {
+            reply(nil, error.localizedDescription)
+            return
+        }
+        Task {
+            defer { maintenancePermit?.release() }
+            do {
+                let status = try await agentControl.setPolicyEnabled(enabled)
+                reply(XPCAgentControlCoding.encode(status), nil)
             } catch {
                 reply(nil, error.localizedDescription)
             }

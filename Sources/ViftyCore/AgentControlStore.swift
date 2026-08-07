@@ -6,6 +6,15 @@ public protocol AgentControlPersisting: Sendable {
     func loadActiveLease() throws -> AgentCoolingLease?
     func appendAuditEvent(_ event: AgentControlAuditEvent) throws
     func loadRecentAuditEvents(limit: Int) throws -> [AgentControlAuditEvent]
+    func saveAgentControlEnabled(_ enabled: Bool) throws
+    func loadAgentControlEnabled() throws -> Bool?
+}
+
+public extension AgentControlPersisting {
+    /// Test and legacy stores that do not persist the user kill switch keep
+    /// the daemon-constructed policy default (enabled) unchanged.
+    func saveAgentControlEnabled(_ enabled: Bool) throws {}
+    func loadAgentControlEnabled() throws -> Bool? { nil }
 }
 
 public enum AgentControlStoreError: Error, Equatable, LocalizedError, Sendable {
@@ -58,6 +67,9 @@ public final class AgentControlStore: AgentControlPersisting, @unchecked Sendabl
     private static let activeLeaseKind = "tech.reidar.vifty.agent-control.active-lease"
     private static let activeLeaseFileName = "active-lease.json"
     private static let auditFileName = "audit.jsonl"
+    private static let policyEnabledKind = "tech.reidar.vifty.agent-control.policy-enabled"
+    private static let policyEnabledFileName = "policy-enabled.json"
+    private static let maximumPolicyEnabledBytes = 1_024
 
     private let directoryURL: URL
     private let maximumAuditEvents: Int
@@ -203,6 +215,48 @@ public final class AgentControlStore: AgentControlPersisting, @unchecked Sendabl
         }
     }
 
+    public func saveAgentControlEnabled(_ enabled: Bool) throws {
+        try operationLock.withLock {
+            try mapStorageErrors {
+                guard let directory = try secureDirectoryLocked(createIfMissing: true) else {
+                    throw AgentControlStoreError.ioFailure("could not create the agent-control directory")
+                }
+                let envelope = PolicyEnabledEnvelope(
+                    schemaVersion: 1,
+                    kind: Self.policyEnabledKind,
+                    enabled: enabled
+                )
+                let data: Data
+                do {
+                    data = try encoder.encode(envelope)
+                } catch {
+                    throw AgentControlStoreError.ioFailure(error.localizedDescription)
+                }
+                try directory.replaceRegularFile(
+                    named: Self.policyEnabledFileName,
+                    data: data,
+                    maximumBytes: Self.maximumPolicyEnabledBytes,
+                    hooks: hooks
+                )
+            }
+        }
+    }
+
+    public func loadAgentControlEnabled() throws -> Bool? {
+        try operationLock.withLock {
+            try mapStorageErrors {
+                guard let directory = try secureDirectoryLocked(createIfMissing: false),
+                      let data = try directory.readRegularFile(
+                          named: Self.policyEnabledFileName,
+                          maximumBytes: Self.maximumPolicyEnabledBytes
+                      ) else {
+                    return nil
+                }
+                return try decoder.decode(PolicyEnabledEnvelope.self, from: data).enabled
+            }
+        }
+    }
+
     private func secureDirectoryLocked(createIfMissing: Bool) throws -> SecureStorageDirectory? {
         if let anchoredDirectory {
             try anchoredDirectory.validatePathIdentity()
@@ -335,5 +389,11 @@ public final class AgentControlStore: AgentControlPersisting, @unchecked Sendabl
         let schemaVersion: Int
         let kind: String
         let lease: AgentCoolingLease
+    }
+
+    private struct PolicyEnabledEnvelope: Codable {
+        let schemaVersion: Int
+        let kind: String
+        let enabled: Bool
     }
 }

@@ -127,6 +127,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var fanControlApplyState: FanControlApplyState = .applied
     @Published var agentControlStatus: AgentControlStatus?
     @Published var agentControlStatusError: String?
+    @Published var agentCoolingEnabled: Bool?
     @Published private(set) var fanControlOwnershipStatus: FanControlOwnershipStatus?
     @Published private(set) var fanControlOwnershipStatusError: String?
     @Published var hasCompletedHardwarePoll = false
@@ -169,6 +170,7 @@ final class AppModel: ObservableObject {
     private let launchAtLoginManager: LaunchAtLoginManaging
     private let daemonPing: @Sendable () async -> Bool
     private let agentStatusReader: @Sendable () async throws -> AgentControlStatus?
+    private let agentPolicySetter: @Sendable (Bool) async throws -> AgentControlStatus?
     private let agentRestore: @Sendable (String) async throws -> AgentControlStatus?
     private let profileStore: CurveProfileStore
     private let preferencesStore: AppPreferencesStore
@@ -287,6 +289,9 @@ final class AppModel: ObservableObject {
         agentStatusReader: @escaping @Sendable () async throws -> AgentControlStatus? = {
             try await ViftyDaemonClient().agentControlStatus()
         },
+        agentPolicySetter: @escaping @Sendable (Bool) async throws -> AgentControlStatus? = { enabled in
+            try await ViftyDaemonClient().setAgentControlEnabled(enabled)
+        },
         agentRestore: @escaping @Sendable (String) async throws -> AgentControlStatus? = { reason in
             try await ViftyDaemonClient().restoreAgentControl(reason: reason)
         },
@@ -309,6 +314,7 @@ final class AppModel: ObservableObject {
         self.launchAtLoginManager = launchAtLoginManager
         self.daemonPing = daemonPing
         self.agentStatusReader = agentStatusReader
+        self.agentPolicySetter = agentPolicySetter
         self.agentRestore = agentRestore
         self.profileStore = profileStore
         self.preferencesStore = preferencesStore
@@ -2235,6 +2241,18 @@ final class AppModel: ObservableObject {
     private func refreshAgentControlStatus() async {
         do {
             agentControlStatus = try await agentStatusReader()
+            agentCoolingEnabled = agentControlStatus?.policy?.enabled
+            agentControlStatusError = nil
+        } catch {
+            agentControlStatusError = error.localizedDescription
+        }
+    }
+
+    func setAgentCoolingEnabled(_ enabled: Bool) async {
+        do {
+            guard let status = try await agentPolicySetter(enabled) else { return }
+            agentControlStatus = status
+            agentCoolingEnabled = status.policy?.enabled
             agentControlStatusError = nil
         } catch {
             agentControlStatusError = error.localizedDescription
@@ -2271,6 +2289,7 @@ final class AppModel: ObservableObject {
         do {
             guard let status = try await agentStatusReader() else { return }
             agentControlStatus = status
+            agentCoolingEnabled = status.policy?.enabled
             agentControlStatusError = nil
         } catch {
             agentControlStatusError = error.localizedDescription

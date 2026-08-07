@@ -300,6 +300,39 @@ final class FanControlArbiterTests: XCTestCase {
         }
     }
 
+    func testGlobalAutoRestoreWithoutOperatorAuthorityCannotOverrideManualSession() async throws {
+        let hardware = FakePrivilegedFanControlHardware(fans: Self.twoAutomaticFans)
+        try await withArbiter(hardware: hardware) { arbiter, store in
+            _ = try await arbiter.applyManual(Self.manualRequest())
+            XCTAssertEqual(hardware.appliedFanIDs, [0, 1])
+
+            do {
+                _ = try await arbiter.restoreAuto(AutoRestoreRequest(
+                    transactionID: "scripted-restore",
+                    expectedFanIDs: [],
+                    reason: "Scripted restore without operator confirmation",
+                    allowRestoreAllTrustedFans: true
+                ))
+                XCTFail("Expected manual-session override refusal")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("explicit operator confirmation"))
+            }
+
+            XCTAssertTrue(hardware.restoredFanIDs.isEmpty)
+            XCTAssertEqual(try store.load()?.owner, .manual(sessionID: "session-1"))
+
+            let approved = try await arbiter.restoreAuto(AutoRestoreRequest(
+                transactionID: "operator-restore",
+                expectedFanIDs: [],
+                reason: "Operator-approved restore",
+                allowRestoreAllTrustedFans: true,
+                unreadableJournalRecoveryAuthority: .explicitOperator
+            ))
+            XCTAssertEqual(approved.confirmedFanIDs, [0, 1])
+            XCTAssertNil(try store.load())
+        }
+    }
+
     func testFailingFanIsIncludedInFullRollback() async throws {
         let hardware = FakePrivilegedFanControlHardware(fans: Self.twoAutomaticFans)
         hardware.failApplyFanID = 1
@@ -387,7 +420,11 @@ final class FanControlArbiterTests: XCTestCase {
 
             do {
                 _ = try await arbiter.restoreAuto(
-                    AutoRestoreRequest(transactionID: "restore", reason: "User requested Auto")
+                    AutoRestoreRequest(
+                        transactionID: "restore",
+                        reason: "User requested Auto",
+                        unreadableJournalRecoveryAuthority: .explicitOperator
+                    )
                 )
                 XCTFail("Expected duplicate fan telemetry refusal")
             } catch {
@@ -450,7 +487,11 @@ final class FanControlArbiterTests: XCTestCase {
 
             do {
                 _ = try await arbiter.restoreAuto(
-                    AutoRestoreRequest(transactionID: "restore", reason: "User requested Auto")
+                    AutoRestoreRequest(
+                        transactionID: "restore",
+                        reason: "User requested Auto",
+                        unreadableJournalRecoveryAuthority: .explicitOperator
+                    )
                 )
                 XCTFail("Expected duplicate restore-readback refusal")
             } catch {
@@ -535,7 +576,11 @@ final class FanControlArbiterTests: XCTestCase {
             arbiter.requestRestorePriority()
 
             let result = try await arbiter.restoreAuto(
-                AutoRestoreRequest(transactionID: "restore", reason: "User requested Auto")
+                AutoRestoreRequest(
+                    transactionID: "restore",
+                    reason: "User requested Auto",
+                    unreadableJournalRecoveryAuthority: .explicitOperator
+                )
             )
 
             XCTAssertEqual(result.confirmedFanIDs, [0, 1])
@@ -553,7 +598,11 @@ final class FanControlArbiterTests: XCTestCase {
 
             do {
                 _ = try await arbiter.restoreAuto(
-                    AutoRestoreRequest(transactionID: "restore", reason: "User requested Auto")
+                    AutoRestoreRequest(
+                        transactionID: "restore",
+                        reason: "User requested Auto",
+                        unreadableJournalRecoveryAuthority: .explicitOperator
+                    )
                 )
                 XCTFail("Expected unconfirmed restore")
             } catch {
@@ -653,7 +702,11 @@ final class FanControlArbiterTests: XCTestCase {
 
             do {
                 _ = try await arbiter.restoreAuto(
-                    AutoRestoreRequest(transactionID: "restore", reason: "User requested Auto"),
+                    AutoRestoreRequest(
+                        transactionID: "restore",
+                        reason: "User requested Auto",
+                        unreadableJournalRecoveryAuthority: .explicitOperator
+                    ),
                     beforeJournalClear: {
                         if (try? store.load()) != nil { callbackObservedJournal.mark() }
                         throw ArbiterInjectedFailure.ownershipClearFailed
