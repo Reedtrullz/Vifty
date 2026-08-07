@@ -460,8 +460,9 @@ fi
 if ! { grep -Fq 'gh api --method POST' "${RELEASE_WORKFLOW}" ||
        grep -Fq 'gh api --hostname github.com --method POST' "${RELEASE_WORKFLOW}"; } ||
    ! grep -Fq '"repos/${GITHUB_REPOSITORY}/releases"' "${RELEASE_WORKFLOW}" ||
-   ! grep -Fq 'RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"' "${RELEASE_WORKFLOW}"; then
-  echo "error: ${RELEASE_WORKFLOW} must REST-create the draft and capture its immutable release ID directly" >&2
+   ! grep -Fq 'RELEASE_ID="$(capture_created_release_id "${CREATE_RESPONSE}")"' "${RELEASE_WORKFLOW}" ||
+   ! grep -Fq 'capture_owned_draft_release_id "${CREATE_RESPONSE}" > /dev/null' "${RELEASE_WORKFLOW}"; then
+  echo "error: ${RELEASE_WORKFLOW} must REST-create the draft, retain its repository-scoped immutable release ID before full ownership validation, and then validate ownership" >&2
   exit 1
 fi
 

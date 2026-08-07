@@ -1291,6 +1291,8 @@ jobs:
             local destination="$1"
             local pages_path="${destination}.pages"
             release_gh api --hostname github.com --paginate --slurp \
+              -H 'Cache-Control: no-cache' \
+              -H 'Pragma: no-cache' \
               "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
               > "${pages_path}" || return 1
             ruby -rjson -e '
@@ -1309,6 +1311,27 @@ jobs:
             release_gh api --hostname github.com "repos/${GITHUB_REPOSITORY}/releases/${release_id}" > "${destination}"
           }
 
+          capture_created_release_id() {
+            local state_path="$1"
+            ruby -rjson -e '
+              release = JSON.parse(File.read(ARGV.fetch(0)))
+              repository = ARGV.fetch(1)
+              tag = ARGV.fetch(2)
+              id = release["id"]
+              api_base = id.is_a?(Integer) && id.positive? ?
+                "https://api.github.com/repos/#{repository}/releases/#{id}" : nil
+              upload_url = id.is_a?(Integer) && id.positive? ?
+                "https://uploads.github.com/repos/#{repository}/releases/#{id}/assets{?name,label}" : nil
+              valid = id.is_a?(Integer) && id.positive? &&
+                release["url"] == api_base &&
+                release["assets_url"] == "#{api_base}/assets" &&
+                release["upload_url"] == upload_url &&
+                release["tag_name"] == tag
+              abort("creation response does not prove immutable repository-scoped ID/tag identity") unless valid
+              print id
+            ' "${state_path}" "${GITHUB_REPOSITORY}" "${RELEASE_TAG}"
+          }
+
           capture_owned_draft_release_id() {
             local state_path="$1"
             ruby -rjson -e '
@@ -1317,7 +1340,7 @@ jobs:
               marker = ARGV.fetch(3)
               body = release["body"]
               marker_valid = body.is_a?(String) &&
-                body.scan(Regexp.escape(marker)).length == 1 &&
+                body.scan(marker).length == 1 &&
                 body.lines.map(&:strip).include?(marker)
               valid = id.is_a?(Integer) && id.positive? &&
                 release["tag_name"] == ARGV.fetch(1) &&
@@ -1330,17 +1353,41 @@ jobs:
             ' "${state_path}" "${RELEASE_TAG}" "${DRAFT_TITLE}" "${RELEASE_MARKER}"
           }
 
-          discover_owned_draft_by_tag() {
+          discover_owned_release_by_tag_for_containment() {
             local destination="$1"
             if query_release_by_tag "${destination}"; then
-              if ! capture_owned_draft_release_id "${destination}" > /dev/null; then
-                echo "The by-tag release does not carry this run's exact draft title and ownership marker; refusing mutation." >&2
+              local discovered_release_id
+              if ! discovered_release_id="$(capture_created_release_id "${destination}")" ||
+                 ! verify_release_owned_for_containment "${destination}" "${discovered_release_id}"; then
+                echo "The by-tag release does not carry this run's exact repository-scoped ID, title, and ownership marker; refusing mutation." >&2
                 return 5
               fi
               return 0
             else
               return $?
             fi
+          }
+
+          wait_for_owned_release_by_tag_for_containment() {
+            local destination="$1"
+            local deadline=$((SECONDS + 60))
+            local discovery_status
+
+            while true; do
+              if discover_owned_release_by_tag_for_containment "${destination}"; then
+                return 0
+              else
+                discovery_status=$?
+              fi
+              if [[ "${discovery_status}" -ne 3 ]]; then
+                return 1
+              fi
+              if (( SECONDS >= deadline )); then
+                echo "Containment could not prove post-creation absence or exact marker ownership for ${RELEASE_TAG} within 60 seconds." >&2
+                return 1
+              fi
+              /bin/sleep 2
+            done
           }
 
           verify_release_state() {
@@ -1432,7 +1479,7 @@ jobs:
               marker = ARGV.fetch(3)
               body = release["body"]
               marker_valid = body.is_a?(String) &&
-                body.scan(Regexp.escape(marker)).length == 1 &&
+                body.scan(marker).length == 1 &&
                 body.lines.map(&:strip).include?(marker)
               valid = release["id"] == Integer(ARGV.fetch(1), 10) &&
                 release["tag_name"] == ARGV.fetch(2) &&
@@ -1485,7 +1532,7 @@ jobs:
               marker = ARGV.fetch(3)
               body = release["body"]
               marker_valid = body.is_a?(String) &&
-                body.scan(Regexp.escape(marker)).length == 1 &&
+                body.scan(marker).length == 1 &&
                 body.lines.map(&:strip).include?(marker)
               valid = release["id"] == Integer(ARGV.fetch(1), 10) &&
                 release["tag_name"] == ARGV.fetch(2) &&
@@ -1504,7 +1551,7 @@ jobs:
               marker = ARGV.fetch(3)
               body = release["body"]
               marker_valid = body.is_a?(String) &&
-                body.scan(Regexp.escape(marker)).length == 1 &&
+                body.scan(marker).length == 1 &&
                 body.lines.map(&:strip).include?(marker)
               valid = release["id"] == Integer(ARGV.fetch(1), 10) &&
                 release["tag_name"] == ARGV.fetch(2) &&
@@ -1514,6 +1561,34 @@ jobs:
               abort("release containment ownership/draft readback failed") unless valid
             ' "${state_path}" "${release_id}" "${RELEASE_TAG}" "${RELEASE_MARKER}" \
               "${DRAFT_TITLE}" "${FINAL_TITLE}"
+          }
+
+          wait_for_release_owned_for_containment() {
+            local destination="$1"
+            local release_id="$2"
+            local deadline=$((SECONDS + 60))
+            local query_status
+
+            while true; do
+              if query_release_by_id_for_convergence "${release_id}" "${destination}"; then
+                if verify_release_owned_for_containment "${destination}" "${release_id}"; then
+                  return 0
+                fi
+                echo "Containment readback for release ID ${release_id} changed immutable ID, tag, title, or ownership marker." >&2
+                return 1
+              else
+                query_status=$?
+                if [[ "${query_status}" -ne 75 ]]; then
+                  return 1
+                fi
+              fi
+
+              if (( SECONDS >= deadline )); then
+                echo "Containment could not prove immutable-ID ownership for release ID ${release_id} within 60 seconds; no mutation was attempted." >&2
+                return 1
+              fi
+              /bin/sleep 2
+            done
           }
 
           wait_for_release_contained_by_id() {
@@ -1619,28 +1694,22 @@ jobs:
           }
 
           contain_release_by_id() {
-            local mutation_status query_status discovery_status
+            local mutation_status query_status
             local containment_response="${RUNNER_TEMP}/vifty-release-containment-response.json"
             local containment_state="${RUNNER_TEMP}/vifty-release-containment-state.json"
             local ownership_state="${RUNNER_TEMP}/vifty-release-containment-ownership.json"
             local discovered_state="${RUNNER_TEMP}/vifty-release-containment-discovery.json"
 
             if [[ -z "${RELEASE_ID}" ]]; then
-              if discover_owned_draft_by_tag "${discovered_state}"; then
-                RELEASE_ID="$(capture_owned_draft_release_id "${discovered_state}")" || return 1
+              if wait_for_owned_release_by_tag_for_containment "${discovered_state}"; then
+                RELEASE_ID="$(capture_created_release_id "${discovered_state}")" || return 1
               else
-                discovery_status=$?
-                if [[ "${discovery_status}" -eq 3 ]]; then
-                  echo "Containment readback confirms that no release exists for ${RELEASE_TAG}." >&2
-                  return 0
-                fi
                 echo "Containment could not prove marker ownership for a unique ${RELEASE_TAG} release; no mutation was attempted." >&2
                 return 1
               fi
             fi
 
-            if ! query_release_by_id "${RELEASE_ID}" "${ownership_state}" || \
-               ! verify_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"; then
+            if ! wait_for_release_owned_for_containment "${ownership_state}" "${RELEASE_ID}"; then
               echo "Containment refused to mutate release ID ${RELEASE_ID}: exact tag/title/marker ownership was not proved." >&2
               return 1
             fi
@@ -1738,8 +1807,9 @@ jobs:
 
           CREATE_RESPONSE_STATUS=1
           if [[ -s "${CREATE_RESPONSE}" ]]; then
-            if RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"; then
-              if ruby -rjson -e '
+            if RELEASE_ID="$(capture_created_release_id "${CREATE_RESPONSE}")"; then
+              if capture_owned_draft_release_id "${CREATE_RESPONSE}" > /dev/null && \
+                ruby -rjson -e '
                 release = JSON.parse(File.read(ARGV.fetch(0)))
                 payload = JSON.parse(File.read(ARGV.fetch(1)))
                 body = release["body"]
@@ -1753,13 +1823,13 @@ jobs:
               ' "${CREATE_RESPONSE}" "${CREATE_PAYLOAD}" "${EXPECTED_BODY_PATH}"; then
                 CREATE_RESPONSE_STATUS=0
               fi
-            else
-              RELEASE_ID=""
             fi
           fi
 
           CREATED_STATE="${RUNNER_TEMP}/vifty-release-created-state.json"
-          if [[ -n "${RELEASE_ID}" ]]; then
+          if [[ "${CREATE_STATUS}" -eq 0 ]] && \
+             [[ "${CREATE_RESPONSE_STATUS}" -eq 0 ]] && \
+             [[ -n "${RELEASE_ID}" ]]; then
             if wait_for_release_state_by_id "${CREATED_STATE}" "${RELEASE_ID}" true "${DRAFT_TITLE}" \
               "${EXPECTED_BODY_PATH}" "${EXPECTED_ASSETS_PATH}"; then
               CREATE_QUERY_STATUS=0

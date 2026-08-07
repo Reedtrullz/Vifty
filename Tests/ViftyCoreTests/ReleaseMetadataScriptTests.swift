@@ -437,6 +437,27 @@ final class ReleaseMetadataScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must not mutate a GitHub Release by tag"))
     }
 
+    func testValidatorRejectsDeferringImmutableReleaseIDCaptureUntilFullOwnershipValidation() throws {
+        let harness = try ReleaseMetadataHarness()
+        let workflowURL = harness.rootURL.appendingPathComponent(".github/workflows/release.yml")
+        var workflow = try String(contentsOf: workflowURL, encoding: .utf8)
+        let immutableCapture = "RELEASE_ID=\"$(capture_created_release_id \"${CREATE_RESPONSE}\")\""
+        XCTAssertTrue(workflow.contains(immutableCapture))
+        workflow = workflow.replacingOccurrences(
+            of: immutableCapture,
+            with: "RELEASE_ID=\"$(capture_owned_draft_release_id \"${CREATE_RESPONSE}\")\""
+        )
+        try workflow.write(to: workflowURL, atomically: true, encoding: .utf8)
+
+        let result = try harness.runValidator()
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(
+            result.stderr.contains("retain its repository-scoped immutable release ID before full ownership validation"),
+            result.stderr
+        )
+    }
+
     func testCaskChecksumUpdaterAppliesReleaseChecksumAndRevalidatesMetadata() throws {
         let newSHA = String(repeating: "b", count: 64)
         let harness = try ReleaseMetadataHarness(manifestSHA: newSHA)
@@ -3038,7 +3059,8 @@ private final class ReleaseMetadataHarness {
                   gh api --method POST \\
                     "repos/${GITHUB_REPOSITORY}/releases" \\
                     --input "${CREATE_PAYLOAD}" > "${CREATE_RESPONSE}"
-                  RELEASE_ID="$(capture_owned_draft_release_id "${CREATE_RESPONSE}")"
+                  RELEASE_ID="$(capture_created_release_id "${CREATE_RESPONSE}")"
+                  capture_owned_draft_release_id "${CREATE_RESPONSE}" > /dev/null
                   ruby -rjson -e '
                     data = JSON.parse(File.read(ARGV.fetch(0)))
                     contract = JSON.parse(File.read(ARGV.fetch(1)))
