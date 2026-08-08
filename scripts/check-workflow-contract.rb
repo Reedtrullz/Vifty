@@ -185,7 +185,7 @@ expected_job_wrappers = {
     "prepare-candidate" => {
       "name" => "Build and inventory unsigned candidate",
       "runs-on" => "macos-15",
-      "timeout-minutes" => 35,
+      "timeout-minutes" => 60,
       "permissions" => { "actions" => "read", "contents" => "read" },
       "env" => {
         "RELEASE_TAG" => "${{ github.ref_name }}"
