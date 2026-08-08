@@ -594,7 +594,7 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
         print) [[ ! -e "$state" ]] ;;
         print-disabled)
           if [[ -e "$disabled" ]]; then
-            printf 'disabled services = {\n  "tech.reidar.vifty.daemon" => true\n}\n'
+            printf 'disabled services = {\n  "tech.reidar.vifty.daemon" => disabled\n}\n'
           else
             printf 'disabled services = { }\n'
           fi
