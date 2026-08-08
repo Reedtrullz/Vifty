@@ -149,6 +149,25 @@ public struct AgentControlStatus: Codable, Equatable, Sendable {
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
 
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case activeLease
+        case lastDecision
+        case lastErrorCode
+        case policy
+    }
+
+    // Emit nil optionals as explicit JSON nulls so strict schema consumers see
+    // the full contract shape even in the idle state.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(activeLease, forKey: .activeLease)
+        try container.encode(lastDecision, forKey: .lastDecision)
+        try container.encode(lastErrorCode, forKey: .lastErrorCode)
+        try container.encode(policy, forKey: .policy)
+    }
+
     public init(
         enabled: Bool,
         activeLease: AgentCoolingLease?,
