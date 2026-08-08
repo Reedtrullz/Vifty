@@ -62,5 +62,20 @@
     "manualCompatibility": "pending",
     "manualCompatibilityScope": null
   },
-  "candidate": null
+  "candidate": {
+    "version": "1.4.5",
+    "build": 13,
+    "tag": "v1.4.5",
+    "artifact": "Vifty-v1.4.5.zip",
+    "checksumAsset": "Vifty-v1.4.5.zip.sha256",
+    "artifactSummary": "Vifty-v1.4.5-artifact-summary.json",
+    "releaseChecklist": "Vifty-v1.4.5-release-checklist.md",
+    "sha256": null,
+    "artifactTrust": "pending",
+    "signingTrust": "pending",
+    "tagTrust": "signed-required",
+    "installedReleaseReview": "pending",
+    "manualCompatibility": "pending",
+    "manualCompatibilityScope": null
+  }
 }
