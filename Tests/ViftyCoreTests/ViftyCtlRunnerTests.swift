@@ -382,7 +382,9 @@ final class ViftyCtlRunnerTests: XCTestCase {
 
         let result = try await runner.run(.capabilities(json: true))
 
-        XCTAssertEqual(result.exitCode, 0)
+        // The policy is unusable, so exit-code automation must fail closed even
+        // though the daemon itself responded.
+        XCTAssertEqual(result.exitCode, 69)
         let data = try XCTUnwrap(result.stdout.data(using: .utf8))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["daemonStatusAvailable"] as? Bool, true)
@@ -390,7 +392,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.daemonStatus.rawValue)
         XCTAssertNil(json["agentControlStatusError"] as? String)
         let policy = try XCTUnwrap(json["policy"] as? [String: Any])
-        XCTAssertEqual(policy["enabled"] as? Bool, true)
+        XCTAssertEqual(policy["enabled"] as? Bool, false)
         XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
     }
 

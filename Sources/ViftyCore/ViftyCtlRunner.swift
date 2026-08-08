@@ -1164,6 +1164,31 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
 
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case schemaID
+        case generatedAt
+        case enabled
+        case activeLease
+        case lastDecision
+        case lastErrorCode
+        case policy
+    }
+
+    // Emit nil optionals as explicit JSON nulls so the status schema's required
+    // keys are present in the idle payload.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(schemaID, forKey: .schemaID)
+        try container.encode(generatedAt, forKey: .generatedAt)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(activeLease, forKey: .activeLease)
+        try container.encode(lastDecision, forKey: .lastDecision)
+        try container.encode(lastErrorCode, forKey: .lastErrorCode)
+        try container.encode(policy, forKey: .policy)
+    }
+
     public init(
         schemaVersion: Int = 1,
         schemaID: String = ViftyCtlSchemaReferences.schemaIDs.status,
@@ -1372,19 +1397,25 @@ public struct ViftyCtlRunner: Sendable {
                 return ViftyCtlResult(stdout: stdout)
             case .capabilities(let json):
                 let capabilities = await capabilitiesReport()
+                let policyUsable = capabilities.daemonStatusAvailable && capabilities.policyStatusAvailable
                 if json {
                     return ViftyCtlResult(
                         stdout: try encodeJSON(capabilities) + "\n",
-                        exitCode: capabilities.daemonStatusAvailable ? 0 : capabilities.exitCodes.unavailable
+                        exitCode: policyUsable ? 0 : capabilities.exitCodes.unavailable
                     )
                 }
-                let stderr = capabilities.agentControlStatusError.map {
-                    "viftyctl capabilities: daemon status unavailable; policy is a disabled fallback: \($0)\n"
-                } ?? ""
+                let stderr: String
+                if let error = capabilities.agentControlStatusError {
+                    stderr = "viftyctl capabilities: daemon status unavailable; policy is a disabled fallback: \(error)\n"
+                } else if !capabilities.policyStatusAvailable {
+                    stderr = "viftyctl capabilities: daemon returned no usable policy; policy is a disabled fallback\n"
+                } else {
+                    stderr = ""
+                }
                 return ViftyCtlResult(
                     stdout: capabilities.commands.joined(separator: "\n") + "\n",
                     stderr: stderr,
-                    exitCode: capabilities.daemonStatusAvailable ? 0 : capabilities.exitCodes.unavailable
+                    exitCode: policyUsable ? 0 : capabilities.exitCodes.unavailable
                 )
             case .agentRule(let json):
                 if json {
@@ -1721,7 +1752,7 @@ public struct ViftyCtlRunner: Sendable {
     private func capabilitiesReport() async -> ViftyCtlCapabilities {
         do {
             let status = try await client.status()
-            let policy = status.policy ?? AgentControlPolicy(enabled: status.enabled).snapshot
+            let policy = status.policy ?? AgentControlPolicy(enabled: false).snapshot
             return ViftyCtlCapabilities(
                 policy: policy,
                 policyStatusAvailable: status.policy != nil
