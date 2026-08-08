@@ -14,7 +14,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 1.3.2 | Supported Developer ID signed/notarized release; installed release review passed and manual Fixed/Curve/Auto validation passed on MacBookPro18,1 |
+| 1.4.4 | Supported Developer ID signed/notarized release; installed release review and manual Fixed/Curve/Auto validation pending |
+| 1.3.2 | Historical Developer ID signed/notarized release; installed release review passed and manual Fixed/Curve/Auto validation passed on MacBookPro18,1 |
 | 1.1.x source/tag | Supported source-first fallback; unsigned assets are not trust-complete |
 | 1.0.x public asset | Not trust-complete; use source or a corrected 1.1.x release path |
 
