@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-08-08
+
+### Fixed
+
+- Accept the macOS 26 `launchctl print-disabled` output format (`label => disabled`) in the helper lifecycle's disable confirmation, so the published-app migration from a v1.3.2 install can complete instead of failing closed at status 76.
+- Harden remaining review findings: require an `.active` journal phase before idempotent re-apply confirmation, bound XPC manual/auto-restore request fields, remove Codex usage from the default custom menu-bar fields, make `capabilities` fail closed when the daemon returns no usable policy, and require full request equality for prepare idempotency.
+
+### Scope
+
+- `v1.4.4` published but cannot migrate a v1.3.2 install on macOS 26 because its bundled lifecycle predates the `=> disabled` confirmation fix; installed release-mode review and manual hardware compatibility remain pending for it and for `v1.4.5`. `v1.4.3` and `v1.4.1` remain retired without publication, and the prepared `v1.4.2` candidate was superseded before publication.
+
 ## [1.4.4] - 2026-08-08
 
 ### Fixed
