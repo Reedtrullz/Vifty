@@ -157,7 +157,7 @@ class ReleaseArtifactContractTests < Minitest::Test
 
   def test_schema_v1_rejects_manifest_build_mutation
     manifest = canonical_manifest
-    manifest.fetch("publishedRelease")["build"] = 8
+    v132_entry(manifest)["build"] = 8
 
     assert_v1_boundary_rejected(manifest: manifest)
   end
@@ -170,7 +170,7 @@ class ReleaseArtifactContractTests < Minitest::Test
       refute_equal V132_COMMIT, mutated_commit
       run!("/usr/bin/git", "-C", repository, "tag", "-f", "v1.3.2", mutated_commit)
       manifest = canonical_manifest
-      manifest.fetch("publishedRelease")["sourceCommit"] = mutated_commit
+      v132_entry(manifest)["sourceCommit"] = mutated_commit
 
       assert_v1_boundary_rejected(manifest: manifest, source_repository: repository)
     end
@@ -200,7 +200,7 @@ class ReleaseArtifactContractTests < Minitest::Test
     assert_v1_boundary_rejected(manifest: manifest)
   end
 
-  def test_published_install_command_accepts_exact_current_v132_verifier_v2_fallback
+  def test_published_install_command_rejects_historical_v132_verifier_v2_summary
     with_published_install_fixture do |summary_path, manifest_path|
       _stdout, stderr, status = Open3.capture3(
         "/usr/bin/ruby",
@@ -211,7 +211,11 @@ class ReleaseArtifactContractTests < Minitest::Test
         ROOT
       )
 
-      assert status.success?, stderr
+      refute status.success?, stderr
+      assert_includes stderr, "release evidence must select the current publishedRelease, not a candidate or historical release"
+      assert_includes stderr, "releaseVersion must match the current publishedRelease version"
+      assert_includes stderr, "expectedSHA must exactly match current publishedRelease sha256"
+      assert_includes stderr, "actualSHA must exactly match current publishedRelease sha256"
     end
   end
 
@@ -276,7 +280,7 @@ class ReleaseArtifactContractTests < Minitest::Test
       summary: canonical_v132_verifier_v2_summary
     )
 
-    assert_includes errors, "release evidence must select the current publishedRelease, not a candidate or historical release"
+    assert_includes errors, "releaseVersion must select exactly one authoritative manifest entry"
     assert_includes errors, "releaseVersion must match the current publishedRelease version"
   end
 
@@ -317,7 +321,8 @@ class ReleaseArtifactContractTests < Minitest::Test
     assert_includes errors, "release artifact summary status must be passed"
     assert_includes errors, "release evidence must not skip signature checks"
     assert_includes errors, "release evidence must not skip notarization checks"
-    assert_includes errors, "checks must contain the exact verifier check-name set"
+    assert_includes errors, "release evidence must select the current publishedRelease, not a candidate or historical release"
+    assert_includes errors, "tagless verifier fallback is limited to the exact public v1.3.2 release"
   end
 
   def test_published_install_rejects_nonpassed_check_evidence
@@ -326,13 +331,21 @@ class ReleaseArtifactContractTests < Minitest::Test
 
     errors = validate_published_install(manifest: canonical_manifest, summary: summary)
 
-    assert_includes errors, "every verifier check must be passed release-trust evidence with a non-empty note"
+    assert_includes errors, "release evidence must select the current publishedRelease, not a candidate or historical release"
+    assert_includes errors, "tagless verifier fallback is limited to the exact public v1.3.2 release"
   end
 
   private
 
   def canonical_manifest
     JSON.parse(File.read(File.join(ROOT, ".github/release-manifest.json")))
+  end
+
+  def v132_entry(manifest)
+    entries = [manifest.fetch("publishedRelease")] + Array(manifest["historicalReleases"])
+    entry = entries.find { |release| release["version"] == "1.3.2" }
+    raise "v1.3.2 entry is missing from the manifest" unless entry
+    entry
   end
 
   def v2_manifest(candidate_sha:, published_sha:)

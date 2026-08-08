@@ -2,15 +2,15 @@
 
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
-> Published: `v1.3.2` (version `1.3.2`, build `7`), `arm64` only, minimum macOS `15.0`.
+> Published: `v1.4.4` (version `1.4.4`, build `12`), `arm64` only, minimum macOS `15.0`.
 > Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
-> Canonical artifact: `Vifty-v1.3.2.zip` with checksum asset `Vifty-v1.3.2.zip.sha256` and SHA-256 `8bbc48b7db7bbe342a6c053a58aa655c969d9b803794f981a4cd8e7d3514bcc0`.
-> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `6a771c2ea10386bf7a0a8369a759930f01d56062`, CI run `29284751837`, Release run `29285576026`.
-> Tag policy: `v1.3.2` remains recorded as `historical-unsigned` evidence; signed tags are mandatory from version `1.3.3` onward.
-> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md`).
+> Canonical artifact: `Vifty-v1.4.4.zip` with checksum asset `Vifty-v1.4.4.zip.sha256` and SHA-256 `d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `0ac7842483a602a30900671904f76fd7b06e2370`, CI run `31252163922`, Release run `31253285103`.
+> Tag policy: `v1.4.4` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
-Auto-update is not enabled for `v1.3.2`; its exact public binary does not contain update checking and cannot gain it retroactively. The first public release that contains the current update-checking code must therefore be installed manually. Source-first, unsigned-dev, local ad-hoc, CI, and other ineligible builds do not make update requests.
+Auto-update is not enabled for `v1.4.4`; its exact public binary contains the advisory release-availability checker but no executable downloader or in-place installer. The first public release that contains the current update-checking code must therefore be installed manually. Source-first, unsigned-dev, local ad-hoc, CI, and other ineligible builds do not make update requests.
 
 Current source implements an advisory release-availability checker for future exact Vifty Developer ID builds. It does not download executable code, replace `Vifty.app`, run an installer, or silently change the privileged helper. A separate in-place updater has a higher trust bar and has not been implemented.
 

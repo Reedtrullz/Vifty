@@ -43,7 +43,7 @@ body:
     id: install-source
     attributes:
       label: Install source
-      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA. Choose notarized or Homebrew only for an exact published trusted-binary artifact such as v1.3.2.
+      description: How did you install this build? For v1.1.1, prefer Source build from tag or Source-first unsigned-dev zip. For current main/local builds, choose Local ad-hoc build with the exact source SHA. Choose notarized or Homebrew only for an exact published trusted-binary artifact such as v1.4.4.
       options:
         - Source build from tag
         - Source-first unsigned-dev zip
