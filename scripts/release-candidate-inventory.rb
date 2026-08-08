@@ -106,7 +106,7 @@ module ViftyCandidateInventory
   end
 
   def validate_relative_path!(path, label, allow_root: false)
-    fail_inventory("#{label} must be valid UTF-8") unless path.is_a?(String) && path.encoding == Encoding::UTF_8 && path.valid_encoding?
+    fail_inventory("#{label} must be valid UTF-8") unless utf8_representable?(path)
     fail_inventory("#{label} contains a control character") if path.match?(/[\x00-\x1f\x7f]/)
     return if allow_root && path == "."
     fail_inventory("#{label} must be a non-empty relative path") if path.empty? || path.start_with?("/")
@@ -116,9 +116,20 @@ module ViftyCandidateInventory
     fail_inventory("#{label} exceeds #{MAX_PATH_DEPTH} path components") if components.length > MAX_PATH_DEPTH
   end
 
+  # Accepts UTF-8-tagged strings and ASCII-8BIT names reported by the
+  # filesystem under a C locale (LANG=C hostile-environment hardening); the
+  # requirement is that the bytes represent valid UTF-8, not a specific Ruby
+  # encoding tag.
+  def utf8_representable?(value)
+    return false unless value.is_a?(String)
+    encoded = value.encoding == Encoding::UTF_8 ? value : value.dup.force_encoding(Encoding::UTF_8)
+    encoded.valid_encoding?
+  rescue Encoding::CompatibilityError
+    false
+  end
+
   def validate_symlink_target!(entry_path, target)
-    fail_inventory("symlink target for #{entry_path} must be valid UTF-8") unless
-      target.is_a?(String) && target.encoding == Encoding::UTF_8 && target.valid_encoding?
+    fail_inventory("symlink target for #{entry_path} must be valid UTF-8") unless utf8_representable?(target)
     fail_inventory("symlink target for #{entry_path} contains a control character") if target.match?(/[\x00-\x1f\x7f]/)
     fail_inventory("symlink target for #{entry_path} must be relative") if target.empty? || target.start_with?("/")
     fail_inventory("symlink target for #{entry_path} exceeds #{MAX_PATH_BYTES} bytes") if target.bytesize > MAX_PATH_BYTES
