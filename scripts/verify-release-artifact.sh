@@ -424,9 +424,9 @@ if [[ ! -f "${CASK_PATH}" ]]; then
   exit 66
 fi
 
-CASK_VERSION="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "${CASK_PATH}")"
-CASK_SHA="$(ruby -ne 'puts $1 if /^\s*sha256 "([^"]+)"/' "${CASK_PATH}")"
-CASK_URL_TEMPLATE="$(ruby -ne 'puts $1 if /^\s*url "([^"]+)"/' "${CASK_PATH}")"
+CASK_VERSION="$(ruby -E UTF-8 -ne 'puts $1 if /^\s*version "([^"]+)"/' "${CASK_PATH}")"
+CASK_SHA="$(ruby -E UTF-8 -ne 'puts $1 if /^\s*sha256 "([^"]+)"/' "${CASK_PATH}")"
+CASK_URL_TEMPLATE="$(ruby -E UTF-8 -ne 'puts $1 if /^\s*url "([^"]+)"/' "${CASK_PATH}")"
 
 if [[ -z "${CASK_VERSION}" || -z "${CASK_SHA}" || -z "${CASK_URL_TEMPLATE}" ]]; then
   fail_check "cask-metadata" "could not read version, sha256, or url from ${CASK_PATH}"
@@ -642,7 +642,7 @@ fi
 support_contract_rows="${TMP_DIR}/expected-support-contract.tsv"
 if ! ruby -e '
   path = ARGV.fetch(0)
-  rows = File.readlines(path).each_with_object([]) do |line, found|
+  rows = File.readlines(path, encoding: Encoding::UTF_8).each_with_object([]) do |line, found|
     match = line.match(/^\s*install\s+-m\s+755\s+scripts\/([A-Za-z0-9._-]+)\s+"\$\(CONTENTS\)\/Resources\/([A-Za-z0-9._-]+)"\s*$/)
     found << [match[1], match[2]] if match
   end
@@ -667,7 +667,7 @@ while IFS=$'\t' read -r support_source support_destination; do
 done < "${support_contract_rows}"
 
 if ! ruby -e '
-  text = File.read(ARGV.fetch(0))
+  text = File.read(ARGV.fetch(0), encoding: Encoding::UTF_8)
   abort("Makefile does not bundle the viftyctl wrapper script inventory") unless text.match?(/^\s*install\s+-m\s+755\s+examples\/viftyctl\/\*\.sh\s+"\$\(WRAPPERS\)\/"\s*$/)
   abort("Makefile does not bundle the viftyctl wrapper README") unless text.match?(/^\s*install\s+-m\s+644\s+examples\/viftyctl\/README\.md\s+"\$\(WRAPPERS\)\/README\.md"\s*$/)
 ' "${BUNDLE_CONTRACT_MAKEFILE}" 2>/dev/null; then
@@ -677,7 +677,7 @@ fi
 EXPECTED_WRAPPER_SCRIPT_INVENTORY_PATH="${TMP_DIR}/expected-wrapper-scripts.txt"
 if [[ "${CURRENT_RELEASE_MANIFEST_ENTRY_KIND}" != "candidate" ]]; then
   if ! git -C "${SOURCE_REPOSITORY_ROOT}" ls-tree -r --name-only "${CURRENT_RELEASE_SOURCE_COMMIT}" -- examples/viftyctl 2>/dev/null \
-      | ruby -ne 'path = $_.strip; puts File.basename(path) if path.match?(%r{\Aexamples/viftyctl/[^/]+\.sh\z})' \
+      | ruby -E UTF-8 -ne 'path = $_.strip; puts File.basename(path) if path.match?(%r{\Aexamples/viftyctl/[^/]+\.sh\z})' \
       | LC_ALL=C sort > "${EXPECTED_WRAPPER_SCRIPT_INVENTORY_PATH}"; then
     fail_check "release-source-contract" "could not enumerate workload wrappers from ${BUNDLE_CONTRACT_DESCRIPTION}"
   fi
