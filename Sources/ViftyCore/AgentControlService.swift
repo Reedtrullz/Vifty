@@ -200,9 +200,20 @@ public actor AgentControlService {
         }
 
         if let lease = activeLease,
-           lease.request.idempotencyKey == request.idempotencyKey,
-           lease.isActive(at: decisionClock()) {
-            return status()
+           lease.request.idempotencyKey == request.idempotencyKey {
+            guard lease.request == request else {
+                let decision = AgentControlDecision.denied(
+                    .invalidArguments,
+                    message: "Idempotency key is already in use by a different cooling request."
+                )
+                lastDecision = decision
+                lastErrorCode = decision.errorCode
+                appendAudit(action: "prepare-denied", leaseID: lease.id, message: decision.message)
+                return status()
+            }
+            if lease.isActive(at: decisionClock()) {
+                return status()
+            }
         }
 
         if let lease = activeLease,
