@@ -47,6 +47,7 @@ Update status: the exact public `v1.3.2` binary has no update checker and cannot
 
 Public release facts:
 
+- The public `Vifty-v1.4.4.zip` and checked-in cask both resolve to SHA-256 `d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f`.
 - Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.4.4` build `12` with SHA-256 `d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f`; installed release-mode and hardware compatibility evidence remain pending.
 - Source CI run `29284751837` passed on release commit `6a771c2ea10386bf7a0a8369a759930f01d56062`, and Release run `29285576026` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
 - The GitHub Release publishes `Vifty-v1.3.2.zip`, `Vifty-v1.3.2.zip.sha256`, `Vifty-v1.3.2-artifact-summary.json`, and `Vifty-v1.3.2-release-checklist.md`.
