@@ -81,14 +81,6 @@ final class AppPreferencesStore: @unchecked Sendable {
             return preferences
         }
 
-        // Preserve the unreadable original before any overwrite so a decode
-        // failure never silently destroys the last recoverable copy.
-        if FileManager.default.fileExists(atPath: url.path) {
-            let backup = url.appendingPathExtension("bak")
-            try? FileManager.default.removeItem(at: backup)
-            try? FileManager.default.copyItem(at: url, to: backup)
-        }
-
         let migrated = migratedPreferences()
         if migrated != .defaults {
             try? saveThrowing(migrated)

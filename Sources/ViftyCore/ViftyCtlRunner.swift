@@ -1164,31 +1164,6 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
 
-    private enum CodingKeys: String, CodingKey {
-        case schemaVersion
-        case schemaID
-        case generatedAt
-        case enabled
-        case activeLease
-        case lastDecision
-        case lastErrorCode
-        case policy
-    }
-
-    // Emit nil optionals as explicit JSON nulls so the status schema's required
-    // keys are present in the idle payload.
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(schemaVersion, forKey: .schemaVersion)
-        try container.encode(schemaID, forKey: .schemaID)
-        try container.encode(generatedAt, forKey: .generatedAt)
-        try container.encode(enabled, forKey: .enabled)
-        try container.encode(activeLease, forKey: .activeLease)
-        try container.encode(lastDecision, forKey: .lastDecision)
-        try container.encode(lastErrorCode, forKey: .lastErrorCode)
-        try container.encode(policy, forKey: .policy)
-    }
-
     public init(
         schemaVersion: Int = 1,
         schemaID: String = ViftyCtlSchemaReferences.schemaIDs.status,
