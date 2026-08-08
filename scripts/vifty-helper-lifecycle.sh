@@ -1366,7 +1366,7 @@ is_service_disabled() {
     | /usr/bin/ruby -e '
       label = ARGV.fetch(0)
       disabled = STDIN.each_line.any? do |line|
-        match = line.match(/\A\s*"?([A-Za-z0-9._-]+)"?\s*=>\s*true\s*,?\s*\z/)
+        match = line.match(/\A\s*"?([A-Za-z0-9._-]+)"?\s*=>\s*(?:true|disabled)\s*,?\s*\z/)
         match && match[1] == label
       end
       exit(disabled ? 0 : 1)
