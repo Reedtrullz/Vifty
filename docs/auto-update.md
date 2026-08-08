@@ -10,7 +10,7 @@
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
-Auto-update is not enabled for `v1.4.4`; its exact public binary contains the advisory update checker only and no in-place installer. The first public release that contains the current update-checking code must therefore be installed manually. Source-first, unsigned-dev, local ad-hoc, CI, and other ineligible builds do not make update requests.
+Auto-update is not enabled for `v1.4.4`; its exact public binary contains the advisory release-availability checker but no executable downloader or in-place installer. The first public release that contains the current update-checking code must therefore be installed manually. Source-first, unsigned-dev, local ad-hoc, CI, and other ineligible builds do not make update requests.
 
 Current source implements an advisory release-availability checker for future exact Vifty Developer ID builds. It does not download executable code, replace `Vifty.app`, run an installer, or silently change the privileged helper. A separate in-place updater has a higher trust bar and has not been implemented.
 
