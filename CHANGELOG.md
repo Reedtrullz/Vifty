@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-08-08
+
+### Fixed
+
+- Require exact immutable repository-scoped release ID plus tag/title/ownership-marker matching on every created draft and by-tag readback, bust GitHub release-list API caching during containment, and wait for convergence before any publish mutation, so a transient publish failure fails closed instead of losing the draft or publishing without proof.
+- Consolidate the machine-readable `viftyctl diagnose` report, operator recovery steps, and agent safe-cooling rule into a single maintained diagnostics module with the same JSON contract and fixtures.
+- Keep the full documentation/evidence trust test suite and release-metadata/validation script coverage in the release gate after the diagnostics consolidation.
+- Add a user-controlled agent-cooling kill switch in Settings → Agent Workflows; disabling it restores Auto if a lease is active and refuses new cooling leases until re-enabled, with `policy.enabled` reflecting the choice on every readback.
+- Make cooling-lease expiry, prepare cooldown, and monitor scheduling use monotonic timing so wall-clock changes cannot extend a lease beyond the policy cap; startup recovery clamps persisted lease remaining time.
+- Require explicit `--operator` confirmation for `viftyctl restore-auto` to override an active manual fan-control session, and audit every full-set Auto restore including idle restores.
+- Reject additional active tag rulesets that match release tags in the administrator release-governance gate instead of silently skipping non-shape-exact rulesets.
+- Raise the CI job timeout from 35 to 60 minutes so the full verification gate cannot be cancelled on slower macOS runners.
+
+### Scope
+
+- `v1.4.1` was retired without publication after its immutable first-attempt tag-push transaction failed at the publish step; no v1.4.1 GitHub Release or Homebrew promotion exists. The prepared `v1.4.2` candidate was superseded before publication because the release-prep gate requires the prep commit to be the final commit on `main`; `v1.4.3` carries forward the complete v1.4.0/v1.4.1 source changes plus the publish containment fix, diagnostics consolidation, and agent-control hardening. No v1.4.2 GitHub Release or Homebrew promotion exists.
+
 ## [1.4.2] - 2026-08-07
 
 ### Fixed
