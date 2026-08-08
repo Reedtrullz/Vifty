@@ -51,7 +51,7 @@ enum MenuBarField: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    static let defaultCustomFields: [MenuBarField] = [.temperature, .fanStrength, .codexUsage]
+    static let defaultCustomFields: [MenuBarField] = [.temperature, .fanStrength]
 
     var label: String {
         switch self {

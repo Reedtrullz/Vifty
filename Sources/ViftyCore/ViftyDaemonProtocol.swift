@@ -63,6 +63,11 @@ public enum XPCFanControlCoding {
               let reason = dictionary["reason"] as? String else {
             return nil
         }
+        guard transactionID.count <= 256,
+              sessionID.count <= 256,
+              reason.count <= 512 else {
+            return nil
+        }
         return ManualFanControlRequest(
             transactionID: transactionID,
             sessionID: sessionID,
@@ -90,6 +95,10 @@ public enum XPCFanControlCoding {
               let expectedFanIDs = intArray(dictionary["expectedFanIDs"]),
               let reason = dictionary["reason"] as? String,
               let allowRestoreAllTrustedFans = bool(dictionary["allowRestoreAllTrustedFans"]) else {
+            return nil
+        }
+        guard transactionID.count <= 256,
+              reason.count <= 512 else {
             return nil
         }
         return AutoRestoreRequest(
