@@ -301,6 +301,22 @@ class WorkflowContractTests < Minitest::Test
     )
   end
 
+  def test_rejects_prepare_candidate_timeout_drift
+    mutate_release_workflow(
+      "    name: Build and inventory unsigned candidate\n" \
+      "    runs-on: macos-15\n" \
+      "    timeout-minutes: 60\n",
+      "    name: Build and inventory unsigned candidate\n" \
+      "    runs-on: macos-15\n" \
+      "    timeout-minutes: 30\n"
+    )
+
+    assert_contract_failure(
+      ".github/workflows/release.yml job prepare-candidate wrapper must match the reviewed runner, " \
+      "timeout, dependencies, permissions, environment, and fields exactly"
+    )
+  end
+
   def test_rejects_draft_creation_body_prefix_drift
     mutate_release_workflow(
       "body.b.start_with?(submitted_body.b)",

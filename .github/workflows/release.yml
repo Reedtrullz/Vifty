@@ -20,7 +20,7 @@ jobs:
   prepare-candidate:
     name: Build and inventory unsigned candidate
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read
