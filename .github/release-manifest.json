@@ -41,20 +41,39 @@
         "reviewReport": "docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/review-result.json",
         "attestation": "docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md"
       }
+    },
+    {
+      "version": "1.4.4",
+      "build": 12,
+      "tag": "v1.4.4",
+      "sourceCommit": "0ac7842483a602a30900671904f76fd7b06e2370",
+      "sourceCIRunID": 31252163922,
+      "releaseWorkflowRunID": 31253285103,
+      "artifact": "Vifty-v1.4.4.zip",
+      "checksumAsset": "Vifty-v1.4.4.zip.sha256",
+      "artifactSummary": "Vifty-v1.4.4-artifact-summary.json",
+      "releaseChecklist": "Vifty-v1.4.4-release-checklist.md",
+      "sha256": "d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f",
+      "artifactTrust": "passed",
+      "signingTrust": "developer-id-notarized",
+      "tagTrust": "signed-verified",
+      "installedReleaseReview": "pending",
+      "manualCompatibility": "pending",
+      "manualCompatibilityScope": null
     }
   ],
   "publishedRelease": {
-    "version": "1.4.4",
-    "build": 12,
-    "tag": "v1.4.4",
-    "sourceCommit": "0ac7842483a602a30900671904f76fd7b06e2370",
-    "sourceCIRunID": 31252163922,
-    "releaseWorkflowRunID": 31253285103,
-    "artifact": "Vifty-v1.4.4.zip",
-    "checksumAsset": "Vifty-v1.4.4.zip.sha256",
-    "artifactSummary": "Vifty-v1.4.4-artifact-summary.json",
-    "releaseChecklist": "Vifty-v1.4.4-release-checklist.md",
-    "sha256": "d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f",
+    "version": "1.4.5",
+    "build": 13,
+    "tag": "v1.4.5",
+    "sourceCommit": "174dcd28a343de7f797d682d02c0f70e26b72c2e",
+    "sourceCIRunID": 31283125895,
+    "releaseWorkflowRunID": 31284620552,
+    "artifact": "Vifty-v1.4.5.zip",
+    "checksumAsset": "Vifty-v1.4.5.zip.sha256",
+    "artifactSummary": "Vifty-v1.4.5-artifact-summary.json",
+    "releaseChecklist": "Vifty-v1.4.5-release-checklist.md",
+    "sha256": "13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5",
     "artifactTrust": "passed",
     "signingTrust": "developer-id-notarized",
     "tagTrust": "signed-verified",
@@ -62,20 +81,5 @@
     "manualCompatibility": "pending",
     "manualCompatibilityScope": null
   },
-  "candidate": {
-    "version": "1.4.5",
-    "build": 13,
-    "tag": "v1.4.5",
-    "artifact": "Vifty-v1.4.5.zip",
-    "checksumAsset": "Vifty-v1.4.5.zip.sha256",
-    "artifactSummary": "Vifty-v1.4.5-artifact-summary.json",
-    "releaseChecklist": "Vifty-v1.4.5-release-checklist.md",
-    "sha256": null,
-    "artifactTrust": "pending",
-    "signingTrust": "pending",
-    "tagTrust": "signed-required",
-    "installedReleaseReview": "pending",
-    "manualCompatibility": "pending",
-    "manualCompatibilityScope": null
-  }
+  "candidate": null
 }

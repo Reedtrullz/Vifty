@@ -2,11 +2,11 @@
 
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
-> Published: `v1.4.4` (version `1.4.4`, build `12`), `arm64` only, minimum macOS `15.0`.
+> Published: `v1.4.5` (version `1.4.5`, build `13`), `arm64` only, minimum macOS `15.0`.
 > Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
-> Canonical artifact: `Vifty-v1.4.4.zip` with checksum asset `Vifty-v1.4.4.zip.sha256` and SHA-256 `d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f`.
-> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `0ac7842483a602a30900671904f76fd7b06e2370`, CI run `31252163922`, Release run `31253285103`.
-> Tag policy: `v1.4.4` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Canonical artifact: `Vifty-v1.4.5.zip` with checksum asset `Vifty-v1.4.5.zip.sha256` and SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `174dcd28a343de7f797d682d02c0f70e26b72c2e`, CI run `31283125895`, Release run `31284620552`.
+> Tag policy: `v1.4.5` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
@@ -17,7 +17,7 @@ Vifty has two release modes:
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
 
-Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. The checker is present in the current `v1.4.4` artifact. The manual bridge takes only an operator-supplied archive selected as the reviewed checkout's current `publishedRelease`, performs no download, verifies the manifest-pinned SHA plus Developer ID/notarization evidence, and enters the existing fail-closed replacement transaction. Do not enable Sparkle for those artifacts; the checker, manual bridge, and future installer requirements live in [auto-update.md](auto-update.md).
+Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. The checker is present in the current `v1.4.5` artifact. The manual bridge takes only an operator-supplied archive selected as the reviewed checkout's current `publishedRelease`, performs no download, verifies the manifest-pinned SHA plus Developer ID/notarization evidence, and enters the existing fail-closed replacement transaction. Do not enable Sparkle for those artifacts; the checker, manual bridge, and future installer requirements live in [auto-update.md](auto-update.md).
 
 ## Manual Published-Archive Install
 

@@ -1,6 +1,6 @@
 cask "vifty" do
-  version "1.4.4"
-  sha256 "d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f"
+  version "1.4.5"
+  sha256 "13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5"
 
   url "https://github.com/Reedtrullz/Vifty/releases/download/v#{version}/Vifty-v#{version}.zip"
   name "Vifty"
