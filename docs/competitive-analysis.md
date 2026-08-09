@@ -2,11 +2,11 @@
 
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
-> Published: `v1.4.4` (version `1.4.4`, build `12`), `arm64` only, minimum macOS `15.0`.
+> Published: `v1.4.5` (version `1.4.5`, build `13`), `arm64` only, minimum macOS `15.0`.
 > Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
-> Canonical artifact: `Vifty-v1.4.4.zip` with checksum asset `Vifty-v1.4.4.zip.sha256` and SHA-256 `d35c7326166d128c3596f0b84b87f283a54dedd1483a854a37bcbef888af713f`.
-> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `0ac7842483a602a30900671904f76fd7b06e2370`, CI run `31252163922`, Release run `31253285103`.
-> Tag policy: `v1.4.4` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Canonical artifact: `Vifty-v1.4.5.zip` with checksum asset `Vifty-v1.4.5.zip.sha256` and SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `174dcd28a343de7f797d682d02c0f70e26b72c2e`, CI run `31283125895`, Release run `31284620552`.
+> Tag policy: `v1.4.5` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
@@ -48,7 +48,7 @@ Priority order: trusted release story, hardware validation evidence, daemon safe
 
 The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
 
-1. **Trusted release story:** preserve the verified `v1.4.4` Developer ID artifact and historical `v1.1.1` source-first boundary; every future candidate must pass the manifest, signed-tag, checksum, verifier, and Homebrew handoff gates as a new immutable release.
+1. **Trusted release story:** preserve the verified `v1.4.5` Developer ID artifact and historical `v1.1.1` source-first boundary; every future candidate must pass the manifest, signed-tag, checksum, verifier, and Homebrew handoff gates as a new immutable release.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, main-window settings, a compact/readiness-oriented menu-bar popover, compact power/history/temperature surfaces, and a better screenshot/demo.
