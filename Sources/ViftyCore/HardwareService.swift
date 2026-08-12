@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public protocol HardwareService: Sendable {
@@ -279,7 +280,9 @@ public actor FanControlCoordinator {
             autoRestoreRequested = false
             lastManualWriteAtByFanID = [:]
             state.manualControlActive = true
-            uncleanMarker.markActive()
+            if !uncleanMarker.markActive() {
+                state.statusMessage = "Manual fan control is active, but the crash-recovery marker could not be written; restore Auto before quitting."
+            }
         }
     }
 
@@ -695,28 +698,90 @@ public struct ManualControlMarker: Sendable {
         FileManager.default.fileExists(atPath: url.path)
     }
 
-    public func markActive() {
+    @discardableResult
+    public func markActive() -> Bool {
         let directory = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: 0o700)],
-            ofItemAtPath: directory.path
-        )
-        if FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.setAttributes(
-                [.posixPermissions: NSNumber(value: 0o600)],
-                ofItemAtPath: url.path
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o700)],
+                ofItemAtPath: directory.path
             )
-            return
+        } catch {
+            return false
         }
-        try? Data("active".utf8).write(to: url, options: .atomic)
+
+        // Reassert permissions on an existing marker without replacing its
+        // inode, so a repeated mark preserves the original file identity.
+        if FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.setAttributes(
+                    [.posixPermissions: NSNumber(value: 0o600)],
+                    ofItemAtPath: url.path
+                )
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        // The marker is the unclean-exit recovery signal for the next launch:
+        // write it through a same-directory temporary file, fsync the file and
+        // directory, then rename, so a crash or power loss cannot lose the
+        // evidence after a manual fan write has been issued.
+        let temporaryURL = directory.appendingPathComponent(
+            ".manual-control-active.tmp.\(UUID().uuidString)",
+            isDirectory: false
+        )
+        let descriptor = open(temporaryURL.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        let bytes = Array("active".utf8)
+        var written = 0
+        while written < bytes.count {
+            let count = bytes.withUnsafeBytes { buffer in
+                Darwin.write(descriptor, buffer.baseAddress!.advanced(by: written), bytes.count - written)
+            }
+            if count < 0 {
+                if errno == EINTR { continue }
+                try? FileManager.default.removeItem(at: temporaryURL)
+                return false
+            }
+            written += count
+        }
+        guard fsync(descriptor) == 0 else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            return false
+        }
         try? FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o600)],
-            ofItemAtPath: url.path
+            ofItemAtPath: temporaryURL.path
         )
+        guard rename(temporaryURL.path, url.path) == 0 else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            return false
+        }
+        let directoryDescriptor = open(directory.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        if directoryDescriptor >= 0 {
+            fsync(directoryDescriptor)
+            close(directoryDescriptor)
+        }
+        return true
     }
 
-    public func clear() {
-        try? FileManager.default.removeItem(at: url)
+    @discardableResult
+    public func clear() -> Bool {
+        do {
+            try FileManager.default.removeItem(at: url)
+            let directory = url.deletingLastPathComponent()
+            let directoryDescriptor = open(directory.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+            if directoryDescriptor >= 0 {
+                fsync(directoryDescriptor)
+                close(directoryDescriptor)
+            }
+            return true
+        } catch {
+            return !FileManager.default.fileExists(atPath: url.path)
+        }
     }
 }

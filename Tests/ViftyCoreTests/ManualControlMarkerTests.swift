@@ -22,25 +22,25 @@ final class ManualControlMarkerTests: XCTestCase {
     func testMarkActiveCreatesFile() {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
-        marker.markActive()
+        XCTAssertTrue(marker.markActive())
         XCTAssertTrue(marker.wasManualControlActive)
     }
 
     func testClearRemovesFile() {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
-        marker.markActive()
+        XCTAssertTrue(marker.markActive())
         XCTAssertTrue(marker.wasManualControlActive)
-        marker.clear()
+        XCTAssertTrue(marker.clear())
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
     func testDoubleMarkKeepsExistingMarkerIdentity() throws {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
-        marker.markActive()
+        XCTAssertTrue(marker.markActive())
         let originalAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        marker.markActive()
+        XCTAssertTrue(marker.markActive())
         let repeatedAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
         XCTAssertTrue(marker.wasManualControlActive)
         XCTAssertEqual(
@@ -53,8 +53,8 @@ final class ManualControlMarkerTests: XCTestCase {
     func testDoubleClearDoesNotCrash() {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
-        marker.clear()
-        marker.clear()
+        XCTAssertTrue(marker.clear())
+        XCTAssertTrue(marker.clear())
         XCTAssertFalse(marker.wasManualControlActive)
     }
 
@@ -62,10 +62,21 @@ final class ManualControlMarkerTests: XCTestCase {
         let url = tempURL()
         let marker = ManualControlMarker(url: url)
 
-        marker.markActive()
+        XCTAssertTrue(marker.markActive())
 
         XCTAssertEqual(try posixPermissions(at: url.deletingLastPathComponent()), 0o700)
         XCTAssertEqual(try posixPermissions(at: url), 0o600)
+    }
+
+    func testMarkActiveFailsWhenDirectoryCannotBeCreated() throws {
+        let url = tempURL()
+        let directory = url.deletingLastPathComponent()
+        try Data("not a directory".utf8).write(to: directory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let marker = ManualControlMarker(url: url)
+        XCTAssertFalse(marker.markActive())
+        XCTAssertFalse(marker.wasManualControlActive)
     }
 
     private func tempURL() -> URL {
