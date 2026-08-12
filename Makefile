@@ -1,4 +1,4 @@
-.PHONY: app package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-public-release install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-initialize-ledger ui-review-start-session ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
+.PHONY: app check-toolchain package-bundled-schemas release-contract-ruby-tests installer-lifecycle-ruby-tests release-facts run-app install install-public-release install-dev-adhoc repair-helper uninstall-helper pkg validation-evidence validation-evidence-current-build validation-evidence-review manual-smoke-readiness manual-smoke-readiness-current-build agent-cooling-evidence agent-cooling-evidence-review agent-run-smoke-readiness agent-run-smoke-readiness-current-build agent-run-smoke-evidence agent-run-smoke-evidence-current-build ui-review-build-products ui-review-initialize-ledger ui-review-start-session ui-review-ruby-tests ui-review-verify-automated ui-review-write-checkpoint ui-review-verify source-first-release-notes unsigned-dev-artifact source-first-readiness clean-app clean-pkg test test-fast test-full verify verify-full help clean
 
 CONFIGURATION ?= debug
 SIGNING_IDENTITY ?= -
@@ -115,7 +115,10 @@ installer-lifecycle-ruby-tests: ## Run portable installer lifecycle transaction 
 	/usr/bin/ruby Tests/Ruby/InstallerLifecycleTrustContractTests.rb
 	/usr/bin/ruby Tests/Ruby/HelperLifecycleReplacementFixtureTests.rb
 
-app: release-facts ## Build the release app bundle
+check-toolchain: ## Fail with actionable guidance when the active developer directory cannot build SwiftUI macros
+	./scripts/check-toolchain.sh
+
+app: check-toolchain release-facts ## Build the release app bundle
 	VIFTY_XPC_ADHOC_DEVELOPMENT="$(VIFTY_XPC_ADHOC_DEVELOPMENT)" VIFTY_XPC_ADHOC_ALLOWED_UID="$(VIFTY_XPC_ADHOC_ALLOWED_UID)" VIFTY_XPC_ADHOC_APP_PATH="$(VIFTY_XPC_ADHOC_APP_PATH)" VIFTY_XPC_ADHOC_CTL_PATH="$(VIFTY_XPC_ADHOC_CTL_PATH)" VIFTY_XPC_ADHOC_HELPER_PATH="$(VIFTY_XPC_ADHOC_HELPER_PATH)" ./scripts/configure-daemon-plist.sh --configuration "$(CONFIGURATION)" --team-id "$(VIFTY_XPC_ALLOWED_TEAM_ID)" --validate-only
 	swift build $(SWIFT_BUILD_ARGS) -c $(CONFIGURATION)
 	rm -rf "$(APP_DIR)"
@@ -155,17 +158,17 @@ app: release-facts ## Build the release app bundle
 	@test -z "$$(find "$(CONTENTS)" -name 'ViftyAXCollector*' -o -name 'ViftyAXEvidenceCore*' -o -name 'AXReader.swift' -o -name 'AXTraversal.swift' -o -name 'AXEvidenceModels.swift' -o -name 'AXPredicateCatalog.swift' -o -name 'ui-review-ax-*.schema.json')" || { echo "AX evidence tooling must not be bundled in Vifty.app" >&2; exit 1; }
 	@echo "Built $(APP_DIR)"
 
-run-app: ## Build and open the local app bundle
+run-app: check-toolchain ## Build and open the local app bundle
 	./scripts/build-and-run-vifty.sh
 
-install: ## Build and install to /Applications
+install: check-toolchain ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
 
 install-public-release: ## Verify and install the exact current published release archive
 	@if [ -z "$(PUBLIC_RELEASE_ARCHIVE)" ]; then echo "PUBLIC_RELEASE_ARCHIVE is required and must be an absolute path to the canonical public release zip" >&2; exit 64; fi
 	CONFIGURATION=release ./scripts/install-vifty.sh --public-release-archive "$(PUBLIC_RELEASE_ARCHIVE)"
 
-install-dev-adhoc: ## Explicit debug-only install with exact UID/path XPC allowlist
+install-dev-adhoc: check-toolchain ## Explicit debug-only install with exact UID/path XPC allowlist
 	CONFIGURATION=debug VIFTY_ENABLE_ADHOC_XPC=1 ./scripts/install-vifty.sh
 
 repair-helper: ## Explicitly repair the installed privileged helper
@@ -174,7 +177,7 @@ repair-helper: ## Explicitly repair the installed privileged helper
 uninstall-helper: ## Safely remove the installed privileged helper
 	./scripts/uninstall-vifty.sh --app "$(UNINSTALL_HELPER_APP)"
 
-pkg: ## Build an unsigned installer .pkg
+pkg: check-toolchain ## Build an unsigned installer .pkg
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/build-installer-pkg.sh
 
 validation-evidence: ## Collect read-only release/hardware validation evidence
@@ -257,13 +260,13 @@ source-first-readiness: ## Check published source-first release readiness
 
 test: test-full ## Run the full XCTest suite
 
-test-fast: ## Run the fast local XCTest suite
+test-fast: check-toolchain ## Run the fast local XCTest suite
 	swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS)
 
-test-full: ## Run the full XCTest suite, including slow evidence/release script tests
+test-full: check-toolchain ## Run the full XCTest suite, including slow evidence/release script tests
 	swift test $(SWIFT_BUILD_ARGS)
 
-verify: ## Run fast local trust gates without installing
+verify: check-toolchain ## Run fast local trust gates without installing
 	/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh
 	$(MAKE) release-facts
 	scripts/check-community-standards.sh
