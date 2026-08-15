@@ -323,6 +323,7 @@ public actor FanControlArbiter {
         }
 
         if let existing,
+           existing.phase == .active,
            existing.expectedFanIDs == reservedFanIDs,
            existing.targetRPMByFanID == mergedTargets,
            (try? confirmApplied(

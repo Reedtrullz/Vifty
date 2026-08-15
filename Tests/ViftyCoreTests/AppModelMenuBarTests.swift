@@ -812,7 +812,7 @@ final class AppModelMenuBarTests: XCTestCase {
     }
 
     func testExtractedMenuBarPresentationTypesPreserveDefaults() {
-        XCTAssertEqual(MenuBarField.defaultCustomFields, [.temperature, .fanStrength, .codexUsage])
+        XCTAssertEqual(MenuBarField.defaultCustomFields, [.temperature, .fanStrength])
         XCTAssertEqual(MenuBarStatusItemPresentation.placeholder.tooltip, "Vifty")
         XCTAssertTrue(MenuBarStatusItemPresentation.placeholder.needsTelemetryPrime)
     }
