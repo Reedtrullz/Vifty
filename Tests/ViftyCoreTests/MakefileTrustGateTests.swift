@@ -78,7 +78,7 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("SWIFT_BUILD_PROVENANCE_FILE ?="))
         XCTAssertTrue(makefile.contains("SWIFT_PROVENANCE_ARGS = $(if $(SWIFT_BUILD_PROVENANCE_FILE),-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __vifty_src"))
         XCTAssertTrue(makefile.contains("SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path \"$(SWIFT_BUILD_PATH)\",) $(SWIFT_TRIPLE_ARGS) $(SWIFT_PROVENANCE_ARGS)"))
-        XCTAssertTrue(makefile.contains("SWIFT_PRODUCTS_DIR = $(if $(filter release,$(CONFIGURATION))"))
+        XCTAssertTrue(makefile.contains("SWIFT_PRODUCTS_DIR ?= $(shell swift build $(SWIFT_BUILD_ARGS) -c $(CONFIGURATION) --show-bin-path)"))
         XCTAssertTrue(makefile.contains("APP_DIR ?= .build/$(APP_NAME).app"))
         XCTAssertTrue(makefile.contains("ui-review-build-products: ## Build one clean-tree provenance-bound UI review product transaction"))
         XCTAssertTrue(makefile.contains("./scripts/build-ui-review-products.sh"))

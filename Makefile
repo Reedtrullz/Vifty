@@ -18,7 +18,10 @@ RELEASE_SWIFT_PLATFORM_DIR ?= $(RELEASE_ARCHITECTURE)-apple-macosx
 SWIFT_TRIPLE_ARGS = $(if $(filter release,$(CONFIGURATION)),--triple "$(RELEASE_SWIFT_TRIPLE)",)
 SWIFT_PROVENANCE_ARGS = $(if $(SWIFT_BUILD_PROVENANCE_FILE),-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __vifty_src -Xlinker "$(SWIFT_BUILD_PROVENANCE_FILE)",)
 SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",) $(SWIFT_TRIPLE_ARGS) $(SWIFT_PROVENANCE_ARGS) $(SWIFT_BUILD_EXTRA_ARGS)
-SWIFT_PRODUCTS_DIR = $(if $(filter release,$(CONFIGURATION)),$(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(RELEASE_SWIFT_PLATFORM_DIR)/$(CONFIGURATION),.build/$(RELEASE_SWIFT_PLATFORM_DIR)/$(CONFIGURATION)),$(if $(SWIFT_BUILD_PATH),$(SWIFT_BUILD_PATH)/$(CONFIGURATION),.build/$(CONFIGURATION)))
+# SwiftPM's product layout is toolchain-dependent (for example, Xcode 26
+# places release products under .build/out/Products/Release). Ask SwiftPM for
+# the path it actually selected, while preserving explicit caller overrides.
+SWIFT_PRODUCTS_DIR ?= $(shell swift build $(SWIFT_BUILD_ARGS) -c $(CONFIGURATION) --show-bin-path)
 VERIFY_TEST_TARGET ?= test-fast
 SLOW_TEST_SKIP_ARGS := --skip 'ViftyCoreTests\.(AgentCoolingEvidenceScriptTests|AgentRunSmokeEvidenceScriptTests|GuardedRunScriptTests|HelperLifecycleScriptTests|InstallReplacementPreflightScriptTests|ReleaseArtifactScriptTests|ReleaseManifestScriptTests|ReleaseMetadataScriptTests|UIReviewEvidenceScriptTests|ValidationEvidenceReviewScriptTests|ValidationEvidenceScriptTests|ValidationReportSummaryScriptTests)'
 RELEASE_VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
