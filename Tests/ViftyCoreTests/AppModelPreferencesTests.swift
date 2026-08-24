@@ -350,7 +350,7 @@ final class AppModelPreferencesTests: XCTestCase {
         let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
         let model = AppModel(preferencesStore: store)
 
-        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
+        XCTAssertEqual(model.menuBarCustomFields, [.temperature, .fanStrength])
 
         model.menuBarDisplayMode = .custom
         model.menuBarCustomFields = [.codexUsage, .fanStrength, .owner, .temperature, .codexUsage]
@@ -554,7 +554,7 @@ final class AppModelPreferencesTests: XCTestCase {
         let loaded = store.load()
 
         XCTAssertEqual(loaded.menuBarDisplayMode, .temperature)
-        XCTAssertEqual(loaded.menuBarCustomFields, [.temperature, .fanStrength, .codexUsage])
+        XCTAssertEqual(loaded.menuBarCustomFields, [.temperature, .fanStrength])
         XCTAssertEqual(loaded.startupMode, .auto)
         XCTAssertEqual(loaded.textScale, .standard)
         XCTAssertTrue(loaded.notificationSettings.helperFailure)

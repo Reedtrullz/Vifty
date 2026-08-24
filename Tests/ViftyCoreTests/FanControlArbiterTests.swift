@@ -624,6 +624,34 @@ final class FanControlArbiterTests: XCTestCase {
         }
     }
 
+    func testMatchingNonActiveJournalCannotUseIdempotentConfirmation() async throws {
+        let hardware = FakePrivilegedFanControlHardware(fans: [
+            Self.fan(id: 0, mode: .forced, targetRPM: 3_200),
+            Self.fan(id: 1, mode: .forced, targetRPM: 3_300)
+        ])
+        try await withArbiter(hardware: hardware) { arbiter, store in
+            try store.save(FanControlJournalRecord(
+                transactionID: "manual-1",
+                owner: .manual(sessionID: "session-1"),
+                phase: .applying,
+                expectedFanIDs: [0, 1],
+                targetRPMByFanID: [0: 3_200, 1: 3_300],
+                appliedFanIDs: [0, 1],
+                createdAt: Date(timeIntervalSince1970: 1),
+                updatedAt: Date(timeIntervalSince1970: 2)
+            ))
+
+            do {
+                _ = try await arbiter.applyManual(Self.manualRequest())
+                XCTFail("Expected unresolved non-active journal refusal")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("owned by unresolved transaction"))
+            }
+            XCTAssertTrue(hardware.appliedFanIDs.isEmpty)
+            XCTAssertEqual(try store.load()?.phase, .applying)
+        }
+    }
+
     func testSameManualSessionCanApplyLaterPartialBatchWithoutShrinkingExpectedDomain() async throws {
         let hardware = FakePrivilegedFanControlHardware(fans: Self.twoAutomaticFans)
         try await withArbiter(hardware: hardware) { arbiter, store in

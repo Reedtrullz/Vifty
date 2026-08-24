@@ -114,4 +114,99 @@ final class XPCFanControlCodingTests: XCTestCase {
 
         XCTAssertNil(XPCFanControlCoding.decodeManualRequest(malformed))
     }
+
+    func testManualRequestBoundsIdentifiersAndReasonByUTF8Bytes() {
+        let base: [String: Any] = [
+            "transactionID": "manual-1",
+            "sessionID": "session-1",
+            "expectedFanIDs": [0],
+            "targetRPMByFanID": ["0": 3_000],
+            "reason": "Fixed"
+        ]
+
+        var oversizedTransaction = base
+        oversizedTransaction["transactionID"] = String(repeating: "é", count: 129)
+        XCTAssertNil(XPCFanControlCoding.decodeManualRequest(oversizedTransaction as NSDictionary))
+
+        var oversizedSession = base
+        oversizedSession["sessionID"] = String(repeating: "é", count: 129)
+        XCTAssertNil(XPCFanControlCoding.decodeManualRequest(oversizedSession as NSDictionary))
+
+        var oversizedReason = base
+        oversizedReason["reason"] = String(repeating: "é", count: 257)
+        XCTAssertNil(XPCFanControlCoding.decodeManualRequest(oversizedReason as NSDictionary))
+
+        var bounded = base
+        bounded["transactionID"] = String(repeating: "é", count: 128)
+        bounded["sessionID"] = String(repeating: "é", count: 128)
+        bounded["reason"] = String(repeating: "é", count: 256)
+        XCTAssertNotNil(XPCFanControlCoding.decodeManualRequest(bounded as NSDictionary))
+    }
+
+    func testManualRequestRejectsOversizedFanCollections() {
+        let oversizedFanIDs = Array(0...10)
+        let oversizedTargets = Dictionary(
+            uniqueKeysWithValues: oversizedFanIDs.map { (String($0), 3_000) }
+        )
+
+        XCTAssertNil(
+            XPCFanControlCoding.decodeManualRequest([
+                "transactionID": "manual-1",
+                "sessionID": "session-1",
+                "expectedFanIDs": oversizedFanIDs,
+                "targetRPMByFanID": ["0": 3_000],
+                "reason": "Fixed"
+            ] as NSDictionary)
+        )
+
+        let boundedFanIDs = Array(0..<10)
+        let boundedTargets = Dictionary(
+            uniqueKeysWithValues: boundedFanIDs.map { (String($0), 3_000) }
+        )
+        XCTAssertNotNil(
+            XPCFanControlCoding.decodeManualRequest([
+                "transactionID": "manual-1",
+                "sessionID": "session-1",
+                "expectedFanIDs": boundedFanIDs,
+                "targetRPMByFanID": boundedTargets,
+                "reason": "Fixed"
+            ] as NSDictionary)
+        )
+        XCTAssertNil(
+            XPCFanControlCoding.decodeManualRequest([
+                "transactionID": "manual-1",
+                "sessionID": "session-1",
+                "expectedFanIDs": [0],
+                "targetRPMByFanID": oversizedTargets,
+                "reason": "Fixed"
+            ] as NSDictionary)
+        )
+    }
+
+    func testAutoRestoreRequestBoundsUTF8BytesAndFanCardinality() {
+        let base: [String: Any] = [
+            "transactionID": "restore-1",
+            "expectedFanIDs": [0],
+            "reason": "Restore",
+            "allowRestoreAllTrustedFans": false
+        ]
+
+        var oversizedTransaction = base
+        oversizedTransaction["transactionID"] = String(repeating: "é", count: 129)
+        XCTAssertNil(XPCFanControlCoding.decodeAutoRestoreRequest(oversizedTransaction as NSDictionary))
+
+        var oversizedReason = base
+        oversizedReason["reason"] = String(repeating: "é", count: 257)
+        XCTAssertNil(XPCFanControlCoding.decodeAutoRestoreRequest(oversizedReason as NSDictionary))
+
+        var oversizedFanIDs = base
+        oversizedFanIDs["expectedFanIDs"] = Array(0...10)
+        XCTAssertNil(XPCFanControlCoding.decodeAutoRestoreRequest(oversizedFanIDs as NSDictionary))
+
+        var bounded = base
+        bounded["transactionID"] = String(repeating: "é", count: 128)
+        bounded["reason"] = String(repeating: "é", count: 256)
+        bounded["expectedFanIDs"] = Array(0..<10)
+        XCTAssertNotNil(XPCFanControlCoding.decodeAutoRestoreRequest(bounded as NSDictionary))
+    }
 }
