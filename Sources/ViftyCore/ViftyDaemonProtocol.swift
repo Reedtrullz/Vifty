@@ -45,6 +45,11 @@ public enum ViftyDaemonConstants {
 }
 
 public enum XPCFanControlCoding {
+    private static let maximumFanCount = 10
+    private static let maximumTransactionIDUTF8Bytes = 256
+    private static let maximumSessionIDUTF8Bytes = 256
+    private static let maximumReasonUTF8Bytes = 512
+
     public static func encode(_ request: ManualFanControlRequest) -> NSDictionary {
         [
             "transactionID": request.transactionID,
@@ -58,9 +63,16 @@ public enum XPCFanControlCoding {
     public static func decodeManualRequest(_ dictionary: NSDictionary) -> ManualFanControlRequest? {
         guard let transactionID = dictionary["transactionID"] as? String,
               let sessionID = dictionary["sessionID"] as? String,
-              let expectedFanIDs = intArray(dictionary["expectedFanIDs"]),
-              let targetRPMByFanID = decodeTargets(dictionary["targetRPMByFanID"]),
+              let expectedFanIDs = intArray(dictionary["expectedFanIDs"], maximumCount: maximumFanCount),
+              let targetRPMByFanID = decodeTargets(dictionary["targetRPMByFanID"], maximumCount: maximumFanCount),
               let reason = dictionary["reason"] as? String else {
+            return nil
+        }
+        guard transactionID.utf8.count <= maximumTransactionIDUTF8Bytes,
+              sessionID.utf8.count <= maximumSessionIDUTF8Bytes,
+              reason.utf8.count <= maximumReasonUTF8Bytes,
+              expectedFanIDs.count <= maximumFanCount,
+              targetRPMByFanID.count <= maximumFanCount else {
             return nil
         }
         return ManualFanControlRequest(
@@ -87,9 +99,14 @@ public enum XPCFanControlCoding {
 
     public static func decodeAutoRestoreRequest(_ dictionary: NSDictionary) -> AutoRestoreRequest? {
         guard let transactionID = dictionary["transactionID"] as? String,
-              let expectedFanIDs = intArray(dictionary["expectedFanIDs"]),
+              let expectedFanIDs = intArray(dictionary["expectedFanIDs"], maximumCount: maximumFanCount),
               let reason = dictionary["reason"] as? String,
               let allowRestoreAllTrustedFans = bool(dictionary["allowRestoreAllTrustedFans"]) else {
+            return nil
+        }
+        guard transactionID.utf8.count <= maximumTransactionIDUTF8Bytes,
+              reason.utf8.count <= maximumReasonUTF8Bytes,
+              expectedFanIDs.count <= maximumFanCount else {
             return nil
         }
         return AutoRestoreRequest(
@@ -228,8 +245,9 @@ public enum XPCFanControlCoding {
         NSDictionary(dictionary: Dictionary(uniqueKeysWithValues: targets.map { (String($0.key), $0.value) }))
     }
 
-    private static func decodeTargets(_ value: Any?) -> [Int: Int]? {
+    private static func decodeTargets(_ value: Any?, maximumCount: Int? = nil) -> [Int: Int]? {
         guard let dictionary = value as? NSDictionary else { return nil }
+        if let maximumCount, dictionary.count > maximumCount { return nil }
         var targets: [Int: Int] = [:]
         for (key, value) in dictionary {
             guard let key = key as? String,
@@ -241,8 +259,9 @@ public enum XPCFanControlCoding {
         return targets
     }
 
-    private static func intArray(_ value: Any?) -> [Int]? {
-        guard let values = value as? [Any] else { return nil }
+    private static func intArray(_ value: Any?, maximumCount: Int? = nil) -> [Int]? {
+        guard let values = value as? NSArray else { return nil }
+        if let maximumCount, values.count > maximumCount { return nil }
         var result: [Int] = []
         for value in values {
             guard let decoded = int(value) else { return nil }

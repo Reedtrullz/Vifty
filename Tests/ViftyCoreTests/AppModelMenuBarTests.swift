@@ -405,6 +405,7 @@ final class AppModelMenuBarTests: XCTestCase {
             agentStatusReader: { nil }
         )
         model.selectedSensorID = "Tp09"
+        model.setMenuBarCustomField(.codexUsage, enabled: true)
         model.menuBarDisplayMode = .custom
 
         await model.pollOnce()
@@ -621,6 +622,7 @@ final class AppModelMenuBarTests: XCTestCase {
             agentStatusReader: { nil }
         )
 
+        model.setMenuBarCustomField(.codexUsage, enabled: true)
         model.menuBarDisplayMode = .custom
         await model.pollOnce()
 
@@ -798,7 +800,7 @@ final class AppModelMenuBarTests: XCTestCase {
             (.averageFanRPM, "-- RPM avg"),
             (.adapterWattage, "-- W"),
             (.codexUsage, "Ai --"),
-            (.custom, "-- C | --% fan | Ai --"),
+            (.custom, "-- C | --% fan"),
             (.temperatureAndRPM, "-- C | -- RPM"),
             (.ownerTemperatureAndRPM, "Owner? | -- C | -- RPM")
         ]
@@ -812,7 +814,7 @@ final class AppModelMenuBarTests: XCTestCase {
     }
 
     func testExtractedMenuBarPresentationTypesPreserveDefaults() {
-        XCTAssertEqual(MenuBarField.defaultCustomFields, [.temperature, .fanStrength, .codexUsage])
+        XCTAssertEqual(MenuBarField.defaultCustomFields, [.temperature, .fanStrength])
         XCTAssertEqual(MenuBarStatusItemPresentation.placeholder.tooltip, "Vifty")
         XCTAssertTrue(MenuBarStatusItemPresentation.placeholder.needsTelemetryPrime)
     }

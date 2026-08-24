@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Make the existing `.active` journal prerequisite explicit in the idempotent re-apply branch, bound manual and Auto-restore XPC identifiers and reasons by UTF-8 bytes, cap untrusted fan collections at the ten-fan hardware domain before traversal, and keep Codex usage an explicit opt-in rather than a default custom menu-bar field.
+
 ## [1.4.5] - 2026-08-08
 
 ### Fixed
 
 - Accept the macOS 26 `launchctl print-disabled` output format (`label => disabled`) in the helper lifecycle's disable confirmation, so the published-app migration from a v1.3.2 install can complete instead of failing closed at status 76.
-- Harden remaining review findings: require an `.active` journal phase before idempotent re-apply confirmation, bound XPC manual/auto-restore request fields, remove Codex usage from the default custom menu-bar fields, make `capabilities` fail closed when the daemon returns no usable policy, and require full request equality for prepare idempotency.
+- Preserve unreadable preferences and explicit nulls in status JSON, make `capabilities` fail closed when the daemon returns no usable policy, and require full request equality for prepare idempotency.
 
 ### Scope
 
