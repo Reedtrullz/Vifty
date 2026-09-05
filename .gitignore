@@ -16,6 +16,7 @@ Package.resolved
 
 # Local agent workflow scratch
 .superpowers/
+.worktrees/
 
 # Machine-local native UI capture ledger (portable checkpoint is tracked separately)
 docs/ui-review/evidence-manifest.local.json
