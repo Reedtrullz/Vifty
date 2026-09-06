@@ -107,7 +107,7 @@ final class AgentControlServiceTests: XCTestCase {
 
         XCTAssertEqual(disabled.policy?.enabled, false)
         XCTAssertEqual(try store.loadAgentControlEnabled(), false)
-        let status = try await service.status()
+        let status = await service.status()
         XCTAssertEqual(status.policy?.enabled, false)
     }
 

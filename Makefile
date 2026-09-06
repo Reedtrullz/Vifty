@@ -18,6 +18,7 @@ RELEASE_SWIFT_PLATFORM_DIR ?= $(RELEASE_ARCHITECTURE)-apple-macosx
 SWIFT_TRIPLE_ARGS = $(if $(filter release,$(CONFIGURATION)),--triple "$(RELEASE_SWIFT_TRIPLE)",)
 SWIFT_PROVENANCE_ARGS = $(if $(SWIFT_BUILD_PROVENANCE_FILE),-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __vifty_src -Xlinker "$(SWIFT_BUILD_PROVENANCE_FILE)",)
 SWIFT_BUILD_ARGS = $(if $(SWIFT_BUILD_PATH),--build-path "$(SWIFT_BUILD_PATH)",) $(SWIFT_TRIPLE_ARGS) $(SWIFT_PROVENANCE_ARGS) $(SWIFT_BUILD_EXTRA_ARGS)
+SWIFT_TEST_WARNING_ARGS = -Xswiftc -warnings-as-errors
 # SwiftPM's product layout is toolchain-dependent (for example, Xcode 26
 # places release products under .build/out/Products/Release). Ask SwiftPM for
 # the path it actually selected, while preserving explicit caller overrides.
@@ -264,10 +265,10 @@ source-first-readiness: ## Check published source-first release readiness
 test: test-full ## Run the full XCTest suite
 
 test-fast: check-toolchain ## Run the fast local XCTest suite
-	swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS)
+	swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS) $(SWIFT_TEST_WARNING_ARGS)
 
 test-full: check-toolchain ## Run the full XCTest suite, including slow evidence/release script tests
-	swift test $(SWIFT_BUILD_ARGS)
+	swift test $(SWIFT_BUILD_ARGS) $(SWIFT_TEST_WARNING_ARGS)
 
 verify: check-toolchain ## Run fast local trust gates without installing
 	/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh
