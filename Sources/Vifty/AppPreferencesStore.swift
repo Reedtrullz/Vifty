@@ -87,8 +87,8 @@ final class AppPreferencesStore: @unchecked Sendable {
     func loadResult() throws -> AppPreferencesLoadResult {
         switch decodePreferences(at: url) {
         case .success(let preferences):
-            try? restrictDirectoryPermissions()
-            try? restrictFilePermissions(at: url)
+            try restrictDirectoryPermissions()
+            try restrictFilePermissions(at: url)
             return AppPreferencesLoadResult(preferences: preferences, recoveryMessage: nil)
         case .missing, .failure:
             break
@@ -96,8 +96,8 @@ final class AppPreferencesStore: @unchecked Sendable {
 
         switch decodePreferences(at: backupURL) {
         case .success(let preferences):
-            try? restrictDirectoryPermissions()
-            try? restrictFilePermissions(at: backupURL)
+            try restrictDirectoryPermissions()
+            try restrictFilePermissions(at: backupURL)
             if case .failure = decodePreferences(at: url) {
                 quarantinePrimaryIfPossible()
             }
@@ -114,18 +114,14 @@ final class AppPreferencesStore: @unchecked Sendable {
         }
     }
 
-    func save(_ preferences: AppPreferences) {
-        try? saveThrowing(preferences)
-    }
-
     func saveThrowing(_ preferences: AppPreferences) throws {
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: directory.path)
 
-        if case .success = decodePreferences(at: url),
-           let primaryData = try? Data(contentsOf: url) {
-            replaceBackupIfPossible(with: primaryData)
+        if case .success = decodePreferences(at: url) {
+            let primaryData = try Data(contentsOf: url)
+            try replaceBackup(with: primaryData)
         }
 
         let data = try JSONEncoder().encode(preferences)
@@ -133,9 +129,9 @@ final class AppPreferencesStore: @unchecked Sendable {
         try restrictFilePermissions(at: url)
 
         if case .success = decodePreferences(at: backupURL) {
-            try? restrictFilePermissions(at: backupURL)
+            try restrictFilePermissions(at: backupURL)
         } else {
-            replaceBackupIfPossible(with: data)
+            try replaceBackup(with: data)
         }
     }
 
@@ -158,7 +154,7 @@ final class AppPreferencesStore: @unchecked Sendable {
         }
     }
 
-    private func replaceBackupIfPossible(with data: Data) {
+    private func replaceBackup(with data: Data) throws {
         let temporaryURL = backupURL.deletingLastPathComponent().appendingPathComponent(
             ".\(backupURL.lastPathComponent).\(UUID().uuidString).tmp"
         )
@@ -178,6 +174,7 @@ final class AppPreferencesStore: @unchecked Sendable {
             try restrictFilePermissions(at: backupURL)
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
+            throw error
         }
     }
 

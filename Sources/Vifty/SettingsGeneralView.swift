@@ -38,6 +38,15 @@ struct SettingsGeneralView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
+            if let message = model.appPreferencesRecoveryMessage {
+                Label("Settings recovered", systemImage: "arrow.counterclockwise.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Settings recovered")
+                    .accessibilityValue(message)
+                    .viftyFont(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             updatesSection
 
             Section("Startup") {

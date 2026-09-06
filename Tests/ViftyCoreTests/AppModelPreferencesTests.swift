@@ -1,9 +1,61 @@
+import Darwin
 import XCTest
 @testable import ViftyCore
 @testable import Vifty
 
 @MainActor
 final class AppModelPreferencesTests: XCTestCase {
+    func testSaveFailsBeforeReplacingValidPrimaryWhenBackupPreservationFails() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let existing = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        let replacement = AppPreferences(
+            menuBarDisplayMode: .averageFanRPM,
+            startupMode: .fixed,
+            notificationSettings: .disabled
+        )
+        let existingData = try JSONEncoder().encode(existing)
+        try existingData.write(to: preferencesURL)
+        let backupURL = preferencesURL.appendingPathExtension("bak")
+        try Data("keep this invalid backup".utf8).write(to: backupURL)
+        XCTAssertEqual(chflags(backupURL.path, UInt32(UF_IMMUTABLE)), 0)
+        defer { _ = chflags(backupURL.path, 0) }
+
+        XCTAssertThrowsError(try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).saveThrowing(replacement))
+        XCTAssertEqual(try Data(contentsOf: preferencesURL), existingData)
+        XCTAssertEqual(try Data(contentsOf: backupURL), Data("keep this invalid backup".utf8))
+    }
+
+    func testAppModelSurfacesPreferenceRecoverySeparatelyFromFanError() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("corrupt primary".utf8).write(to: preferencesURL)
+        let recovered = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        try JSONEncoder().encode(recovered).write(to: preferencesURL.appendingPathExtension("bak"))
+
+        let model = AppModel(
+            preferencesStore: AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        )
+
+        XCTAssertEqual(model.menuBarDisplayMode, .temperature)
+        XCTAssertTrue(model.appPreferencesRecoveryMessage?.contains("backup") == true)
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertNil(model.lastError)
+    }
+
     func testCorruptPrimaryRecoversValidBackupWithoutMutatingBackup() throws {
         let preferencesURL = temporaryPreferencesPath()
         let directory = preferencesURL.deletingLastPathComponent()

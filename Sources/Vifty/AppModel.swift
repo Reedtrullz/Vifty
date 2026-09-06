@@ -31,6 +31,7 @@ final class AppModel: ObservableObject {
     @Published var lastError: String?
     @Published var curveProfilePersistenceError: String?
     @Published var appPreferencesPersistenceMessage: String?
+    @Published var appPreferencesRecoveryMessage: String?
     @Published var fanAccessMessage: String?
     @Published var daemonResponding = false
     @Published var daemonReachable = false
@@ -321,7 +322,9 @@ final class AppModel: ObservableObject {
         self.preferencesStore = preferencesStore
         let appPreferences: AppPreferences
         do {
-            appPreferences = try self.preferencesStore.loadResult().preferences
+            let result = try self.preferencesStore.loadResult()
+            appPreferences = result.preferences
+            appPreferencesRecoveryMessage = result.recoveryMessage
         } catch {
             appPreferences = self.preferencesStore.load()
             appPreferencesPersistenceMessage = "Settings were not saved: \(error.localizedDescription)"
