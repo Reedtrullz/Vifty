@@ -175,7 +175,7 @@ extension AppModel {
     }
 
     func persistAppPreferences() {
-        preferencesStore.save(AppPreferences(
+        let preferences = AppPreferences(
             menuBarDisplayMode: menuBarDisplayMode,
             menuBarCustomFields: menuBarCustomFields,
             startupMode: startupMode,
@@ -184,7 +184,17 @@ extension AppModel {
             usePerFanFixedRPM: usePerFanFixedRPM,
             fixedFanTargets: fixedFanTargets,
             codexUsageDisplayPreferences: codexUsageDisplayPreferences
-        ))
+        )
+        do {
+            try preferencesStore.saveThrowing(preferences)
+            appPreferencesPersistenceMessage = nil
+        } catch {
+            appPreferencesPersistenceMessage = "Settings were not saved: \(error.localizedDescription)"
+        }
+    }
+
+    func retryAppPreferencesSave() {
+        persistAppPreferences()
     }
 
     var codexUsageDisplayPreferences: CodexUsageDisplayPreferences {

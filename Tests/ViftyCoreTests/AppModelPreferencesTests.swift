@@ -4,6 +4,66 @@ import XCTest
 
 @MainActor
 final class AppModelPreferencesTests: XCTestCase {
+    func testCorruptPrimaryRecoversValidBackupWithoutMutatingBackup() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
+
+        let backupPreferences = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        let backupData = try JSONEncoder().encode(backupPreferences)
+        let corruptData = Data("corrupt primary".utf8)
+        try corruptData.write(to: preferencesURL)
+        try backupData.write(to: preferencesURL.appendingPathExtension("bak"))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)],
+            ofItemAtPath: preferencesURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)],
+            ofItemAtPath: preferencesURL.appendingPathExtension("bak").path
+        )
+
+        let result = try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).loadResult()
+
+        XCTAssertEqual(result.preferences, backupPreferences)
+        XCTAssertNotNil(result.recoveryMessage)
+        XCTAssertEqual(try Data(contentsOf: preferencesURL.appendingPathExtension("bak")), backupData)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testPreferenceSaveFailureIsSeparateAndRetryClearsMessage() throws {
+        let root = temporaryPreferencesPath().deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let invalidParent = root.appendingPathComponent("preferences-parent")
+        try Data("not a directory".utf8).write(to: invalidParent)
+        let preferencesURL = invalidParent.appendingPathComponent("app-preferences.json")
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let model = AppModel(preferencesStore: store)
+        model.lastError = "fan control failure"
+
+        model.menuBarDisplayMode = .temperature
+
+        XCTAssertTrue(model.appPreferencesPersistenceMessage?.hasPrefix("Settings were not saved:") == true)
+        XCTAssertEqual(model.lastError, "fan control failure")
+
+        try FileManager.default.removeItem(at: invalidParent)
+        try FileManager.default.createDirectory(at: invalidParent, withIntermediateDirectories: true)
+        model.retryAppPreferencesSave()
+
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertEqual(store.load().menuBarDisplayMode, .temperature)
+    }
+
     func testSaveProfileWithDuplicateNameRequiresConfirmationAndPreservesIdentity() throws {
         let model = AppModel()
         model.savedProfiles = []

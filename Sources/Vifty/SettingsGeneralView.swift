@@ -23,6 +23,21 @@ struct SettingsGeneralView: View {
 
     var body: some View {
         SettingsPane(accessibilityPane: .general) {
+            if let message = model.appPreferencesPersistenceMessage {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel("Settings were not saved")
+                        .accessibilityValue(message)
+                    Button("Retry Save") {
+                        model.retryAppPreferencesSave()
+                    }
+                    .accessibilityLabel("Retry saving settings")
+                }
+                .viftyFont(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             updatesSection
 
             Section("Startup") {
