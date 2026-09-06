@@ -384,6 +384,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(status.lastDecision?.allowed, true)
         XCTAssertEqual(status.lastDecision?.targetRPMByFanID[1], 3700)
         XCTAssertNil(status.lastErrorCode)
+        XCTAssertEqual(status.persistenceHealth, .healthy)
     }
 
     func testCommandErrorExampleDecodesAgainstCurrentModel() throws {
@@ -974,6 +975,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         try assertRequiredFields(definition: "request", in: statusDefinitions, arePresentIn: activeLease["request"] as? [String: Any], context: "lease request")
         try assertRequiredFields(definition: "decision", in: statusDefinitions, arePresentIn: statusExample["lastDecision"] as? [String: Any], context: "last decision")
         try assertRequiredFields(definition: "policy", in: statusDefinitions, arePresentIn: statusExample["policy"] as? [String: Any], context: "status policy")
+        try assertRequiredFields(definition: "persistenceHealth", in: statusDefinitions, arePresentIn: statusExample["persistenceHealth"] as? [String: Any], context: "status persistence health")
 
         let commandErrorSchema = try readJSON(schemaURL("viftyctl-command-error.schema.json"))
         let commandErrorProperties = try XCTUnwrap(commandErrorSchema["properties"] as? [String: Any])
@@ -1157,7 +1159,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "INVALID_ARGUMENTS",
             "CHILD_COMMAND_FAILED",
             "PREPARE_RATE_LIMITED",
-            "RESTORE_REQUESTED"
+            "RESTORE_REQUESTED",
+            "PERSISTENCE_FAILURE"
         ]
     }
 

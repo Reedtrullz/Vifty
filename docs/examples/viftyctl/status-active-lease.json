@@ -38,6 +38,12 @@
     "minimumAgentRPMPercent": 45,
     "prepareCooldownSeconds": 30
   },
+  "persistenceHealth": {
+    "auditError": null,
+    "auditStatusAvailable": true,
+    "policyError": null,
+    "policyStatusAvailable": true
+  },
   "generatedAt": 700000900,
   "schemaID": "https://vifty.local/schemas/viftyctl-status.schema.json",
   "schemaVersion": 1

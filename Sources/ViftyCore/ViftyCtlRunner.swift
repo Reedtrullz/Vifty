@@ -845,7 +845,8 @@ public enum ViftyCtlCommandErrorRecoveryAction: String, Codable, Equatable, Send
              .rpmOutOfRange,
              .thermalCritical,
              .leaseNotFound,
-             .restoreFailed:
+             .restoreFailed,
+             .persistenceFailure:
             return .runDiagnose
         }
     }
@@ -1163,6 +1164,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
     public var lastDecision: AgentControlDecision?
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
+    public var persistenceHealth: AgentControlPersistenceHealth
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -1173,6 +1175,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         case lastDecision
         case lastErrorCode
         case policy
+        case persistenceHealth
     }
 
     // Emit nil optionals as explicit JSON nulls so the status schema's required
@@ -1187,6 +1190,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         try container.encode(lastDecision, forKey: .lastDecision)
         try container.encode(lastErrorCode, forKey: .lastErrorCode)
         try container.encode(policy, forKey: .policy)
+        try container.encode(persistenceHealth, forKey: .persistenceHealth)
     }
 
     public init(
@@ -1203,6 +1207,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         self.lastDecision = status.lastDecision
         self.lastErrorCode = status.lastErrorCode
         self.policy = status.policy
+        self.persistenceHealth = status.persistenceHealth
     }
 }
 
@@ -1752,10 +1757,20 @@ public struct ViftyCtlRunner: Sendable {
     private func capabilitiesReport() async -> ViftyCtlCapabilities {
         do {
             let status = try await client.status()
-            let policy = status.policy ?? AgentControlPolicy(enabled: false).snapshot
+            guard let policy = status.policy,
+                  status.persistenceHealth.policyStatusAvailable else {
+                return ViftyCtlCapabilities(
+                    policy: AgentControlPolicy(enabled: false).snapshot,
+                    policySource: .fallbackUnavailable,
+                    daemonStatusAvailable: true,
+                    policyStatusAvailable: false,
+                    agentControlStatusError: status.persistenceHealth.policyError
+                        ?? "Agent-control policy persistence is unavailable."
+                )
+            }
             return ViftyCtlCapabilities(
                 policy: policy,
-                policyStatusAvailable: status.policy != nil
+                policyStatusAvailable: true
             )
         } catch {
             return ViftyCtlCapabilities(

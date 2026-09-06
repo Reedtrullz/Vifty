@@ -13,6 +13,12 @@ final class XPCAgentControlCodingTests: XCTestCase {
 
     func testStatusRoundTripsThroughNSDictionary() {
         let created = Date(timeIntervalSince1970: 1_000)
+        let health = AgentControlPersistenceHealth(
+            policyStatusAvailable: false,
+            policyError: "policy unreadable",
+            auditStatusAvailable: true,
+            auditError: nil
+        )
         let status = AgentControlStatus(
             enabled: true,
             activeLease: AgentCoolingLease(
@@ -24,7 +30,8 @@ final class XPCAgentControlCodingTests: XCTestCase {
             ),
             lastDecision: .denied(.prepareRateLimited, message: "Wait", retryAfterSeconds: 12),
             lastErrorCode: .prepareRateLimited,
-            policy: AgentControlPolicy(enabled: true, minimumAgentRPMPercent: 40, maximumAllowedRPMPercent: 75, maxDurationSeconds: 1_800, prepareCooldownSeconds: 12).snapshot
+            policy: AgentControlPolicy(enabled: true, minimumAgentRPMPercent: 40, maximumAllowedRPMPercent: 75, maxDurationSeconds: 1_800, prepareCooldownSeconds: 12).snapshot,
+            persistenceHealth: health
         )
 
         let encoded = XPCAgentControlCoding.encode(status)
@@ -44,6 +51,10 @@ final class XPCAgentControlCodingTests: XCTestCase {
         XCTAssertNil(decoded?.activeLease)
         XCTAssertNil(decoded?.lastDecision)
         XCTAssertNil(decoded?.policy)
+        XCTAssertEqual(decoded?.persistenceHealth.policyStatusAvailable, false)
+        XCTAssertEqual(decoded?.persistenceHealth.auditStatusAvailable, false)
+        XCTAssertEqual(decoded?.persistenceHealth.policyError, "Persistence health unavailable from older daemon response.")
+        XCTAssertEqual(decoded?.persistenceHealth.auditError, "Persistence health unavailable from older daemon response.")
     }
 
     func testAuditEventsRoundTripThroughNSDictionary() {
