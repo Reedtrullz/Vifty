@@ -99,16 +99,15 @@ struct DaemonInstallProcessRunner: Sendable {
                 try? inputHandle.close()
                 try? outputHandle.close()
                 try? errorHandle.close()
-                let deadline = Date().addingTimeInterval(1)
+                let deadline = Date().addingTimeInterval(0.25)
                 while process.isRunning && Date() < deadline {
                     usleep(10_000)
                 }
                 if process.isRunning {
                     kill(process.processIdentifier, SIGKILL)
                 }
-                process.waitUntilExit()
-                _ = await outputReader.value
-                _ = await errorReader.value
+                outputReader.cancel()
+                errorReader.cancel()
                 throw error
             }
             process.waitUntilExit()

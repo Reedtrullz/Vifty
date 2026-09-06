@@ -97,8 +97,40 @@ final class DaemonInstallServiceTests: XCTestCase {
         let output = await resultBox.value
         let result = try XCTUnwrap(output)
         XCTAssertEqual(result.terminationStatus, 0)
-        XCTAssertLessThanOrEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
-        XCTAssertLessThanOrEqual(result.standardError.utf8.count, maximumBytesPerStream)
+        XCTAssertEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
+        XCTAssertEqual(result.standardError.utf8.count, maximumBytesPerStream)
+    }
+
+    func testSystemRunnerBoundsCleanupAfterStdinWriteFailure() async throws {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-input-failure-" + UUID().uuidString + ".sh")
+        defer { try? FileManager.default.removeItem(at: script) }
+        try Data("#!/bin/bash\nexec 0<&-\ntrap '' TERM\nwhile :; do :; done\n".utf8).write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+
+        let previousSIGPIPEHandler = signal(SIGPIPE, SIG_IGN)
+        defer { signal(SIGPIPE, previousSIGPIPEHandler) }
+        let resultBox = ProcessFailureBox()
+        let completion = expectation(description: "stdin failure cleanup completes")
+        let startedAt = Date()
+        Task {
+            defer { completion.fulfill() }
+            do {
+                _ = try await DaemonInstallProcessRunner.system.run(
+                    script,
+                    [],
+                    Data(repeating: 0, count: 1 * 1_024 * 1_024)
+                )
+                await resultBox.set(threw: false)
+            } catch {
+                await resultBox.set(threw: true)
+            }
+        }
+
+        await fulfillment(of: [completion], timeout: 2)
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1.25)
+        let didThrow = await resultBox.threw
+        XCTAssertTrue(didThrow)
     }
 
     func testBundledLoaderAcceptsOnlyTheReviewedLifecycleScriptBytes() throws {
@@ -245,5 +277,13 @@ private actor ProcessOutputBox {
 
     func set(_ value: DaemonInstallProcessOutput?) {
         self.value = value
+    }
+}
+
+private actor ProcessFailureBox {
+    private(set) var threw = false
+
+    func set(threw: Bool) {
+        self.threw = threw
     }
 }
