@@ -8,7 +8,13 @@ final class AppModelPreferencesTests: XCTestCase {
     func testSaveFailsBeforeReplacingValidPrimaryWhenBackupPreservationFails() throws {
         let preferencesURL = temporaryPreferencesPath()
         let directory = preferencesURL.deletingLastPathComponent()
-        defer { try? FileManager.default.removeItem(at: directory) }
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o700)],
+                ofItemAtPath: directory.path
+            )
+            try? FileManager.default.removeItem(at: directory)
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let existing = AppPreferences(
@@ -90,6 +96,69 @@ final class AppModelPreferencesTests: XCTestCase {
         XCTAssertNotNil(result.recoveryMessage)
         XCTAssertEqual(try Data(contentsOf: preferencesURL.appendingPathExtension("bak")), backupData)
         XCTAssertEqual(try posixPermissions(at: preferencesURL.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testValidPrimaryLoadRestrictsExistingValidBackupPermissions() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o700)],
+                ofItemAtPath: directory.path
+            )
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let primary = AppPreferences(
+            menuBarDisplayMode: .fanIcon,
+            startupMode: .auto,
+            notificationSettings: .disabled
+        )
+        let backup = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        try JSONEncoder().encode(primary).write(to: preferencesURL)
+        try JSONEncoder().encode(backup).write(to: preferencesURL.appendingPathExtension("bak"))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o644)],
+            ofItemAtPath: preferencesURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o644)],
+            ofItemAtPath: preferencesURL.appendingPathExtension("bak").path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o755)],
+            ofItemAtPath: directory.path
+        )
+
+        let result = try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).loadResult()
+
+        XCTAssertEqual(result.preferences, primary)
+        XCTAssertEqual(try posixPermissions(at: directory), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testCorruptPrimaryAndBackupUseVisibleDefaultsRecoveryState() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("corrupt primary".utf8).write(to: preferencesURL)
+        try Data("corrupt backup".utf8).write(to: preferencesURL.appendingPathExtension("bak"))
+
+        let model = AppModel(
+            preferencesStore: AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        )
+
+        XCTAssertEqual(model.menuBarDisplayMode, AppPreferences.defaults.menuBarDisplayMode)
+        XCTAssertTrue(model.appPreferencesRecoveryMessage?.localizedCaseInsensitiveContains("defaults") == true)
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertNil(model.lastError)
     }
 
     func testPreferenceSaveFailureIsSeparateAndRetryClearsMessage() throws {

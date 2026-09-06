@@ -256,6 +256,7 @@ final class AgentControlServiceTests: XCTestCase {
     func testFailedDisableSaveRestoresActiveLeaseAndSuccessfulRetryPublishesToggle() async throws {
         let store = AgentControlFaultStore(directory: temporaryDirectory())
         store.loadedPolicy = .success(true)
+        try store.base.saveAgentControlEnabled(true)
         let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
         let service = AgentControlService(
             hardware: hardware,
@@ -289,6 +290,7 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertEqual(failed.lastErrorCode, .persistenceFailure)
         let restoredFanIDs = await hardware.restoredFanIDs
         XCTAssertEqual(restoredFanIDs, [0])
+        XCTAssertEqual(try store.base.loadAgentControlEnabled(), true)
 
         store.savePolicyError = nil
         let retried = try await service.setPolicyEnabled(false)

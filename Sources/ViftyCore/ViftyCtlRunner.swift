@@ -1413,7 +1413,10 @@ public struct ViftyCtlRunner: Sendable {
                 }
                 let stderr: String
                 if let error = capabilities.agentControlStatusError {
-                    stderr = "viftyctl capabilities: daemon status unavailable; policy is a disabled fallback: \(error)\n"
+                    let source = capabilities.daemonStatusAvailable
+                        ? "policy persistence unavailable"
+                        : "daemon status unavailable"
+                    stderr = "viftyctl capabilities: \(source); policy is a disabled fallback: \(error)\n"
                 } else if !capabilities.policyStatusAvailable {
                     stderr = "viftyctl capabilities: daemon returned no usable policy; policy is a disabled fallback\n"
                 } else {
@@ -1779,7 +1782,7 @@ public struct ViftyCtlRunner: Sendable {
                 policySource: .fallbackUnavailable,
                 daemonStatusAvailable: false,
                 policyStatusAvailable: false,
-                agentControlStatusError: error.localizedDescription
+                agentControlStatusError: Self.boundedPolicyPersistenceMessage(error.localizedDescription)
             )
         }
     }

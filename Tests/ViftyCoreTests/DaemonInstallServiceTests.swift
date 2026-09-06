@@ -88,13 +88,14 @@ final class DaemonInstallServiceTests: XCTestCase {
         let resultBox = ProcessOutputBox()
         let completion = expectation(description: "high-output process completes")
         let maximumBytesPerStream = 64 * 1_024
-        Task {
+        let task = Task {
             defer { completion.fulfill() }
-            await resultBox.set(try? await DaemonInstallProcessRunner.system.run(script, [], Data("input\n".utf8)))
+            resultBox.set(try? await DaemonInstallProcessRunner.system.run(script, [], Data("input\n".utf8)))
         }
+        defer { task.cancel() }
 
         await fulfillment(of: [completion], timeout: 2)
-        let output = await resultBox.value
+        let output = resultBox.value
         let result = try XCTUnwrap(output)
         XCTAssertEqual(result.terminationStatus, 0)
         XCTAssertEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
@@ -113,7 +114,7 @@ final class DaemonInstallServiceTests: XCTestCase {
         let resultBox = ProcessFailureBox()
         let completion = expectation(description: "stdin failure cleanup completes")
         let startedAt = Date()
-        Task {
+        let task = Task {
             defer { completion.fulfill() }
             do {
                 _ = try await DaemonInstallProcessRunner.system.run(
@@ -121,15 +122,16 @@ final class DaemonInstallServiceTests: XCTestCase {
                     [],
                     Data(repeating: 0, count: 1 * 1_024 * 1_024)
                 )
-                await resultBox.set(threw: false)
+                resultBox.set(threw: false)
             } catch {
-                await resultBox.set(threw: true)
+                resultBox.set(threw: true)
             }
         }
+        defer { task.cancel() }
 
         await fulfillment(of: [completion], timeout: 2)
         XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1.25)
-        let didThrow = await resultBox.threw
+        let didThrow = resultBox.threw
         XCTAssertTrue(didThrow)
     }
 
@@ -272,18 +274,28 @@ private actor InstallRunnerRecorder {
     }
 }
 
-private actor ProcessOutputBox {
-    private(set) var value: DaemonInstallProcessOutput?
+private final class ProcessOutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: DaemonInstallProcessOutput?
+
+    var value: DaemonInstallProcessOutput? {
+        lock.withLock { storedValue }
+    }
 
     func set(_ value: DaemonInstallProcessOutput?) {
-        self.value = value
+        lock.withLock { storedValue = value }
     }
 }
 
-private actor ProcessFailureBox {
-    private(set) var threw = false
+private final class ProcessFailureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedThrew = false
+
+    var threw: Bool {
+        lock.withLock { storedThrew }
+    }
 
     func set(threw: Bool) {
-        self.threw = threw
+        lock.withLock { storedThrew = threw }
     }
 }

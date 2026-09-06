@@ -14,6 +14,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .childCommandFailed), .fixChildCommand)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .restoreRequested), .restoreAutoBeforeRetry)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .prepareRateLimited), .waitBeforeRetry)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .persistenceFailure), .runDiagnose)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .thermalCritical), .runDiagnose)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: nil), .runDiagnose)
     }
@@ -490,6 +491,50 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let policy = try XCTUnwrap(json["policy"] as? [String: Any])
         XCTAssertEqual(policy["enabled"] as? Bool, false)
         XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
+    }
+
+    func testCapabilitiesHumanReadableDescribesPolicyPersistenceWhenDaemonResponds() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: .persistenceFailure,
+                policy: AgentControlPolicy(enabled: true).snapshot,
+                persistenceHealth: AgentControlPersistenceHealth(
+                    policyStatusAvailable: false,
+                    policyError: "policy file unreadable",
+                    auditStatusAvailable: true,
+                    auditError: nil
+                )
+            )),
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.capabilities(json: false))
+
+        XCTAssertEqual(result.exitCode, 69)
+        XCTAssertTrue(result.stderr.contains("policy persistence unavailable"))
+        XCTAssertTrue(result.stderr.contains("policy file unreadable"))
+        XCTAssertFalse(result.stderr.contains("daemon status unavailable"))
+    }
+
+    func testCapabilitiesJSONBoundsDaemonRequestError() async throws {
+        let originalMessage = String(repeating: "x", count: AgentControlRequest.maximumReasonLength + 100)
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(
+                statusError: ViftyError.helperRejected(originalMessage)
+            ),
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.capabilities(json: true))
+
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let message = try XCTUnwrap(json["agentControlStatusError"] as? String)
+        XCTAssertEqual(message.count, AgentControlRequest.maximumReasonLength)
+        XCTAssertTrue(message.hasSuffix(String(repeating: "x", count: 20)))
     }
 
     func testCapabilitiesHumanReadableReturnsCommandsAndUnavailableExitWhenDaemonStatusUnavailable() async throws {

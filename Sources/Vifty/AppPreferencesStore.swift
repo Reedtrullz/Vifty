@@ -85,20 +85,25 @@ final class AppPreferencesStore: @unchecked Sendable {
     }
 
     func loadResult() throws -> AppPreferencesLoadResult {
-        switch decodePreferences(at: url) {
+        let primary = decodePreferences(at: url)
+        switch primary {
         case .success(let preferences):
             try restrictDirectoryPermissions()
             try restrictFilePermissions(at: url)
+            if case .success = decodePreferences(at: backupURL) {
+                try restrictFilePermissions(at: backupURL)
+            }
             return AppPreferencesLoadResult(preferences: preferences, recoveryMessage: nil)
         case .missing, .failure:
             break
         }
 
-        switch decodePreferences(at: backupURL) {
+        let backup = decodePreferences(at: backupURL)
+        switch backup {
         case .success(let preferences):
             try restrictDirectoryPermissions()
             try restrictFilePermissions(at: backupURL)
-            if case .failure = decodePreferences(at: url) {
+            if case .failure = primary {
                 quarantinePrimaryIfPossible()
             }
             return AppPreferencesLoadResult(
@@ -110,7 +115,14 @@ final class AppPreferencesStore: @unchecked Sendable {
             if migrated != .defaults {
                 try saveThrowing(migrated)
             }
-            return AppPreferencesLoadResult(preferences: migrated, recoveryMessage: nil)
+            let recoveryMessage: String?
+            switch (primary, backup) {
+            case (.failure, _), (_, .failure):
+                recoveryMessage = "Vifty could not recover its private app preferences; defaults are in use."
+            default:
+                recoveryMessage = nil
+            }
+            return AppPreferencesLoadResult(preferences: migrated, recoveryMessage: recoveryMessage)
         }
     }
 

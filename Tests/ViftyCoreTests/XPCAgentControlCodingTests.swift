@@ -42,6 +42,30 @@ final class XPCAgentControlCodingTests: XCTestCase {
         XCTAssertEqual(decoded?.policy?.maximumAllowedRPMPercent, 75)
     }
 
+    func testPersistenceFailureRoundTripsThroughJSONAndXPC() throws {
+        let status = AgentControlStatus(
+            enabled: false,
+            activeLease: nil,
+            lastDecision: .denied(.persistenceFailure, message: "policy unreadable"),
+            lastErrorCode: .persistenceFailure,
+            policy: AgentControlPolicy(enabled: false).snapshot,
+            persistenceHealth: AgentControlPersistenceHealth(
+                policyStatusAvailable: false,
+                policyError: "policy unreadable",
+                auditStatusAvailable: true,
+                auditError: nil
+            )
+        )
+
+        let json = try JSONDecoder().decode(
+            AgentControlStatus.self,
+            from: JSONEncoder().encode(status)
+        )
+
+        XCTAssertEqual(json, status)
+        XCTAssertEqual(XPCAgentControlCoding.decodeStatus(XPCAgentControlCoding.encode(status)), status)
+    }
+
     func testOlderStatusWithoutLeaseStillDecodes() {
         let dictionary: NSDictionary = ["enabled": true]
 
