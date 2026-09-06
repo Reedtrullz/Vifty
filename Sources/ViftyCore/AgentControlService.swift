@@ -678,12 +678,30 @@ public actor AgentControlService {
     }
 
     private func appendAudit(action: String, leaseID: String?, message: String) {
-        try? store.appendAuditEvent(AgentControlAuditEvent(
+        let event = AgentControlAuditEvent(
             timestamp: now(),
             action: action,
             leaseID: leaseID,
             message: message
-        ))
+        )
+        do {
+            try store.appendAuditEvent(event)
+            persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: persistenceHealth.policyStatusAvailable,
+                policyError: persistenceHealth.policyError,
+                auditStatusAvailable: true,
+                auditError: nil
+            )
+        } catch {
+            let auditError = String(error.localizedDescription.prefix(512))
+            persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: persistenceHealth.policyStatusAvailable,
+                policyError: persistenceHealth.policyError,
+                auditStatusAvailable: false,
+                auditError: auditError
+            )
+            ViftyCoreLog.agentControl.error("Agent audit persistence failed")
+        }
     }
 
     private static func normalizedAuditReason(_ reason: String, fallback: String) -> String {

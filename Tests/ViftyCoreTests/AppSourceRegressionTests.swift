@@ -23,6 +23,16 @@ final class AppSourceRegressionTests: XCTestCase {
         XCTAssertTrue(general.contains("Settings recovered"))
     }
 
+    func testAgentSettingsSurfacesAuditPersistenceAttentionWithoutChangingCoolingPolicy() throws {
+        let settings = try read("Sources/Vifty/SettingsAgentWorkflowView.swift")
+        let control = try read("Sources/Vifty/AppModel+Control.swift")
+
+        XCTAssertTrue(settings.contains("model.agentAuditPersistenceMessage"))
+        XCTAssertTrue(settings.contains("Agent audit persistence needs attention"))
+        XCTAssertTrue(control.contains("auditStatusAvailable"))
+        XCTAssertTrue(control.contains("cooling control is unchanged"))
+    }
+
     private func read(_ relativePath: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let repositoryRoot = testFile

@@ -624,6 +624,44 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasonCount, 0)
     }
 
+    func testDiagnoseExposesAuditPersistenceHealthWithoutChangingCoolingReadiness() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot,
+                persistenceHealth: AgentControlPersistenceHealth(
+                    policyStatusAvailable: true,
+                    policyError: nil,
+                    auditStatusAvailable: false,
+                    auditError: "audit file unavailable"
+                )
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let json = try jsonObject(in: result.stdout)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(json["state"] as? String, "ready")
+        let agentControl = try XCTUnwrap(json["agentControl"] as? [String: Any])
+        let persistenceHealth = try XCTUnwrap(agentControl["persistenceHealth"] as? [String: Any])
+        XCTAssertEqual(persistenceHealth["auditStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(persistenceHealth["auditError"] as? String, "audit file unavailable")
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertFalse(checks.contains { ($0["id"] as? String)?.localizedCaseInsensitiveContains("audit") == true })
+    }
+
     func testDiagnoseReplacementMaintenanceAttestationDoesNotAssumeTwoFans() async throws {
         var snapshot = Self.readySnapshot()
         snapshot.fans = Array(snapshot.fans.prefix(1))

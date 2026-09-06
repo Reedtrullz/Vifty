@@ -32,6 +32,17 @@ struct SettingsAgentWorkflowView: View {
                     )
                     .disabled(model.agentCoolingEnabled == nil)
                     .accessibilityIdentifier(ViftyAccessibilityIdentifier.agentCoolingEnabled)
+
+                if let message = model.agentAuditPersistenceMessage {
+                    Label {
+                        Text(message)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Agent audit persistence needs attention")
+                }
             }
 
             Section("Commands") {

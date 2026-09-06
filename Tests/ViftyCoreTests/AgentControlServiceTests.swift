@@ -253,6 +253,40 @@ final class AgentControlServiceTests: XCTestCase {
         XCTAssertEqual(store.savedPolicies, [])
     }
 
+    func testAuditAppendFailureIsVisibleAndLaterSuccessRecoversWithoutChangingTransactionResult() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.auditErrorsRemaining = 1
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "audit-failure"
+        )
+
+        let prepared = try await service.prepare(request)
+
+        XCTAssertNotNil(prepared.activeLease)
+        XCTAssertFalse(prepared.persistenceHealth.auditStatusAvailable)
+        XCTAssertNotNil(prepared.persistenceHealth.auditError)
+
+        let restored = try await service.restoreAuto(reason: "Finished")
+
+        XCTAssertNil(restored.activeLease)
+        XCTAssertTrue(restored.persistenceHealth.auditStatusAvailable)
+        XCTAssertNil(restored.persistenceHealth.auditError)
+        XCTAssertEqual(restored.lastErrorCode, nil)
+    }
+
     func testFailedDisableSaveRestoresActiveLeaseAndSuccessfulRetryPublishesToggle() async throws {
         let store = AgentControlFaultStore(directory: temporaryDirectory())
         store.loadedPolicy = .success(true)
@@ -1923,6 +1957,7 @@ private final class AgentControlFaultStore: AgentControlPersisting, @unchecked S
     var loadedPolicy: Result<Bool?, AgentControlFault> = .success(nil)
     var savePolicyError: AgentControlFault?
     var savedPolicies: [Bool] = []
+    var auditErrorsRemaining = 0
 
     init(directory: URL) {
         self.base = AgentControlStore(directory: directory)
@@ -1930,7 +1965,13 @@ private final class AgentControlFaultStore: AgentControlPersisting, @unchecked S
 
     func saveActiveLease(_ lease: AgentCoolingLease?) throws { try base.saveActiveLease(lease) }
     func loadActiveLease() throws -> AgentCoolingLease? { try base.loadActiveLease() }
-    func appendAuditEvent(_ event: AgentControlAuditEvent) throws { try base.appendAuditEvent(event) }
+    func appendAuditEvent(_ event: AgentControlAuditEvent) throws {
+        if auditErrorsRemaining > 0 {
+            auditErrorsRemaining -= 1
+            throw AgentControlFault.savePolicy
+        }
+        try base.appendAuditEvent(event)
+    }
     func loadRecentAuditEvents(limit: Int) throws -> [AgentControlAuditEvent] {
         try base.loadRecentAuditEvents(limit: limit)
     }

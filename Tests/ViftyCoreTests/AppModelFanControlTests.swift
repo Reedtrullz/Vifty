@@ -478,6 +478,29 @@ final class AppModelFanControlTests: XCTestCase {
         XCTAssertEqual(model.agentCoolingRestoreActionHelp, "Restore Auto before starting another agent workload")
     }
 
+    func testAuditPersistenceFailureIsPresentedWithoutBlockingCoolingStatus() {
+        let model = AppModel()
+        model.agentControlStatus = AgentControlStatus(
+            enabled: true,
+            activeLease: nil,
+            lastDecision: nil,
+            lastErrorCode: nil,
+            persistenceHealth: AgentControlPersistenceHealth(
+                policyStatusAvailable: true,
+                policyError: nil,
+                auditStatusAvailable: false,
+                auditError: "audit file unavailable"
+            )
+        )
+
+        XCTAssertEqual(
+            model.agentAuditPersistenceMessage,
+            "Agent audit history unavailable; cooling control is unchanged. audit file unavailable"
+        )
+        XCTAssertFalse(model.agentCoolingNeedsAttention)
+        XCTAssertNil(model.agentCoolingSummary)
+    }
+
     func testAgentCoolingSummaryIncludesWorkloadAndSortedTargets() {
         let model = AppModel(now: { Date(timeIntervalSince1970: 1200) })
         model.agentControlStatus = AgentControlStatus(
