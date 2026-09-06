@@ -51,6 +51,7 @@ public actor AgentControlService {
 
     private var activeLease: AgentCoolingLease?
     private var persistenceLoadErrorMessage: String?
+    private var persistenceHealth = AgentControlPersistenceHealth.healthy
     private var lastDecision: AgentControlDecision?
     private var lastErrorCode: AgentControlErrorCode?
     private var operationInProgress = false
@@ -86,8 +87,18 @@ public actor AgentControlService {
             self.activeLease = nil
             self.persistenceLoadErrorMessage = error.localizedDescription
         }
-        if let storedEnabled = try? store.loadAgentControlEnabled() {
-            self.policy.enabled = storedEnabled
+        do {
+            if let storedEnabled = try store.loadAgentControlEnabled() {
+                self.policy.enabled = storedEnabled
+            }
+        } catch {
+            self.policy.enabled = false
+            self.persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: false,
+                policyError: Self.boundedPolicyPersistenceMessage(error),
+                auditStatusAvailable: true,
+                auditError: nil
+            )
         }
         self.scheduledExpiry = nil
         if automaticallySchedulePersistedLeaseMonitor, let activeLease {
@@ -104,7 +115,8 @@ public actor AgentControlService {
             activeLease: lease,
             lastDecision: lastDecision,
             lastErrorCode: lastErrorCode,
-            policy: policy.snapshot
+            policy: policy.snapshot,
+            persistenceHealth: persistenceHealth
         )
     }
 
@@ -116,8 +128,35 @@ public actor AgentControlService {
         if !enabled, activeLease != nil {
             _ = try await restoreAuto(reason: "Agent control disabled by user")
         }
+        let previousEnabled = policy.enabled
+        do {
+            try store.saveAgentControlEnabled(enabled)
+        } catch {
+            policy.enabled = previousEnabled
+            persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: false,
+                policyError: Self.boundedPolicyPersistenceMessage(error),
+                auditStatusAvailable: persistenceHealth.auditStatusAvailable,
+                auditError: persistenceHealth.auditError
+            )
+            let decision = AgentControlDecision.denied(
+                .persistenceFailure,
+                message: persistenceHealth.policyError ?? "Agent-control policy persistence is unavailable."
+            )
+            lastDecision = decision
+            lastErrorCode = decision.errorCode
+            appendAudit(action: "policy-persistence-failed", leaseID: nil, message: decision.message)
+            throw error
+        }
         policy.enabled = enabled
-        try store.saveAgentControlEnabled(enabled)
+        persistenceHealth = AgentControlPersistenceHealth(
+            policyStatusAvailable: true,
+            policyError: nil,
+            auditStatusAvailable: persistenceHealth.auditStatusAvailable,
+            auditError: persistenceHealth.auditError
+        )
+        lastDecision = nil
+        lastErrorCode = nil
         return status()
     }
 
@@ -186,6 +225,16 @@ public actor AgentControlService {
             throw ViftyError.helperRejected(
                 "Agent-control ownership state is unreadable; startup Auto recovery is required before prepare: \(persistenceLoadErrorMessage)"
             )
+        }
+        guard persistenceHealth.policyStatusAvailable else {
+            let decision = AgentControlDecision.denied(
+                .persistenceFailure,
+                message: persistenceHealth.policyError ?? "Agent-control policy persistence is unavailable."
+            )
+            lastDecision = decision
+            lastErrorCode = decision.errorCode
+            appendAudit(action: "prepare-denied", leaseID: nil, message: decision.message)
+            return status()
         }
         let prepareRestoreGeneration = restoreRequestGeneration
         guard let request = request.normalizedMetadata else {
@@ -641,6 +690,14 @@ public actor AgentControlService {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmed.isEmpty ? fallback : trimmed
         return String(normalized.prefix(AgentControlRequest.maximumReasonLength))
+    }
+
+    private static func boundedPolicyPersistenceMessage(_ error: any Error) -> String {
+        let trimmed = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "Agent-control policy persistence is unavailable."
+        }
+        return String(trimmed.prefix(AgentControlRequest.maximumReasonLength))
     }
 }
 
