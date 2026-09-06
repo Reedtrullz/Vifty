@@ -1398,6 +1398,8 @@ public struct ViftyCtlRunner: Sendable {
     public func run(_ command: ViftyCtlCommand) async throws -> ViftyCtlResult {
         do {
             switch command {
+            case .help:
+                return ViftyCtlResult(stdout: ViftyCtlArguments.usage + "\n")
             case .status(let json):
                 let status = try await client.status()
                 let stdout = try formatStatus(status, json: json)
@@ -1641,6 +1643,8 @@ public struct ViftyCtlRunner: Sendable {
 
     private func jsonRequested(for command: ViftyCtlCommand) -> Bool {
         switch command {
+        case .help:
+            return false
         case .status(let json),
              .capabilities(let json),
              .agentRule(let json),
@@ -1661,6 +1665,8 @@ public struct ViftyCtlRunner: Sendable {
 
     private func commandName(for command: ViftyCtlCommand) -> String {
         switch command {
+        case .help:
+            return "help"
         case .status:
             return "status"
         case .capabilities:

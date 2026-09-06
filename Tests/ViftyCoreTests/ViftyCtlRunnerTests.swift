@@ -113,6 +113,27 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("agent-rule"))
     }
 
+    func testHelpAliasesReturnIdenticalCanonicalUsage() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(),
+            processRunner: FakeProcessRunner()
+        )
+
+        var outputs: [String] = []
+        for argument in ["help", "--help", "-h"] {
+            let command = try ViftyCtlArguments.parse([argument])
+            let result = try await runner.run(command)
+            XCTAssertEqual(result.exitCode, 0)
+            XCTAssertEqual(result.stderr, "")
+            XCTAssertTrue(result.stdout.hasSuffix("\n"))
+            outputs.append(result.stdout)
+        }
+
+        XCTAssertEqual(Set(outputs).count, 1)
+        XCTAssertEqual(outputs.first, ViftyCtlArguments.usage + "\n")
+        XCTAssertFalse(outputs[0].contains("helper-maintenance"))
+    }
+
     func testAgentRuleReturnsPasteableRuleWithoutDaemonMutation() async throws {
         let client = FakeAgentControlClient(
             status: AgentControlStatus(

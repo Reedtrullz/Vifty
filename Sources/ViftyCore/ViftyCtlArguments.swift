@@ -1,6 +1,7 @@
 import Foundation
 
 public enum ViftyCtlCommand: Equatable, Sendable {
+    case help
     case status(json: Bool)
     case capabilities(json: Bool)
     case agentRule(json: Bool)
@@ -16,6 +17,11 @@ public enum ViftyCtlCommand: Equatable, Sendable {
 
 public enum ViftyCtlArguments {
     public static let defaultAuditLimit = 20
+    public static let usage = """
+    Usage: viftyctl <command> [options]
+    Commands: status, capabilities, agent-rule, diagnose, audit, prepare, restore-auto, run
+    Run 'viftyctl agent-rule' for the guarded agent workflow.
+    """
 
     public static func parse(_ arguments: [String]) throws -> ViftyCtlCommand {
         guard let command = arguments.first else {
@@ -25,6 +31,11 @@ public enum ViftyCtlArguments {
         let rest = Array(arguments.dropFirst())
 
         switch command {
+        case "help", "--help", "-h":
+            guard rest.isEmpty else {
+                throw ViftyCtlParseError.unexpectedArgument(rest[0])
+            }
+            return .help
         case "status":
             try validateOptions(rest, flagOnly: ["--json"], valueFlags: [])
             return .status(json: rest.contains("--json"))
