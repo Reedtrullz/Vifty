@@ -105,11 +105,10 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh --mode \"$(RELEASE_METADATA_MODE)\""))
-        XCTAssertTrue(makefile.contains("SWIFT_TEST_WARNING_ARGS = -Xswiftc -warnings-as-errors"))
-        XCTAssertTrue(makefile.contains("swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS) $(SWIFT_TEST_WARNING_ARGS)"))
-        XCTAssertTrue(makefile.contains("swift test $(SWIFT_BUILD_ARGS) $(SWIFT_TEST_WARNING_ARGS)"))
-        XCTAssertTrue(makefile.contains("swift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS)"))
-        XCTAssertTrue(makefile.contains("swift test $(SWIFT_BUILD_ARGS)"))
+        let contractViolations = warningContractViolations(in: makefile)
+        XCTAssertEqual(contractViolations, [])
+        let unboundMakefile = makefile.replacingOccurrences(of: " $(SWIFT_TEST_WARNING_ARGS)", with: "")
+        XCTAssertFalse(warningContractViolations(in: unboundMakefile).isEmpty)
         XCTAssertTrue(makefile.contains("$(MAKE) $(VERIFY_TEST_TARGET)"))
         XCTAssertTrue(makefile.contains("verify-full: VERIFY_TEST_TARGET = test-full"))
         XCTAssertTrue(makefile.contains("verify-full: verify"))
@@ -295,5 +294,39 @@ final class MakefileTrustGateTests: XCTestCase {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func warningContractViolations(in makefile: String) -> [String] {
+        let lines = makefile.components(separatedBy: "\n")
+        var violations: [String] = []
+        let expectedDefinition = "SWIFT_TEST_WARNING_ARGS = -Xswiftc -warnings-as-errors"
+        let definitions = lines.filter { line in
+            line.hasPrefix("SWIFT_TEST_WARNING_ARGS") && line.contains("=")
+        }
+        if definitions.count != 1 || definitions.first != expectedDefinition {
+            violations.append("warning argument definition must appear exactly once")
+        }
+
+        for (target, expectedRecipe) in [
+            ("test-fast", "\tswift test $(SWIFT_BUILD_ARGS) $(SLOW_TEST_SKIP_ARGS) $(SWIFT_TEST_WARNING_ARGS)"),
+            ("test-full", "\tswift test $(SWIFT_BUILD_ARGS) $(SWIFT_TEST_WARNING_ARGS)")
+        ] {
+            let headers = lines.indices.filter { lines[$0].hasPrefix("\(target):") }
+            guard headers.count == 1, let header = headers.first else {
+                violations.append("\(target) target must appear exactly once")
+                continue
+            }
+            var block = [lines[header]]
+            var index = header + 1
+            while index < lines.count, lines[index].isEmpty || lines[index].hasPrefix("\t") {
+                block.append(lines[index])
+                index += 1
+            }
+            let swiftTestRecipes = block.filter { $0.hasPrefix("\tswift test ") }
+            if swiftTestRecipes != [expectedRecipe] {
+                violations.append("\(target) recipe must invoke Swift tests with warning arguments")
+            }
+        }
+        return violations
     }
 }
