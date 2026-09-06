@@ -481,7 +481,7 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
                 ownershipStatusError: fanControlOwnershipStatusError
             ),
             daemonRuntimeMatchesExpectedCheck(daemonRuntime),
-            supportedHardwareCheck(snapshot),
+            supportedHardwareCheck(snapshot, snapshotError: daemonSnapshotError),
             agentControlEnabledCheck(agentControl),
             temperatureSensorsPresentCheck(snapshot),
             controllableFansPresentCheck(controllableFans),
@@ -859,7 +859,19 @@ public struct ViftyCtlReadinessReport: Codable, Equatable, Sendable {
         )
     }
 
-    private static func supportedHardwareCheck(_ snapshot: HardwareSnapshot) -> ViftyCtlReadinessCheck {
+    private static func supportedHardwareCheck(
+        _ snapshot: HardwareSnapshot,
+        snapshotError: String?
+    ) -> ViftyCtlReadinessCheck {
+        guard snapshotError == nil else {
+            return ViftyCtlReadinessCheck(
+                id: "supportedHardware",
+                severity: .error,
+                passed: false,
+                message: "Supported hardware could not be determined because the daemon hardware snapshot is unavailable."
+            )
+        }
+
         let passed = snapshot.isAppleSilicon && snapshot.isMacBookPro
         return ViftyCtlReadinessCheck(
             id: "supportedHardware",

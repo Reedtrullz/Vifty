@@ -890,6 +890,15 @@ final class ViftyCtlRunnerTests: XCTestCase {
                 && (check["passed"] as? Bool) == false
                 && (check["severity"] as? String) == "error"
         })
+        XCTAssertTrue(checks.contains { check in
+            guard (check["id"] as? String) == "supportedHardware",
+                  let message = check["message"] as? String else {
+                return false
+            }
+            return (check["passed"] as? Bool) == false
+                && message.contains("could not be determined")
+                && !message.contains("supported only")
+        })
     }
 
     func testDiagnoseJSONReturnsBlockedReportWhenAgentControlStatusFails() async throws {

@@ -186,6 +186,33 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.agentControlStatusError)
     }
 
+    func testKnownUnsupportedHardwareRetainsExistingBlockerAndCopy() {
+        let report = ViftyCtlReadinessReport.make(
+            snapshot: HardwareSnapshot(
+                fans: [],
+                temperatureSensors: [],
+                modelIdentifier: "Mac14,15",
+                isAppleSilicon: false,
+                isMacBookPro: false,
+                capturedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            agentControl: AgentControlStatus(
+                enabled: false,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil
+            ),
+            thermalPressure: .nominal,
+            generatedAt: Date(timeIntervalSince1970: 1_000)
+        )
+
+        let check = report.checks.first { $0.id == "supportedHardware" }
+        XCTAssertEqual(check?.passed, false)
+        XCTAssertTrue(check?.message.contains("supported only") == true)
+        XCTAssertTrue(report.failedCheckIDs.contains("supportedHardware"))
+        XCTAssertTrue(report.coolingBlockerIDs.contains("supportedHardware"))
+    }
+
     func testDiagnoseBlockedHelperUnreachableExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-blocked-helper-unreachable.json")
 
