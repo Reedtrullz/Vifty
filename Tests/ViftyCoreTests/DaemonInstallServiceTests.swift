@@ -77,6 +77,30 @@ final class DaemonInstallServiceTests: XCTestCase {
         }
     }
 
+    func testSystemRunnerDrainsLargeOutputWithoutDeadlock() async throws {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-output-" + UUID().uuidString + ".sh")
+        defer { try? FileManager.default.removeItem(at: script) }
+        try Data("#!/bin/bash\ncat >/dev/null\ndd if=/dev/zero bs=262144 count=1 2>/dev/null\ndd if=/dev/zero bs=262144 count=1 1>&2 2>/dev/null\nexit 0\n".utf8)
+            .write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+
+        let resultBox = ProcessOutputBox()
+        let completion = expectation(description: "high-output process completes")
+        let maximumBytesPerStream = 64 * 1_024
+        Task {
+            defer { completion.fulfill() }
+            await resultBox.set(try? await DaemonInstallProcessRunner.system.run(script, [], Data("input\n".utf8)))
+        }
+
+        await fulfillment(of: [completion], timeout: 2)
+        let output = await resultBox.value
+        let result = try XCTUnwrap(output)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertLessThanOrEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
+        XCTAssertLessThanOrEqual(result.standardError.utf8.count, maximumBytesPerStream)
+    }
+
     func testBundledLoaderAcceptsOnlyTheReviewedLifecycleScriptBytes() throws {
         let reviewedScript = repositoryRoot.appendingPathComponent("scripts/vifty-helper-lifecycle.sh")
         let expectedData = try Data(contentsOf: reviewedScript)
@@ -213,5 +237,13 @@ private actor InstallRunnerRecorder {
             standardInput: standardInput,
             ranOnMainThread: ranOnMainThread
         )
+    }
+}
+
+private actor ProcessOutputBox {
+    private(set) var value: DaemonInstallProcessOutput?
+
+    func set(_ value: DaemonInstallProcessOutput?) {
+        self.value = value
     }
 }
