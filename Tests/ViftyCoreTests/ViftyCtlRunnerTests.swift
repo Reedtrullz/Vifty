@@ -396,6 +396,42 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
     }
 
+    func testCapabilitiesJSONBoundsPolicyPersistenceMessage() async throws {
+        let messages = [
+            "",
+            String(repeating: "x", count: AgentControlRequest.maximumReasonLength + 1)
+        ]
+
+        for originalMessage in messages {
+            let runner = ViftyCtlRunner(
+                client: FakeAgentControlClient(status: AgentControlStatus(
+                    enabled: true,
+                    activeLease: nil,
+                    lastDecision: nil,
+                    lastErrorCode: nil,
+                    policy: AgentControlPolicy(enabled: true).snapshot,
+                    persistenceHealth: AgentControlPersistenceHealth(
+                        policyStatusAvailable: false,
+                        policyError: originalMessage,
+                        auditStatusAvailable: true,
+                        auditError: nil
+                    )
+                )),
+                processRunner: FakeProcessRunner()
+            )
+
+            let result = try await runner.run(.capabilities(json: true))
+            let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let message = try XCTUnwrap(json["agentControlStatusError"] as? String)
+            let expected = originalMessage.isEmpty
+                ? "Agent-control policy persistence is unavailable."
+                : String(originalMessage.prefix(AgentControlRequest.maximumReasonLength))
+            XCTAssertEqual(message, expected)
+            XCTAssertLessThanOrEqual(message.count, AgentControlRequest.maximumReasonLength)
+        }
+    }
+
     func testCapabilitiesJSONReturnsStaticContractWhenDaemonStatusUnavailable() async throws {
         let runner = ViftyCtlRunner(
             client: FakeAgentControlClient(

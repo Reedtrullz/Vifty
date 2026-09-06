@@ -1349,6 +1349,8 @@ public struct ViftyCtlDaemonClient: ViftyCtlAgentControlClient {
 }
 
 public struct ViftyCtlRunner: Sendable {
+    private static let policyPersistenceFallbackMessage = "Agent-control policy persistence is unavailable."
+
     private let client: any ViftyCtlAgentControlClient
     private let processRunner: any ViftyCtlProcessRunning
     private let thermalReader: @Sendable () -> ThermalPressure
@@ -1764,8 +1766,7 @@ public struct ViftyCtlRunner: Sendable {
                     policySource: .fallbackUnavailable,
                     daemonStatusAvailable: true,
                     policyStatusAvailable: false,
-                    agentControlStatusError: status.persistenceHealth.policyError
-                        ?? "Agent-control policy persistence is unavailable."
+                    agentControlStatusError: Self.boundedPolicyPersistenceMessage(status.persistenceHealth.policyError)
                 )
             }
             return ViftyCtlCapabilities(
@@ -1781,6 +1782,17 @@ public struct ViftyCtlRunner: Sendable {
                 agentControlStatusError: error.localizedDescription
             )
         }
+    }
+
+    private static func boundedPolicyPersistenceMessage(_ message: String?) -> String {
+        guard let message else {
+            return policyPersistenceFallbackMessage
+        }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return policyPersistenceFallbackMessage
+        }
+        return String(trimmed.prefix(AgentControlRequest.maximumReasonLength))
     }
 
     private func diagnoseReport() async -> ViftyCtlReadinessReport {
