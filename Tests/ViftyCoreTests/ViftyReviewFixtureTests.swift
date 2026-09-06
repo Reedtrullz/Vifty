@@ -97,7 +97,6 @@ final class ViftyReviewFixtureTests: XCTestCase {
         let root = fixtureRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let executable = try writeExecutableFixture(in: root)
-        // Match the observed WindowServer setting so this test isolates lifecycle scheduling.
         let request = try fixtureRequest(
             root: root,
             captureID: "capture-schema-v3",
@@ -167,6 +166,7 @@ final class ViftyReviewFixtureTests: XCTestCase {
         let root = fixtureRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let executable = try writeExecutableFixture(in: root)
+        // Match the observed WindowServer setting so this test isolates lifecycle scheduling.
         let request = try fixtureRequest(
             root: root,
             captureID: "capture-hosted-scene",
