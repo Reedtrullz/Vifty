@@ -166,11 +166,12 @@ final class ViftyReviewFixtureTests: XCTestCase {
         let root = fixtureRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let executable = try writeExecutableFixture(in: root)
-        // Match the observed WindowServer setting so this test isolates lifecycle scheduling.
+        let workspace = NSWorkspace.shared
         let request = try fixtureRequest(
             root: root,
             captureID: "capture-hosted-scene",
-            transparency: .reduced
+            contrast: workspace.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard,
+            transparency: workspace.accessibilityDisplayShouldReduceTransparency ? .reduced : .standard
         )
         let runtime = try ViftyReviewFixtureRuntime(
             request: request,
@@ -1407,6 +1408,7 @@ final class ViftyReviewFixtureTests: XCTestCase {
         state: ViftyReviewFixtureState = .healthyAuto,
         surface: ViftyReviewFixtureSurface = .main,
         window: ViftyReviewFixtureWindow = .standard,
+        contrast: ViftyReviewFixtureContrast = .standard,
         transparency: ViftyReviewFixtureTransparency = .standard,
         interaction: ViftyReviewFixtureInteraction = .none,
         expectedExecutableSHA256: String? = nil
@@ -1416,6 +1418,7 @@ final class ViftyReviewFixtureTests: XCTestCase {
             "--ui-review-fixture", state.rawValue,
             "--ui-review-surface", surface.rawValue,
             "--ui-review-window", window.rawValue,
+            "--ui-review-contrast", contrast.rawValue,
             "--ui-review-transparency", transparency.rawValue,
             "--ui-review-interaction", interaction.rawValue,
             "--ui-review-capture-id", captureID,

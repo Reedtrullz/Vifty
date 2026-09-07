@@ -258,8 +258,8 @@ final class ReleaseGovernanceScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("must not replace a checker input"), result.stderr)
         XCTAssertEqual(try Data(contentsOf: fixture.repoURL), originalFixtureBytes)
 
-        let gitMetadataOutput = repositoryRoot
-            .appendingPathComponent(".git/refs/tags")
+        let gitMetadataOutput = try repositoryGitCommonDirectory(from: repositoryRoot)
+            .appendingPathComponent("refs/tags")
             .appendingPathComponent("vifty-governance-output-\(UUID().uuidString)")
         result = try runChecker(fixture, outputURL: gitMetadataOutput)
 

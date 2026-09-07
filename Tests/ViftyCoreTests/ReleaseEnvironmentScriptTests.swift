@@ -110,8 +110,8 @@ final class ReleaseEnvironmentScriptTests: XCTestCase {
         XCTAssertTrue(trackedResult.stderr.contains("must not replace a tracked worktree path"))
         XCTAssertEqual(try Data(contentsOf: trackedURL), trackedBefore)
 
-        let refURL = repositoryRoot
-            .appendingPathComponent(".git/refs/tags/vifty-environment-output-\(UUID().uuidString)")
+        let refURL = try repositoryGitCommonDirectory(from: repositoryRoot)
+            .appendingPathComponent("refs/tags/vifty-environment-output-\(UUID().uuidString)")
         let metadataResult = try runChecker(fixture: fixture, output: refURL)
         XCTAssertEqual(metadataResult.exitCode, 65)
         XCTAssertTrue(metadataResult.stderr.contains("must not be inside Git metadata"))
@@ -730,6 +730,27 @@ final class ReleaseEnvironmentScriptTests: XCTestCase {
     private func readJSON(_ url: URL) throws -> [String: Any] {
         try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
+}
+
+func repositoryGitCommonDirectory(from repositoryRoot: URL) throws -> URL {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+    process.arguments = [
+        "-C", repositoryRoot.path,
+        "rev-parse", "--path-format=absolute", "--git-common-dir"
+    ]
+    let stdout = Pipe()
+    process.standardOutput = stdout
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        throw NSError(domain: "ViftyTests.Git", code: Int(process.terminationStatus))
+    }
+    let path = String(
+        decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
+        as: UTF8.self
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    return URL(fileURLWithPath: path, isDirectory: true)
 }
 
 private struct ReleaseEnvironmentProcessResult {
