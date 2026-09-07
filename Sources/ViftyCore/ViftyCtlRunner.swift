@@ -1806,14 +1806,13 @@ public struct ViftyCtlRunner: Sendable {
 
     private func diagnoseReport() async -> ViftyCtlReadinessReport {
         let generatedAt = now()
-        async let snapshotProbe = capture { try await client.snapshot() }
-        async let statusProbe = capture { try await client.status() }
-        async let ownershipProbe = capture { try await client.fanControlOwnershipStatus() }
-        let (snapshotResult, statusResult, ownershipResult) = await (
-            snapshotProbe,
-            statusProbe,
-            ownershipProbe
-        )
+        // Keep async-let lifetimes nested to avoid Swift 6.1 task-stack misordering (swiftlang/swift#81771).
+        let (snapshotResult, statusResult, ownershipResult) = await {
+            async let snapshotProbe = capture { try await client.snapshot() }
+            async let statusProbe = capture { try await client.status() }
+            async let ownershipProbe = capture { try await client.fanControlOwnershipStatus() }
+            return await (snapshotProbe, statusProbe, ownershipProbe)
+        }()
 
         let snapshot: HardwareSnapshot
         let daemonSnapshotError: String?
