@@ -54,6 +54,7 @@ public struct AXSystemReader: AXReadAdapter {
     static func treatsGenericFailureAsMissing(errorCode: Int32, attribute: String) -> Bool {
         guard errorCode == AXError.failure.rawValue else { return false }
         return attribute == AXReadAttribute.identifier
+            || attribute == AXReadAttribute.description
             || attribute == AXReadAttribute.valueDescription
     }
 
@@ -159,8 +160,8 @@ public struct AXSystemReader: AXReadAdapter {
         var value: CFTypeRef?
         let error = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
         if error == .attributeUnsupported || error == .noValue { return nil }
-        // SwiftUI can return the generic AX failure when optional identifier
-        // or value-description metadata is absent instead of returning
+        // SwiftUI can return the generic AX failure when optional identifier,
+        // description, or value-description metadata is absent instead of returning
         // `noValue`. Required identifiers are still enforced by exact target
         // matching and semantic predicates; every other failure stays closed.
         if Self.treatsGenericFailureAsMissing(errorCode: error.rawValue, attribute: attribute) {

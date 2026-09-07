@@ -18,7 +18,7 @@ final class AXCollectorAdapterTests: XCTestCase {
                 attribute: AXReadAttribute.identifier
             )
         )
-        XCTAssertFalse(
+        XCTAssertTrue(
             AXSystemReader.treatsGenericFailureAsMissing(
                 errorCode: -25_200,
                 attribute: AXReadAttribute.description
