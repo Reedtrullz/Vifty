@@ -46,7 +46,8 @@
             "INVALID_ARGUMENTS",
             "CHILD_COMMAND_FAILED",
             "PREPARE_RATE_LIMITED",
-            "RESTORE_REQUESTED"
+            "RESTORE_REQUESTED",
+            "PERSISTENCE_FAILURE"
           ]
         },
         {

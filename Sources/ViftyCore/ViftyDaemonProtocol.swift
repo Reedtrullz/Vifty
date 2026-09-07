@@ -420,6 +420,8 @@ public enum XPCSnapshotCoding {
 }
 
 public enum XPCAgentControlCoding {
+    private static let missingPersistenceHealthMessage = "Persistence health unavailable from older daemon response."
+
     public static func encode(_ request: AgentControlRequest) -> NSDictionary {
         [
             "workload": request.workload.rawValue,
@@ -465,6 +467,12 @@ public enum XPCAgentControlCoding {
         if let policy = status.policy {
             encoded["policy"] = encodePolicy(policy)
         }
+        encoded["persistenceHealth"] = [
+            "policyStatusAvailable": status.persistenceHealth.policyStatusAvailable,
+            "policyError": status.persistenceHealth.policyError.map { $0 as Any } ?? NSNull(),
+            "auditStatusAvailable": status.persistenceHealth.auditStatusAvailable,
+            "auditError": status.persistenceHealth.auditError.map { $0 as Any } ?? NSNull()
+        ]
         return encoded as NSDictionary
     }
 
@@ -509,12 +517,37 @@ public enum XPCAgentControlCoding {
             policy = decodedPolicy
         }
 
+        let persistenceHealth: AgentControlPersistenceHealth
+        if let value = dictionary["persistenceHealth"] {
+            guard let healthDictionary = value as? NSDictionary,
+                  let policyStatusAvailable = boolValue(healthDictionary["policyStatusAvailable"]),
+                  let auditStatusAvailable = boolValue(healthDictionary["auditStatusAvailable"]),
+                  (healthDictionary["policyError"] == nil || healthDictionary["policyError"] is String || healthDictionary["policyError"] is NSNull),
+                  (healthDictionary["auditError"] == nil || healthDictionary["auditError"] is String || healthDictionary["auditError"] is NSNull) else {
+                return nil
+            }
+            persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: policyStatusAvailable,
+                policyError: healthDictionary["policyError"] as? String,
+                auditStatusAvailable: auditStatusAvailable,
+                auditError: healthDictionary["auditError"] as? String
+            )
+        } else {
+            persistenceHealth = AgentControlPersistenceHealth(
+                policyStatusAvailable: false,
+                policyError: Self.missingPersistenceHealthMessage,
+                auditStatusAvailable: false,
+                auditError: Self.missingPersistenceHealthMessage
+            )
+        }
+
         return AgentControlStatus(
             enabled: enabled,
             activeLease: activeLease,
             lastDecision: lastDecision,
             lastErrorCode: lastErrorCode,
-            policy: policy
+            policy: policy,
+            persistenceHealth: persistenceHealth
         )
     }
 

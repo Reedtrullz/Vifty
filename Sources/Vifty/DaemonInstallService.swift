@@ -24,6 +24,20 @@ struct DaemonInstallProcessOutput: Equatable, Sendable {
     var standardError: String
 }
 
+private actor BoundedProcessOutput {
+    static let maximumBytesPerStream = 64 * 1_024
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        guard data.count < Self.maximumBytesPerStream else { return }
+        data.append(chunk.prefix(Self.maximumBytesPerStream - data.count))
+    }
+
+    func snapshot() -> Data {
+        data
+    }
+}
+
 struct DaemonInstallProcessRunner: Sendable {
     let run: @Sendable (URL, [String], Data) async throws -> DaemonInstallProcessOutput
 
@@ -45,26 +59,68 @@ struct DaemonInstallProcessRunner: Sendable {
             let inputPipe = Pipe()
             let outputPipe = Pipe()
             let errorPipe = Pipe()
+            let inputHandle = inputPipe.fileHandleForWriting
+            let outputHandle = outputPipe.fileHandleForReading
+            let errorHandle = errorPipe.fileHandleForReading
             process.standardInput = inputPipe
             process.standardOutput = outputPipe
             process.standardError = errorPipe
+            defer {
+                try? inputHandle.close()
+                try? outputHandle.close()
+                try? errorHandle.close()
+            }
             try process.run()
+            let output = BoundedProcessOutput()
+            let error = BoundedProcessOutput()
+            let outputReader = Task.detached(priority: .userInitiated) {
+                do {
+                    while let chunk = try outputHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+                        await output.append(chunk)
+                    }
+                } catch {
+                    return
+                }
+            }
+            let errorReader = Task.detached(priority: .userInitiated) {
+                do {
+                    while let chunk = try errorHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+                        await error.append(chunk)
+                    }
+                } catch {
+                    return
+                }
+            }
             do {
-                try inputPipe.fileHandleForWriting.write(contentsOf: standardInput)
-                try inputPipe.fileHandleForWriting.close()
+                try inputHandle.write(contentsOf: standardInput)
+                try inputHandle.close()
             } catch {
                 process.terminate()
+                try? inputHandle.close()
+                try? outputHandle.close()
+                try? errorHandle.close()
+                let deadline = Date().addingTimeInterval(0.25)
+                while process.isRunning && Date() < deadline {
+                    usleep(10_000)
+                }
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                }
+                outputReader.cancel()
+                errorReader.cancel()
                 throw error
             }
             process.waitUntilExit()
+            _ = await outputReader.value
+            _ = await errorReader.value
             return DaemonInstallProcessOutput(
                 terminationStatus: process.terminationStatus,
                 standardOutput: String(
-                    decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
+                    decoding: await output.snapshot(),
                     as: UTF8.self
                 ),
                 standardError: String(
-                    decoding: errorPipe.fileHandleForReading.readDataToEndOfFile(),
+                    decoding: await error.snapshot(),
                     as: UTF8.self
                 )
             )

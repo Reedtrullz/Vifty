@@ -181,7 +181,7 @@ module ViftyUIReview
       }
       write_json_atomic(session_path, session, containment_root: evidence_root)
 
-      readiness_deadline = monotonic_now + options.fetch(:timeout_seconds)
+      deadline = monotonic_now + options.fetch(:timeout_seconds)
       fixture_arguments = fixture_arguments(
         request: request,
         capture_id: capture_id,
@@ -189,8 +189,7 @@ module ViftyUIReview
         screenshot_path: screenshot_path,
         completion_path: completion_path,
         executable_sha: debug_sha,
-        timeout_seconds: options.fetch(:fixture_hold_seconds),
-        readiness_deadline: readiness_deadline
+        timeout_seconds: options.fetch(:fixture_hold_seconds)
       )
       process_log = open_output_file(
         process_log_path,
@@ -208,7 +207,6 @@ module ViftyUIReview
       session["processIdentifier"] = pid
       write_json_atomic(session_path, session, containment_root: evidence_root)
 
-      deadline = readiness_deadline
       report = wait_for_report(
         path: report_path,
         phase: "ready",
@@ -761,7 +759,7 @@ module ViftyUIReview
       row[kind == "fixture" ? "state" : "id"]
     end
 
-    def fixture_arguments(request:, capture_id:, output_path:, screenshot_path:, completion_path:, executable_sha:, timeout_seconds:, readiness_deadline:)
+    def fixture_arguments(request:, capture_id:, output_path:, screenshot_path:, completion_path:, executable_sha:, timeout_seconds:)
       arguments = [
         "-ApplePersistenceIgnoreState", "YES",
         "--ui-review-fixture", request.fetch("state"),
@@ -776,7 +774,6 @@ module ViftyUIReview
         "--ui-review-output", output_path,
         "--ui-review-completion-file", completion_path,
         "--ui-review-timeout-seconds", timeout_seconds.to_s,
-        "--ui-review-readiness-deadline-uptime", readiness_deadline.to_s,
         "--ui-review-executable-sha256", executable_sha
       ]
       arguments.concat(["--ui-review-screenshot", screenshot_path]) if screenshot_path

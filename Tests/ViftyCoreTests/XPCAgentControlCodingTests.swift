@@ -13,6 +13,12 @@ final class XPCAgentControlCodingTests: XCTestCase {
 
     func testStatusRoundTripsThroughNSDictionary() {
         let created = Date(timeIntervalSince1970: 1_000)
+        let health = AgentControlPersistenceHealth(
+            policyStatusAvailable: false,
+            policyError: "policy unreadable",
+            auditStatusAvailable: true,
+            auditError: nil
+        )
         let status = AgentControlStatus(
             enabled: true,
             activeLease: AgentCoolingLease(
@@ -24,7 +30,8 @@ final class XPCAgentControlCodingTests: XCTestCase {
             ),
             lastDecision: .denied(.prepareRateLimited, message: "Wait", retryAfterSeconds: 12),
             lastErrorCode: .prepareRateLimited,
-            policy: AgentControlPolicy(enabled: true, minimumAgentRPMPercent: 40, maximumAllowedRPMPercent: 75, maxDurationSeconds: 1_800, prepareCooldownSeconds: 12).snapshot
+            policy: AgentControlPolicy(enabled: true, minimumAgentRPMPercent: 40, maximumAllowedRPMPercent: 75, maxDurationSeconds: 1_800, prepareCooldownSeconds: 12).snapshot,
+            persistenceHealth: health
         )
 
         let encoded = XPCAgentControlCoding.encode(status)
@@ -33,6 +40,30 @@ final class XPCAgentControlCodingTests: XCTestCase {
         XCTAssertEqual(decoded, status)
         XCTAssertEqual(decoded?.lastDecision?.retryAfterSeconds, 12)
         XCTAssertEqual(decoded?.policy?.maximumAllowedRPMPercent, 75)
+    }
+
+    func testPersistenceFailureRoundTripsThroughJSONAndXPC() throws {
+        let status = AgentControlStatus(
+            enabled: false,
+            activeLease: nil,
+            lastDecision: .denied(.persistenceFailure, message: "policy unreadable"),
+            lastErrorCode: .persistenceFailure,
+            policy: AgentControlPolicy(enabled: false).snapshot,
+            persistenceHealth: AgentControlPersistenceHealth(
+                policyStatusAvailable: false,
+                policyError: "policy unreadable",
+                auditStatusAvailable: true,
+                auditError: nil
+            )
+        )
+
+        let json = try JSONDecoder().decode(
+            AgentControlStatus.self,
+            from: JSONEncoder().encode(status)
+        )
+
+        XCTAssertEqual(json, status)
+        XCTAssertEqual(XPCAgentControlCoding.decodeStatus(XPCAgentControlCoding.encode(status)), status)
     }
 
     func testOlderStatusWithoutLeaseStillDecodes() {
@@ -44,6 +75,10 @@ final class XPCAgentControlCodingTests: XCTestCase {
         XCTAssertNil(decoded?.activeLease)
         XCTAssertNil(decoded?.lastDecision)
         XCTAssertNil(decoded?.policy)
+        XCTAssertEqual(decoded?.persistenceHealth.policyStatusAvailable, false)
+        XCTAssertEqual(decoded?.persistenceHealth.auditStatusAvailable, false)
+        XCTAssertEqual(decoded?.persistenceHealth.policyError, "Persistence health unavailable from older daemon response.")
+        XCTAssertEqual(decoded?.persistenceHealth.auditError, "Persistence health unavailable from older daemon response.")
     }
 
     func testAuditEventsRoundTripThroughNSDictionary() {

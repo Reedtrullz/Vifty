@@ -14,6 +14,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .childCommandFailed), .fixChildCommand)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .restoreRequested), .restoreAutoBeforeRetry)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .prepareRateLimited), .waitBeforeRetry)
+        XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .persistenceFailure), .runDiagnose)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: .thermalCritical), .runDiagnose)
         XCTAssertEqual(ViftyCtlCommandErrorRecoveryAction.recommended(for: nil), .runDiagnose)
     }
@@ -110,6 +111,27 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("diagnose"))
         XCTAssertTrue(result.stdout.contains("prepare"))
         XCTAssertTrue(result.stdout.contains("agent-rule"))
+    }
+
+    func testHelpAliasesReturnIdenticalCanonicalUsage() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(),
+            processRunner: FakeProcessRunner()
+        )
+
+        var outputs: [String] = []
+        for argument in ["help", "--help", "-h"] {
+            let command = try ViftyCtlArguments.parse([argument])
+            let result = try await runner.run(command)
+            XCTAssertEqual(result.exitCode, 0)
+            XCTAssertEqual(result.stderr, "")
+            XCTAssertTrue(result.stdout.hasSuffix("\n"))
+            outputs.append(result.stdout)
+        }
+
+        XCTAssertEqual(Set(outputs).count, 1)
+        XCTAssertEqual(outputs.first, ViftyCtlArguments.usage + "\n")
+        XCTAssertFalse(outputs[0].contains("helper-maintenance"))
     }
 
     func testAgentRuleReturnsPasteableRuleWithoutDaemonMutation() async throws {
@@ -389,11 +411,47 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["daemonStatusAvailable"] as? Bool, true)
         XCTAssertEqual(json["policyStatusAvailable"] as? Bool, false)
-        XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.daemonStatus.rawValue)
-        XCTAssertNil(json["agentControlStatusError"] as? String)
+        XCTAssertEqual(json["policySource"] as? String, ViftyCtlPolicySource.fallbackUnavailable.rawValue)
+        XCTAssertEqual(json["agentControlStatusError"] as? String, "Agent-control policy persistence is unavailable.")
         let policy = try XCTUnwrap(json["policy"] as? [String: Any])
         XCTAssertEqual(policy["enabled"] as? Bool, false)
         XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
+    }
+
+    func testCapabilitiesJSONBoundsPolicyPersistenceMessage() async throws {
+        let messages = [
+            "",
+            String(repeating: "x", count: AgentControlRequest.maximumReasonLength + 1)
+        ]
+
+        for originalMessage in messages {
+            let runner = ViftyCtlRunner(
+                client: FakeAgentControlClient(status: AgentControlStatus(
+                    enabled: true,
+                    activeLease: nil,
+                    lastDecision: nil,
+                    lastErrorCode: nil,
+                    policy: AgentControlPolicy(enabled: true).snapshot,
+                    persistenceHealth: AgentControlPersistenceHealth(
+                        policyStatusAvailable: false,
+                        policyError: originalMessage,
+                        auditStatusAvailable: true,
+                        auditError: nil
+                    )
+                )),
+                processRunner: FakeProcessRunner()
+            )
+
+            let result = try await runner.run(.capabilities(json: true))
+            let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let message = try XCTUnwrap(json["agentControlStatusError"] as? String)
+            let expected = originalMessage.isEmpty
+                ? "Agent-control policy persistence is unavailable."
+                : String(originalMessage.prefix(AgentControlRequest.maximumReasonLength))
+            XCTAssertEqual(message, expected)
+            XCTAssertLessThanOrEqual(message.count, AgentControlRequest.maximumReasonLength)
+        }
     }
 
     func testCapabilitiesJSONReturnsStaticContractWhenDaemonStatusUnavailable() async throws {
@@ -454,6 +512,50 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let policy = try XCTUnwrap(json["policy"] as? [String: Any])
         XCTAssertEqual(policy["enabled"] as? Bool, false)
         XCTAssertEqual(policy["maxDurationSeconds"] as? Int, 1_800)
+    }
+
+    func testCapabilitiesHumanReadableDescribesPolicyPersistenceWhenDaemonResponds() async throws {
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: .persistenceFailure,
+                policy: AgentControlPolicy(enabled: true).snapshot,
+                persistenceHealth: AgentControlPersistenceHealth(
+                    policyStatusAvailable: false,
+                    policyError: "policy file unreadable",
+                    auditStatusAvailable: true,
+                    auditError: nil
+                )
+            )),
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.capabilities(json: false))
+
+        XCTAssertEqual(result.exitCode, 69)
+        XCTAssertTrue(result.stderr.contains("policy persistence unavailable"))
+        XCTAssertTrue(result.stderr.contains("policy file unreadable"))
+        XCTAssertFalse(result.stderr.contains("daemon status unavailable"))
+    }
+
+    func testCapabilitiesJSONBoundsDaemonRequestError() async throws {
+        let originalMessage = String(repeating: "x", count: AgentControlRequest.maximumReasonLength + 100)
+        let runner = ViftyCtlRunner(
+            client: FakeAgentControlClient(
+                statusError: ViftyError.helperRejected(originalMessage)
+            ),
+            processRunner: FakeProcessRunner()
+        )
+
+        let result = try await runner.run(.capabilities(json: true))
+
+        let data = try XCTUnwrap(result.stdout.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let message = try XCTUnwrap(json["agentControlStatusError"] as? String)
+        XCTAssertEqual(message.count, AgentControlRequest.maximumReasonLength)
+        XCTAssertTrue(message.hasSuffix(String(repeating: "x", count: 20)))
     }
 
     func testCapabilitiesHumanReadableReturnsCommandsAndUnavailableExitWhenDaemonStatusUnavailable() async throws {
@@ -541,6 +643,44 @@ final class ViftyCtlRunnerTests: XCTestCase {
         let restoreReasonCount = await client.restoreReasonCount
         XCTAssertEqual(prepareRequestCount, 0)
         XCTAssertEqual(restoreReasonCount, 0)
+    }
+
+    func testDiagnoseExposesAuditPersistenceHealthWithoutChangingCoolingReadiness() async throws {
+        let client = FakeAgentControlClient(
+            snapshot: Self.readySnapshot(),
+            status: AgentControlStatus(
+                enabled: true,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil,
+                policy: AgentControlPolicy(enabled: true).snapshot,
+                persistenceHealth: AgentControlPersistenceHealth(
+                    policyStatusAvailable: true,
+                    policyError: nil,
+                    auditStatusAvailable: false,
+                    auditError: "audit file unavailable"
+                )
+            )
+        )
+        let runner = ViftyCtlRunner(
+            client: client,
+            processRunner: FakeProcessRunner(),
+            thermalReader: { .nominal },
+            manualControlActiveReader: { false }
+        )
+
+        let result = try await runner.run(.diagnose(json: true))
+
+        XCTAssertEqual(result.exitCode, 0)
+        let json = try jsonObject(in: result.stdout)
+        XCTAssertEqual(json["safeToRequestCooling"] as? Bool, true)
+        XCTAssertEqual(json["state"] as? String, "ready")
+        let agentControl = try XCTUnwrap(json["agentControl"] as? [String: Any])
+        let persistenceHealth = try XCTUnwrap(agentControl["persistenceHealth"] as? [String: Any])
+        XCTAssertEqual(persistenceHealth["auditStatusAvailable"] as? Bool, false)
+        XCTAssertEqual(persistenceHealth["auditError"] as? String, "audit file unavailable")
+        let checks = try XCTUnwrap(json["checks"] as? [[String: Any]])
+        XCTAssertFalse(checks.contains { ($0["id"] as? String)?.localizedCaseInsensitiveContains("audit") == true })
     }
 
     func testDiagnoseReplacementMaintenanceAttestationDoesNotAssumeTwoFans() async throws {
@@ -808,6 +948,15 @@ final class ViftyCtlRunnerTests: XCTestCase {
             (check["id"] as? String) == "daemonControlPathReady"
                 && (check["passed"] as? Bool) == false
                 && (check["severity"] as? String) == "error"
+        })
+        XCTAssertTrue(checks.contains { check in
+            guard (check["id"] as? String) == "supportedHardware",
+                  let message = check["message"] as? String else {
+                return false
+            }
+            return (check["passed"] as? Bool) == false
+                && message.contains("could not be determined")
+                && !message.contains("supported only")
         })
     }
 

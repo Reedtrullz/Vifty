@@ -67,6 +67,7 @@ Vifty never exposes raw SMC writes through `viftyctl`. Agents request intent: wo
 ## Commands
 
 ```sh
+viftyctl help
 viftyctl status --json
 viftyctl capabilities --json
 viftyctl agent-rule --json

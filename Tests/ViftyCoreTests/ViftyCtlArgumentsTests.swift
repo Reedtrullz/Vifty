@@ -10,6 +10,12 @@ final class ViftyCtlArgumentsTests: XCTestCase {
         assertParseError(["frobnicate"], equals: .unknownCommand("frobnicate"))
     }
 
+    func testParsesHelpAliases() throws {
+        XCTAssertEqual(try ViftyCtlArguments.parse(["help"]), .help)
+        XCTAssertEqual(try ViftyCtlArguments.parse(["--help"]), .help)
+        XCTAssertEqual(try ViftyCtlArguments.parse(["-h"]), .help)
+    }
+
     func testParsesStatusJSON() throws {
         let command = try ViftyCtlArguments.parse(["status", "--json"])
 

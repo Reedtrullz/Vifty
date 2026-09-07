@@ -1,9 +1,190 @@
+import Darwin
 import XCTest
 @testable import ViftyCore
 @testable import Vifty
 
 @MainActor
 final class AppModelPreferencesTests: XCTestCase {
+    func testSaveFailsBeforeReplacingValidPrimaryWhenBackupPreservationFails() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o700)],
+                ofItemAtPath: directory.path
+            )
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let existing = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        let replacement = AppPreferences(
+            menuBarDisplayMode: .averageFanRPM,
+            startupMode: .fixed,
+            notificationSettings: .disabled
+        )
+        let existingData = try JSONEncoder().encode(existing)
+        try existingData.write(to: preferencesURL)
+        let backupURL = preferencesURL.appendingPathExtension("bak")
+        try Data("keep this invalid backup".utf8).write(to: backupURL)
+        XCTAssertEqual(chflags(backupURL.path, UInt32(UF_IMMUTABLE)), 0)
+        defer { _ = chflags(backupURL.path, 0) }
+
+        XCTAssertThrowsError(try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).saveThrowing(replacement))
+        XCTAssertEqual(try Data(contentsOf: preferencesURL), existingData)
+        XCTAssertEqual(try Data(contentsOf: backupURL), Data("keep this invalid backup".utf8))
+    }
+
+    func testAppModelSurfacesPreferenceRecoverySeparatelyFromFanError() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("corrupt primary".utf8).write(to: preferencesURL)
+        let recovered = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        try JSONEncoder().encode(recovered).write(to: preferencesURL.appendingPathExtension("bak"))
+
+        let model = AppModel(
+            preferencesStore: AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        )
+
+        XCTAssertEqual(model.menuBarDisplayMode, .temperature)
+        XCTAssertTrue(model.appPreferencesRecoveryMessage?.contains("backup") == true)
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertNil(model.lastError)
+    }
+
+    func testCorruptPrimaryRecoversValidBackupWithoutMutatingBackup() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
+
+        let backupPreferences = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        let backupData = try JSONEncoder().encode(backupPreferences)
+        let corruptData = Data("corrupt primary".utf8)
+        try corruptData.write(to: preferencesURL)
+        try backupData.write(to: preferencesURL.appendingPathExtension("bak"))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)],
+            ofItemAtPath: preferencesURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)],
+            ofItemAtPath: preferencesURL.appendingPathExtension("bak").path
+        )
+
+        let result = try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).loadResult()
+
+        XCTAssertEqual(result.preferences, backupPreferences)
+        XCTAssertNotNil(result.recoveryMessage)
+        XCTAssertEqual(try Data(contentsOf: preferencesURL.appendingPathExtension("bak")), backupData)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testValidPrimaryLoadRestrictsExistingValidBackupPermissions() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o700)],
+                ofItemAtPath: directory.path
+            )
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let primary = AppPreferences(
+            menuBarDisplayMode: .fanIcon,
+            startupMode: .auto,
+            notificationSettings: .disabled
+        )
+        let backup = AppPreferences(
+            menuBarDisplayMode: .temperature,
+            startupMode: .curve,
+            notificationSettings: .disabled
+        )
+        try JSONEncoder().encode(primary).write(to: preferencesURL)
+        try JSONEncoder().encode(backup).write(to: preferencesURL.appendingPathExtension("bak"))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o644)],
+            ofItemAtPath: preferencesURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o644)],
+            ofItemAtPath: preferencesURL.appendingPathExtension("bak").path
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o755)],
+            ofItemAtPath: directory.path
+        )
+
+        let result = try AppPreferencesStore(url: preferencesURL, legacyDefaults: nil).loadResult()
+
+        XCTAssertEqual(result.preferences, primary)
+        XCTAssertEqual(try posixPermissions(at: directory), 0o700)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL), 0o600)
+        XCTAssertEqual(try posixPermissions(at: preferencesURL.appendingPathExtension("bak")), 0o600)
+    }
+
+    func testCorruptPrimaryAndBackupUseVisibleDefaultsRecoveryState() throws {
+        let preferencesURL = temporaryPreferencesPath()
+        let directory = preferencesURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("corrupt primary".utf8).write(to: preferencesURL)
+        try Data("corrupt backup".utf8).write(to: preferencesURL.appendingPathExtension("bak"))
+
+        let model = AppModel(
+            preferencesStore: AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        )
+
+        XCTAssertEqual(model.menuBarDisplayMode, AppPreferences.defaults.menuBarDisplayMode)
+        XCTAssertTrue(model.appPreferencesRecoveryMessage?.localizedCaseInsensitiveContains("defaults") == true)
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertNil(model.lastError)
+    }
+
+    func testPreferenceSaveFailureIsSeparateAndRetryClearsMessage() throws {
+        let root = temporaryPreferencesPath().deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let invalidParent = root.appendingPathComponent("preferences-parent")
+        try Data("not a directory".utf8).write(to: invalidParent)
+        let preferencesURL = invalidParent.appendingPathComponent("app-preferences.json")
+        let store = AppPreferencesStore(url: preferencesURL, legacyDefaults: nil)
+        let model = AppModel(preferencesStore: store)
+        model.lastError = "fan control failure"
+
+        model.menuBarDisplayMode = .temperature
+
+        XCTAssertTrue(model.appPreferencesPersistenceMessage?.hasPrefix("Settings were not saved:") == true)
+        XCTAssertEqual(model.lastError, "fan control failure")
+
+        try FileManager.default.removeItem(at: invalidParent)
+        try FileManager.default.createDirectory(at: invalidParent, withIntermediateDirectories: true)
+        model.retryAppPreferencesSave()
+
+        XCTAssertNil(model.appPreferencesPersistenceMessage)
+        XCTAssertEqual(store.load().menuBarDisplayMode, .temperature)
+    }
+
     func testSaveProfileWithDuplicateNameRequiresConfirmationAndPreservesIdentity() throws {
         let model = AppModel()
         model.savedProfiles = []

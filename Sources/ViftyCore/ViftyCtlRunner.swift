@@ -845,7 +845,8 @@ public enum ViftyCtlCommandErrorRecoveryAction: String, Codable, Equatable, Send
              .rpmOutOfRange,
              .thermalCritical,
              .leaseNotFound,
-             .restoreFailed:
+             .restoreFailed,
+             .persistenceFailure:
             return .runDiagnose
         }
     }
@@ -1163,6 +1164,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
     public var lastDecision: AgentControlDecision?
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
+    public var persistenceHealth: AgentControlPersistenceHealth
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -1173,6 +1175,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         case lastDecision
         case lastErrorCode
         case policy
+        case persistenceHealth
     }
 
     // Emit nil optionals as explicit JSON nulls so the status schema's required
@@ -1187,6 +1190,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         try container.encode(lastDecision, forKey: .lastDecision)
         try container.encode(lastErrorCode, forKey: .lastErrorCode)
         try container.encode(policy, forKey: .policy)
+        try container.encode(persistenceHealth, forKey: .persistenceHealth)
     }
 
     public init(
@@ -1203,6 +1207,7 @@ public struct ViftyCtlStatusReport: Codable, Equatable, Sendable {
         self.lastDecision = status.lastDecision
         self.lastErrorCode = status.lastErrorCode
         self.policy = status.policy
+        self.persistenceHealth = status.persistenceHealth
     }
 }
 
@@ -1344,6 +1349,8 @@ public struct ViftyCtlDaemonClient: ViftyCtlAgentControlClient {
 }
 
 public struct ViftyCtlRunner: Sendable {
+    private static let policyPersistenceFallbackMessage = "Agent-control policy persistence is unavailable."
+
     private let client: any ViftyCtlAgentControlClient
     private let processRunner: any ViftyCtlProcessRunning
     private let thermalReader: @Sendable () -> ThermalPressure
@@ -1391,6 +1398,8 @@ public struct ViftyCtlRunner: Sendable {
     public func run(_ command: ViftyCtlCommand) async throws -> ViftyCtlResult {
         do {
             switch command {
+            case .help:
+                return ViftyCtlResult(stdout: ViftyCtlArguments.usage + "\n")
             case .status(let json):
                 let status = try await client.status()
                 let stdout = try formatStatus(status, json: json)
@@ -1406,7 +1415,10 @@ public struct ViftyCtlRunner: Sendable {
                 }
                 let stderr: String
                 if let error = capabilities.agentControlStatusError {
-                    stderr = "viftyctl capabilities: daemon status unavailable; policy is a disabled fallback: \(error)\n"
+                    let source = capabilities.daemonStatusAvailable
+                        ? "policy persistence unavailable"
+                        : "daemon status unavailable"
+                    stderr = "viftyctl capabilities: \(source); policy is a disabled fallback: \(error)\n"
                 } else if !capabilities.policyStatusAvailable {
                     stderr = "viftyctl capabilities: daemon returned no usable policy; policy is a disabled fallback\n"
                 } else {
@@ -1631,6 +1643,8 @@ public struct ViftyCtlRunner: Sendable {
 
     private func jsonRequested(for command: ViftyCtlCommand) -> Bool {
         switch command {
+        case .help:
+            return false
         case .status(let json),
              .capabilities(let json),
              .agentRule(let json),
@@ -1651,6 +1665,8 @@ public struct ViftyCtlRunner: Sendable {
 
     private func commandName(for command: ViftyCtlCommand) -> String {
         switch command {
+        case .help:
+            return "help"
         case .status:
             return "status"
         case .capabilities:
@@ -1752,10 +1768,19 @@ public struct ViftyCtlRunner: Sendable {
     private func capabilitiesReport() async -> ViftyCtlCapabilities {
         do {
             let status = try await client.status()
-            let policy = status.policy ?? AgentControlPolicy(enabled: false).snapshot
+            guard let policy = status.policy,
+                  status.persistenceHealth.policyStatusAvailable else {
+                return ViftyCtlCapabilities(
+                    policy: AgentControlPolicy(enabled: false).snapshot,
+                    policySource: .fallbackUnavailable,
+                    daemonStatusAvailable: true,
+                    policyStatusAvailable: false,
+                    agentControlStatusError: Self.boundedPolicyPersistenceMessage(status.persistenceHealth.policyError)
+                )
+            }
             return ViftyCtlCapabilities(
                 policy: policy,
-                policyStatusAvailable: status.policy != nil
+                policyStatusAvailable: true
             )
         } catch {
             return ViftyCtlCapabilities(
@@ -1763,21 +1788,31 @@ public struct ViftyCtlRunner: Sendable {
                 policySource: .fallbackUnavailable,
                 daemonStatusAvailable: false,
                 policyStatusAvailable: false,
-                agentControlStatusError: error.localizedDescription
+                agentControlStatusError: Self.boundedPolicyPersistenceMessage(error.localizedDescription)
             )
         }
     }
 
+    private static func boundedPolicyPersistenceMessage(_ message: String?) -> String {
+        guard let message else {
+            return policyPersistenceFallbackMessage
+        }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return policyPersistenceFallbackMessage
+        }
+        return String(trimmed.prefix(AgentControlRequest.maximumReasonLength))
+    }
+
     private func diagnoseReport() async -> ViftyCtlReadinessReport {
         let generatedAt = now()
-        async let snapshotProbe = capture { try await client.snapshot() }
-        async let statusProbe = capture { try await client.status() }
-        async let ownershipProbe = capture { try await client.fanControlOwnershipStatus() }
-        let (snapshotResult, statusResult, ownershipResult) = await (
-            snapshotProbe,
-            statusProbe,
-            ownershipProbe
-        )
+        // Keep async-let lifetimes nested to avoid Swift 6.1 task-stack misordering (swiftlang/swift#81771).
+        let (snapshotResult, statusResult, ownershipResult) = await {
+            async let snapshotProbe = capture { try await client.snapshot() }
+            async let statusProbe = capture { try await client.status() }
+            async let ownershipProbe = capture { try await client.fanControlOwnershipStatus() }
+            return await (snapshotProbe, statusProbe, ownershipProbe)
+        }()
 
         let snapshot: HardwareSnapshot
         let daemonSnapshotError: String?

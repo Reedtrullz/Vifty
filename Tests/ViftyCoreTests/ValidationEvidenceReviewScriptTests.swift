@@ -2597,7 +2597,7 @@ private final class ValidationEvidenceReviewHarness {
             ? [
                 "attempted": true,
                 "retryAfterSeconds": rateLimitRetryAfterSeconds,
-                "initialExitStatus": rateLimitInitialMetadataExitStatus ?? rateLimitInitialExitStatus,
+                "initialExitStatus": (rateLimitInitialMetadataExitStatus ?? rateLimitInitialExitStatus) as Any,
                 "stdout": "viftyctl-run.json",
                 "stderr": "viftyctl-run.stderr"
             ]

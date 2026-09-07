@@ -676,7 +676,7 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
         XCTAssertEqual(identity["executablePath"] as? String, try canonicalFilesystemPath(fixture.debugExecutable))
     }
 
-    func testCaptureModePassesPersistenceIsolationArgumentsToFixtureProcess() throws {
+    func testCaptureModeDoesNotPassCrossRuntimeReadinessDeadlineToFixtureProcess() throws {
         let fixture = try orchestrationFixture(mode: .successful)
         defer { try? FileManager.default.removeItem(at: fixture.root) }
 
@@ -703,14 +703,10 @@ final class UIReviewEvidenceScriptTests: XCTestCase {
             1,
             launchArguments.joined(separator: "\n")
         )
-        let deadlineIndex = try XCTUnwrap(
-            launchArguments.firstIndex(of: "--ui-review-readiness-deadline-uptime")
+        XCTAssertFalse(
+            launchArguments.contains("--ui-review-readiness-deadline-uptime"),
+            launchArguments.joined(separator: "\n")
         )
-        let deadlineValue = try XCTUnwrap(
-            Double(launchArguments[deadlineIndex + 1])
-        )
-        XCTAssertTrue(deadlineValue.isFinite)
-        XCTAssertGreaterThan(deadlineValue, 0)
     }
 
     func testCaptureModePreservesStructuredReadyTimeoutAndCleansUpChild() throws {

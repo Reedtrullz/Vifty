@@ -59,6 +59,11 @@ struct AppPreferences: Codable, Equatable {
     }
 }
 
+struct AppPreferencesLoadResult: Equatable {
+    var preferences: AppPreferences
+    var recoveryMessage: String?
+}
+
 final class AppPreferencesStore: @unchecked Sendable {
     static let legacyMenuBarDisplayModeDefaultsKey = "menuBarDisplayMode"
     static let legacyNotificationHelperFailureDefaultsKey = "notification.helperFailure"
@@ -76,28 +81,49 @@ final class AppPreferencesStore: @unchecked Sendable {
     }
 
     func load() -> AppPreferences {
-        if let data = try? Data(contentsOf: url),
-           let preferences = try? JSONDecoder().decode(AppPreferences.self, from: data) {
-            return preferences
-        }
-
-        // Preserve the unreadable original before any overwrite so a decode
-        // failure never silently destroys the last recoverable copy.
-        if FileManager.default.fileExists(atPath: url.path) {
-            let backup = url.appendingPathExtension("bak")
-            try? FileManager.default.removeItem(at: backup)
-            try? FileManager.default.copyItem(at: url, to: backup)
-        }
-
-        let migrated = migratedPreferences()
-        if migrated != .defaults {
-            try? saveThrowing(migrated)
-        }
-        return migrated
+        (try? loadResult().preferences) ?? migratedPreferences()
     }
 
-    func save(_ preferences: AppPreferences) {
-        try? saveThrowing(preferences)
+    func loadResult() throws -> AppPreferencesLoadResult {
+        let primary = decodePreferences(at: url)
+        switch primary {
+        case .success(let preferences):
+            try restrictDirectoryPermissions()
+            try restrictFilePermissions(at: url)
+            if case .success = decodePreferences(at: backupURL) {
+                try restrictFilePermissions(at: backupURL)
+            }
+            return AppPreferencesLoadResult(preferences: preferences, recoveryMessage: nil)
+        case .missing, .failure:
+            break
+        }
+
+        let backup = decodePreferences(at: backupURL)
+        switch backup {
+        case .success(let preferences):
+            try restrictDirectoryPermissions()
+            try restrictFilePermissions(at: backupURL)
+            if case .failure = primary {
+                quarantinePrimaryIfPossible()
+            }
+            return AppPreferencesLoadResult(
+                preferences: preferences,
+                recoveryMessage: "Vifty loaded its private app-preferences backup."
+            )
+        case .missing, .failure:
+            let migrated = migratedPreferences()
+            if migrated != .defaults {
+                try saveThrowing(migrated)
+            }
+            let recoveryMessage: String?
+            switch (primary, backup) {
+            case (.failure, _), (_, .failure):
+                recoveryMessage = "Vifty could not recover its private app preferences; defaults are in use."
+            default:
+                recoveryMessage = nil
+            }
+            return AppPreferencesLoadResult(preferences: migrated, recoveryMessage: recoveryMessage)
+        }
     }
 
     func saveThrowing(_ preferences: AppPreferences) throws {
@@ -105,9 +131,82 @@ final class AppPreferencesStore: @unchecked Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: directory.path)
 
+        if case .success = decodePreferences(at: url) {
+            let primaryData = try Data(contentsOf: url)
+            try replaceBackup(with: primaryData)
+        }
+
         let data = try JSONEncoder().encode(preferences)
         try data.write(to: url, options: .atomic)
         try restrictFilePermissions(at: url)
+
+        if case .success = decodePreferences(at: backupURL) {
+            try restrictFilePermissions(at: backupURL)
+        } else {
+            try replaceBackup(with: data)
+        }
+    }
+
+    private var backupURL: URL {
+        url.appendingPathExtension("bak")
+    }
+
+    private enum DecodeResult {
+        case success(AppPreferences)
+        case missing
+        case failure
+    }
+
+    private func decodePreferences(at fileURL: URL) -> DecodeResult {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .missing }
+        do {
+            return .success(try JSONDecoder().decode(AppPreferences.self, from: Data(contentsOf: fileURL)))
+        } catch {
+            return .failure
+        }
+    }
+
+    private func replaceBackup(with data: Data) throws {
+        let temporaryURL = backupURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(backupURL.lastPathComponent).\(UUID().uuidString).tmp"
+        )
+        do {
+            try data.write(to: temporaryURL, options: .withoutOverwriting)
+            try restrictFilePermissions(at: temporaryURL)
+            if FileManager.default.fileExists(atPath: backupURL.path) {
+                _ = try FileManager.default.replaceItemAt(
+                    backupURL,
+                    withItemAt: temporaryURL,
+                    backupItemName: nil,
+                    options: []
+                )
+            } else {
+                try FileManager.default.moveItem(at: temporaryURL, to: backupURL)
+            }
+            try restrictFilePermissions(at: backupURL)
+        } catch {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            throw error
+        }
+    }
+
+    private func quarantinePrimaryIfPossible() {
+        let quarantineURL = url.deletingLastPathComponent().appendingPathComponent(
+            ".\(url.lastPathComponent).corrupt.\(UUID().uuidString)"
+        )
+        do {
+            try FileManager.default.moveItem(at: url, to: quarantineURL)
+            try restrictFilePermissions(at: quarantineURL)
+        } catch {
+            // Recovery from a valid backup must not depend on quarantine I/O.
+        }
+    }
+
+    private func restrictDirectoryPermissions() throws {
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: url.deletingLastPathComponent().path
+        )
     }
 
     private func migratedPreferences() -> AppPreferences {

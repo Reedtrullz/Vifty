@@ -12,7 +12,8 @@
     "activeLease",
     "lastDecision",
     "lastErrorCode",
-    "policy"
+    "policy",
+    "persistenceHealth"
   ],
   "properties": {
     "schemaVersion": {
@@ -66,6 +67,9 @@
           "type": "null"
         }
       ]
+    },
+    "persistenceHealth": {
+      "$ref": "#/$defs/persistenceHealth"
     }
   },
   "$defs": {
@@ -94,7 +98,8 @@
         "INVALID_ARGUMENTS",
         "CHILD_COMMAND_FAILED",
         "PREPARE_RATE_LIMITED",
-        "RESTORE_REQUESTED"
+        "RESTORE_REQUESTED",
+        "PERSISTENCE_FAILURE"
       ]
     },
     "request": {
@@ -238,6 +243,35 @@
         "prepareCooldownSeconds": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "persistenceHealth": {
+      "type": "object",
+      "required": [
+        "policyStatusAvailable",
+        "policyError",
+        "auditStatusAvailable",
+        "auditError"
+      ],
+      "properties": {
+        "policyStatusAvailable": {
+          "type": "boolean"
+        },
+        "policyError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "auditStatusAvailable": {
+          "type": "boolean"
+        },
+        "auditError": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

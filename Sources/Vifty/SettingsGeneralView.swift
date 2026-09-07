@@ -23,6 +23,30 @@ struct SettingsGeneralView: View {
 
     var body: some View {
         SettingsPane(accessibilityPane: .general) {
+            if let message = model.appPreferencesPersistenceMessage {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel("Settings were not saved")
+                        .accessibilityValue(message)
+                    Button("Retry Save") {
+                        model.retryAppPreferencesSave()
+                    }
+                    .accessibilityLabel("Retry saving settings")
+                }
+                .viftyFont(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let message = model.appPreferencesRecoveryMessage {
+                Label("Settings recovered", systemImage: "arrow.counterclockwise.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Settings recovered")
+                    .accessibilityValue(message)
+                    .viftyFont(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             updatesSection
 
             Section("Startup") {
@@ -87,6 +111,7 @@ struct SettingsGeneralView: View {
                 isOn: automaticUpdateChecksBinding
             )
             .disabled(!softwareUpdates.canCheck)
+            .accessibilityLabel("Automatically check for updates")
             .accessibilityIdentifier(
                 ViftyAccessibilityIdentifier.settingsUpdateAutomatic
             )

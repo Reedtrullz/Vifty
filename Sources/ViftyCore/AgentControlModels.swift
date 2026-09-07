@@ -34,6 +34,7 @@ public enum AgentControlErrorCode: String, Codable, Equatable, Sendable {
     case childCommandFailed = "CHILD_COMMAND_FAILED"
     case prepareRateLimited = "PREPARE_RATE_LIMITED"
     case restoreRequested = "RESTORE_REQUESTED"
+    case persistenceFailure = "PERSISTENCE_FAILURE"
 }
 
 public struct AgentControlRequest: Codable, Equatable, Sendable {
@@ -142,12 +143,54 @@ public struct AgentCoolingLease: Codable, Equatable, Sendable {
     }
 }
 
+public struct AgentControlPersistenceHealth: Codable, Equatable, Sendable {
+    public var policyStatusAvailable: Bool
+    public var policyError: String?
+    public var auditStatusAvailable: Bool
+    public var auditError: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case policyStatusAvailable
+        case policyError
+        case auditStatusAvailable
+        case auditError
+    }
+
+    public init(
+        policyStatusAvailable: Bool,
+        policyError: String?,
+        auditStatusAvailable: Bool,
+        auditError: String?
+    ) {
+        self.policyStatusAvailable = policyStatusAvailable
+        self.policyError = policyError
+        self.auditStatusAvailable = auditStatusAvailable
+        self.auditError = auditError
+    }
+
+    public static let healthy = Self(
+        policyStatusAvailable: true,
+        policyError: nil,
+        auditStatusAvailable: true,
+        auditError: nil
+    )
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(policyStatusAvailable, forKey: .policyStatusAvailable)
+        try container.encode(policyError, forKey: .policyError)
+        try container.encode(auditStatusAvailable, forKey: .auditStatusAvailable)
+        try container.encode(auditError, forKey: .auditError)
+    }
+}
+
 public struct AgentControlStatus: Codable, Equatable, Sendable {
     public var enabled: Bool
     public var activeLease: AgentCoolingLease?
     public var lastDecision: AgentControlDecision?
     public var lastErrorCode: AgentControlErrorCode?
     public var policy: AgentControlPolicySnapshot?
+    public var persistenceHealth: AgentControlPersistenceHealth
 
     private enum CodingKeys: String, CodingKey {
         case enabled
@@ -155,6 +198,7 @@ public struct AgentControlStatus: Codable, Equatable, Sendable {
         case lastDecision
         case lastErrorCode
         case policy
+        case persistenceHealth
     }
 
     // Emit nil optionals as explicit JSON nulls so strict schema consumers see
@@ -166,6 +210,20 @@ public struct AgentControlStatus: Codable, Equatable, Sendable {
         try container.encode(lastDecision, forKey: .lastDecision)
         try container.encode(lastErrorCode, forKey: .lastErrorCode)
         try container.encode(policy, forKey: .policy)
+        try container.encode(persistenceHealth, forKey: .persistenceHealth)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        activeLease = try container.decodeIfPresent(AgentCoolingLease.self, forKey: .activeLease)
+        lastDecision = try container.decodeIfPresent(AgentControlDecision.self, forKey: .lastDecision)
+        lastErrorCode = try container.decodeIfPresent(AgentControlErrorCode.self, forKey: .lastErrorCode)
+        policy = try container.decodeIfPresent(AgentControlPolicySnapshot.self, forKey: .policy)
+        persistenceHealth = try container.decodeIfPresent(
+            AgentControlPersistenceHealth.self,
+            forKey: .persistenceHealth
+        ) ?? .healthy
     }
 
     public init(
@@ -173,13 +231,15 @@ public struct AgentControlStatus: Codable, Equatable, Sendable {
         activeLease: AgentCoolingLease?,
         lastDecision: AgentControlDecision?,
         lastErrorCode: AgentControlErrorCode?,
-        policy: AgentControlPolicySnapshot? = nil
+        policy: AgentControlPolicySnapshot? = nil,
+        persistenceHealth: AgentControlPersistenceHealth = .healthy
     ) {
         self.enabled = enabled
         self.activeLease = activeLease
         self.lastDecision = lastDecision
         self.lastErrorCode = lastErrorCode
         self.policy = policy
+        self.persistenceHealth = persistenceHealth
     }
 }
 

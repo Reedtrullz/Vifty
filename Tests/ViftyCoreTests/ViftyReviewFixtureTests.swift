@@ -162,6 +162,63 @@ final class ViftyReviewFixtureTests: XCTestCase {
         XCTAssertEqual(stabilizer.consume(matching, request: request), matching)
     }
 
+    func testHostedSceneSchedulesObservationAfterPreparation() async throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = try writeExecutableFixture(in: root)
+        let workspace = NSWorkspace.shared
+        let request = try fixtureRequest(
+            root: root,
+            captureID: "capture-hosted-scene",
+            contrast: workspace.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard,
+            transparency: workspace.accessibilityDisplayShouldReduceTransparency ? .reduced : .standard
+        )
+        let runtime = try ViftyReviewFixtureRuntime(
+            request: request,
+            executableURL: executable,
+            processIdentifier: 42
+        )
+
+        try await runtime.prepare()
+
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: request.window.size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        let hostingView = NSHostingView(
+            rootView: ViftyReviewFixtureSceneHost(
+                runtime: runtime,
+                provenance: "swiftui-main-window"
+            ) {
+                Color.clear
+            }
+        )
+        window.contentView = hostingView
+        window.orderFrontRegardless()
+        window.displayIfNeeded()
+        defer {
+            window.orderOut(nil)
+            window.close()
+        }
+
+        let deadline = Date().addingTimeInterval(2)
+        while !runtime.hasReadyObservation, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        XCTAssertTrue(runtime.hasReadyObservation)
+        let report = runtime.report(phase: "current")
+        XCTAssertTrue(report.passed)
+        XCTAssertTrue(report.modelStartSkipped)
+        XCTAssertEqual(report.runtimeIdentity?.provenance, "swiftui-main-window")
+        XCTAssertTrue(report.recorder.attemptedHardwareCommands.isEmpty)
+        XCTAssertTrue(report.recorder.attemptedExternalMutations.isEmpty)
+        XCTAssertTrue(report.recorder.realControlPathConstructions.isEmpty)
+    }
+
     func testWindowConfiguratorOverridesRestoredMainAndSettingsGeometry() throws {
         let root = fixtureRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -1351,6 +1408,8 @@ final class ViftyReviewFixtureTests: XCTestCase {
         state: ViftyReviewFixtureState = .healthyAuto,
         surface: ViftyReviewFixtureSurface = .main,
         window: ViftyReviewFixtureWindow = .standard,
+        contrast: ViftyReviewFixtureContrast = .standard,
+        transparency: ViftyReviewFixtureTransparency = .standard,
         interaction: ViftyReviewFixtureInteraction = .none,
         expectedExecutableSHA256: String? = nil
     ) throws -> ViftyReviewFixtureRequest {
@@ -1359,6 +1418,8 @@ final class ViftyReviewFixtureTests: XCTestCase {
             "--ui-review-fixture", state.rawValue,
             "--ui-review-surface", surface.rawValue,
             "--ui-review-window", window.rawValue,
+            "--ui-review-contrast", contrast.rawValue,
+            "--ui-review-transparency", transparency.rawValue,
             "--ui-review-interaction", interaction.rawValue,
             "--ui-review-capture-id", captureID,
             "--ui-review-output", root.path

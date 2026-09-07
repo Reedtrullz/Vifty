@@ -186,6 +186,33 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertNil(report.agentControlStatusError)
     }
 
+    func testKnownUnsupportedHardwareRetainsExistingBlockerAndCopy() {
+        let report = ViftyCtlReadinessReport.make(
+            snapshot: HardwareSnapshot(
+                fans: [],
+                temperatureSensors: [],
+                modelIdentifier: "Mac14,15",
+                isAppleSilicon: false,
+                isMacBookPro: false,
+                capturedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            agentControl: AgentControlStatus(
+                enabled: false,
+                activeLease: nil,
+                lastDecision: nil,
+                lastErrorCode: nil
+            ),
+            thermalPressure: .nominal,
+            generatedAt: Date(timeIntervalSince1970: 1_000)
+        )
+
+        let check = report.checks.first { $0.id == "supportedHardware" }
+        XCTAssertEqual(check?.passed, false)
+        XCTAssertTrue(check?.message.contains("supported only") == true)
+        XCTAssertTrue(report.failedCheckIDs.contains("supportedHardware"))
+        XCTAssertTrue(report.coolingBlockerIDs.contains("supportedHardware"))
+    }
+
     func testDiagnoseBlockedHelperUnreachableExampleDecodesAgainstCurrentModel() throws {
         let report = try decode(ViftyCtlReadinessReport.self, from: "diagnose-blocked-helper-unreachable.json")
 
@@ -384,6 +411,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         XCTAssertEqual(status.lastDecision?.allowed, true)
         XCTAssertEqual(status.lastDecision?.targetRPMByFanID[1], 3700)
         XCTAssertNil(status.lastErrorCode)
+        XCTAssertEqual(status.persistenceHealth, .healthy)
     }
 
     func testCommandErrorExampleDecodesAgainstCurrentModel() throws {
@@ -974,6 +1002,7 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
         try assertRequiredFields(definition: "request", in: statusDefinitions, arePresentIn: activeLease["request"] as? [String: Any], context: "lease request")
         try assertRequiredFields(definition: "decision", in: statusDefinitions, arePresentIn: statusExample["lastDecision"] as? [String: Any], context: "last decision")
         try assertRequiredFields(definition: "policy", in: statusDefinitions, arePresentIn: statusExample["policy"] as? [String: Any], context: "status policy")
+        try assertRequiredFields(definition: "persistenceHealth", in: statusDefinitions, arePresentIn: statusExample["persistenceHealth"] as? [String: Any], context: "status persistence health")
 
         let commandErrorSchema = try readJSON(schemaURL("viftyctl-command-error.schema.json"))
         let commandErrorProperties = try XCTUnwrap(commandErrorSchema["properties"] as? [String: Any])
@@ -1157,7 +1186,8 @@ final class ViftyCtlJSONExampleTests: XCTestCase {
             "INVALID_ARGUMENTS",
             "CHILD_COMMAND_FAILED",
             "PREPARE_RATE_LIMITED",
-            "RESTORE_REQUESTED"
+            "RESTORE_REQUESTED",
+            "PERSISTENCE_FAILURE"
         ]
     }
 

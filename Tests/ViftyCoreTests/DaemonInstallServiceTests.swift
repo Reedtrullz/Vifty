@@ -77,6 +77,64 @@ final class DaemonInstallServiceTests: XCTestCase {
         }
     }
 
+    func testSystemRunnerDrainsLargeOutputWithoutDeadlock() async throws {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-output-" + UUID().uuidString + ".sh")
+        defer { try? FileManager.default.removeItem(at: script) }
+        try Data("#!/bin/bash\ncat >/dev/null\ndd if=/dev/zero bs=262144 count=1 2>/dev/null\ndd if=/dev/zero bs=262144 count=1 1>&2 2>/dev/null\nexit 0\n".utf8)
+            .write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+
+        let resultBox = ProcessOutputBox()
+        let completion = expectation(description: "high-output process completes")
+        let maximumBytesPerStream = 64 * 1_024
+        let task = Task {
+            defer { completion.fulfill() }
+            resultBox.set(try? await DaemonInstallProcessRunner.system.run(script, [], Data("input\n".utf8)))
+        }
+        defer { task.cancel() }
+
+        await fulfillment(of: [completion], timeout: 2)
+        let output = resultBox.value
+        let result = try XCTUnwrap(output)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
+        XCTAssertEqual(result.standardError.utf8.count, maximumBytesPerStream)
+    }
+
+    func testSystemRunnerBoundsCleanupAfterStdinWriteFailure() async throws {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-input-failure-" + UUID().uuidString + ".sh")
+        defer { try? FileManager.default.removeItem(at: script) }
+        try Data("#!/bin/bash\nexec 0<&-\ntrap '' TERM\nwhile :; do :; done\n".utf8).write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+
+        let previousSIGPIPEHandler = signal(SIGPIPE, SIG_IGN)
+        defer { signal(SIGPIPE, previousSIGPIPEHandler) }
+        let resultBox = ProcessFailureBox()
+        let completion = expectation(description: "stdin failure cleanup completes")
+        let startedAt = Date()
+        let task = Task {
+            defer { completion.fulfill() }
+            do {
+                _ = try await DaemonInstallProcessRunner.system.run(
+                    script,
+                    [],
+                    Data(repeating: 0, count: 1 * 1_024 * 1_024)
+                )
+                resultBox.set(threw: false)
+            } catch {
+                resultBox.set(threw: true)
+            }
+        }
+        defer { task.cancel() }
+
+        await fulfillment(of: [completion], timeout: 2)
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1.25)
+        let didThrow = resultBox.threw
+        XCTAssertTrue(didThrow)
+    }
+
     func testBundledLoaderAcceptsOnlyTheReviewedLifecycleScriptBytes() throws {
         let reviewedScript = repositoryRoot.appendingPathComponent("scripts/vifty-helper-lifecycle.sh")
         let expectedData = try Data(contentsOf: reviewedScript)
@@ -213,5 +271,31 @@ private actor InstallRunnerRecorder {
             standardInput: standardInput,
             ranOnMainThread: ranOnMainThread
         )
+    }
+}
+
+private final class ProcessOutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: DaemonInstallProcessOutput?
+
+    var value: DaemonInstallProcessOutput? {
+        lock.withLock { storedValue }
+    }
+
+    func set(_ value: DaemonInstallProcessOutput?) {
+        lock.withLock { storedValue = value }
+    }
+}
+
+private final class ProcessFailureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedThrew = false
+
+    var threw: Bool {
+        lock.withLock { storedThrew }
+    }
+
+    func set(threw: Bool) {
+        lock.withLock { storedThrew = threw }
     }
 }

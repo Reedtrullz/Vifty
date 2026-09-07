@@ -461,6 +461,16 @@ extension AppModel {
         }
     }
 
+    var agentAuditPersistenceMessage: String? {
+        guard let health = agentControlStatus?.persistenceHealth,
+              !health.auditStatusAvailable else { return nil }
+        let detail = health.auditError?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !detail.isEmpty else {
+            return "Agent audit history unavailable; cooling control is unchanged."
+        }
+        return "Agent audit history unavailable; cooling control is unchanged. " + detail
+    }
+
     func setAgentCoolingEnabled(_ enabled: Bool) async {
         do {
             guard let status = try await agentPolicySetter(enabled) else { return }

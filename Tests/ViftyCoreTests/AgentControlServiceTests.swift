@@ -107,7 +107,7 @@ final class AgentControlServiceTests: XCTestCase {
 
         XCTAssertEqual(disabled.policy?.enabled, false)
         XCTAssertEqual(try store.loadAgentControlEnabled(), false)
-        let status = try await service.status()
+        let status = await service.status()
         XCTAssertEqual(status.policy?.enabled, false)
     }
 
@@ -159,6 +159,180 @@ final class AgentControlServiceTests: XCTestCase {
         let status = await service.status()
 
         XCTAssertEqual(status.policy?.enabled, false)
+    }
+
+    func testServiceLoadsPersistedPolicyEnabledTrueAtInit() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.loadedPolicy = .success(true)
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: false),
+            store: store,
+            thermalReader: { .nominal }
+        )
+
+        let status = await service.status()
+
+        XCTAssertTrue(status.enabled)
+        XCTAssertEqual(status.policy?.enabled, true)
+        XCTAssertTrue(status.persistenceHealth.policyStatusAvailable)
+    }
+
+    func testServiceKeepsPolicyDefaultWhenPersistedPolicyIsAbsent() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: false),
+            store: store,
+            thermalReader: { .nominal }
+        )
+
+        let status = await service.status()
+
+        XCTAssertFalse(status.enabled)
+        XCTAssertEqual(status.policy?.enabled, false)
+        XCTAssertTrue(status.persistenceHealth.policyStatusAvailable)
+    }
+
+    func testPolicyLoadFailureFailsClosedAndDeniesPrepareBeforeHardwareApply() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.loadedPolicy = .failure(.loadPolicy)
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal }
+        )
+
+        let initial = await service.status()
+        let denied = try await service.prepare(AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "load-failure"
+        ))
+
+        XCTAssertFalse(initial.enabled)
+        XCTAssertFalse(initial.persistenceHealth.policyStatusAvailable)
+        XCTAssertEqual(denied.lastErrorCode, .persistenceFailure)
+        XCTAssertEqual(denied.lastDecision?.errorCode, .persistenceFailure)
+        let snapshotCallCount = await hardware.snapshotCallCount
+        let appliedCommands = await hardware.appliedCommands
+        XCTAssertEqual(snapshotCallCount, 0)
+        XCTAssertEqual(appliedCommands, [])
+    }
+
+    func testFailedEnableSaveKeepsPolicyDisabledAndPublishesPersistenceFailure() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.loadedPolicy = .success(false)
+        store.savePolicyError = .savePolicy
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal }
+        )
+
+        do {
+            _ = try await service.setPolicyEnabled(true)
+            XCTFail("Expected policy enable persistence to fail")
+        } catch {
+            XCTAssertTrue(error is AgentControlFault)
+        }
+
+        let status = await service.status()
+        XCTAssertFalse(status.enabled)
+        XCTAssertEqual(status.policy?.enabled, false)
+        XCTAssertFalse(status.persistenceHealth.policyStatusAvailable)
+        XCTAssertEqual(status.lastErrorCode, .persistenceFailure)
+        XCTAssertEqual(store.savedPolicies, [])
+    }
+
+    func testAuditAppendFailureIsVisibleAndLaterSuccessRecoversWithoutChangingTransactionResult() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.auditErrorsRemaining = 1
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: true),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        let request = AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "audit-failure"
+        )
+
+        let prepared = try await service.prepare(request)
+
+        XCTAssertNotNil(prepared.activeLease)
+        XCTAssertFalse(prepared.persistenceHealth.auditStatusAvailable)
+        XCTAssertNotNil(prepared.persistenceHealth.auditError)
+
+        let restored = try await service.restoreAuto(reason: "Finished")
+
+        XCTAssertNil(restored.activeLease)
+        XCTAssertTrue(restored.persistenceHealth.auditStatusAvailable)
+        XCTAssertNil(restored.persistenceHealth.auditError)
+        XCTAssertEqual(restored.lastErrorCode, nil)
+    }
+
+    func testFailedDisableSaveRestoresActiveLeaseAndSuccessfulRetryPublishesToggle() async throws {
+        let store = AgentControlFaultStore(directory: temporaryDirectory())
+        store.loadedPolicy = .success(true)
+        try store.base.saveAgentControlEnabled(true)
+        let hardware = AgentServiceFakeHardware(snapshot: Self.snapshot(fans: [Self.fan(id: 0, minimumRPM: 1500, maximumRPM: 4500)]))
+        let service = AgentControlService(
+            hardware: hardware,
+            policy: AgentControlPolicy(enabled: false),
+            store: store,
+            thermalReader: { .nominal },
+            now: { Date(timeIntervalSince1970: 1_000) },
+            leaseID: { "lease-1" }
+        )
+        _ = try await service.prepare(AgentControlRequest(
+            workload: .build,
+            durationSeconds: 600,
+            maxRPMPercent: 75,
+            reason: "Build",
+            idempotencyKey: "disable-failure"
+        ))
+        store.savePolicyError = .savePolicy
+
+        do {
+            _ = try await service.setPolicyEnabled(false)
+            XCTFail("Expected policy disable persistence to fail")
+        } catch {
+            XCTAssertTrue(error is AgentControlFault)
+        }
+
+        let failed = await service.status()
+        XCTAssertTrue(failed.enabled)
+        XCTAssertEqual(failed.policy?.enabled, true)
+        XCTAssertNil(failed.activeLease)
+        XCTAssertFalse(failed.persistenceHealth.policyStatusAvailable)
+        XCTAssertEqual(failed.lastErrorCode, .persistenceFailure)
+        let restoredFanIDs = await hardware.restoredFanIDs
+        XCTAssertEqual(restoredFanIDs, [0])
+        XCTAssertEqual(try store.base.loadAgentControlEnabled(), true)
+
+        store.savePolicyError = nil
+        let retried = try await service.setPolicyEnabled(false)
+        XCTAssertFalse(retried.enabled)
+        XCTAssertEqual(retried.policy?.enabled, false)
+        XCTAssertTrue(retried.persistenceHealth.policyStatusAvailable)
+        XCTAssertEqual(try store.base.loadAgentControlEnabled(), false)
+        XCTAssertEqual(store.savedPolicies, [false])
     }
 
     func testLeaseExpiryUsesMonotonicDecisionClockNotWallClockRollback() async throws {
@@ -1770,6 +1944,42 @@ private final class FailingActiveLeaseSaveStore: AgentControlPersisting, @unchec
 
     func loadRecentAuditEvents(limit: Int) throws -> [AgentControlAuditEvent] {
         try base.loadRecentAuditEvents(limit: limit)
+    }
+}
+
+private enum AgentControlFault: Error {
+    case loadPolicy
+    case savePolicy
+}
+
+private final class AgentControlFaultStore: AgentControlPersisting, @unchecked Sendable {
+    let base: AgentControlStore
+    var loadedPolicy: Result<Bool?, AgentControlFault> = .success(nil)
+    var savePolicyError: AgentControlFault?
+    var savedPolicies: [Bool] = []
+    var auditErrorsRemaining = 0
+
+    init(directory: URL) {
+        self.base = AgentControlStore(directory: directory)
+    }
+
+    func saveActiveLease(_ lease: AgentCoolingLease?) throws { try base.saveActiveLease(lease) }
+    func loadActiveLease() throws -> AgentCoolingLease? { try base.loadActiveLease() }
+    func appendAuditEvent(_ event: AgentControlAuditEvent) throws {
+        if auditErrorsRemaining > 0 {
+            auditErrorsRemaining -= 1
+            throw AgentControlFault.savePolicy
+        }
+        try base.appendAuditEvent(event)
+    }
+    func loadRecentAuditEvents(limit: Int) throws -> [AgentControlAuditEvent] {
+        try base.loadRecentAuditEvents(limit: limit)
+    }
+    func loadAgentControlEnabled() throws -> Bool? { try loadedPolicy.get() }
+    func saveAgentControlEnabled(_ enabled: Bool) throws {
+        if let savePolicyError { throw savePolicyError }
+        savedPolicies.append(enabled)
+        try base.saveAgentControlEnabled(enabled)
     }
 }
 
