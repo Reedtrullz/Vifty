@@ -111,6 +111,7 @@ struct SettingsGeneralView: View {
                 isOn: automaticUpdateChecksBinding
             )
             .disabled(!softwareUpdates.canCheck)
+            .accessibilityLabel("Automatically check for updates")
             .accessibilityIdentifier(
                 ViftyAccessibilityIdentifier.settingsUpdateAutomatic
             )
