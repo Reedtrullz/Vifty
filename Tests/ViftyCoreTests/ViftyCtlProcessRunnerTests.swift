@@ -122,7 +122,7 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
                     childProcessGroup: Darwin.getpgid(childPID),
                     wrapperProcessGroup: Darwin.getpgrp()
                 )
-                _ = Self.waitForFile(at: pidFile, timeout: 1)
+                _ = Self.waitForFile(at: pidFile, componentCount: 2, timeout: 1)
                 XCTAssertEqual(Darwin.kill(Darwin.getpid(), SIGTERM), 0)
             }
         )
@@ -287,9 +287,14 @@ final class ViftyCtlProcessRunnerTests: XCTestCase {
         return (child, grandchild)
     }
 
-    private static func waitForFile(at url: URL, timeout: TimeInterval) -> Bool {
+    private static func waitForFile(
+        at url: URL,
+        componentCount: Int = 1,
+        timeout: TimeInterval
+    ) -> Bool {
         waitUntil(timeout: timeout) {
-            FileManager.default.fileExists(atPath: url.path)
+            guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return false }
+            return contents.split(whereSeparator: \.isWhitespace).count >= componentCount
         }
     }
 
