@@ -9,12 +9,13 @@ reviewed `review-result.json` summary only when it is safe to publish and useful
 for the compatibility index.
 
 The current exact-binary validated report is
-[`2026-07-14-v1.3.2-macbookpro18-supported`](2026-07-14-v1.3.2-macbookpro18-supported/).
-Its review result, machine-readable smoke summary, and human-supervised
-attestation scope Fixed → Auto → Curve → Auto proof to public Vifty v1.3.2
-build 7 on `MacBookPro18,1`. The adjacent
-[`2026-07-14-v1.3.2-macbookpro18-release`](2026-07-14-v1.3.2-macbookpro18-release/)
-summary records the separate installed-release review.
+[`2026-09-13-v1.4.8-macbookpro18-supported`](2026-09-13-v1.4.8-macbookpro18-supported/).
+Its review result, machine-readable smoke summary, and supervised attestation
+scope Fixed → Temperature Curve → Auto proof to public Vifty v1.4.8 build 16
+on `MacBookPro18,1`. The adjacent
+[`2026-09-13-v1.4.8-macbookpro18-release`](2026-09-13-v1.4.8-macbookpro18-release/)
+summary records the separate installed-release review. The v1.3.2 report
+remains historical evidence for that exact older binary.
 
 Regenerate the checked-in index after adding or replacing report summaries:
 

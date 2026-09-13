@@ -2180,7 +2180,10 @@ private final class ValidationEvidenceReviewHarness {
             ],
             "blockers": [],
             "nextAction": "Run make agent-run-smoke-evidence-current-build for clean current-source proof.",
-            "parseErrors": []
+            "parseErrors": [
+                "capabilities": NSNull(),
+                "diagnose": NSNull()
+            ]
         ]
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: summaryURL)

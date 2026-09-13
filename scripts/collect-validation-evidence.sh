@@ -804,11 +804,15 @@ capture_release_artifact_summary() {
     fi
 
     set +e
-    ruby -rjson -e '
+    ruby -rcsv -rjson -e '
       source_path, copied_path, installed_app_version, expected_schema_id = ARGV
 
       def clean(value)
         value.to_s.gsub(/[\t\r\n]+/, " ")
+      end
+
+      def tsv_line(values)
+        CSV.generate_line(values, col_sep: "\t", row_sep: "\n")
       end
 
       begin
@@ -851,10 +855,10 @@ capture_release_artifact_summary() {
         "failureMessage" => data["failureMessage"]
       }
 
-      puts "field\tvalue"
+      print tsv_line(["field", "value"])
       fields.each do |field, value|
         next if value.nil?
-        puts "#{field}\t#{clean(value)}"
+        print tsv_line([field, clean(value)])
       end
 
       ok = true

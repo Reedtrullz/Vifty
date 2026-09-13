@@ -7,7 +7,7 @@
 > Canonical artifact: `Vifty-v1.4.8.zip` with checksum asset `Vifty-v1.4.8.zip.sha256` and SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
 > Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `65cc3862beee62dd7abf7a31847988bbec7e37e8`, CI run `34755252127`, Release run `34756659658`.
 > Tag policy: `v1.4.8` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
-> Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
+> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/manual-smoke-attestation.md`).
 <!-- END GENERATED RELEASE FACTS -->
 
 Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.4.8` build `16`.
@@ -16,7 +16,7 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 ## Current Status
 
-As of 2026-09-13, `v1.4.8` is the current published Developer ID release. Its immutable annotated tag object is `493e6b99ce954a5720283570acefaa19ace3089f` at commit `65cc3862beee62dd7abf7a31847988bbec7e37e8`, source CI run `34755252127` passed, signed/notarized Release run `34756659658` passed, and the four canonical trust assets are public at the [v1.4.8 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.8). The public artifact, checksum, manifest promotion, Homebrew cask handoff, readiness check, and public verifier all pass for build `16`; installed release review and manual Fixed/Curve/Auto compatibility remain pending for this exact build. `/Applications/Vifty.app` remains v1.4.5/build 13 until an operator installs the promoted release. `v1.4.6` and `v1.4.7` are retired without publication after first-attempt notarization failed with invalid Apple credentials; their immutable tags must not be reused. `v1.4.4` and `v1.3.2` are previous published Developer ID releases (recorded in `historicalReleases`), and `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
+As of 2026-09-13, `v1.4.8` is the current published Developer ID release. Its immutable annotated tag object is `493e6b99ce954a5720283570acefaa19ace3089f` at commit `65cc3862beee62dd7abf7a31847988bbec7e37e8`, source CI run `34755252127` passed, signed/notarized Release run `34756659658` passed, and the four canonical trust assets are public at the [v1.4.8 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.8). The public artifact, checksum, manifest promotion, Homebrew cask handoff, readiness check, public verifier, installed release review, and manual Fixed/Curve/Auto compatibility review all pass for build `16` on `MacBookPro18,1`. `v1.4.6` and `v1.4.7` are retired without publication after first-attempt notarization failed with invalid Apple credentials; their immutable tags must not be reused. `v1.4.4` and `v1.3.2` are previous published Developer ID releases (recorded in `historicalReleases`), and `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
 The manifest candidate remains `null` until a separate release-prep pull request passes exact-main CI.
 
@@ -43,7 +43,7 @@ This solo-maintainer design has an explicit remote-proof limit. GitHub can verif
 
 Release lanes:
 
-1. **Published Developer ID release:** `v1.4.8` public artifact and cask trust checks passed for the tagged workflow, canonical assets, checksum handoff, public verifier, release readiness, TeamID, notarization, stapling, and Gatekeeper. Installed helper parity, explicit Auto restoration, and manual Fixed/Curve compatibility remain pending for exact build 16 and are not claimed; the historical `v1.3.2` build 7 holds separately reviewed installed and hardware claims on `MacBookPro18,1` that do not transfer.
+1. **Published Developer ID release:** `v1.4.8` public artifact and cask trust checks passed for the tagged workflow, canonical assets, checksum handoff, public verifier, release readiness, TeamID, notarization, stapling, and Gatekeeper. The exact installed public `v1.4.8` build `16` passed release-mode review and supervised Fixed → Temperature Curve → Auto compatibility on `MacBookPro18,1`; the claim does not transfer to other models or versions.
 2. **Source release:** `v1.1.1` remains the published source-first fallback. Do not claim it or any unsigned-dev artifact is Developer ID signed, notarized, stapled, Gatekeeper-approved, or Homebrew-trusted.
 3. **Unsigned convenience app zip:** optional tester convenience only. The attached hotfix artifact is named `Vifty-v1.1.1-unsigned-dev.zip` with `Vifty-v1.1.1-unsigned-dev.zip.sha256`. The unsigned-dev zip is valid only with its `.sha256` sidecar, and the SHA-256 digest in that sidecar must match the zip bytes. It is ad-hoc signed, not notarized, not the official trusted binary, and may trigger macOS Gatekeeper warnings.
 
@@ -52,7 +52,7 @@ Update status: the exact public `v1.3.2` binary has no update checker and cannot
 Public release facts:
 
 - The public `Vifty-v1.4.8.zip` and checked-in cask both resolve to SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
-- The promoted manifest and `Casks/vifty.rb` now point to published `1.4.8` build `16`; public artifact verification passed, while installed release review and hardware evidence remain pending.
+- The promoted manifest and `Casks/vifty.rb` now point to published `1.4.8` build `16`; public artifact verification, installed release review, and supported-hardware evidence all passed for `MacBookPro18,1`.
 - Source CI run `34755252127` passed on release commit `65cc3862beee62dd7abf7a31847988bbec7e37e8`, and Release run `34756659658` passed all signing, notarization, pre-publication verification, checklist, and publication steps.
 - The GitHub Release publishes `Vifty-v1.4.8.zip`, `Vifty-v1.4.8.zip.sha256`, `Vifty-v1.4.8-artifact-summary.json`, and `Vifty-v1.4.8-release-checklist.md`.
 - `scripts/check-release-readiness.sh --mode developer-id --version 1.4.8 --repo Reedtrullz/Vifty --require-source-ref 65cc3862beee62dd7abf7a31847988bbec7e37e8 --json` reports `ready` against the immutable source commit and exact manifest run IDs.
@@ -163,4 +163,4 @@ All of these must be true before calling a future public binary release trusted:
 6. `scripts/verify-release-artifact.sh --team-id "$APPLE_TEAM_ID"` passes against the published cask artifact.
 7. A release-mode validation evidence bundle is collected with both `--release-summary` and `--release-checklist`, then reviewed with `make validation-evidence-review VALIDATION_EVIDENCE_REVIEW_MODE=release`.
 
-The public artifact, cask, and installed release-mode checks establish release identity, integrity, signed helper parity, and a safe System-managed installation. The separate supervised report establishes explicit Fixed → Auto → Curve → Auto behavior for exact v1.3.2 build 7 on `MacBookPro18,1`. Neither claim extends to another Vifty build, model identifier, agent-run workflow, or broad Apple Silicon compatibility.
+The public artifact, cask, and installed release-mode checks establish release identity, integrity, signed helper parity, and a safe System-managed installation. The separate supervised report establishes explicit Fixed → Temperature Curve → Auto behavior for exact v1.4.8 build 16 on `MacBookPro18,1`; the historical v1.3.2 report remains separately scoped to that older binary. Neither claim extends to another Vifty build, model identifier, agent-run workflow, or broad Apple Silicon compatibility.

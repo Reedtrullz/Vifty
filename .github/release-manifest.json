@@ -96,9 +96,15 @@
     "artifactTrust": "passed",
     "signingTrust": "developer-id-notarized",
     "tagTrust": "signed-verified",
-    "installedReleaseReview": "pending",
-    "manualCompatibility": "pending",
-    "manualCompatibilityScope": null
+    "installedReleaseReview": "passed",
+    "manualCompatibility": "passed-auto-restored",
+    "manualCompatibilityScope": {
+      "modelIdentifiers": [
+        "MacBookPro18,1"
+      ],
+      "reviewReport": "docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/review-result.json",
+      "attestation": "docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/manual-smoke-attestation.md"
+    }
   },
   "candidate": null
 }
