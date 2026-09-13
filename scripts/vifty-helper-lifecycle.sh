@@ -142,7 +142,10 @@ and token consumption. Only an explicit machine-readable protocol-mismatch
 report, or an exact helper-unreachable report paired with either a still-valid
 receipt or root re-verification of the published v1.3.2 daemon binary, may
 select offline recovery. Ordinary uninstall also admits the exact signed public
-v1.4.5 Auto-only helper after root re-verification. All other
+v1.4.5 Auto-only helper after root re-verification. This is a historical
+recovery fallback for the v1.4.5 install line, not an admission of the
+current v1.4.8 helper; change it only after exact-build helper parity and
+Auto-restoration evidence are accepted. All other
 command errors, safety blockers, and malformed reports fail closed. Both paths enter the
 administrator/root boundary, disable and prove the exact launchd label offline,
 then run a root-staged, digest-bound, Developer-ID-verified Auto-only helper

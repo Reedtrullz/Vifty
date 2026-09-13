@@ -614,6 +614,12 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
   end
 
+  def parse_error_map?(value)
+    value.is_a?(Hash) &&
+      value.keys.sort == %w[capabilities diagnose] &&
+      value.values.all? { |entry| entry.nil? || entry.is_a?(String) }
+  end
+
   def operator_recovery_command?(value)
     value.is_a?(Hash) &&
       value["id"].is_a?(String) && !value["id"].empty? &&
@@ -955,7 +961,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
     failures << "agent-run-smoke readiness summary failedCheckIDs must be an array of strings" unless string_array?(summary["failedCheckIDs"])
     failures << "agent-run-smoke readiness summary coolingBlockerIDs must be an array of strings" unless string_array?(summary["coolingBlockerIDs"])
     failures << "agent-run-smoke readiness summary blockers must be an array of strings" unless string_array?(summary["blockers"])
-    failures << "agent-run-smoke readiness summary parseErrors must be an array of strings" unless string_array?(summary["parseErrors"])
+    failures << "agent-run-smoke readiness summary parseErrors must be an object with capabilities and diagnose string-or-null fields" unless parse_error_map?(summary["parseErrors"])
 
     if summary["status"].to_s == "ready"
       unless summary["agentRunSmokeReady"] == true
@@ -994,7 +1000,7 @@ ruby -rjson -rcsv -rdigest -rfileutils -e '
       if string_array?(summary["blockers"]) && !summary["blockers"].empty?
         failures << "agent-run-smoke readiness summary blockers must be empty before passed agent-run smoke"
       end
-      if string_array?(summary["parseErrors"]) && !summary["parseErrors"].empty?
+      if parse_error_map?(summary["parseErrors"]) && summary["parseErrors"].values.any? { |entry| !entry.nil? }
         failures << "agent-run-smoke readiness summary parseErrors must be empty before passed agent-run smoke"
       end
       capabilities = summary["capabilities"].is_a?(Hash) ? summary["capabilities"] : {}
