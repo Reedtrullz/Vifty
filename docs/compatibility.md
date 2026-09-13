@@ -7,7 +7,7 @@
 > Canonical artifact: `Vifty-v1.4.8.zip` with checksum asset `Vifty-v1.4.8.zip.sha256` and SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
 > Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `65cc3862beee62dd7abf7a31847988bbec7e37e8`, CI run `34755252127`, Release run `34756659658`.
 > Tag policy: `v1.4.8` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
-> Separate exact-build claims: installed release review `passed`; manual Fixed/Curve/Auto compatibility `passed-auto-restored` on `MacBookPro18,1` only (review `docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/review-result.json`; attestation `docs/validation-reports/2026-09-13-v1.4.8-macbookpro18-supported/manual-smoke-attestation.md`).
+> Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
 Vifty's compatibility claims are evidence-based. A model family is considered validated only when a real machine report includes the read-only readiness JSON, helper fan probe output, install source, macOS version, bundle/signing evidence, and manual smoke-test result when the hardware is supported.
