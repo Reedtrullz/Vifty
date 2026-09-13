@@ -28,7 +28,7 @@ private final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
 
 signal(SIGTERM, SIG_IGN)
 let terminationGate = DaemonTerminationSignalGate()
-let terminationSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+let terminationSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 terminationSource.setEventHandler {
     terminationGate.requestTermination()
 }
@@ -37,7 +37,7 @@ terminationSource.resume()
 do {
     let service = try await DaemonService.bootstrap()
     terminationGate.installHandler {
-        Task {
+        Task.detached {
             do {
                 let report = try await service.prepareVoluntaryTermination()
                 guard report.safeToStop,
@@ -61,8 +61,9 @@ do {
     let listener = NSXPCListener(machServiceName: ViftyDaemonConstants.machServiceName)
     listener.delegate = delegate
     listener.resume()
-    withExtendedLifetime((delegate, terminationSource, terminationGate)) {
-        RunLoop.main.run()
+    while !Task.isCancelled {
+        _ = (delegate, listener, terminationSource, terminationGate)
+        try? await Task.sleep(for: .seconds(86_400))
     }
 } catch {
     FileHandle.standardError.write(Data("ViftyDaemon startup failed: \(error.localizedDescription)\n".utf8))

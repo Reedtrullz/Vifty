@@ -3,6 +3,7 @@
 require "json"
 require "minitest/autorun"
 require "open3"
+require "tmpdir"
 
 class InstallerLifecycleTrustContractTests < Minitest::Test
   ROOT = File.expand_path("../..", __dir__)
@@ -62,11 +63,48 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     )
   end
 
+  def test_private_executable_copy_does_not_inherit_immutable_flags
+    Dir.mktmpdir("vifty-copy-", File.join(ROOT, ".build")) do |dir|
+      source = File.join(dir, "source")
+      destination = File.join(dir, "copy")
+      File.write(source, "#!/bin/sh\nexit 0\n")
+      File.chmod(0o500, source)
+      assert system("/usr/bin/chflags", "uchg", source)
+      begin
+        script = installer_function("system_tool_environment") + "\n" +
+          installer_function("sha256_file") + "\n" +
+          installer_function("copy_stable_executable_to_run_dir") +
+          "\n" + 'copy_stable_executable_to_run_dir "$1" "$2"'
+        output, error, status = Open3.capture3({"RUN_DIR" => dir}, "/bin/bash", "-c", script, "copy-test", source, destination)
+        assert status.success?, output + error
+        assert_equal File.binread(source), File.binread(destination)
+        assert_equal 0o500, File.stat(destination).mode & 0o777
+        File.unlink(destination)
+      ensure
+        system("/usr/bin/chflags", "nouchg", source)
+        system("/usr/bin/chflags", "nouchg", destination) if File.exist?(destination)
+      end
+    end
+  end
+
   def test_replacement_state_has_a_dedicated_durable_ledger
     assert_includes lifecycle, 'ROOT_REPLACEMENT_RECORD="${EXECUTION_DIR}/replacement-state-v1.json"'
     assert_includes lifecycle, "snapshot_prior_replacement_record"
     assert_includes lifecycle, "remove_replacement_ledger_durably"
     assert_match(/snapshot_prior_replacement_record[\s\S]+ROOT_REPLACEMENT_RECORD/, lifecycle)
+  end
+
+  def test_control_app_is_a_narrow_uninstall_source_and_target_stays_ledger_bound
+    assert_includes lifecycle, "--control-app"
+    assert_includes lifecycle, 'CONTROL_APP_EXPLICIT=0'
+    assert_includes lifecycle, 'CONTROL_APP_PATH="${APP_PATH}"'
+    assert_includes lifecycle, '--control-app is only valid for uninstall or repair replacement prepare.'
+    assert_includes lifecycle, 'payload[:controlApp] = control_app unless control_app == app'
+    assert_match(/VIFTY_CTL="\$\{CONTROL_APP_PATH\}\/Contents\/MacOS\/viftyctl"/, lifecycle)
+    assert_match(/release_prior_replacement_lock_after_quiesce[\s\S]+capture_bundle_binding "\$\{APP_PATH\}"/, lifecycle)
+    assert_includes lifecycle, 'PUBLIC_RECOVERY_HELPER_SHA256="4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f"'
+    assert_includes lifecycle, 'identity["kind"] == "developer-id"'
+    assert_includes lifecycle, 'identity.dig("componentSHA256", "ViftyHelper") == expected_helper_sha'
   end
 
   def test_flag_changes_are_journaled_and_reconciled_from_real_flags

@@ -26,37 +26,16 @@ extension ViftyAgentRuleWorkloadCommandMode {
 extension AgentWorkflowSupport {
     static let safeWorkloadCommandTemplates: [WorkloadCommandTemplate] = ViftyCtlWorkloadTemplate.auditedTemplates
 
-    static func agentRule(
-        bundleURL: URL = Bundle.main.bundleURL,
-        fileManager: FileManager = .default
-    ) -> String {
-        ViftyAgentRule.rule(bundleURL: bundleURL, fileManager: fileManager)
-    }
-
     @discardableResult
     @MainActor
     static func copyAgentRule(
         bundleURL: URL = Bundle.main.bundleURL,
         pasteboard: NSPasteboard = .general
     ) -> String {
-        let rule = agentRule(bundleURL: bundleURL)
+        let rule = ViftyAgentRule.rule(bundleURL: bundleURL)
         pasteboard.clearContents()
         pasteboard.setString(rule, forType: .string)
         return rule
-    }
-
-    static func workloadCommand(
-        _ template: WorkloadCommandTemplate,
-        mode: WorkloadCommandMode,
-        bundleURL: URL = Bundle.main.bundleURL,
-        fileManager: FileManager = .default
-    ) -> String {
-        ViftyAgentRule.workloadCommand(
-            template,
-            mode: mode,
-            bundleURL: bundleURL,
-            fileManager: fileManager
-        )
     }
 
     @discardableResult
@@ -67,7 +46,7 @@ extension AgentWorkflowSupport {
         bundleURL: URL = Bundle.main.bundleURL,
         pasteboard: NSPasteboard = .general
     ) -> String {
-        let command = workloadCommand(template, mode: mode, bundleURL: bundleURL)
+        let command = ViftyAgentRule.workloadCommand(template, mode: mode, bundleURL: bundleURL)
         pasteboard.clearContents()
         pasteboard.setString(command, forType: .string)
         return command

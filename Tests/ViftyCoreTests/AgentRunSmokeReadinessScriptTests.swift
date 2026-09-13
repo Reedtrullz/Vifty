@@ -149,6 +149,29 @@ final class AgentRunSmokeReadinessScriptTests: XCTestCase {
         XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
     }
 
+    func testReadinessUsesModernDaemonPathReportedByDiagnose() throws {
+        let harness = try AgentRunSmokeReadinessHarness(
+            diagnoseJSON: #"{"schemaVersion":1,"schemaID":"https://vifty.local/schemas/viftyctl-diagnose.schema.json","state":"ready","modelIdentifier":"MacBookPro18,1","isAppleSilicon":true,"isMacBookPro":true,"recommendedAgentAction":"requestCooling","recommendedRecoveryAction":"none","safeToRequestCooling":true,"daemonControlPathReady":true,"manualControlActive":false,"fanCount":2,"controllableFanCount":2,"temperatureSensorCount":6,"thermalPressure":"nominal","failedCheckIDs":[],"coolingBlockerIDs":[],"appPreferences":{"startupMode":"Auto","startupModeSource":"persisted","readError":null},"daemonRuntime":{"installedDaemonPath":"__INSTALLED_DAEMON_PATH__"}}"#,
+            useDiagnosedDaemonPath: true
+        )
+
+        let result = try harness.runReadiness([
+            "--viftyctl", harness.viftyctlURL.path,
+            "--expected-daemon", harness.expectedDaemonURL.path,
+            "--require-daemon-match",
+            "--json"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0, result.stderr)
+        let summary = try XCTUnwrap(AgentRunSmokeReadinessHarness.parseJSON(result.stdout))
+        let daemonRuntime = try XCTUnwrap(summary["daemonRuntime"] as? [String: Any])
+        XCTAssertEqual(daemonRuntime["installedDaemonPath"] as? String, harness.installedDaemonURL.lastPathComponent)
+        XCTAssertEqual(daemonRuntime["installedDaemonPresent"] as? Bool, true)
+        XCTAssertEqual(daemonRuntime["matchesExpectedDaemon"] as? Bool, true)
+        XCTAssertEqual(daemonRuntime["matchRequired"] as? Bool, true)
+        XCTAssertEqual(try harness.loggedArguments(), ["capabilities --json", "diagnose --json"])
+    }
+
     func testReadinessBlocksFallbackCapabilitiesBeforeCoolingBoundary() throws {
         let harness = try AgentRunSmokeReadinessHarness(
             capabilitiesJSON: AgentRunSmokeReadinessHarness.capabilitiesJSON(
@@ -344,6 +367,7 @@ private final class AgentRunSmokeReadinessHarness {
     private let capabilitiesExitCode: Int
     private let diagnoseJSON: String
     private let diagnoseExitCode: Int
+    private let useDiagnosedDaemonPath: Bool
 
     init(
         capabilitiesJSON: String = AgentRunSmokeReadinessHarness.capabilitiesJSON(),
@@ -351,7 +375,8 @@ private final class AgentRunSmokeReadinessHarness {
         diagnoseJSON: String = AgentRunSmokeReadinessHarness.diagnoseJSON(),
         diagnoseExitCode: Int = 0,
         installedDaemonContents: String = "installed daemon",
-        expectedDaemonContents: String = "installed daemon"
+        expectedDaemonContents: String = "installed daemon",
+        useDiagnosedDaemonPath: Bool = false
     ) throws {
         repositoryRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         rootURL = FileManager.default.temporaryDirectory
@@ -362,8 +387,9 @@ private final class AgentRunSmokeReadinessHarness {
         expectedDaemonURL = rootURL.appendingPathComponent("expected-daemon")
         self.capabilitiesJSON = capabilitiesJSON
         self.capabilitiesExitCode = capabilitiesExitCode
-        self.diagnoseJSON = diagnoseJSON
+        self.diagnoseJSON = diagnoseJSON.replacingOccurrences(of: "__INSTALLED_DAEMON_PATH__", with: installedDaemonURL.path)
         self.diagnoseExitCode = diagnoseExitCode
+        self.useDiagnosedDaemonPath = useDiagnosedDaemonPath
 
         try FileManager.default.createDirectory(
             at: viftyctlURL.deletingLastPathComponent(),
@@ -384,15 +410,18 @@ private final class AgentRunSmokeReadinessHarness {
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.currentDirectoryURL = repositoryRoot
         process.arguments = [script.path] + arguments
-        process.environment = ProcessInfo.processInfo.environment.merging([
+        var environment = ProcessInfo.processInfo.environment.merging([
             "VIFTY_TEST_SHELL_FIXTURES": "1",
             "VIFTY_FAKE_LOG": logURL.path,
             "VIFTY_FAKE_CAPABILITIES_JSON": capabilitiesJSON,
             "VIFTY_FAKE_CAPABILITIES_EXIT": "\(capabilitiesExitCode)",
             "VIFTY_FAKE_DIAGNOSE_JSON": diagnoseJSON,
-            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)",
-            "VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH": installedDaemonURL.path
+            "VIFTY_FAKE_DIAGNOSE_EXIT": "\(diagnoseExitCode)"
         ]) { _, new in new }
+        if !useDiagnosedDaemonPath {
+            environment["VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH"] = installedDaemonURL.path
+        }
+        process.environment = environment
 
         let stdout = Pipe()
         let stderr = Pipe()

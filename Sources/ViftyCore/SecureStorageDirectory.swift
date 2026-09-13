@@ -965,14 +965,6 @@ public final class SecureStorageDirectory: @unchecked Sendable {
         lhs.st_dev == rhs.st_dev && lhs.st_ino == rhs.st_ino
     }
 
-    private static func sameOptionalIdentity(_ lhs: stat?, _ rhs: stat?) -> Bool {
-        switch (lhs, rhs) {
-        case (nil, nil): true
-        case (.some(let lhs), .some(let rhs)): sameIdentity(lhs, rhs)
-        default: false
-        }
-    }
-
     private static func sameOptionalVersion(_ lhs: stat?, _ rhs: stat?) -> Bool {
         switch (lhs, rhs) {
         case (nil, nil): true

@@ -2,6 +2,44 @@ import Foundation
 import XCTest
 
 final class MakefileTrustGateTests: XCTestCase {
+    func testVerifyChecksEveryShellScript() throws {
+        let makefile = try read("Makefile")
+        let verify = try XCTUnwrap(makefile.components(separatedBy: "verify: check-toolchain").last)
+        let recipe = try XCTUnwrap(verify.components(separatedBy: "\n").first { $0.hasPrefix("\t") })
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ViftyShellSyntax-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try ("verify:\n" + recipe + "\n").write(
+            to: root.appendingPathComponent("Makefile"), atomically: true, encoding: .utf8
+        )
+        let directories = ["scripts", "scripts/lib", "examples/viftyctl"]
+        for directory in directories {
+            let url = root.appendingPathComponent(directory)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            try "true\n".write(to: url.appendingPathComponent("00-valid.sh"), atomically: true, encoding: .utf8)
+        }
+        func runGate() throws -> Int32 {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/make")
+            process.arguments = ["verify"]
+            process.currentDirectoryURL = root
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            _ = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return process.terminationStatus
+        }
+        XCTAssertEqual(try runGate(), 0)
+        for directory in directories {
+            let invalid = root.appendingPathComponent(directory).appendingPathComponent("99-invalid.sh")
+            try "if then\n".write(to: invalid, atomically: true, encoding: .utf8)
+            XCTAssertNotEqual(try runGate(), 0, "Skipped syntax error in \(directory)")
+            try FileManager.default.removeItem(at: invalid)
+        }
+    }
+
     func testVerifyTargetRunsLocalTrustGates() throws {
         let makefile = try read("Makefile")
 
@@ -102,7 +140,6 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("InstallReplacementPreflightScriptTests"))
         XCTAssertTrue(makefile.contains("ReleaseManifestScriptTests"))
         XCTAssertTrue(makefile.contains("UIReviewEvidenceScriptTests"))
-        XCTAssertTrue(makefile.contains("/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh"))
         XCTAssertTrue(makefile.contains("scripts/check-community-standards.sh"))
         XCTAssertTrue(makefile.contains("scripts/validate-release-metadata.sh --mode \"$(RELEASE_METADATA_MODE)\""))
         let contractViolations = warningContractViolations(in: makefile)
@@ -159,6 +196,15 @@ final class MakefileTrustGateTests: XCTestCase {
         XCTAssertTrue(makefile.contains("Identifier=tech.reidar.vifty.helper"))
         XCTAssertTrue(makefile.contains("Identifier=tech.reidar.vifty.daemon"))
         XCTAssertTrue(makefile.contains("Identifier=tech.reidar.vifty.ctl"))
+    }
+
+    func testInstallBuildsTheCurrentAppBeforeCopyingIt() throws {
+        let makefile = try read("Makefile")
+
+        XCTAssertTrue(
+            makefile.contains("install: check-toolchain app ## Build and install to /Applications"),
+            "make install must rebuild the current app before the installer copies .build/Vifty.app."
+        )
     }
 
     func testVerifyTargetIsListedAsPhonyAndHelpVisible() throws {

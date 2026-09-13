@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class AppPollingControllerTests: XCTestCase {
     func testStartIsIdempotentAndStopCancelsTheLoop() async {
-        let sleeper = ManualPollingSleeper()
+        let sleeper = AppModelManualPollingSleeper()
         let controller = AppPollingController(sleeper: sleeper)
         let started = expectation(description: "initial operation")
         var initialRuns = 0
@@ -124,7 +124,7 @@ final class AppPollingControllerTests: XCTestCase {
     }
 
     func testIntervalProviderIsReadAgainAfterEveryPoll() async {
-        let sleeper = ManualPollingSleeper()
+        let sleeper = AppModelManualPollingSleeper()
         let controller = AppPollingController(sleeper: sleeper)
         let polled = expectation(description: "first repeat poll")
         var interval = Duration.seconds(10)
@@ -182,48 +182,5 @@ private actor PollingGate {
     func open() {
         continuation?.resume()
         continuation = nil
-    }
-}
-
-private actor ManualPollingSleeper: AppPollingSleeping {
-    private var requestedDurations: [Duration] = []
-    private var durationWaiters: [CheckedContinuation<Duration, Never>] = []
-    private var sleepWaiters: [CheckedContinuation<Void, Error>] = []
-
-    func sleep(for duration: Duration) async throws {
-        if let waiter = durationWaiters.first {
-            durationWaiters.removeFirst()
-            waiter.resume(returning: duration)
-        } else {
-            requestedDurations.append(duration)
-        }
-
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                sleepWaiters.append(continuation)
-            }
-        } onCancel: {
-            Task { await self.cancelAll() }
-        }
-    }
-
-    func nextRequestedDuration() async -> Duration {
-        if !requestedDurations.isEmpty {
-            return requestedDurations.removeFirst()
-        }
-        return await withCheckedContinuation { continuation in
-            durationWaiters.append(continuation)
-        }
-    }
-
-    func resumeNext() {
-        guard !sleepWaiters.isEmpty else { return }
-        sleepWaiters.removeFirst().resume()
-    }
-
-    func cancelAll() {
-        let waiters = sleepWaiters
-        sleepWaiters.removeAll()
-        waiters.forEach { $0.resume(throwing: CancellationError()) }
     }
 }

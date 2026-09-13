@@ -416,12 +416,12 @@ public actor DaemonLifecycleCoordinator {
                             "The exact bundled ViftyHelper digest is unavailable."
                         )
                     }
-                    let issuedAt = now()
+                    let issuedAt = Self.wireStableDate(now())
                     token = HelperMaintenanceToken(
                         tokenID: UUID().uuidString,
                         operation: operation,
                         issuedAt: issuedAt,
-                        expiresAt: issuedAt.addingTimeInterval(tokenTTL),
+                        expiresAt: Self.wireStableDate(issuedAt.addingTimeInterval(tokenTTL)),
                         bootSessionID: bootSessionID(),
                         daemonSessionID: daemonSessionID,
                         journalGeneration: await journalGeneration(),
@@ -664,6 +664,13 @@ public actor DaemonLifecycleCoordinator {
         guard restoreSignal.endMaintenanceQuiesce(through: activeQuiesceGeneration) else {
             throw DaemonLifecycleCoordinatorError.bindingChanged("quiesce generation changed")
         }
+    }
+
+    // Maintenance tokens cross JSON/XPC boundaries whose date encoding is
+    // microsecond precision. Canonicalize at issuance so strict token binding
+    // survives that round trip without accepting a caller-adjusted timestamp.
+    private static func wireStableDate(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 * 1_000_000).rounded() / 1_000_000)
     }
 
     private static func isCleanOSOwnership(_ status: FanControlOwnershipStatus) -> Bool {

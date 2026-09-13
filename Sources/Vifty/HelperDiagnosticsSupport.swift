@@ -78,18 +78,6 @@ enum HelperDiagnosticsSupport {
         return command
     }
 
-    @discardableResult
-    @MainActor
-    static func copyDiagnoseCommand(
-        bundleURL: URL = Bundle.main.bundleURL,
-        pasteboard: NSPasteboard = .general
-    ) -> String {
-        let command = diagnoseCommand(bundleURL: bundleURL)
-        pasteboard.clearContents()
-        pasteboard.setString(command, forType: .string)
-        return command
-    }
-
     private static func developmentToolURL(
         beside executableURL: URL?,
         fileManager: FileManager

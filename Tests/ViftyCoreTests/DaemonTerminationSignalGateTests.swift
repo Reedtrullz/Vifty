@@ -42,6 +42,24 @@ final class DaemonTerminationSignalGateTests: XCTestCase {
 
         XCTAssertLessThan(ignoreRange.lowerBound, bootstrapRange.lowerBound)
         XCTAssertLessThan(sourceRange.lowerBound, bootstrapRange.lowerBound)
+        XCTAssertTrue(source.contains("DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)"))
+    }
+
+    func testDaemonMainKeepsTheMachListenerAliveWithoutBlockingAsyncMainQueue() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/ViftyDaemon/main.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("while !Task.isCancelled"), "The async daemon main must stay suspended after registering its Mach listener.")
+        XCTAssertTrue(source.contains("Task.sleep"), "The async daemon main must keep its task alive without blocking the main queue.")
+        XCTAssertTrue(source.contains("Task.detached"), "SIGTERM cleanup must not inherit an unsafe actor/queue context.")
+        XCTAssertFalse(source.contains("dispatchMain()"), "dispatchMain cannot be called from Swift async main's main-queue block on macOS 27.")
+        XCTAssertFalse(source.contains("RunLoop.main.run()"), "RunLoop.main.run() returns on the current launchd/XPC path.")
     }
 }
 

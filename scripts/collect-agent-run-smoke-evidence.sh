@@ -68,7 +68,7 @@ SOURCE_ARTIFACT_SHA256=""
 SOURCE_ARTIFACT_BYTES=""
 EXPECTED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_EXPECTED_DAEMON:-}"
 REQUIRE_DAEMON_MATCH="${VIFTY_AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
-INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
+INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-}"
 INSTALLED_DAEMON_PRESENT="false"
 INSTALLED_DAEMON_SHA256=""
 EXPECTED_DAEMON_SHA256=""
@@ -349,28 +349,10 @@ child_command_kind() {
 VIFTYCTL_COMMAND_NAME="$(basename "${VIFTYCTL}")"
 VIFTYCTL_PATH_PRIVACY="basenameOnly"
 VIFTYCTL_PATH_KIND="$(classify_viftyctl_path_kind)"
-SAFE_INSTALLED_DAEMON_PATH="$(share_safe_path_value "${INSTALLED_DAEMON_PATH}")"
-INSTALLED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${INSTALLED_DAEMON_PATH}")"
-SAFE_EXPECTED_DAEMON_PATH="$(share_safe_path_value "${EXPECTED_DAEMON_PATH}")"
-EXPECTED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${EXPECTED_DAEMON_PATH}")"
 CHILD_COMMAND_NAME="$(/usr/bin/basename "${CHILD_COMMAND[0]}")"
 CHILD_COMMAND_KIND="$(child_command_kind "${CHILD_COMMAND[0]}")"
 CHILD_ARGUMENT_COUNT=$((${#CHILD_COMMAND[@]} - 1))
 CHILD_ARGUMENTS_PRIVACY="omitted"
-
-if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
-  INSTALLED_DAEMON_PRESENT="true"
-  INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
-fi
-
-if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
-  EXPECTED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${EXPECTED_DAEMON_PATH}" | awk '{print $1}')"
-  if [[ -n "${INSTALLED_DAEMON_SHA256}" && "${INSTALLED_DAEMON_SHA256}" == "${EXPECTED_DAEMON_SHA256}" ]]; then
-    DAEMON_MATCHES_EXPECTED="true"
-  else
-    DAEMON_MATCHES_EXPECTED="false"
-  fi
-fi
 
 if [[ -z "${OUTPUT_DIR}" ]]; then
   timestamp="$(date -u +"%Y%m%dT%H%M%SZ")"
@@ -1009,6 +991,39 @@ run_capture "pre-capabilities" "pre-capabilities.json" \
   "${VIFTYCTL}" capabilities --json
 run_capture "pre-diagnose" "pre-diagnose.json" \
   "${VIFTYCTL}" diagnose --json
+
+if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PATH="$(/usr/bin/ruby -rjson -e '
+    begin
+      payload = JSON.parse(File.read(ARGV.fetch(0)))
+      path = payload.dig("daemonRuntime", "installedDaemonPath")
+      puts path if path.is_a?(String) && !path.empty?
+    rescue StandardError
+    end
+  ' "${OUTPUT_DIR}/pre-diagnose.json" 2>/dev/null || true)"
+  if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+    INSTALLED_DAEMON_PATH="/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon"
+  fi
+fi
+
+SAFE_INSTALLED_DAEMON_PATH="$(share_safe_path_value "${INSTALLED_DAEMON_PATH}")"
+INSTALLED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${INSTALLED_DAEMON_PATH}")"
+SAFE_EXPECTED_DAEMON_PATH="$(share_safe_path_value "${EXPECTED_DAEMON_PATH}")"
+EXPECTED_DAEMON_PATH_PRIVACY="$(share_safe_path_privacy "${EXPECTED_DAEMON_PATH}")"
+
+if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PRESENT="true"
+  INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
+fi
+
+if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
+  EXPECTED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${EXPECTED_DAEMON_PATH}" | awk '{print $1}')"
+  if [[ -n "${INSTALLED_DAEMON_SHA256}" && "${INSTALLED_DAEMON_SHA256}" == "${EXPECTED_DAEMON_SHA256}" ]]; then
+    DAEMON_MATCHES_EXPECTED="true"
+  else
+    DAEMON_MATCHES_EXPECTED="false"
+  fi
+fi
 
 pre_capabilities_status="$(command_status "pre-capabilities")"
 pre_diagnose_status="$(command_status "pre-diagnose")"

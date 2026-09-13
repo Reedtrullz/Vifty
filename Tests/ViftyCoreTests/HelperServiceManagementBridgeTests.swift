@@ -61,6 +61,15 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
         XCTAssertEqual(approval.registerCount, 0)
     }
 
+    func testRegisterResubmitsAnAlreadyEnabledServiceForStaleLaunchdState() async throws {
+        let backend = HelperServiceBackendFixture(state: .enabled)
+        let report = try await performRegister(backend: backend)
+
+        XCTAssertEqual(report.state, .enabled)
+        XCTAssertTrue(report.complete)
+        XCTAssertEqual(backend.registerCount, 1)
+    }
+
     func testUnregisterRequiresNotRegisteredReadbackAndUnknownFailsClosed() async throws {
         let report = Self.maintenanceReport()
         let token = try XCTUnwrap(report.token)

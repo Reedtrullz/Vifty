@@ -105,7 +105,8 @@ final class AdHocXPCConfigurationScriptTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         _ = try executableScript(root: buildApp, name: "Contents/MacOS/ViftyDaemon", body: "exit 0")
         _ = try executableScript(root: buildApp, name: "Contents/MacOS/ViftyHelper", body: "exit 0")
-        _ = try executableScript(root: destination, name: "Contents/MacOS/Vifty", body: "exit 0")
+        let registrationReport = "printf '%s\\n' '{\"action\":\"register\",\"state\":\"enabled\",\"complete\":true,\"operatorActionRequired\":false,\"maintenanceAuthorized\":false,\"tokenID\":null}'"
+        _ = try executableScript(root: destination, name: "Contents/MacOS/Vifty", body: registrationReport)
         _ = try executableScript(root: destination, name: "Contents/MacOS/ViftyDaemon", body: "exit 0")
         _ = try executableScript(root: destination, name: "Contents/MacOS/ViftyHelper", body: "exit 0")
         try FileManager.default.createDirectory(

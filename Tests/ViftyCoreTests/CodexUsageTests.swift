@@ -2,6 +2,19 @@ import XCTest
 @testable import Vifty
 
 final class CodexUsageTests: XCTestCase {
+    func testReaderSelectsLastValidEventInDenseTail() throws {
+        let root = try temporaryDirectory()
+        let sessions = root.appendingPathComponent("sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        let event = "{\"timestamp\":\"2026-06-21T11:00:00Z\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"primary\":{\"used_percent\":21,\"resets_at\":1800003600,\"window_minutes\":300}}}}\n"
+        let newest = event.replacingOccurrences(of: "\"used_percent\":21", with: "\"used_percent\":42")
+        try (String(repeating: event, count: 3000) + newest).write(
+            to: sessions.appendingPathComponent("dense.jsonl"), atomically: true, encoding: .utf8
+        )
+        let reader = CodexUsageReader(codexHome: root)
+        XCTAssertEqual(try XCTUnwrap(reader.read()).usedPercent, 42)
+    }
+
     func testReaderParsesLatestPrimaryRateLimitFromCodexSessions() throws {
         let root = try temporaryDirectory()
         let sessions = root.appendingPathComponent("sessions", isDirectory: true)

@@ -3,6 +3,75 @@ import Foundation
 import XCTest
 
 final class HelperLifecycleScriptTests: XCTestCase {
+    func testControlAppIsRejectedForRepairBeforeInvokingFixture() throws {
+        let fixture = try LifecycleFixture()
+        defer { fixture.remove() }
+        let controlApp = try fixture.cloneApp(in: "control-source")
+
+        let result = try fixture.runLifecycle(
+            operation: "repair",
+            dryRun: false,
+            controlApp: controlApp
+        )
+
+        XCTAssertEqual(result.exitCode, 64, result.output)
+        XCTAssertTrue(result.output.contains("--control-app is only valid for uninstall or repair replacement prepare."), result.output)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.forbiddenInvocationLog.path))
+    }
+
+    func testControlAppIsAcceptedForReplacementPhaseAndKeepsTargetLedgerBound() throws {
+        let fixture = try LifecycleFixture()
+        defer { fixture.remove() }
+        let controlApp = try fixture.cloneApp(in: "control-source")
+        try fixture.installControlSourceMarker(in: controlApp)
+
+        let result = try fixture.runLifecycle(
+            operation: "repair",
+            dryRun: false,
+            controlApp: controlApp,
+            replacementPhase: "prepare",
+            replacementDestination: fixture.app,
+            replacementCandidate: controlApp,
+            replacementPrevious: fixture.app
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.output)
+        if result.output.contains("--control-app is only valid") {
+            XCTFail("unexpected control-app rejection: \(result.output)")
+        }
+        let invocations = try fixture.readInvocations()
+        let invocationText = invocations.joined(separator: "\n")
+        XCTAssertTrue(invocations.contains("control source viftyctl"), invocationText)
+        XCTAssertTrue(invocations.contains("control source Vifty"), invocationText)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.replacementRecord.path))
+    }
+
+    func testSymlinkedControlAppFailsClosedBeforeInvokingFixture() throws {
+        let fixture = try LifecycleFixture()
+        defer { fixture.remove() }
+        let controlLink = fixture.root
+            .appendingPathComponent("control-link", isDirectory: true)
+            .appendingPathComponent("Vifty.app", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: controlLink.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(
+            at: controlLink,
+            withDestinationURL: fixture.app
+        )
+
+        let result = try fixture.runLifecycle(
+            operation: "uninstall",
+            dryRun: false,
+            controlApp: controlLink
+        )
+
+        XCTAssertEqual(result.exitCode, 66, result.output)
+        XCTAssertTrue(result.output.contains("control app must be a real Vifty.app directory"), result.output)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.forbiddenInvocationLog.path))
+    }
+
     func testRepairDryRunRecordsRequiredOrderButRemainsBlocked() throws {
         let fixture = try LifecycleFixture()
         defer { fixture.remove() }
@@ -107,6 +176,22 @@ final class HelperLifecycleScriptTests: XCTestCase {
             ]
         )
         XCTAssertTrue(try fixture.workerScratchDirectories().isEmpty)
+    }
+
+    func testLegacyReferenceDateMaintenanceReportIsNormalizedBeforeAuthorization() throws {
+        let fixture = try LifecycleFixture()
+        defer { fixture.remove() }
+
+        let result = try fixture.runLifecycle(
+            operation: "repair",
+            dryRun: false,
+            extraEnvironment: [
+                "VIFTY_FIXTURE_REFERENCE_DATE_MAINTENANCE": "1",
+                "VIFTY_FIXTURE_REQUIRE_EPOCH_MAINTENANCE_DATES": "1"
+            ]
+        )
+
+        XCTAssertEqual(result.exitCode, 0, result.output)
     }
 
     func testSuccessfulUninstallNeverRegistersAndPreservesRecoveryState() throws {
@@ -242,6 +327,41 @@ final class HelperLifecycleScriptTests: XCTestCase {
         })
         let privileged = try fixture.readPrivilegedRecord()
         XCTAssertEqual(privileged["status"] as? String, "blocked")
+    }
+
+    func testPinnedPublicHelperUninstallKeepsServiceFrozenThroughUnregister() throws {
+        let fixture = try LifecycleFixture()
+        defer { fixture.remove() }
+        let script = try fixture.recoveryLifecycleScript()
+        let result = try fixture.runLifecycle(
+            operation: "uninstall", dryRun: false, executable: script,
+            extraEnvironment: ["VIFTY_FIXTURE_PREPARE_FAILURE": "1"]
+        )
+        XCTAssertEqual(result.exitCode, 0, result.output)
+        XCTAssertEqual(try fixture.readInvocations(), [
+            "viftyctl prepare uninstall", "viftyctl cancel",
+            "launchctl disable", "launchctl bootout",
+            "ViftyHelper authorizeLegacyTeardown uninstall",
+            "Vifty unregister-legacy uninstall"
+        ])
+    }
+
+    func testPinnedPublicHelperCannotDowngradeRepairOrUnsafeAuto() throws {
+        for operation in ["repair", "uninstall"] {
+            let fixture = try LifecycleFixture()
+            defer { fixture.remove() }
+            let script = try fixture.recoveryLifecycleScript()
+            let result = try fixture.runLifecycle(
+                operation: operation, dryRun: false, executable: script,
+                extraEnvironment: [
+                    "VIFTY_FIXTURE_PREPARE_FAILURE": "1",
+                    "VIFTY_FIXTURE_LEGACY_UNSAFE": operation == "uninstall" ? "1" : "0"
+                ]
+            )
+            XCTAssertEqual(result.exitCode, 75, result.output)
+            XCTAssertFalse(try fixture.readInvocations().contains("Vifty unregister-legacy uninstall"))
+            XCTAssertTrue(fixture.legacyFiles.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        }
     }
 
     func testOnlyExplicitProtocolMismatchCanEnterOfflineRecovery() throws {
@@ -983,6 +1103,8 @@ final class HelperLifecycleScriptTests: XCTestCase {
         defer { fixture.remove() }
         let firstCandidate = try fixture.cloneApp(in: "candidate-ledger-first")
         let secondCandidate = try fixture.cloneApp(in: "candidate-ledger-second")
+        let controlApp = try fixture.cloneApp(in: "control-source")
+        try fixture.installControlSourceMarker(in: controlApp)
 
         XCTAssertEqual(try fixture.runLifecycle(
             operation: "repair", dryRun: false, replacementPhase: "prepare",
@@ -1012,8 +1134,18 @@ final class HelperLifecycleScriptTests: XCTestCase {
         XCTAssertEqual(nextPrepare.exitCode, 0, nextPrepare.output)
         XCTAssertEqual(try fixture.readReplacementRecord()["replacementTransactionID"] as? String, nextID)
 
-        let uninstall = try fixture.runLifecycle(operation: "uninstall", dryRun: false)
+        let uninstall = try fixture.runLifecycle(
+            operation: "uninstall",
+            dryRun: false,
+            controlApp: controlApp
+        )
         XCTAssertEqual(uninstall.exitCode, 0, uninstall.output)
+        let uninstallInvocations = try fixture.readInvocations()
+        XCTAssertTrue(uninstallInvocations.contains("control source viftyctl"), uninstall.output)
+        XCTAssertTrue(uninstallInvocations.contains("control source Vifty"), uninstall.output)
+        let uninstallRecord = try fixture.readRecord()
+        XCTAssertEqual(uninstallRecord["app"] as? String, fixture.app.path)
+        XCTAssertEqual(uninstallRecord["controlApp"] as? String, controlApp.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.replacementRecord.path))
     }
 
@@ -1722,6 +1854,21 @@ private final class LifecycleFixture {
         )
     }
 
+    func installControlSourceMarker(in bundle: URL) throws {
+        for executable in ["viftyctl", "Vifty"] {
+            let url = bundle.appendingPathComponent("Contents/MacOS/\(executable)")
+            let original = try String(contentsOf: url, encoding: .utf8)
+            let marker = "printf 'control source \(executable)\\n' >> \"${VIFTY_FIXTURE_INVOCATION_LOG}\"\n"
+            let instrumented = original.replacingOccurrences(
+                of: "#!/bin/bash\n",
+                with: "#!/bin/bash\n\(marker)",
+                options: [],
+                range: original.startIndex..<original.endIndex
+            )
+            try writeExecutable(instrumented, to: url)
+        }
+    }
+
     func pathHasFixtureImmutableFlag(_ url: URL) throws -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/stat")
@@ -1765,10 +1912,22 @@ private final class LifecycleFixture {
         process.waitUntilExit()
     }
 
+    func recoveryLifecycleScript() throws -> URL {
+        let source = repositoryRoot.appendingPathComponent("scripts/vifty-helper-lifecycle.sh")
+        let copy = root.appendingPathComponent("recovery-lifecycle.sh")
+        let text = try String(contentsOf: source, encoding: .utf8).replacingOccurrences(
+            of: "4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f",
+            with: try sha256(app.appendingPathComponent("Contents/MacOS/ViftyHelper"))
+        )
+        try text.write(to: copy, atomically: true, encoding: .utf8)
+        return copy
+    }
+
     func runLifecycle(
         operation: String,
         dryRun: Bool,
         maintenanceReport: URL? = nil,
+        controlApp: URL? = nil,
         replacementPhase: String? = nil,
         replacementDestination: URL? = nil,
         replacementResult: String? = nil,
@@ -1785,6 +1944,9 @@ private final class LifecycleFixture {
             "--app", app.path,
             "--record", record.path
         ]
+        if let controlApp {
+            arguments.append(contentsOf: ["--control-app", controlApp.path])
+        }
         if dryRun { arguments.append("--dry-run") }
         if let maintenanceReport {
             arguments.append(contentsOf: ["--maintenance-report", maintenanceReport.path])
@@ -1849,7 +2011,9 @@ private final class LifecycleFixture {
             "VIFTY_FIXTURE_PARENT_START_ID",
             "VIFTY_FIXTURE_PREPARE_FAILURE",
             "VIFTY_FIXTURE_SAFETY_BLOCK",
-            "VIFTY_FIXTURE_MALFORMED_BLOCK"
+            "VIFTY_FIXTURE_MALFORMED_BLOCK",
+            "VIFTY_FIXTURE_REFERENCE_DATE_MAINTENANCE",
+            "VIFTY_FIXTURE_REQUIRE_EPOCH_MAINTENANCE_DATES"
             ,"VIFTY_FIXTURE_SWAP_BEFORE_REGISTER"
             ,"VIFTY_FIXTURE_SWAP_BEFORE_ENABLE"
             ,"VIFTY_FIXTURE_ALTERNATE_APP"
@@ -1984,8 +2148,15 @@ private final class LifecycleFixture {
                 exit 75
               fi
               helper_sha="$(/usr/bin/shasum -a 256 "$(/usr/bin/dirname "$0")/ViftyHelper" | /usr/bin/awk '{print $1}')"
+              issued_at=1000
+              expires_at=1030
+              if [[ "${VIFTY_FIXTURE_REFERENCE_DATE_MAINTENANCE:-0}" == "1" ]]; then
+                now="$(/bin/date +%s)"
+                issued_at="$((now - 978307200))"
+                expires_at="$((now + 30 - 978307200))"
+              fi
               cat <<JSON
-            {"schemaVersion":1,"schemaID":"https://vifty.app/schemas/helper-maintenance-report-v1.json","operation":"${operation}","safeToStop":true,"quiesced":true,"restoreAttempted":true,"restoreSucceeded":true,"completeExpectedSetConfirmed":true,"fanResults":[],"blockers":[],"token":{"schemaVersion":1,"tokenID":"fixture-token-${operation}","operation":"${operation}","issuedAt":1000,"expiresAt":1030,"bootSessionID":"boot","daemonSessionID":"daemon","journalGeneration":1,"expectedFanIDs":[0,1],"helperSHA256":"${helper_sha}","quiesceGeneration":1},"tokenConsumed":false}
+            {"schemaVersion":1,"schemaID":"https://vifty.app/schemas/helper-maintenance-report-v1.json","operation":"${operation}","safeToStop":true,"quiesced":true,"restoreAttempted":true,"restoreSucceeded":true,"completeExpectedSetConfirmed":true,"fanResults":[],"blockers":[],"token":{"schemaVersion":1,"tokenID":"fixture-token-${operation}","operation":"${operation}","issuedAt":${issued_at},"expiresAt":${expires_at},"bootSessionID":"boot","daemonSessionID":"daemon","journalGeneration":1,"expectedFanIDs":[0,1],"helperSHA256":"${helper_sha}","quiesceGeneration":1},"tokenConsumed":false}
             JSON
               exit 0
             fi
@@ -2012,6 +2183,9 @@ private final class LifecycleFixture {
               if [[ "${VIFTY_FIXTURE_UNREGISTER_FAIL:-0}" == "1" ]]; then exit 75; fi
               token_id="$(/usr/bin/ruby -rjson -e 'print JSON.parse(File.read(ARGV[0])).dig("token", "tokenID")' "$report")"
               helper_sha="$(/usr/bin/ruby -rjson -e 'print JSON.parse(File.read(ARGV[0])).dig("token", "helperSHA256")' "$report")"
+              if [[ "${VIFTY_FIXTURE_REQUIRE_EPOCH_MAINTENANCE_DATES:-0}" == "1" ]]; then
+                /usr/bin/ruby -rjson -e 'r=JSON.parse(File.read(ARGV[0])); t=r.fetch("token"); now=Time.now.to_f; exit(((now-t.fetch("issuedAt")).abs <= 120 && (now-t.fetch("expiresAt")).abs <= 120) ? 0 : 75)' "$report"
+              fi
               if [[ "${VIFTY_FIXTURE_HELPER_CHANGED_RECEIPT:-0}" == "1" ]]; then helper_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; fi
               if [[ "${VIFTY_FIXTURE_OMIT_RECEIPT:-0}" != "1" ]]; then
                 authority_dir="${VIFTY_LIFECYCLE_TEST_ROOT}/Library/Application Support/Vifty/Maintenance"

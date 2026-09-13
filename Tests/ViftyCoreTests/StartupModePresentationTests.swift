@@ -3,19 +3,17 @@ import XCTest
 
 final class StartupModePresentationTests: XCTestCase {
     func testAutoExplainsSafeSystemControl() {
-        let presentation = StartupModePresentation.resolve(.auto)
+        let detail = StartupModePresentation.detail(for: .auto)
 
-        XCTAssertEqual(presentation.detail, "Starts in macOS Auto control.")
-        XCTAssertFalse(presentation.requiresExplicitApply)
+        XCTAssertEqual(detail, "Starts in macOS Auto control.")
     }
 
     func testFixedAndCurveRequireExplicitApply() {
         for mode in [ModeSelection.fixed, .curve] {
-            let presentation = StartupModePresentation.resolve(mode)
+            let detail = StartupModePresentation.detail(for: mode)
 
-            XCTAssertTrue(presentation.requiresExplicitApply)
-            XCTAssertTrue(presentation.detail.contains("Apply"))
-            XCTAssertTrue(presentation.detail.contains("does not change fan control at launch"))
+            XCTAssertTrue(detail.contains("Apply"))
+            XCTAssertTrue(detail.contains("does not change fan control at launch"))
         }
     }
 }

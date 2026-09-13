@@ -87,6 +87,28 @@ final class DaemonLifecycleCoordinatorTests: XCTestCase {
         }
     }
 
+    func testPreparedTokenSurvivesJSONDateRoundTrip() async throws {
+        let fixture = makeFixture()
+        fixture.state.date = Date(timeIntervalSince1970: 1_000.1234567)
+
+        let report = try await fixture.coordinator.prepare(
+            operation: .repair,
+            helperSHA256: fixture.state.helperHash
+        )
+        let token = try XCTUnwrap(report.token)
+        let request = HelperMaintenanceAuthorizationRequest(operation: .repair, token: token)
+        let roundTripped = try XCTUnwrap(
+            XPCHelperMaintenanceCoding.decodeAuthorizationRequest(
+                XPCHelperMaintenanceCoding.encode(request)
+            )
+        )
+
+        XCTAssertEqual(roundTripped, request)
+        fixture.state.date = token.issuedAt.addingTimeInterval(0.001)
+        let authorization = try await fixture.coordinator.consume(roundTripped)
+        XCTAssertTrue(authorization.authorized)
+    }
+
     func testConcurrentConsumeReservesTokenBeforeAwaitAndAuthorizesExactlyOnce() async throws {
         let fixture = makeFixture()
         let report = try await fixture.coordinator.prepare(
