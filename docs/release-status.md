@@ -10,6 +10,8 @@
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
+Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.4.8` build `16`.
+
 This page is the current public trust status for Vifty releases. Update it whenever the source tag, GitHub Release notes/assets, Developer ID release workflow outcome, Homebrew cask checksum, or published release assets change.
 
 ## Current Status

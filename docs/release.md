@@ -17,7 +17,7 @@ Vifty has two release modes:
 
 For the current public release trust state, see [release-status.md](release-status.md). Keep that page updated when a release workflow fails, succeeds, or when the cask checksum is updated.
 
-Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. The checker is present in the current `v1.4.5` artifact. The manual bridge takes only an operator-supplied archive selected as the reviewed checkout's current `publishedRelease`, performs no download, verifies the manifest-pinned SHA plus Developer ID/notarization evidence, and enters the existing fail-closed replacement transaction. Do not enable Sparkle for those artifacts; the checker, manual bridge, and future installer requirements live in [auto-update.md](auto-update.md).
+Release-availability checking, manual public-archive installation, and future in-place updating are three separate trust lanes. Source-first, unsigned-dev, local ad-hoc, and CI builds must remain ineligible and make zero update requests. The checker is present in the current `v1.4.8` artifact. The manual bridge takes only an operator-supplied archive selected as the reviewed checkout's current `publishedRelease`, performs no download, verifies the manifest-pinned SHA plus Developer ID/notarization evidence, and enters the existing fail-closed replacement transaction. Do not enable Sparkle for those artifacts; the checker, manual bridge, and future installer requirements live in [auto-update.md](auto-update.md).
 
 ## Manual Published-Archive Install
 

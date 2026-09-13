@@ -48,7 +48,7 @@ Priority order: trusted release story, hardware validation evidence, daemon safe
 
 The concrete execution plan for the next cycle is [plans/2026-06-13-next-workplan.md](plans/2026-06-13-next-workplan.md). It starts with M1 Pro validation on available hardware, keeps untested model families as "Needs report," and sequences UI/helper/menu-bar/observability work before future trusted-binary updater work.
 
-1. **Trusted release story:** preserve the verified `v1.4.5` Developer ID artifact and historical `v1.1.1` source-first boundary; every future candidate must pass the manifest, signed-tag, checksum, verifier, and Homebrew handoff gates as a new immutable release.
+1. **Trusted release story:** preserve the verified `v1.4.8` Developer ID artifact and historical `v1.1.1` source-first boundary; every future candidate must pass the manifest, signed-tag, checksum, verifier, and Homebrew handoff gates as a new immutable release.
 2. **Hardware validation evidence:** publish only generated compatibility evidence from reviewed reports; keep unvalidated rows as "Needs report."
 3. **Helper repair clarity:** keep first-run, approval, unreachable, telemetry-only, repair, unsupported, and healthy states distinct in the app and support docs.
 4. **Human UI polish:** prioritize small-window scrolling, full-height operational panes, main-window settings, a compact/readiness-oriented menu-bar popover, compact power/history/temperature surfaces, and a better screenshot/demo.
