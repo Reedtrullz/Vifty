@@ -585,7 +585,10 @@ else
         value = lambda do |camel, snake|
           run.key?(camel) ? run[camel] : run[snake]
         end
-        workflow_name = value.call("workflowName", "name")
+        workflow_name = value.call("workflowName", "workflow_name")
+        # GitHub REST exposes the run name ("Release vX.Y.Z") as `name`,
+        # while `gh run view --json workflowName` exposes the workflow name.
+        workflow_name = "Release" if workflow_name.nil? && value.call("name", "name") == "Release #{tag}"
         workflow_path = value.call("path", "path")
         status = value.call("status", "status")
         conclusion = value.call("conclusion", "conclusion")
