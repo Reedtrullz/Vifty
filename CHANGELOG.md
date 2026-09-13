@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-09-13
+
+### Release
+
+- Reissue the repaired source under a new immutable release boundary after `v1.4.6` was retired before public publication; there is no runtime-code delta in this patch.
+
 ## [1.4.6] - 2026-09-13
 
 ### Fixed
@@ -14,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declare AppleSMC write payload sizes and confirm bounded target/mode readback, including the guarded protected-mode fallback, so Fixed/Curve writes and Auto restore are applied reliably on supported Apple Silicon.
 - Repair helper replacement and control-service recovery while preserving the fail-closed lifecycle and diagnostic gates after a signed install.
 - Make the existing `.active` journal prerequisite explicit in the idempotent re-apply branch, bind manual and Auto-restore XPC identifiers and reasons by UTF-8 bytes, cap untrusted fan collections at the ten-fan hardware domain before traversal, and keep Codex usage an explicit opt-in rather than a default custom menu-bar field.
+
+### Scope
+
+- `v1.4.6` was retired without publication after its first-attempt Release run passed candidate build/inventory and Developer ID signing but Apple notarization rejected the repository credential with HTTP 401; no GitHub Release or Homebrew promotion exists. `v1.4.7` reissues the same repaired source after the repository credential was corrected.
 
 ## [1.4.5] - 2026-08-08
 
