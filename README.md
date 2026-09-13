@@ -2,11 +2,11 @@
 
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
-> Published: `v1.4.5` (version `1.4.5`, build `13`), `arm64` only, minimum macOS `15.0`.
+> Published: `v1.4.8` (version `1.4.8`, build `16`), `arm64` only, minimum macOS `15.0`.
 > Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
-> Canonical artifact: `Vifty-v1.4.5.zip` with checksum asset `Vifty-v1.4.5.zip.sha256` and SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`.
-> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `174dcd28a343de7f797d682d02c0f70e26b72c2e`, CI run `31283125895`, Release run `31284620552`.
-> Tag policy: `v1.4.5` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Canonical artifact: `Vifty-v1.4.8.zip` with checksum asset `Vifty-v1.4.8.zip.sha256` and SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `65cc3862beee62dd7abf7a31847988bbec7e37e8`, CI run `34755252127`, Release run `34756659658`.
+> Tag policy: `v1.4.8` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
@@ -77,9 +77,9 @@ The checked-in [v1.3.2 MacBookPro18,1 report](docs/validation-reports/2026-07-14
 
 ### Current release trust status
 
-Vifty `v1.4.5` is the current published Developer ID release. Its immutable annotated tag object is `ffd6fdc11a77b460ce1e629b1ec43f3b7ebf582e` at commit `174dcd28a343de7f797d682d02c0f70e26b72c2e`, source CI run `31283125895` passed, signed/notarized Release run `31284620552` passed, and the canonical zip, checksum, verifier summary, and release checklist are published at the [v1.4.5 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.5).
+Vifty `v1.4.8` is the current published Developer ID release. Its immutable annotated tag object is `493e6b99ce954a5720283570acefaa19ace3089f` at commit `65cc3862beee62dd7abf7a31847988bbec7e37e8`, source CI run `34755252127` passed, signed/notarized Release run `34756659658` passed, and the canonical zip, checksum, verifier summary, and release checklist are published at the [v1.4.8 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.8).
 
-The exact public zip and the checked-in cask both resolve to SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`. The publication workflow summary records that this exact artifact passed bundle-version, required-executable and bundled-schema, Developer ID TeamID, LaunchDaemon allowlist, stapling, and Gatekeeper checks without skip flags. This is release evidence, not a claim that a fresh verifier run has succeeded on every current host. The exact installed public `v1.3.2` build also passed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`; see the [release review](docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json) and [hardware attestation](docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md). Installed-binary parity, explicit Auto restoration, and manual hardware compatibility are now separately reviewed for that exact build on `MacBookPro18,1`; they are not broad model-family or future-release proof, and installed release-mode review and manual hardware compatibility for `v1.4.5` remain pending and are not claimed. `v1.1.1` remains the published source-first fallback; see [docs/release-status.md](docs/release-status.md).
+The exact public zip and the checked-in cask both resolve to SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`. The publication workflow summary and independent cask verification record that this exact artifact passed bundle-version, required-executable and bundled-schema, Developer ID TeamID, LaunchDaemon allowlist, stapling, and Gatekeeper checks without skip flags. This is release evidence, not a claim that a fresh verifier run has succeeded on every current host. The exact installed public `v1.3.2` build also passed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`; see the [release review](docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json) and [hardware attestation](docs/validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md). Installed-binary parity, explicit Auto restoration, and manual hardware compatibility are now separately reviewed for that exact build on `MacBookPro18,1`. Installed-binary parity, explicit Auto restoration, and manual hardware compatibility remain pending for exact `v1.4.8` build 16 and are not claimed. `v1.1.1` remains the published source-first fallback; see [docs/release-status.md](docs/release-status.md).
 
 The immutable `v1.1.1` source tag is `a82f2237ff39c24a6b366dca8f95a17ee54fd972`. Later `main` commits may contain post-release hardening, but they are not part of the published `v1.1.1` source release unless a future release is cut.
 
@@ -87,7 +87,7 @@ An optional `Vifty-v1.1.1-unsigned-dev.zip` convenience app is attached to the G
 
 Superseded release: the published `v1.1.0` source/unsigned-dev release predates helper-install hardening and may leave the app showing "Fan helper unreachable" after update. Do not retag `v1.1.0` or silently replace its assets; use the `v1.1.1` source-first hotfix release instead.
 
-The exact public `v1.3.2` binary could not gain the update checker retroactively. The exact public `v1.4.5` binary contains the advisory release-availability checker but no executable downloader or in-place installer, and must be installed manually. Eligible Developer ID builds check GitHub's fixed latest-release endpoint at most daily, with an opt-out, and open the matching fixed tag page through **Update to latest version**. This validates availability metadata and expected filenames only; it does not verify archive bytes, checksum contents, a signed tag, or notarization. Local ad-hoc, CI, source-first, and unsigned-dev builds make no update requests. This is a browser handoff only: Vifty does not download executable assets, silently replace the app, or yet provide a Sparkle installer. See [docs/auto-update.md](docs/auto-update.md).
+The exact public `v1.3.2` binary could not gain the update checker retroactively. The exact public `v1.4.8` binary contains the advisory release-availability checker but no executable downloader or in-place installer, and must be installed manually. Eligible Developer ID builds check GitHub's fixed latest-release endpoint at most daily, with an opt-out, and open the matching fixed tag page through **Update to latest version**. This validates availability metadata and expected filenames only; it does not verify archive bytes, checksum contents, a signed tag, or notarization. Local ad-hoc, CI, source-first, and unsigned-dev builds make no update requests. This is a browser handoff only: Vifty does not download executable assets, silently replace the app, or yet provide a Sparkle installer. See [docs/auto-update.md](docs/auto-update.md).
 
 ### Install trust levels
 
@@ -145,7 +145,7 @@ To audit the already-published `v1.1.0` boundary, check out `v1.1.0` and set `RE
 
 ### Homebrew
 
-The Homebrew cask now points at the published `v1.4.5` notarized zip with SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`. The publication-time workflow recorded a pass for that exact artifact using the cask checksum; this is not a fresh current-host verifier claim. Installed-binary parity, explicit Auto restoration, and manual hardware compatibility remain pending for the exact `v1.4.5` build and are not claimed; the historical `v1.3.2` build was separately reviewed on `MacBookPro18,1`. Keep compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
+The Homebrew cask now points at the published `v1.4.8` notarized zip with SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`. The publication-time workflow and independent cask verifier recorded a pass for that exact artifact; this is not a claim that the current installed app has been upgraded. Installed-binary parity, explicit Auto restoration, and manual hardware compatibility remain pending for exact `v1.4.8` build 16 and are not claimed; the historical `v1.3.2` build was separately reviewed on `MacBookPro18,1`. Keep compatibility claims gated by [docs/release-status.md](docs/release-status.md), and never point the cask at an unsigned-dev artifact.
 
 ## Build and verify
 

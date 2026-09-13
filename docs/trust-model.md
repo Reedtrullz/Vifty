@@ -2,11 +2,11 @@
 
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
-> Published: `v1.4.5` (version `1.4.5`, build `13`), `arm64` only, minimum macOS `15.0`.
+> Published: `v1.4.8` (version `1.4.8`, build `16`), `arm64` only, minimum macOS `15.0`.
 > Runtime identities: app `tech.reidar.vifty`, daemon `tech.reidar.vifty.daemon`, helper `tech.reidar.vifty.helper`, CLI `tech.reidar.vifty.ctl`.
-> Canonical artifact: `Vifty-v1.4.5.zip` with checksum asset `Vifty-v1.4.5.zip.sha256` and SHA-256 `13fa763cbfdca3e77fcf6f657df6d51b32e19a4d25dd17a79614635fe844b0d5`.
-> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `174dcd28a343de7f797d682d02c0f70e26b72c2e`, CI run `31283125895`, Release run `31284620552`.
-> Tag policy: `v1.4.5` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
+> Canonical artifact: `Vifty-v1.4.8.zip` with checksum asset `Vifty-v1.4.8.zip.sha256` and SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
+> Public artifact trust: `passed` / `developer-id-notarized` for TeamID `X88J3853S2`; source `65cc3862beee62dd7abf7a31847988bbec7e37e8`, CI run `34755252127`, Release run `34756659658`.
+> Tag policy: `v1.4.8` remains recorded as `signed-verified` evidence; signed tags are mandatory from version `1.3.3` onward.
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
@@ -177,7 +177,7 @@ The archive was downloaded to fresh scratch storage, hashed before extraction, e
 
 Before any legacy code runs, the installer also requires `anchor apple generic`, the Developer ID Application leaf/intermediate certificate OIDs, leaf OU `X88J3853S2`, exact signing identifiers, and a valid deep app seal. It copies the pinned CLI and sibling daemon into a private `0700` run directory, rechecks their signatures and byte identities there, and executes only that private CLI copy. Its Auto/System evidence is a fresh point-in-time snapshot rather than a daemon-held quiescence lease; the existing daemon continues to own any concurrent bounded lease, expiry, and Auto restoration during the app-only rename swap.
 
-The generated fact block above is authoritative for the current public version, build, architecture, identities, checksum, TeamID, and trust state. The exact `v1.4.5` public artifact passes release-level signing/notarization checks; installed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation remain pending for it. The historical `v1.3.2` build passed installed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`; the [release review](validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json) and [manual-smoke attestation](validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md) scope those claims to that exact binary and model; they do not validate the current branch or broad Apple Silicon compatibility. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
+The generated fact block above is authoritative for the current public version, build, architecture, identities, checksum, TeamID, and trust state. The exact `v1.4.8` public artifact passes release-level signing/notarization checks; installed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation remain pending for it. The historical `v1.3.2` build passed installed release-mode review and human-supervised Fixed → Auto → Curve → Auto validation on `MacBookPro18,1`; the [release review](validation-reports/2026-07-14-v1.3.2-macbookpro18-release/review-result.json) and [manual-smoke attestation](validation-reports/2026-07-14-v1.3.2-macbookpro18-supported/manual-smoke-attestation.md) scope those claims to that exact binary and model; they do not validate the current branch or broad Apple Silicon compatibility. `v1.1.1` remains the source-first fallback and supersedes `v1.1.0` for users who hit the helper-unreachable update issue. Any `Vifty-v<version>-unsigned-dev.zip` attachment is not Developer ID signed, not notarized, not Homebrew-trusted, and must not use the canonical `Vifty-v<version>.zip` release artifact name.
 
 The current release trust state is tracked in [release-status.md](release-status.md). Do not promote Homebrew or a GitHub asset as trust-complete unless that status page points to a signed, notarized, stapled artifact whose checksum and verifier summary match the cask.
 
