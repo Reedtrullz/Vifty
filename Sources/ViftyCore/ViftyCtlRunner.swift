@@ -129,12 +129,14 @@ public extension ViftyCtlDaemonRuntimeDiagnostic {
     }
 
     private static func launchdValue(_ key: String, in description: String) -> String? {
-        description.split(whereSeparator: \.isNewline).compactMap { line in
+        let prefix = "\(key) = "
+        for line in description.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let prefix = "\(key) = "
-            guard trimmed.hasPrefix(prefix) else { return nil }
-            return String(trimmed.dropFirst(prefix.count))
-        }.first
+            if trimmed.hasPrefix(prefix) {
+                return String(trimmed.dropFirst(prefix.count))
+            }
+        }
+        return nil
     }
 
     private static func runningProcessPath(for pid: pid_t) -> String? {
