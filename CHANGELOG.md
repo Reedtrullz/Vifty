@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-09-13
+
 ### Fixed
 
-- Make the existing `.active` journal prerequisite explicit in the idempotent re-apply branch, bound manual and Auto-restore XPC identifiers and reasons by UTF-8 bytes, cap untrusted fan collections at the ten-fan hardware domain before traversal, and keep Codex usage an explicit opt-in rather than a default custom menu-bar field.
+- Declare AppleSMC write payload sizes and confirm bounded target/mode readback, including the guarded protected-mode fallback, so Fixed/Curve writes and Auto restore are applied reliably on supported Apple Silicon.
+- Repair helper replacement and control-service recovery while preserving the fail-closed lifecycle and diagnostic gates after a signed install.
+- Make the existing `.active` journal prerequisite explicit in the idempotent re-apply branch, bind manual and Auto-restore XPC identifiers and reasons by UTF-8 bytes, cap untrusted fan collections at the ten-fan hardware domain before traversal, and keep Codex usage an explicit opt-in rather than a default custom menu-bar field.
 
 ## [1.4.5] - 2026-08-08
 
