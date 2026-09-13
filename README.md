@@ -1,5 +1,52 @@
 # Vifty
 
+<p align="center">
+  <strong>Local-first thermal control for Apple Silicon MacBook Pro developers.</strong><br>
+  Keep builds, tests, and local AI coding agents cool without giving up control or evidence.
+</p>
+
+![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
+![Swift](https://img.shields.io/badge/swift-6.0-orange)
+[![CI](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml/badge.svg)](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml)
+![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+Vifty provides safe local thermal control for Apple Silicon MacBook Pro developer workloads: builds, tests, and local AI coding agents. It combines live thermals, fan RPM control, reusable temperature curves, bounded `viftyctl` cooling leases, and USB-C/MagSafe power telemetry in one app.
+
+Apple can change private SMC/HID behavior in macOS or new hardware revisions without notice. Vifty treats unknown fan topology, missing sensors, invalid ranges, or drifting SMC mode/target telemetry as a reason to stay in macOS Auto and collect read-only evidence first. Do not use raw SMC tools or manual fan writes to "try a new model into support."
+
+## Features
+
+- **Three fan modes** — Auto, Fixed RPM with optional percentage-aware per-fan targets, and a 3-point Temperature Curve.
+- **Developer telemetry** — live temperatures, fan state, power, thermal pressure, and subtle in-memory trend sparklines for recent selected temperature, fan RPM, power flow, and thermal-pressure state; samples stay local and reset with the app.
+- **Agent-friendly cooling** — bounded `viftyctl` leases for builds and tests, with readiness checks, expiry, and Auto restoration.
+- **Profiles and recovery** — reusable curve profiles, timed manual modes, fail-closed helper repair, and unclean-exit recovery.
+- **Local by default** — no accounts, cloud sync, analytics, or persistent telemetry export.
+- **Optional local notifications** — macOS UserNotifications only, opt-in, and off by default.
+- **Optional Codex usage** — Codex usage display is optional. When selected as a standalone mode or as one field in a custom menu-bar summary, Vifty can show percent left or used as text or a compact battery-style gauge, reset countdown or reset time, without storing Codex credentials or API keys. Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage.
+
+## Quick start
+
+Download the current [v1.4.8 release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.8), or build from source:
+
+```sh
+make install
+open /Applications/Vifty.app
+```
+
+`make install` falls back to `~/Applications/Vifty.app` when `/Applications` is not writable. For local development, use `make run-app` so macOS launches the app bundle correctly.
+
+## Documentation
+
+- [Compatibility and supported hardware](docs/compatibility.md)
+- [Safety and trust model](docs/trust-model.md)
+- [Agent cooling runbook](docs/safe-agent-cooling.md) · [integrations](docs/agent-integrations.md)
+- [Release status](docs/release-status.md) · [release process](docs/release.md)
+- [Support and troubleshooting](SUPPORT.md) · [support triage](docs/support-triage.md)
+
+<details>
+<summary>Current release facts</summary>
+
 <!-- BEGIN GENERATED RELEASE FACTS -->
 > Release facts authority: `.github/release-manifest.json` (schema `docs/schemas/release-manifest.schema.json`).
 > Published: `v1.4.8` (version `1.4.8`, build `16`), `arm64` only, minimum macOS `15.0`.
@@ -10,43 +57,12 @@
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
-Open-source, local-first thermal control for Apple Silicon MacBook Pro developers. Vifty focuses on safe local thermal control for Apple Silicon MacBook Pro developer workloads: builds, tests, and local AI coding agents. It combines live thermals, fan RPM control, reusable temperature curves, bounded `viftyctl` cooling leases, and USB-C/MagSafe power telemetry in one SwiftUI utility.
+</details>
 
-![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
-![Swift](https://img.shields.io/badge/swift-6.0-orange)
-[![CI](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml/badge.svg)](https://github.com/Reedtrullz/Vifty/actions/workflows/ci.yml)
-![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-green)
-
-Vifty is built for local signed distribution, not the App Store. It uses private macOS SMC/HID interfaces for fan and sensor access, keeps data on-device, and refuses manual control on unsupported hardware.
-
-Apple can change private SMC/HID behavior in macOS or new hardware revisions without notice. Vifty treats unknown fan topology, missing sensors, invalid ranges, or drifting SMC mode/target telemetry as a reason to stay in macOS Auto and collect read-only evidence first. Do not use raw SMC tools or manual fan writes to "try a new model into support."
+<details>
+<summary>Full project reference: releases, helper lifecycle, agent CLI, and architecture</summary>
 
 The [historical README image](docs/images/vifty-screenshot.png) is byte-bound as the canonical hero in the committed automated checkpoint for exact source `6ac429cbacf7cc3358c74493ab7461a43fa40275`. Current `HEAD` differs, so the image is not current-source UI evidence and is intentionally not displayed here. The checkpoint proves its 50 automated fixture/visual/Accessibility rows only; human visual review remains pending and VoiceOver was skipped by the owner with no VoiceOver behavior claimed.
-
-## Highlights
-
-- **Menu bar cockpit** — selected-sensor temperature, primary or average fan RPM, power state, Codex quota, or a custom combination at a glance.
-- **Three fan modes** — Auto, Fixed RPM with optional percentage-aware per-fan targets, and a 3-point Temperature Curve.
-- **Curve profiles** — save, name, switch, overwrite, and delete fan curves, including per-fan RPM overrides; profiles persist across restarts.
-- **Developer presets** — conservative curve presets for tests, builds, and local model runs.
-- **Hardware fan state** — shows actual SMC Auto/Forced/System mode and target RPM when available.
-- **Live temperature panel** — all SMC and HID sensors with source labels and highest-temperature tracking.
-- **Live power tracking** — battery percentage, charge/drain watts, signed battery current, adapter wattage, negotiated USB-C voltage/current, health, cycle count, battery temperature, and USB-C PD profiles from local IOKit data.
-- **Thermal pressure** — surfaces macOS thermal-pressure state alongside raw temperatures, and flags high selected-sensor temperatures when macOS has not raised thermal pressure.
-- **Timed manual modes** — Fixed RPM and Temperature Curve modes can automatically restore Auto after a selected duration.
-- **Power insights** — estimates battery runtime from live drain and warns when plugged in but still draining.
-- **Telemetry history** — shows subtle in-memory trend sparklines for recent selected temperature, fan RPM, power flow, and thermal-pressure state; samples stay local and reset with the app.
-- **Optional local notifications** — alerts for helper failure, sustained high thermal pressure, Auto restore failure, plugged-in battery drain, and agent cooling that needs attention; all are off by default.
-- **Privileged helper architecture** — a LaunchDaemon/XPC helper owns root SMC writes so the app does not need repeated permission prompts.
-- **Helper health summary** — distinguishes healthy daemon-backed fan data from helper errors, unreachable daemon state, fallback fan telemetry with daemon repair needed, and empty snapshots, with recovery guidance, main-window and menu-bar repair actions, read-only diagnose-command copy, immediate post-repair refresh, and blocked manual controls when fan writes are not safe to start.
-- **Agent-friendly cooling leases** — local agents can use bundled `viftyctl` JSON commands to inspect readiness, request bounded temporary cooling for builds/tests, and restore Auto with visible active/pending recovery state and daemon-owned expiry. The main window can copy a short AGENTS.md/Codex rule and guarded command templates that check capabilities, readiness, and the guarded wrapper path.
-- **Codex usage tracking** — optional menu-bar field reads the local Codex app-server rate-limit snapshot when available, then falls back to Codex `token_count` events in `~/.codex/sessions`, showing 5-hour usage as text or a compact battery-style gauge, reset countdown or reset time, credits, monthly limits, and source without storing API keys. Use it alone or in a custom menu-bar summary with temperature, fan RPM, owner, or adapter wattage.
-- **Installer workflow** — double-click `Install Vifty.command`, run `make install`, or build a reusable `.pkg`.
-- **Startup control** — optional **Start Vifty at startup** uses macOS Login Items so Vifty can show the selected menu-bar status immediately after login.
-- **Update availability checks** — future exact Developer ID builds can check GitHub's fixed latest-release endpoint at most daily, with an opt-out and an **Update to latest version** browser handoff; Vifty does not silently download or replace the app.
-- **Safety defaults** — RPM clamping, unsupported-hardware refusal, auto-restore on sensor loss, and unclean-exit recovery.
-- **Debug helper CLI** — `ViftyHelper` can probe SMC state and restore Auto from Terminal.
 
 ## Why Vifty matters
 
@@ -428,6 +444,8 @@ Vifty/
 └── Tests/
     └── ViftyCoreTests/         # XCTest suite
 ```
+
+</details>
 
 ## License
 
