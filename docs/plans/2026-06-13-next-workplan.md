@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-13
 
-**Status:** Active next-work plan for post-`v1.1.1` development on `main`.
+**Status:** Historical plan, superseded on 2026-09-13 by [the post-v1.4.8 validation workplan](2026-09-13-post-v1.4.8-validation.md). The body is retained as the source-first planning record; do not use its June 2026 release-state or public-messaging sections as current facts.
 
 **Goal:** Move Vifty from source-first credible to day-to-day trusted by proving one real Apple Silicon MacBook Pro path, fixing the visible operational UX issues, and keeping future distribution/updater work tied to the trusted-binary lane.
 

@@ -100,7 +100,7 @@ ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target n
 - `docs/safe-agent-cooling.md` — short operational runbook for local agents/scripts: readiness gate, guarded-run preference, conservative workload limits, and blocked/restore-failure handling.
 - `docs/auto-update.md` — current Developer-ID-only advisory release-check policy and privacy boundary, plus the separate future Sparkle signed-appcast/in-place replacement requirements.
 - `docs/competitive-analysis.md` — current competitive positioning, scope guardrails, and roadmap priorities for Vifty's developer-workload thermal-control wedge.
-- `docs/plans/2026-06-13-next-workplan.md` — next execution plan: M1 Pro validation first, then small-window UI, helper repair clarity, main-window settings relocation and readiness-first menu-bar popover, local observability, agent polish, and future trusted-binary updater prerequisites.
+- `docs/plans/2026-09-13-post-v1.4.8-validation.md` — current execution plan: install and validate the exact published v1.4.8 binary on the available MacBookPro18,1, prove helper parity and Auto restoration, perform supervised Fixed/Curve/Auto acceptance, then update compatibility evidence before returning to UI/agent polish.
 - `docs/trust-model.md` — plain-language trust model for privileged helper, SMC write, agent-control, local-data, and release-signing boundaries.
 - `docs/release-status.md` — point-in-time public release trust status, including source-first history, Developer ID candidates/releases, Homebrew trust, and operator checks.
 - `docs/unsupported-hardware.md` — canonical policy for unsupported-machine safe blocks, read-only evidence, and forbidden fan-write bypasses.
