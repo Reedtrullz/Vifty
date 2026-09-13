@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-09-13
+
+### Release
+
+- Reissue the repaired source under a fresh immutable release boundary after `v1.4.7` was retired at notarization; there is no runtime-code delta in this patch.
+
+### Scope
+
+- `v1.4.7` passed the complete candidate build/inventory and Developer ID signing stages, but its first-attempt notarization failed because the repository used the wrong Apple ID. The repository release secrets were synchronized from the authoritative Apple Developer 1Password environment before preparing this candidate.
+
 ## [1.4.7] - 2026-09-13
 
 ### Release
