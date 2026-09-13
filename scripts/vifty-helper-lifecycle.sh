@@ -3,6 +3,8 @@ set -euo pipefail
 
 OPERATION=""
 APP_PATH="${VIFTY_APP:-/Applications/Vifty.app}"
+CONTROL_APP_PATH=""
+CONTROL_APP_EXPLICIT=0
 REPLACEMENT_PHASE=""
 REPLACEMENT_DESTINATION=""
 REPLACEMENT_TRANSACTION_ID=""
@@ -119,6 +121,7 @@ usage() {
   cat >&2 <<'USAGE'
 Usage:
   vifty-helper-lifecycle.sh --operation repair|uninstall [--app /Applications/Vifty.app]
+                            [--control-app /path/to/Vifty.app]
                             [--dry-run] [--record command-record.json]
                             [--replacement-phase prepare|finish
                              --replacement-destination /Applications/Vifty.app
@@ -138,7 +141,8 @@ authenticated daemon after quiesce, full-set Auto restoration, fresh readback,
 and token consumption. Only an explicit machine-readable protocol-mismatch
 report, or an exact helper-unreachable report paired with either a still-valid
 receipt or root re-verification of the published v1.3.2 daemon binary, may
-select offline recovery; all other
+select offline recovery. Ordinary uninstall also admits the exact signed public
+v1.4.5 Auto-only helper after root re-verification. All other
 command errors, safety blockers, and malformed reports fail closed. Both paths enter the
 administrator/root boundary, disable and prove the exact launchd label offline,
 then run a root-staged, digest-bound, Developer-ID-verified Auto-only helper
@@ -160,6 +164,7 @@ while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --operation) require_value "$1" "${2:-}"; OPERATION="$2"; shift 2 ;;
     --app) require_value "$1" "${2:-}"; APP_PATH="${2%/}"; shift 2 ;;
+    --control-app) require_value "$1" "${2:-}"; CONTROL_APP_PATH="${2%/}"; CONTROL_APP_EXPLICIT=1; shift 2 ;;
     --record) require_value "$1" "${2:-}"; RECORD_PATH="$2"; shift 2 ;;
     --maintenance-report) require_value "$1" "${2:-}"; MAINTENANCE_REPORT="$2"; shift 2 ;;
     --replacement-phase) require_value "$1" "${2:-}"; REPLACEMENT_PHASE="$2"; shift 2 ;;
@@ -184,6 +189,13 @@ done
 
 case "${OPERATION}" in repair|uninstall) ;; *) echo "helper-lifecycle: --operation must be repair or uninstall." >&2; exit 64 ;; esac
 case "${REPLACEMENT_PHASE}" in ""|prepare|finish|release-lock) ;; *) echo "helper-lifecycle: --replacement-phase must be prepare, finish, or release-lock." >&2; exit 64 ;; esac
+if [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]] && {
+  [[ "${OPERATION}" != "uninstall" &&
+     ! ( "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" ) ]]
+}; then
+  echo "helper-lifecycle: --control-app is only valid for uninstall or repair replacement prepare." >&2
+  exit 64
+fi
 if [[ -n "${REPLACEMENT_PHASE}" ]]; then
   [[ "${OPERATION}" == "repair" && -n "${REPLACEMENT_DESTINATION}" && "${REPLACEMENT_DESTINATION}" == /* ]] || {
     echo "helper-lifecycle: replacement prepare/finish requires repair and an absolute replacement destination." >&2
@@ -206,7 +218,38 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
   }
 fi
 
-APP_PATH="$(cd "$(/usr/bin/dirname "${APP_PATH}")" 2>/dev/null && pwd -P)/$(/usr/bin/basename "${APP_PATH}")"
+app_parent="$(cd "$(/usr/bin/dirname "${APP_PATH}")" 2>/dev/null && pwd -P)" || {
+  echo "helper-lifecycle: target app parent is unavailable." >&2
+  exit 66
+}
+APP_PATH="${app_parent}/$(/usr/bin/basename "${APP_PATH}")"
+if [[ -n "${CONTROL_APP_PATH}" ]]; then
+  control_app_parent="$(cd "$(/usr/bin/dirname "${CONTROL_APP_PATH}")" 2>/dev/null && pwd -P)" || {
+    echo "helper-lifecycle: control app parent is unavailable." >&2
+    exit 66
+  }
+  CONTROL_APP_PATH="${control_app_parent}/$(/usr/bin/basename "${CONTROL_APP_PATH}")"
+else
+  CONTROL_APP_PATH="${APP_PATH}"
+fi
+[[ "$(/usr/bin/basename "${APP_PATH}")" == "Vifty.app" ]] || {
+  echo "helper-lifecycle: target app must be a Vifty.app bundle path." >&2
+  exit 64
+}
+if [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]]; then
+  [[ "${CONTROL_APP_PATH}" != "${APP_PATH}" ]] || {
+    echo "helper-lifecycle: --control-app must differ from the target --app." >&2
+    exit 64
+  }
+  [[ "$(/usr/bin/basename "${CONTROL_APP_PATH}")" == "Vifty.app" ]] || {
+    echo "helper-lifecycle: control app must be a Vifty.app bundle path." >&2
+    exit 64
+  }
+  [[ -d "${CONTROL_APP_PATH}" && ! -L "${CONTROL_APP_PATH}" ]] || {
+    echo "helper-lifecycle: control app must be a real Vifty.app directory." >&2
+    exit 66
+  }
+fi
 if [[ -n "${REPLACEMENT_PHASE}" ]]; then
   replacement_parent="$(cd "$(/usr/bin/dirname "${REPLACEMENT_DESTINATION}")" 2>/dev/null && pwd -P)" || {
     echo "helper-lifecycle: replacement destination parent is unavailable." >&2
@@ -288,10 +331,10 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
     fi
   fi
 fi
-VIFTY_CTL="${APP_PATH}/Contents/MacOS/viftyctl"
-VIFTY_MAIN="${APP_PATH}/Contents/MacOS/Vifty"
-VIFTY_HELPER="${APP_PATH}/Contents/MacOS/ViftyHelper"
-VIFTY_DAEMON="${APP_PATH}/Contents/MacOS/ViftyDaemon"
+VIFTY_CTL="${CONTROL_APP_PATH}/Contents/MacOS/viftyctl"
+VIFTY_MAIN="${CONTROL_APP_PATH}/Contents/MacOS/Vifty"
+VIFTY_HELPER="${CONTROL_APP_PATH}/Contents/MacOS/ViftyHelper"
+VIFTY_DAEMON="${CONTROL_APP_PATH}/Contents/MacOS/ViftyDaemon"
 PLIST_NAME="tech.reidar.vifty.daemon.plist"
 SERVICE_LABEL="tech.reidar.vifty.daemon"
 RELEASE_TEAM_ID="X88J3853S2"
@@ -300,8 +343,9 @@ DAEMON_SIGNING_ID="tech.reidar.vifty.daemon"
 V132_DAEMON_SHA256="7543c573528a57bb096b045b9a7476b1d4da4aef88b7cd8b54d4cd2ca5bf7dac"
 V132_DAEMON_CDHASH="c5613e3020d94de1d141917d7b950fc367a6e61a"
 V132_FIXTURE_DAEMON_SHA256="66f0b66e7ed10074476cbd239194adbe3e8cb49fca3e43a3fc5f6c7b81cdeea5"
+PUBLIC_RECOVERY_HELPER_SHA256="4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f"
 
-if [[ ! -d "${APP_PATH}" ]]; then
+if [[ ! -d "${APP_PATH}" || -L "${APP_PATH}" ]]; then
   echo "helper-lifecycle: app bundle not found: ${APP_PATH}" >&2
   exit 66
 fi
@@ -309,6 +353,7 @@ fi
 if [[ -n "${TEST_ROOT}" ]]; then
   TEST_ROOT="$(cd "${TEST_ROOT}" 2>/dev/null && pwd -P)"
   case "${APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
+  case "${CONTROL_APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture control app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
   if [[ "${REPLACEMENT_PHASE}" == "prepare" ]]; then
     case "${REPLACEMENT_CANDIDATE_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture replacement candidate escaped the test root." >&2; exit 65 ;; esac
     case "${REPLACEMENT_PREVIOUS_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture previous bundle escaped the test root." >&2; exit 65 ;; esac
@@ -398,7 +443,7 @@ write_record() {
   [[ -d "${record_dir}" ]] || { echo "helper-lifecycle: record directory does not exist: ${record_dir}" >&2; return 1; }
   RECORD_TMP="$(/usr/bin/mktemp "${RECORD_PATH}.tmp.XXXXXX")"
   /usr/bin/ruby -rjson -rdigest -e '
-    operation, app, dry_run, status, blocker, phase_log, privileged_record, *planned = ARGV
+    operation, app, control_app, dry_run, status, blocker, phase_log, privileged_record, *planned = ARGV
     executed = File.file?(phase_log) ? File.readlines(phase_log, chomp: true).reject(&:empty?) : []
     payload = {
       schemaVersion: 1,
@@ -412,8 +457,9 @@ write_record() {
       executedPhases: executed,
       privilegedEvidencePath: privileged_record
     }
+    payload[:controlApp] = control_app unless control_app == app
     STDOUT.write(JSON.pretty_generate(payload)); STDOUT.write("\n")
-  ' "${OPERATION}" "${APP_PATH}" "${DRY_RUN}" "${STATUS}" "${BLOCKER}" "${PHASE_LOG}" "${ROOT_EXECUTION_RECORD}" "${PLANNED_PHASES[@]}" > "${RECORD_TMP}"
+  ' "${OPERATION}" "${APP_PATH}" "${CONTROL_APP_PATH}" "${DRY_RUN}" "${STATUS}" "${BLOCKER}" "${PHASE_LOG}" "${ROOT_EXECUTION_RECORD}" "${PLANNED_PHASES[@]}" > "${RECORD_TMP}"
   /bin/chmod 600 "${RECORD_TMP}"
   /bin/mv -f "${RECORD_TMP}" "${RECORD_PATH}"
   RECORD_TMP=""
@@ -438,6 +484,38 @@ validate_prepare_report() {
       token["expiresAt"].is_a?(Numeric) && token["issuedAt"].is_a?(Numeric) && token["expiresAt"] > token["issuedAt"]
     exit(ok ? 0 : 75)
   ' "$1" "$2" "$3"
+}
+
+normalize_legacy_maintenance_report_dates() {
+  /usr/bin/ruby -rjson -e '
+    path = ARGV.fetch(0)
+    report = JSON.parse(File.read(path))
+    offset = 978_307_200
+    now = Time.now.to_f
+    changed = false
+    normalize = lambda do |value|
+      next value unless value.is_a?(Numeric)
+      shifted = value + offset
+      if (now - shifted).abs <= 120
+        changed = true
+        shifted
+      else
+        value
+      end
+    end
+    [report["token"], *Array(report["fanResults"])].each do |entry|
+      next unless entry.is_a?(Hash)
+      %w[issuedAt expiresAt freshConfirmationAt].each do |key|
+        entry[key] = normalize.call(entry[key]) if entry.key?(key)
+      end
+    end
+    exit 0 unless changed
+    File.open(path, File::WRONLY | File::TRUNC | File::NOFOLLOW) do |file|
+      file.write(JSON.generate(report))
+      file.flush
+      file.fsync
+    end
+  ' "$1"
 }
 
 validate_protocol_mismatch_report() {
@@ -1180,6 +1258,48 @@ capture_bundle_binding() {
   ' "${app}" "${kind}" "${team_id}" "${main_id}" "${ctl_id}" "${daemon_id}" "${helper_id}" "${bundle_version}" "${bundle_build}"
 }
 
+validate_control_app() {
+  [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]] || return 0
+  case "${OPERATION}:${REPLACEMENT_PHASE}" in
+    uninstall:|repair:prepare) ;;
+    *) return 1 ;;
+  esac
+  if [[ "${OPERATION}:${REPLACEMENT_PHASE}" == "repair:prepare" ]]; then
+    [[ "${CONTROL_APP_PATH}" == "${REPLACEMENT_CANDIDATE_APP}" ]] || return 1
+  fi
+  [[ -d "${CONTROL_APP_PATH}" && ! -L "${CONTROL_APP_PATH}" ]] || return 1
+  [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "${CONTROL_APP_PATH}/Contents/Info.plist" 2>/dev/null)" == "tech.reidar.vifty" ]] || return 1
+
+  local binding
+  binding="$(capture_bundle_binding "${CONTROL_APP_PATH}")" || return 1
+  local expected_helper_sha="${PUBLIC_RECOVERY_HELPER_SHA256}"
+  if [[ "${OPERATION}:${REPLACEMENT_PHASE}" == "repair:prepare" ]]; then
+    expected_helper_sha=""
+  fi
+  /usr/bin/ruby -rjson -e '
+    binding = JSON.parse(ARGV.fetch(0))
+    path, expected_team, expected_helper_sha, test_root = ARGV.drop(1)
+    identity = binding.fetch("identity")
+    expected_ids = {
+      "Vifty" => "tech.reidar.vifty",
+      "viftyctl" => "tech.reidar.vifty.ctl",
+      "ViftyDaemon" => "tech.reidar.vifty.daemon",
+      "ViftyHelper" => "tech.reidar.vifty.helper"
+    }
+    exit 75 unless binding["sourcePath"] == File.expand_path(path) &&
+      identity["componentIdentifiers"] == expected_ids &&
+      identity["componentSHA256"].is_a?(Hash) &&
+      identity["componentSHA256"].keys.sort == expected_ids.keys.sort
+    if test_root.empty?
+      exit 75 unless identity["kind"] == "developer-id" &&
+        identity["teamID"] == expected_team &&
+        (expected_helper_sha.empty? || identity.dig("componentSHA256", "ViftyHelper") == expected_helper_sha)
+    else
+      exit 75 unless identity["kind"] == "adhoc" && identity["teamID"].nil?
+    end
+  ' "${binding}" "${CONTROL_APP_PATH}" "${RELEASE_TEAM_ID}" "${expected_helper_sha}" "${TEST_ROOT}"
+}
+
 persist_root_record() {
   local record_status="$1"
   local record_blocker="${2:-}"
@@ -1426,6 +1546,14 @@ stage_trusted_helper() {
   TRUSTED_HELPER="${staged}"
 }
 
+stage_verified_public_recovery_helper() {
+  # Only the published Auto-only recovery helper may recover an unreachable
+  # service without a daemon receipt. Replacement and repair stay receipt-gated.
+  [[ "${OPERATION}" == "uninstall" && -z "${REPLACEMENT_PHASE}" ]] || return 1
+  stage_trusted_helper "$1" || return 1
+  [[ "${HELPER_SNAPSHOT_SHA256}" == "4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f" ]]
+}
+
 stage_verified_legacy_v132_daemon() {
   local daemon_dir="$1"
   local staged="${daemon_dir}/ViftyDaemon.v1.3.2"
@@ -1608,7 +1736,9 @@ root_worker() {
     esac
     ROOT_AUTHORITY_MODE="${authority_mode}"
     if [[ "${requires_legacy_v132}" -eq 1 ]]; then
-      stage_verified_legacy_v132_daemon "${local_tmp}" || root_fail "The installed daemon is not the exact published Developer ID v1.3.2 compatibility binary."
+      stage_verified_legacy_v132_daemon "${local_tmp}" ||
+        stage_verified_public_recovery_helper "${local_tmp}" ||
+        root_fail "Unreachable helper recovery requires the exact published v1.3.2 daemon or the signed public Auto-only uninstall helper."
     fi
     record_root_phase verify-privileged-authority succeeded
 
@@ -1715,6 +1845,7 @@ build_root_program() {
   builtin declare -f enable_and_confirm_service
   builtin declare -f stop_and_confirm_offline
   builtin declare -f stage_trusted_helper
+  builtin declare -f stage_verified_public_recovery_helper
   builtin declare -f stage_verified_legacy_v132_daemon
   builtin declare -f root_worker
   local variable
@@ -2490,6 +2621,13 @@ if [[ "${REPLACEMENT_PHASE}" == "finish" ]]; then
   exit 0
 fi
 
+if ! validate_control_app; then
+  BLOCKER="The explicit control app failed the complete bundle, identifier, signature, TeamID, or pinned helper digest check."
+  write_record || true
+  echo "helper-lifecycle: ${BLOCKER}" >&2
+  exit 75
+fi
+
 if [[ -n "${MAINTENANCE_REPORT}" ]]; then
   BLOCKER="Caller-supplied maintenance reports cannot authorize live teardown; prepare must run in this invocation."
   PHASE_LOG="/dev/null"
@@ -2536,6 +2674,10 @@ PREPARE_STATUS=$?
 set -e
 if [[ "${PREPARE_STATUS}" -eq 0 ]]; then
   /bin/chmod 600 "${REPORT_PATH}"
+  if ! normalize_legacy_maintenance_report_dates "${REPORT_PATH}"; then
+    cancel_unconsumed
+    fail_prepare_or_root "The daemon maintenance report could not be normalized or read safely."
+  fi
   if ! validate_prepare_report "${REPORT_PATH}" "${OPERATION}" "${HELPER_SNAPSHOT_SHA256}"; then
     cancel_unconsumed
     fail_prepare_or_root "The daemon maintenance report was incomplete, stale, or unsafe."

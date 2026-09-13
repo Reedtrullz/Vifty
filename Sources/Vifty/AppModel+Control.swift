@@ -4,14 +4,6 @@ import ViftyCore
 
 @MainActor
 extension AppModel {
-    func applyModeSelection() {
-        if selectedMode == .auto {
-            restoreAuto()
-        } else {
-            markFanControlDraftPending()
-        }
-    }
-
     func performModeSelectionAction() {
         Task { await performModeSelectionActionNow() }
     }
@@ -45,10 +37,6 @@ extension AppModel {
             controlMode: controlState.mode,
             applyState: fanControlApplyState
         )
-    }
-
-    func applyPendingFanControl() {
-        Task { _ = await applyCurrentModeSelection() }
     }
 
     @discardableResult
@@ -348,10 +336,6 @@ extension AppModel {
 
     func fanMode(for draft: FanControlDraft) -> FanMode {
         fanControlSessionController.fanMode(for: draft)
-    }
-
-    func applyCurveOverrides() {
-        markFanControlDraftPending()
     }
 
     func restoreAutoIfManualSessionExpired() async -> FanControlSessionOperation? {

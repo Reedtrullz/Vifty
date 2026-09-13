@@ -27,9 +27,11 @@ This script only runs:
   viftyctl capabilities --json
   viftyctl diagnose --json
 
-It may also hash the installed LaunchDaemon helper and --expected-daemon when
-provided. It does not call prepare, run, restore-auto, ViftyHelper, sudo, or raw
-SMC tools. Exit 0 means the supervised agent-run smoke collector may proceed.
+It hashes the installed daemon path reported by diagnose when available,
+falling back to the legacy LaunchDaemon helper path, and hashes
+--expected-daemon when provided. It does not call prepare, run, restore-auto,
+ViftyHelper, sudo, or raw SMC tools. Exit 0 means the supervised agent-run
+smoke collector may proceed.
 Exit 75 means the smoke collector must be skipped until the printed blockers
 are cleared. JSON output uses schemaID:
   https://vifty.local/schemas/agent-run-smoke-readiness.schema.json
@@ -42,7 +44,7 @@ MAX_RPM_PERCENT="${VIFTY_AGENT_RUN_SMOKE_MAX_RPM_PERCENT:-55}"
 REASON="${VIFTY_AGENT_RUN_SMOKE_REASON:-agent run smoke test}"
 EXPECTED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_EXPECTED_DAEMON:-}"
 REQUIRE_DAEMON_MATCH="${VIFTY_AGENT_RUN_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
-INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
+INSTALLED_DAEMON_PATH="${VIFTY_AGENT_RUN_SMOKE_INSTALLED_DAEMON_PATH:-}"
 JSON_OUTPUT=0
 SUMMARY_PATH="${VIFTY_AGENT_RUN_SMOKE_READINESS_SUMMARY:-}"
 
@@ -164,25 +166,6 @@ if [[ ! -x "${VIFTYCTL}" ]]; then
   exit 69
 fi
 
-INSTALLED_DAEMON_PRESENT="false"
-INSTALLED_DAEMON_SHA256=""
-EXPECTED_DAEMON_SHA256=""
-DAEMON_MATCHES_EXPECTED="unknown"
-
-if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
-  INSTALLED_DAEMON_PRESENT="true"
-  INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
-fi
-
-if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
-  EXPECTED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${EXPECTED_DAEMON_PATH}" | awk '{print $1}')"
-  if [[ -n "${INSTALLED_DAEMON_SHA256}" && "${INSTALLED_DAEMON_SHA256}" == "${EXPECTED_DAEMON_SHA256}" ]]; then
-    DAEMON_MATCHES_EXPECTED="true"
-  else
-    DAEMON_MATCHES_EXPECTED="false"
-  fi
-fi
-
 CAPABILITIES_JSON="$(mktemp "${TMPDIR:-/tmp}/vifty-agent-run-readiness-capabilities.XXXXXXXX.json")"
 CAPABILITIES_STDERR="$(mktemp "${TMPDIR:-/tmp}/vifty-agent-run-readiness-capabilities.XXXXXXXX.stderr")"
 DIAGNOSE_JSON="$(mktemp "${TMPDIR:-/tmp}/vifty-agent-run-readiness-diagnose.XXXXXXXX.json")"
@@ -204,6 +187,39 @@ else
 fi
 DIAGNOSE_STATUS=$?
 set -e
+
+if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PATH="$(/usr/bin/ruby -rjson -e '
+    begin
+      payload = JSON.parse(File.read(ARGV.fetch(0)))
+      path = payload.dig("daemonRuntime", "installedDaemonPath")
+      puts path if path.is_a?(String) && !path.empty?
+    rescue StandardError
+    end
+  ' "${DIAGNOSE_JSON}" 2>/dev/null || true)"
+  if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+    INSTALLED_DAEMON_PATH="/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon"
+  fi
+fi
+
+INSTALLED_DAEMON_PRESENT="false"
+INSTALLED_DAEMON_SHA256=""
+EXPECTED_DAEMON_SHA256=""
+DAEMON_MATCHES_EXPECTED="unknown"
+
+if [[ -f "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PRESENT="true"
+  INSTALLED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${INSTALLED_DAEMON_PATH}" | awk '{print $1}')"
+fi
+
+if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
+  EXPECTED_DAEMON_SHA256="$(/usr/bin/shasum -a 256 "${EXPECTED_DAEMON_PATH}" | awk '{print $1}')"
+  if [[ -n "${INSTALLED_DAEMON_SHA256}" && "${INSTALLED_DAEMON_SHA256}" == "${EXPECTED_DAEMON_SHA256}" ]]; then
+    DAEMON_MATCHES_EXPECTED="true"
+  else
+    DAEMON_MATCHES_EXPECTED="false"
+  fi
+fi
 
 ruby -rjson -rfileutils - \
   "${CAPABILITIES_JSON}" \

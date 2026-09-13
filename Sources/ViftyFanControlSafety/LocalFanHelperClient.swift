@@ -44,6 +44,8 @@ public struct LocalFanHelperClient: Sendable {
     private let smcFactory: @Sendable () throws -> any SMCConnection
     private let unlockTimeoutSeconds: TimeInterval
     private let unlockRetryIntervalSeconds: TimeInterval
+    private let forceTestSettleSeconds: TimeInterval
+    private let targetReadbackTimeoutSeconds: TimeInterval
     private let monotonicNow: @Sendable () -> TimeInterval
     private let sleep: @Sendable (TimeInterval) -> Void
 
@@ -55,6 +57,8 @@ public struct LocalFanHelperClient: Sendable {
         smcFactory: @escaping @Sendable () throws -> any SMCConnection,
         unlockTimeoutSeconds: TimeInterval = 10,
         unlockRetryIntervalSeconds: TimeInterval = 0.1,
+        forceTestSettleSeconds: TimeInterval = 3,
+        targetReadbackTimeoutSeconds: TimeInterval = 2,
         monotonicNow: @escaping @Sendable () -> TimeInterval = {
             ProcessInfo.processInfo.systemUptime
         },
@@ -65,6 +69,8 @@ public struct LocalFanHelperClient: Sendable {
         self.smcFactory = smcFactory
         self.unlockTimeoutSeconds = max(0, unlockTimeoutSeconds)
         self.unlockRetryIntervalSeconds = max(0, unlockRetryIntervalSeconds)
+        self.forceTestSettleSeconds = max(0, forceTestSettleSeconds)
+        self.targetReadbackTimeoutSeconds = max(0, targetReadbackTimeoutSeconds)
         self.monotonicNow = monotonicNow
         self.sleep = sleep
     }
@@ -108,7 +114,7 @@ public struct LocalFanHelperClient: Sendable {
         var warnings = plan.warnings
 
         do {
-            try perform(plan.automaticMode, smc: smc)
+            try writeAndConfirmAutomaticModeWithRetry(plan: plan, smc: smc)
 
             if let hygieneTarget = plan.hygieneTarget {
                 do {
@@ -162,25 +168,32 @@ public struct LocalFanHelperClient: Sendable {
         let plan = try preflight(fan: fan, requestedRPM: rpm, smc: smc)
 
         do {
-            let usedForceTest = try enterManualMode(plan: plan, smc: smc)
+            var usedForceTest = try enterManualMode(plan: plan, smc: smc)
             guard let requestedTarget = plan.requestedTarget else {
                 throw ViftyError.helperRejected("Fixed-RPM preflight produced no target write.")
             }
-            try perform(requestedTarget, smc: smc)
-
-            if (usedForceTest || !plan.forceTestInitiallyDisabled),
-               let forceTestDisable = plan.forceTestDisable {
-                try perform(forceTestDisable, smc: smc)
-            }
+            usedForceTest = try writeTargetWithFallback(
+                requestedTarget,
+                expectedRPM: rpm,
+                plan: plan,
+                smc: smc,
+                usedForceTest: usedForceTest
+            )
 
             let observation = observe(plan: plan, smc: smc)
+            let forceTestMustRemainEnabled = !plan.forceTestInitiallyDisabled || usedForceTest
+            let forceTestStateConfirmed = forceTestMustRemainEnabled
+                ? !observation.forceTestDisabled
+                : observation.forceTestDisabled
             guard observation.errors.isEmpty,
                   observation.mode == .forced,
                   observation.targetRPM == rpm,
-                  observation.forceTestDisabled else {
+                  forceTestStateConfirmed else {
                 throw ReadbackMismatch(
                     message: readbackMessage(
-                        expected: "Forced at \(rpm) RPM with Ftst disabled",
+                        expected: forceTestMustRemainEnabled
+                            ? "Forced at \(rpm) RPM with Ftst enabled"
+                            : "Forced at \(rpm) RPM with Ftst disabled",
                         observation: observation
                     )
                 )
@@ -200,6 +213,123 @@ public struct LocalFanHelperClient: Sendable {
                 plan: plan,
                 smc: smc,
                 warnings: plan.warnings
+            )
+        }
+    }
+
+    private func writeTargetWithFallback(
+        _ target: PreparedWrite,
+        expectedRPM: Int,
+        plan: MutationPlan,
+        smc: any SMCConnection,
+        usedForceTest: Bool
+    ) throws -> Bool {
+        do {
+            try writeAndConfirmTargetWithRetry(
+                target,
+                expectedRPM: expectedRPM,
+                smc: smc,
+                timeoutSeconds: targetReadbackTimeoutSeconds
+            )
+            return usedForceTest
+        } catch let mismatch as ReadbackMismatch {
+            guard let forceTestEnable = plan.forceTestEnable else {
+                throw mismatch
+            }
+            if !usedForceTest {
+                try resetToOSManagedModeBeforeUnlock(plan: plan, smc: smc)
+                try perform(forceTestEnable, smc: smc)
+            }
+            _ = try retryManualMode(
+                plan: plan,
+                smc: smc,
+                initialError: mismatch,
+                usedForceTest: true
+            )
+            try writeAndConfirmTargetWithRetry(
+                target,
+                expectedRPM: expectedRPM,
+                smc: smc,
+                timeoutSeconds: unlockTimeoutSeconds
+            )
+            return true
+        }
+    }
+
+    private func resetToOSManagedModeBeforeUnlock(
+        plan: MutationPlan,
+        smc: any SMCConnection
+    ) throws {
+        try writeAndConfirmAutomaticModeWithRetry(plan: plan, smc: smc)
+    }
+
+    private func writeAndConfirmTargetWithRetry(
+        _ target: PreparedWrite,
+        expectedRPM: Int,
+        smc: any SMCConnection,
+        timeoutSeconds: TimeInterval
+    ) throws {
+        try retryReadback(timeoutSeconds: timeoutSeconds) {
+            try writeAndConfirmTarget(target, expectedRPM: expectedRPM, smc: smc)
+        }
+    }
+
+    private func writeAndConfirmAutomaticModeWithRetry(
+        plan: MutationPlan,
+        smc: any SMCConnection
+    ) throws {
+        try retryReadback(timeoutSeconds: targetReadbackTimeoutSeconds) {
+            try perform(plan.automaticMode, smc: smc)
+            let value = try smc.read(plan.modeKey)
+            guard let rawMode = SMCDecoding.decodeFanControlByte(value),
+                  let mode = FanHardwareMode(rawValue: Int(rawMode)),
+                  isOSManaged(mode) else {
+                throw ReadbackMismatch(
+                    message: "Auto mode write was not confirmed for \(plan.modeKey)."
+                )
+            }
+        }
+    }
+
+    private func retryReadback(
+        timeoutSeconds: TimeInterval,
+        operation: () throws -> Void
+    ) throws {
+        var lastError: Error?
+        let deadline = monotonicNow() + timeoutSeconds
+        while true {
+            do {
+                try operation()
+                return
+            } catch {
+                lastError = error
+            }
+
+            guard monotonicNow() < deadline,
+                  unlockRetryIntervalSeconds > 0 else {
+                break
+            }
+            sleep(unlockRetryIntervalSeconds)
+        }
+
+        throw lastError ?? ViftyError.helperRejected(
+            "Fan target write could not be confirmed."
+        )
+    }
+
+    private func writeAndConfirmTarget(
+        _ target: PreparedWrite,
+        expectedRPM: Int,
+        smc: any SMCConnection
+    ) throws {
+        try perform(target, smc: smc)
+        let value = try smc.read(target.key)
+        guard let actualRPM = SMCDecoding.decodeFanTargetRPM(value),
+              actualRPM == expectedRPM else {
+            let observedRPM = SMCDecoding.decodeFanTargetRPM(value)
+                .map(String.init) ?? "missing"
+            throw ReadbackMismatch(
+                message: "Fan target write was not confirmed for \(target.key): expected \(expectedRPM) RPM, observed \(observedRPM)"
             )
         }
     }
@@ -356,42 +486,75 @@ public struct LocalFanHelperClient: Sendable {
         smc: any SMCConnection
     ) throws -> Bool {
         do {
-            try perform(plan.manualMode, smc: smc)
+            try writeAndConfirmManualMode(plan: plan, smc: smc)
             return false
         } catch {
             let directError = error
-            guard let forceTestEnable = plan.forceTestEnable else {
-                throw directError
-            }
-
-            do {
-                try perform(forceTestEnable, smc: smc)
-            } catch {
-                throw ViftyError.helperRejected(
-                    "Manual mode write failed (\(describe(directError))); Ftst unlock failed (\(describe(error)))."
+            if let forceTestEnable = plan.forceTestEnable {
+                do {
+                    try perform(forceTestEnable, smc: smc)
+                } catch {
+                    throw ViftyError.helperRejected(
+                        "Manual mode write failed (\(describe(directError))); Ftst unlock failed (\(describe(error)))."
+                    )
+                }
+                return try retryManualMode(
+                    plan: plan,
+                    smc: smc,
+                    initialError: directError,
+                    usedForceTest: true
                 )
             }
 
-            let deadline = monotonicNow() + unlockTimeoutSeconds
-            var lastError = directError
-            while true {
-                do {
-                    try perform(plan.manualMode, smc: smc)
-                    return true
-                } catch {
-                    lastError = error
-                }
+            return try retryManualMode(
+                plan: plan,
+                smc: smc,
+                initialError: directError,
+                usedForceTest: false
+            )
+        }
+    }
 
-                guard monotonicNow() < deadline,
-                      unlockRetryIntervalSeconds > 0 else {
-                    break
+    private func retryManualMode(
+        plan: MutationPlan,
+        smc: any SMCConnection,
+        initialError: Error,
+        usedForceTest: Bool
+    ) throws -> Bool {
+        let deadline = monotonicNow() + unlockTimeoutSeconds
+        let settleDeadline = monotonicNow()
+            + (usedForceTest && unlockRetryIntervalSeconds > 0 ? forceTestSettleSeconds : 0)
+        var lastError = initialError
+        while true {
+            do {
+                try writeAndConfirmManualMode(plan: plan, smc: smc)
+                if monotonicNow() >= settleDeadline {
+                    return usedForceTest
                 }
-                sleep(unlockRetryIntervalSeconds)
+            } catch {
+                lastError = error
             }
 
+            guard monotonicNow() < deadline,
+                  unlockRetryIntervalSeconds > 0 else {
+                break
+            }
+            sleep(unlockRetryIntervalSeconds)
+        }
+
+        if usedForceTest {
             throw ViftyError.helperRejected(
                 "Fan control remained protected after Ftst unlock attempt: \(describe(lastError))"
             )
+        }
+        throw lastError
+    }
+
+    private func writeAndConfirmManualMode(plan: MutationPlan, smc: any SMCConnection) throws {
+        try perform(plan.manualMode, smc: smc)
+        let value = try smc.read(plan.modeKey)
+        guard SMCDecoding.decodeFanControlByte(value) == 1 else {
+            throw ReadbackMismatch(message: "Manual mode write was not confirmed for \(plan.modeKey).")
         }
     }
 

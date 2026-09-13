@@ -1082,7 +1082,7 @@ private final class ReleaseArtifactHarness {
     }
 
     var taggedReleaseManifestSHA256: String {
-        let contents = try! Self.run(
+        let contents = try! ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: [
                 "-C", sourceRepositoryURL.path,
@@ -1095,7 +1095,7 @@ private final class ReleaseArtifactHarness {
     }
 
     var releaseTagCommit: String {
-        try! Self.run(
+        try! ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: ["-C", sourceRepositoryURL.path, "rev-parse", "--verify", "\(selectedReleaseTag)^{commit}"]
         ).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1153,14 +1153,14 @@ private final class ReleaseArtifactHarness {
                 isDirectory: true
             )
             let clonedRepositoryURL = rootURL.appendingPathComponent("source-repository", isDirectory: true)
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: [
                     "clone", "--quiet", "--no-checkout", "--shared",
                     repositoryURL.path, clonedRepositoryURL.path
                 ]
             )
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: [
                     "-C", clonedRepositoryURL.path,
@@ -1168,7 +1168,7 @@ private final class ReleaseArtifactHarness {
                 ]
             )
             if let candidateVersion {
-                try Self.run(
+                try ReleaseEvidenceTestSupport.run(
                     executable: URL(fileURLWithPath: "/usr/bin/git"),
                     arguments: [
                         "-C", clonedRepositoryURL.path,
@@ -1241,7 +1241,7 @@ private final class ReleaseArtifactHarness {
         }
         // Synthetic Foundation writes carry irrelevant xattrs. Keep this fixture focused on
         // the portable Unix payload instead of OS-version-specific AppleDouble metadata.
-        try Self.run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/ditto"),
             arguments: [
                 "-c", "-k", "--norsrc", "--noqtn", "--keepParent",
@@ -1271,7 +1271,7 @@ private final class ReleaseArtifactHarness {
             publishedSourceCommit: publishedSourceCommit
         )
         if let candidateVersion, sourceRepositoryURL == nil {
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: ["-C", repositoryURL.path, "checkout", "--quiet", "HEAD"]
             )
@@ -1299,11 +1299,11 @@ private final class ReleaseArtifactHarness {
                 at: rootURL.appendingPathComponent(".github/release-manifest.json"),
                 to: taggedManifestURL
             )
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: ["-C", repositoryURL.path, "add", "--all"]
             )
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: [
                     "-C", repositoryURL.path,
@@ -1312,7 +1312,7 @@ private final class ReleaseArtifactHarness {
                     "commit", "--quiet", "-m", "tagged candidate manifest"
                 ]
             )
-            try Self.run(
+            try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: ["-C", repositoryURL.path, "tag", "-f", "v\(candidateVersion)", "HEAD"]
             )
@@ -1387,7 +1387,7 @@ private final class ReleaseArtifactHarness {
     }
 
     func createSourceTag(_ tag: String, commit: String) throws {
-        try Self.run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: ["-C", sourceRepositoryURL.path, "tag", "-f", tag, commit]
         )
@@ -1411,11 +1411,11 @@ private final class ReleaseArtifactHarness {
             withJSONObject: taggedManifest,
             options: [.prettyPrinted, .sortedKeys]
         ).write(to: taggedManifestURL)
-        try Self.run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: ["-C", sourceRepositoryURL.path, "add", ".github/release-manifest.json"]
         )
-        try Self.run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: [
                 "-C", sourceRepositoryURL.path,
@@ -1425,7 +1425,7 @@ private final class ReleaseArtifactHarness {
                 "commit", "--quiet", "-m", "pin candidate SHA"
             ]
         )
-        try Self.run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: [
                 "-C", sourceRepositoryURL.path,
@@ -1586,7 +1586,7 @@ private final class ReleaseArtifactHarness {
         _ artifactURL: URL,
         expectedScripts: [String]
     ) throws {
-        let listing = try run(
+        let listing = try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/zipinfo"),
             arguments: ["-1", artifactURL.path]
         )
@@ -1624,7 +1624,7 @@ private final class ReleaseArtifactHarness {
             .appendingPathComponent("archive-validation-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: extractionURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: extractionURL) }
-        try run(
+        try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/ditto"),
             arguments: ["-x", "-k", artifactURL.path, extractionURL.path]
         )
@@ -1679,7 +1679,7 @@ private final class ReleaseArtifactHarness {
     ) throws {
         let schemaContents: [String: String]
         if let sourceCommit {
-            let listing = try run(
+            let listing = try ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: [
                     "-C", repositoryURL.path,
@@ -1692,7 +1692,7 @@ private final class ReleaseArtifactHarness {
                 .filter { $0.hasSuffix(".schema.json") }
                 .map { path in
                     let filename = URL(fileURLWithPath: path).lastPathComponent
-                    let contents = try run(
+                    let contents = try ReleaseEvidenceTestSupport.run(
                         executable: URL(fileURLWithPath: "/usr/bin/git"),
                         arguments: ["-C", repositoryURL.path, "show", "\(sourceCommit):\(path)"]
                     )
@@ -1710,7 +1710,7 @@ private final class ReleaseArtifactHarness {
 
         let inventoryNames: [String]
         if let sourceCommit {
-            let inventory = try? run(
+            let inventory = try? ReleaseEvidenceTestSupport.run(
                 executable: URL(fileURLWithPath: "/usr/bin/git"),
                 arguments: [
                     "-C", repositoryURL.path,
@@ -1953,39 +1953,12 @@ private final class ReleaseArtifactHarness {
     }
 
     private static func sha256(of url: URL) throws -> String {
-        let output = try run(
+        let output = try ReleaseEvidenceTestSupport.run(
             executable: URL(fileURLWithPath: "/usr/bin/shasum"),
             arguments: ["-a", "256", url.path]
         )
         return try XCTUnwrap(output.split(separator: " ").first.map(String.init))
     }
 
-    @discardableResult
-    private static func run(
-        executable: URL,
-        arguments: [String]
-    ) throws -> String {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
 
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        try process.run()
-        process.waitUntilExit()
-
-        let stdoutString = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        let stderrString = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        if process.terminationStatus != 0 {
-            throw NSError(
-                domain: "ReleaseArtifactHarness",
-                code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: stderrString]
-            )
-        }
-        return stdoutString
-    }
 }

@@ -286,6 +286,9 @@ final class DaemonInstaller: ObservableObject {
                 return .failed
             }
         case .enabled:
+            // Keep SMAppService and launchd aligned when macOS reports a
+            // stale enabled record after a prior bootout or app replacement.
+            try? backend.register()
             return await runSafeLifecycle()
         case .unknown:
             statusText = "Helper registration state is unknown; restore Auto or reboot before repair"

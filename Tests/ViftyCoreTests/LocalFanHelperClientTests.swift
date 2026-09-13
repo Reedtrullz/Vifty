@@ -24,6 +24,53 @@ final class LocalFanHelperClientTests: XCTestCase {
         XCTAssertTrue(receipt.warnings.isEmpty)
     }
 
+    func testTransientTargetReadbackIsRetriedWithoutForceTest() throws {
+        let smc = FakeSMCConnection(values: [
+            "F0Md": Self.modeValue(mode: 0),
+            "F0Tg": Self.targetValue(rpm: 1_400)
+        ])
+        smc.ignoreNextWrite(to: "F0Tg")
+        let clock = ManualMonotonicClock()
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            unlockRetryIntervalSeconds: 0.1,
+            monotonicNow: { clock.now },
+            sleep: { clock.advance(by: $0) }
+        )
+
+        let receipt = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_200)),
+            fan: Self.fan()
+        )
+
+        XCTAssertEqual(receipt.observedTargetRPM, 3_200)
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "F0Tg", "F0Tg"])
+        XCTAssertEqual(clock.sleepCalls, [0.1])
+    }
+
+    func testTransientAutoReadbackIsRetriedWithoutForceTest() throws {
+        let smc = FakeSMCConnection(values: [
+            "F0Md": Self.modeValue(mode: 1),
+            "F0Tg": Self.targetValue(rpm: 2_400)
+        ])
+        smc.ignoreNextWrite(to: "F0Md")
+        let clock = ManualMonotonicClock()
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            unlockRetryIntervalSeconds: 0.1,
+            targetReadbackTimeoutSeconds: 0.2,
+            monotonicNow: { clock.now },
+            sleep: { clock.advance(by: $0) }
+        )
+
+        let receipt = try client.restoreAuto(fan: Self.fan())
+
+        XCTAssertEqual(receipt.observedMode, .automatic)
+        XCTAssertTrue(receipt.recoveryConfirmed)
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "F0Md", "F0Tg"])
+        XCTAssertEqual(clock.sleepCalls, [0.1])
+    }
+
     func testFixedRPMUsesLowercaseModeKeyWhenUppercaseModeKeyIsMissing() throws {
         let smc = FakeSMCConnection(values: [
             "F0md": Self.modeValue(key: "F0md", mode: 0),
@@ -37,6 +84,96 @@ final class LocalFanHelperClientTests: XCTestCase {
         )
 
         XCTAssertEqual(smc.writes.map(\.key), ["F0md", "F0Tg"])
+        XCTAssertEqual(receipt.observedMode, .forced)
+        XCTAssertEqual(receipt.observedTargetRPM, 3_200)
+    }
+
+    func testTargetReadbackMismatchUsesGuardedForceTestRetry() throws {
+        let smc = FakeSMCConnection(
+            values: Self.controlValues(),
+            targetWritesRequireForceTest: true
+        )
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        let receipt = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_200)),
+            fan: Self.fan()
+        )
+
+        XCTAssertEqual(
+            smc.writes.map(\.key),
+            ["F0Md", "F0Tg", "F0Md", "Ftst", "F0Md", "F0Tg"]
+        )
+        XCTAssertEqual(receipt.observedMode, .forced)
+        XCTAssertEqual(receipt.observedTargetRPM, 3_200)
+        XCTAssertFalse(receipt.forceTestDisabled)
+    }
+
+    func testTargetFallbackWaitsForForceTestHandoffBeforeRetryingMode() throws {
+        let smc = FakeSMCConnection(
+            values: Self.controlValues(),
+            targetWritesRequireForceTest: true
+        )
+        let clock = ManualMonotonicClock()
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            unlockRetryIntervalSeconds: 0.1,
+            forceTestSettleSeconds: 0.2,
+            targetReadbackTimeoutSeconds: 0,
+            monotonicNow: { clock.now },
+            sleep: { clock.advance(by: $0) }
+        )
+
+        _ = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_200)),
+            fan: Self.fan()
+        )
+
+        XCTAssertEqual(clock.sleepCalls, [0.1, 0.1])
+        XCTAssertEqual(
+            smc.writes.map(\.key),
+            ["F0Md", "F0Tg", "F0Md", "Ftst", "F0Md", "F0Md", "F0Md", "F0Tg"]
+        )
+    }
+
+    func testAlreadyEnabledForceTestRemainsEnabledAcrossManualApply() throws {
+        let smc = FakeSMCConnection(values: Self.controlValues(forceTest: 1))
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        let receipt = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_200)),
+            fan: Self.fan()
+        )
+
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "F0Tg"])
+        XCTAssertEqual(receipt.observedMode, .forced)
+        XCTAssertEqual(receipt.observedTargetRPM, 3_200)
+        XCTAssertFalse(receipt.forceTestDisabled)
+    }
+
+    func testModeReadbackMismatchWithoutFtstRetriesDirectly() throws {
+        let smc = FakeSMCConnection(values: [
+            "F0Md": Self.modeValue(key: "F0Md", mode: 0),
+            "F0Tg": Self.targetValue(rpm: 1_400)
+        ])
+        smc.ignoreNextWrite(to: "F0Md")
+        smc.ignoreNextWrite(to: "F0Md")
+        let clock = ManualMonotonicClock()
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            unlockTimeoutSeconds: 0.2,
+            unlockRetryIntervalSeconds: 0.1,
+            monotonicNow: { clock.now },
+            sleep: { clock.advance(by: $0) }
+        )
+
+        let receipt = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_200)),
+            fan: Self.fan(hardwareModeKey: "F0Md")
+        )
+
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "F0Md", "F0Md", "F0Tg"])
+        XCTAssertEqual(clock.sleepCalls, [0.1])
         XCTAssertEqual(receipt.observedMode, .forced)
         XCTAssertEqual(receipt.observedTargetRPM, 3_200)
     }
@@ -102,7 +239,10 @@ final class LocalFanHelperClientTests: XCTestCase {
     func testTargetFailureAfterForcedAttemptsCompleteCleanupAndReportsConfirmedRecovery() {
         let smc = FakeSMCConnection(values: Self.controlValues(mode: 0, targetRPM: 1_800))
         smc.failNextWrite(to: "F0Tg", with: TestFailure("target write failed"))
-        let client = LocalFanHelperClient(smcFactory: { smc })
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            targetReadbackTimeoutSeconds: 0
+        )
 
         XCTAssertThrowsError(
             try client.apply(
@@ -131,9 +271,15 @@ final class LocalFanHelperClientTests: XCTestCase {
     }
 
     func testFixedReadbackMismatchFailsAndRunsCleanup() {
-        let smc = FakeSMCConnection(values: Self.controlValues(mode: 0))
-        smc.ignoreNextWrite(to: "F0Md")
-        let client = LocalFanHelperClient(smcFactory: { smc })
+        let smc = FakeSMCConnection(values: [
+            "F0Md": Self.modeValue(mode: 0),
+            "F0Tg": Self.targetValue(rpm: 1_400)
+        ])
+        smc.ignoreNextWrite(to: "F0Tg")
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            targetReadbackTimeoutSeconds: 0
+        )
 
         XCTAssertThrowsError(
             try client.apply(
@@ -145,18 +291,53 @@ final class LocalFanHelperClientTests: XCTestCase {
                 return XCTFail("Expected FanMutationError, got \(error)")
             }
             XCTAssertEqual(mutation.code, .readbackMismatch)
-            XCTAssertTrue(mutation.primaryError.contains("expected Forced at 3600 RPM"))
+            XCTAssertTrue(mutation.primaryError.contains("Fan target write was not confirmed"))
             XCTAssertTrue(mutation.receipt.recoveryConfirmed)
             XCTAssertEqual(mutation.receipt.observedMode, .automatic)
         }
 
         XCTAssertEqual(
             smc.writes.map(\.key),
-            ["F0Md", "F0Tg", "F0Md", "F0Tg", "Ftst"]
+            ["F0Md", "F0Tg", "F0Md", "F0Tg"]
         )
     }
 
-    func testProtectedModeUnlockDisablesForceTestAndConfirmsReadback() throws {
+    func testSilentlyIgnoredManualModeWriteUsesGuardedUnlock() throws {
+        let smc = FakeSMCConnection(values: Self.controlValues(mode: 0))
+        smc.ignoreNextWrite(to: "F0Md")
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        let receipt = try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_600)), fan: Self.fan()
+        )
+
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "Ftst", "F0Md", "F0Tg"])
+        XCTAssertEqual(receipt.observedMode, .forced)
+        XCTAssertEqual(receipt.observedTargetRPM, 3_600)
+        XCTAssertFalse(receipt.forceTestDisabled)
+    }
+
+    func testIgnoredUnlockFailsAndRestoresAutoWithoutWritingRequestedTarget() {
+        let smc = FakeSMCConnection(values: Self.controlValues(mode: 0))
+        smc.ignoreNextWrite(to: "F0Md")
+        smc.ignoreNextWrite(to: "F0Md")
+        let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
+
+        XCTAssertThrowsError(try client.apply(
+            FanCommand(fanID: 0, mode: .fixedRPM(3_600)), fan: Self.fan()
+        )) { error in
+            guard let mutation = error as? FanMutationError else {
+                return XCTFail("Expected FanMutationError, got \(error)")
+            }
+            XCTAssertTrue(mutation.receipt.recoveryConfirmed)
+            XCTAssertTrue(mutation.receipt.forceTestDisabled)
+            XCTAssertEqual(mutation.receipt.observedMode, .automatic)
+        }
+        XCTAssertEqual(smc.writes.map(\.key), ["F0Md", "Ftst", "F0Md", "F0Md", "F0Tg", "Ftst"])
+        XCTAssertFalse(smc.writes.contains { $0.key == "F0Tg" && $0.bytes == SMCDecoding.encodeFPE2(3_600) })
+    }
+
+    func testProtectedModeUnlockKeepsForceTestAndConfirmsReadback() throws {
         let smc = FakeSMCConnection(values: Self.controlValues(mode: 3))
         smc.failNextWrite(to: "F0Md", with: TestFailure("protected"))
         let client = LocalFanHelperClient(smcFactory: { smc }, unlockRetryIntervalSeconds: 0)
@@ -168,12 +349,11 @@ final class LocalFanHelperClientTests: XCTestCase {
 
         XCTAssertEqual(
             smc.writes.map(\.key),
-            ["F0Md", "Ftst", "F0Md", "F0Tg", "Ftst"]
+            ["F0Md", "Ftst", "F0Md", "F0Tg"]
         )
         XCTAssertEqual(smc.writes[1].bytes, [1])
-        XCTAssertEqual(smc.writes[4].bytes, [0])
         XCTAssertEqual(receipt.observedMode, .forced)
-        XCTAssertTrue(receipt.forceTestDisabled)
+        XCTAssertFalse(receipt.forceTestDisabled)
     }
 
     func testUnlockTimeoutAndCleanupFailureReturnRecoveryUnconfirmedWithoutWallTime() {
@@ -219,7 +399,10 @@ final class LocalFanHelperClientTests: XCTestCase {
         smc.failNextWrite(to: "F0Tg", with: TestFailure("cleanup target failure"))
         smc.succeedNextWrite(to: "F0Md")
         smc.failNextWrite(to: "F0Md", with: TestFailure("cleanup auto failure"))
-        let client = LocalFanHelperClient(smcFactory: { smc })
+        let client = LocalFanHelperClient(
+            smcFactory: { smc },
+            targetReadbackTimeoutSeconds: 0
+        )
 
         XCTAssertThrowsError(
             try client.apply(
@@ -479,13 +662,18 @@ private final class FakeSMCConnection: SMCConnection, @unchecked Sendable {
 
     private let lock = NSLock()
     private var values: [String: SMCValue]
+    private let targetWritesRequireForceTest: Bool
     private var queuedWriteBehaviors: [String: [WriteBehavior]] = [:]
     private var recordedReads: [String] = []
     private var recordedWrites: [Write] = []
     private var recordedEvents: [Event] = []
 
-    init(values: [String: SMCValue]) {
+    init(
+        values: [String: SMCValue],
+        targetWritesRequireForceTest: Bool = false
+    ) {
         self.values = values
+        self.targetWritesRequireForceTest = targetWritesRequireForceTest
     }
 
     var writes: [Write] {
@@ -544,6 +732,12 @@ private final class FakeSMCConnection: SMCConnection, @unchecked Sendable {
                 case .ignore:
                     return
                 }
+            }
+            if targetWritesRequireForceTest,
+               key.hasSuffix("Tg"),
+               let forceTest = values["Ftst"],
+               SMCDecoding.decodeFanControlByte(forceTest) == 0 {
+                return
             }
             values[key] = SMCValue(key: key, dataType: dataType, bytes: bytes)
         }

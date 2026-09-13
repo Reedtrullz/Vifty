@@ -198,14 +198,6 @@ struct CodexUsageReader {
         return latest?.snapshot
     }
 
-    private func latestUsageEvent(in url: URL) -> (timestamp: String, snapshot: CodexUsageSnapshot)? {
-        for line in candidateLines(fromTailOf: url) {
-            guard let event = parseEvent(line, sourceURL: url) else { continue }
-            return event
-        }
-        return nil
-    }
-
     private func usageFiles() -> [URL] {
         let sessionsURL = codexHome.appendingPathComponent("sessions", isDirectory: true)
         guard let enumerator = fileManager.enumerator(
@@ -231,8 +223,8 @@ struct CodexUsageReader {
             .map(\.url)
     }
 
-    private func candidateLines(fromTailOf url: URL) -> [String] {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return [] }
+    private func latestUsageEvent(in url: URL) -> (timestamp: String, snapshot: CodexUsageSnapshot)? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
 
         let size = (try? handle.seekToEnd()) ?? 0
@@ -240,22 +232,17 @@ struct CodexUsageReader {
         do {
             try handle.seek(toOffset: offset)
         } catch {
-            return []
+            return nil
         }
         let data = (try? handle.readToEnd()) ?? Data()
-        return candidateLines(in: data)
-    }
-
-    private func candidateLines(in data: Data) -> [String] {
-        var matches: [String] = []
         for line in String(decoding: data, as: UTF8.self)
             .split(separator: "\n", omittingEmptySubsequences: true)
             .reversed()
         {
             guard line.contains("token_count"), line.contains("rate_limits") else { continue }
-            matches.append(String(line))
+            if let event = parseEvent(String(line), sourceURL: url) { return event }
         }
-        return matches
+        return nil
     }
 
     private func parseEvent(_ line: String, sourceURL: URL) -> (timestamp: String, snapshot: CodexUsageSnapshot)? {

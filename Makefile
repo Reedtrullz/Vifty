@@ -165,7 +165,7 @@ app: check-toolchain release-facts ## Build the release app bundle
 run-app: check-toolchain ## Build and open the local app bundle
 	./scripts/build-and-run-vifty.sh
 
-install: check-toolchain ## Build and install to /Applications
+install: check-toolchain app ## Build and install to /Applications
 	CONFIGURATION="$(CONFIGURATION)" ./scripts/install-vifty.sh
 
 install-public-release: ## Verify and install the exact current published release archive
@@ -271,7 +271,7 @@ test-full: check-toolchain ## Run the full XCTest suite, including slow evidence
 	swift test $(SWIFT_BUILD_ARGS) $(SWIFT_TEST_WARNING_ARGS)
 
 verify: check-toolchain ## Run fast local trust gates without installing
-	/bin/bash -n scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh
+	@for script in scripts/*.sh scripts/lib/*.sh examples/viftyctl/*.sh; do /bin/bash -n "$$script" || exit $$?; done
 	$(MAKE) release-facts
 	scripts/check-community-standards.sh
 	scripts/validate-release-metadata.sh --mode "$(RELEASE_METADATA_MODE)"

@@ -280,7 +280,10 @@ enum HelperServiceManagementBridge {
         case .register:
             switch backend.state {
             case .enabled:
-                break
+                // macOS can retain the enabled SMAppService record after the
+                // launchd job was booted out. Re-submit the native service so
+                // the next XPC lookup can launch it again.
+                try backend.register()
             case .notRegistered:
                 try backend.register()
             case .requiresApproval:

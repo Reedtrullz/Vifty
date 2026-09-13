@@ -185,14 +185,6 @@ struct FanControlSessionController {
         )
     }
 
-    func previousSessionDeadline(for operation: FanControlSessionOperation) -> Date? {
-        guard let attempt = manualApplyAttempt,
-              attempt.operation == operation else {
-            return nil
-        }
-        return attempt.previousSessionExpiresAt
-    }
-
     func fanMode(for draft: FanControlDraft) -> FanMode {
         switch draft.mode {
         case .auto:

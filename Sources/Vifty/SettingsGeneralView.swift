@@ -56,7 +56,7 @@ struct SettingsGeneralView: View {
                     Text("Temperature Curve").tag(ModeSelection.curve)
                 }
 
-                Text(StartupModePresentation.resolve(model.startupMode).detail)
+                Text(StartupModePresentation.detail(for: model.startupMode))
                     .viftyFont(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

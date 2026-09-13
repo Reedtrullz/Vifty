@@ -812,6 +812,36 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(restoreReasonCount, 0)
     }
 
+    func testModernBundleProgramRuntimeRequiresTheExpectedLiveDaemonPath() {
+        let expectedPath = "/Applications/Vifty.app/Contents/MacOS/ViftyDaemon"
+        let launchdDescription = """
+        system/tech.reidar.vifty.daemon = {
+            managed_by = com.apple.xpc.ServiceManagement
+            state = running
+            program identifier = Contents/MacOS/ViftyDaemon (mode: 2)
+            parent bundle identifier = tech.reidar.vifty
+            pid = 87496
+            job state = running
+        }
+        """
+
+        XCTAssertEqual(
+            ViftyCtlDaemonRuntimeDiagnostic.modernBundleProgramDaemonPath(
+                launchdDescription: launchdDescription,
+                expectedDaemonPath: expectedPath,
+                runningProcessPath: expectedPath
+            ),
+            expectedPath
+        )
+        XCTAssertNil(
+            ViftyCtlDaemonRuntimeDiagnostic.modernBundleProgramDaemonPath(
+                launchdDescription: launchdDescription,
+                expectedDaemonPath: expectedPath,
+                runningProcessPath: "/Applications/Old Vifty.app/Contents/MacOS/ViftyDaemon"
+            )
+        )
+    }
+
     func testDiagnoseJSONIncludesAllRecoveryStepsWhenHelperAndManualControlBothBlockCooling() async throws {
         let client = FakeAgentControlClient(
             snapshot: Self.readySnapshot(),
@@ -3020,6 +3050,7 @@ final class ViftyCtlRunnerTests: XCTestCase {
         XCTAssertEqual(prepareOperations, [.repair])
         let safeData = try XCTUnwrap(safe.stdout.data(using: .utf8))
         let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
         XCTAssertEqual(try decoder.decode(HelperMaintenanceReport.self, from: safeData), safeReport)
 
         var blockedReport = safeReport

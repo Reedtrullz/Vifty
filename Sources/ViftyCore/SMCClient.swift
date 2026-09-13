@@ -163,6 +163,10 @@ public final class SMCClient: @unchecked Sendable {
 
         var input = infoInput
         input.keyInfo = infoOutput.keyInfo
+        // AppleSMC expects the write envelope to declare the exact payload
+        // size. Leaving the discovered size implicit can accept F0Md while
+        // silently ignoring the following F{n}Tg write on protected Macs.
+        input.keyInfo.dataSize = UInt32(bytes.count)
         input.data8 = 6
         for (index, byte) in bytes.enumerated() {
             input.bytes[index] = byte

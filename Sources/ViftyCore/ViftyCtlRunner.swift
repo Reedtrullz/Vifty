@@ -25,10 +25,25 @@ public extension ViftyCtlDaemonRuntimeDiagnostic {
         installedDaemonPath: String = ViftyCtlDaemonRuntimeDiagnostic.standardInstalledDaemonPath
     ) -> ViftyCtlDaemonRuntimeDiagnostic {
         let fileManager = FileManager.default
-        let installedURL = URL(fileURLWithPath: installedDaemonPath, isDirectory: false)
+        let expectedURL = expectedDaemonURL(forExecutablePath: executablePath)
+        let modernBundleProgramPath: String?
+        if installedDaemonPath == ViftyCtlDaemonRuntimeDiagnostic.standardInstalledDaemonPath,
+           let expectedURL,
+           let description = launchdDescription(),
+           let pid = launchdPID(from: description),
+           let runningProcessPath = runningProcessPath(for: pid) {
+            modernBundleProgramPath = modernBundleProgramDaemonPath(
+                launchdDescription: description,
+                expectedDaemonPath: expectedURL.path,
+                runningProcessPath: runningProcessPath
+            )
+        } else {
+            modernBundleProgramPath = nil
+        }
+        let effectiveInstalledDaemonPath = modernBundleProgramPath ?? installedDaemonPath
+        let installedURL = URL(fileURLWithPath: effectiveInstalledDaemonPath, isDirectory: false)
         let installedPresent = fileExists(installedURL, fileManager: fileManager)
         let installedSHA256 = installedPresent ? sha256Hex(of: installedURL) : nil
-        let expectedURL = expectedDaemonURL(forExecutablePath: executablePath)
         let expectedPresent = expectedURL.map { fileExists($0, fileManager: fileManager) } ?? false
         let expectedSHA256 = expectedPresent ? expectedURL.flatMap(sha256Hex(of:)) : nil
         let matchesExpectedDaemon: Bool?
@@ -39,7 +54,7 @@ public extension ViftyCtlDaemonRuntimeDiagnostic {
         }
 
         return ViftyCtlDaemonRuntimeDiagnostic(
-            installedDaemonPath: installedDaemonPath,
+            installedDaemonPath: effectiveInstalledDaemonPath,
             installedDaemonPresent: installedPresent,
             installedDaemonSHA256: installedSHA256,
             expectedDaemonPath: expectedURL?.path,
@@ -48,6 +63,27 @@ public extension ViftyCtlDaemonRuntimeDiagnostic {
             matchesExpectedDaemon: matchesExpectedDaemon,
             matchRequired: expectedSHA256 != nil
         )
+    }
+
+    internal static func modernBundleProgramDaemonPath(
+        launchdDescription: String,
+        expectedDaemonPath: String,
+        runningProcessPath: String
+    ) -> String? {
+        guard launchdValue("managed_by", in: launchdDescription) == "com.apple.xpc.ServiceManagement",
+              launchdValue("state", in: launchdDescription) == "running",
+              launchdValue("program identifier", in: launchdDescription) == "Contents/MacOS/ViftyDaemon (mode: 2)",
+              launchdValue("parent bundle identifier", in: launchdDescription) == "tech.reidar.vifty",
+              launchdValue("job state", in: launchdDescription) == "running" else {
+            return nil
+        }
+
+        let expectedPath = URL(fileURLWithPath: expectedDaemonPath, isDirectory: false)
+            .standardizedFileURL.path
+        let runningPath = URL(fileURLWithPath: runningProcessPath, isDirectory: false)
+            .standardizedFileURL.path
+        guard runningPath == expectedPath else { return nil }
+        return runningPath
     }
 
     private static func expectedDaemonURL(forExecutablePath executablePath: String?) -> URL? {
@@ -62,6 +98,53 @@ public extension ViftyCtlDaemonRuntimeDiagnostic {
         return executableURL
             .deletingLastPathComponent()
             .appendingPathComponent("ViftyDaemon", isDirectory: false)
+    }
+
+    private static func launchdDescription() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl", isDirectory: false)
+        process.arguments = ["print", "system/\(ViftyDaemonConstants.machServiceName)"]
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+        _ = stderr.fileHandleForReading.readDataToEndOfFile()
+        guard process.terminationStatus == 0 else { return nil }
+        return String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+    }
+
+    private static func launchdPID(from description: String) -> pid_t? {
+        guard let value = launchdValue("pid", in: description),
+              let pid = Int32(value),
+              pid > 0 else {
+            return nil
+        }
+        return pid
+    }
+
+    private static func launchdValue(_ key: String, in description: String) -> String? {
+        description.split(whereSeparator: \.isNewline).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let prefix = "\(key) = "
+            guard trimmed.hasPrefix(prefix) else { return nil }
+            return String(trimmed.dropFirst(prefix.count))
+        }.first
+    }
+
+    private static func runningProcessPath(for pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4_096)
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return String(
+            decoding: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) },
+            as: UTF8.self
+        )
     }
 
     private static func fileExists(_ url: URL, fileManager: FileManager) -> Bool {
@@ -1558,7 +1641,7 @@ public struct ViftyCtlRunner: Sendable {
                     && report.blockers.isEmpty
                     && report.token?.operation == operation
                 return ViftyCtlResult(
-                    stdout: try encodeJSON(report) + "\n",
+                    stdout: try encodeJSON(report, dateEncodingStrategy: .secondsSince1970) + "\n",
                     exitCode: authorizedShape ? 0 : 75
                 )
             case .helperMaintenanceConsume(let operation, let reportPath):
@@ -1910,9 +1993,13 @@ public struct ViftyCtlRunner: Sendable {
         return try format(status, json: false)
     }
 
-    private func encodeJSON<T: Encodable>(_ value: T) throws -> String {
+    private func encodeJSON<T: Encodable>(
+        _ value: T,
+        dateEncodingStrategy: JSONEncoder.DateEncodingStrategy = .deferredToDate
+    ) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = dateEncodingStrategy
         let data = try encoder.encode(value)
         return String(decoding: data, as: UTF8.self)
     }

@@ -122,8 +122,8 @@ final class InstallReplacementPreflightScriptTests: XCTestCase {
         XCTAssertEqual(try fixture.displacedPreviousApps().count, 1, result.output)
     }
 
-    func testProtocolV2ValidJSONWithNonzeroDiagnoseExitIsRejected() throws {
-        let fixture = try InstallReplacementFixture(report: .safe, existingCtlExitCode: 75)
+    func testProtocolV2ValidJSONWithUnexpectedDiagnoseExitIsRejected() throws {
+        let fixture = try InstallReplacementFixture(report: .safe, existingCtlExitCode: 70)
         defer { fixture.remove() }
 
         let result = try fixture.run()
@@ -175,6 +175,19 @@ final class InstallReplacementPreflightScriptTests: XCTestCase {
         XCTAssertTrue(result.output.contains("app root is a symbolic link"), result.output)
         XCTAssertEqual(try fixture.existingCtlInvocations(), [])
         XCTAssertEqual(try fixture.dittoCallCount(), 0)
+    }
+
+    func testProtocolV2BlockedCoolingStillRequiresCompleteReplacementProof() throws {
+        for (report, code, allowed) in [(InstallReplacementReport.safe, 75, true), (.forced, 75, false), (.missingOwnership, 75, false), (.safe, 70, false)] {
+            let fixture = try InstallReplacementFixture(report: report, existingCtlExitCode: code)
+            defer { fixture.remove() }
+            let result = try fixture.run()
+            XCTAssertEqual(result.output.contains("passed protocol-v2 Auto/System replacement preflight"), allowed, result.output)
+            if !allowed {
+                XCTAssertEqual(result.exitCode, 75, result.output)
+                XCTAssertEqual(try fixture.dittoCallCount(), 0)
+            }
+        }
     }
 
     func testAutoSystemCompleteExistingInstallAllowsCopyAttempt() throws {
@@ -1156,7 +1169,14 @@ private final class InstallReplacementFixture {
             at: helperTarget.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try Self.writeExecutable("#!/bin/bash\nexit 0\n", to: existingMain)
+        try Self.writeExecutable(
+            """
+            #!/bin/bash
+            printf '{"action":"register","state":"enabled","complete":true,"operatorActionRequired":false,"maintenanceAuthorized":false,"tokenID":null}\n'
+            exit 0
+            """,
+            to: existingMain
+        )
         let existingDaemon = existingApp.appendingPathComponent("Contents/MacOS/ViftyDaemon")
         try Self.writeExecutable("#!/bin/bash\nexit 0\n", to: existingDaemon)
         try Self.writeExecutable(
@@ -1182,7 +1202,14 @@ private final class InstallReplacementFixture {
             "#!/bin/bash\nprintf '%s\\n' \"$*\" >> '\(existingCtlLog.path)'\npayload=$(printf '%s' '\(encoded)' | /usr/bin/base64 --decode)\ndaemon_path=$(cd \"$(dirname \"$0\")\" && pwd)/ViftyDaemon\nprintf '%s' \"$payload\" | /usr/bin/sed \"s|__VIFTY_EXPECTED_DAEMON_PATH__|$daemon_path|g\"\n\(removeCandidateDaemonAfterDiagnose ? "/bin/rm -f '\(buildApp.appendingPathComponent("Contents/MacOS/ViftyDaemon").path)'" : ":")\nexit \(existingCtlExitCode)\n",
             to: existingCtl
         )
-        try Self.writeExecutable("#!/bin/bash\nexit 0\n", to: buildApp.appendingPathComponent("Contents/MacOS/Vifty"))
+        try Self.writeExecutable(
+            """
+            #!/bin/bash
+            printf '{"action":"register","state":"enabled","complete":true,"operatorActionRequired":false,"maintenanceAuthorized":false,"tokenID":null}\n'
+            exit 0
+            """,
+            to: buildApp.appendingPathComponent("Contents/MacOS/Vifty")
+        )
         try Self.writeExecutable("#!/bin/bash\nexit 0\n", to: buildApp.appendingPathComponent("Contents/MacOS/ViftyDaemon"))
         let resolvedCandidateReport = candidateReport ?? (report.isPublishedV132Report ? .candidateObservesLegacyV132 : report)
         let encodedCandidate = Data(resolvedCandidateReport.json(
@@ -1310,7 +1337,7 @@ private final class InstallReplacementFixture {
                 withIntermediateDirectories: true
             )
             try Self.writeExecutable(
-                "#!/bin/bash\nexit 0\n",
+                "#!/bin/bash\nprintf '{\"action\":\"register\",\"state\":\"enabled\",\"complete\":true,\"operatorActionRequired\":false,\"maintenanceAuthorized\":false,\"tokenID\":null}\\n'\n",
                 to: fallbackApp.appendingPathComponent("Contents/MacOS/Vifty")
             )
             try Self.writeExecutable(

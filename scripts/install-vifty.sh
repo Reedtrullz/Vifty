@@ -219,6 +219,7 @@ REPLACEMENT_TRANSACTION_ID=""
 REPLACEMENT_PREPARE_LIFECYCLE=""
 REPLACEMENT_PREPARE_LIFECYCLE_SHA256=""
 REPLACEMENT_STAGED_LIFECYCLE=""
+REPLACEMENT_LIFECYCLE_CONTROL_APP=""
 REPLACEMENT_FINISH_ALLOWED=0
 
 path_exists_without_following() {
@@ -1384,7 +1385,8 @@ copy_stable_executable_to_run_dir() {
      [[ ! "${source_sha_before}" =~ ^[0-9a-f]{64}$ ]]; then
     return 1
   fi
-  /bin/cp -p "${source}" "${private_copy}" || return 1
+  # Copy executable bytes without propagating protected source flags.
+  /bin/cat "${source}" > "${private_copy}" || return 1
   /bin/chmod 500 "${private_copy}" || return 1
   [[ -f "${private_copy}" && -x "${private_copy}" && ! -L "${private_copy}" ]] || return 1
   if ! private_sha="$(sha256_file "${private_copy}")" ||
@@ -1482,6 +1484,9 @@ prepare_replacement_authority_freeze() {
       --replacement-public-archive-sha256 "${PUBLIC_RELEASE_SHA256}"
     )
   fi
+  if [[ -n "${REPLACEMENT_LIFECYCLE_CONTROL_APP}" ]]; then
+    prepare_arguments+=(--control-app "${REPLACEMENT_LIFECYCLE_CONTROL_APP}")
+  fi
   if "${REPLACEMENT_PREPARE_LIFECYCLE}" "${prepare_arguments[@]}"; then
     prepare_status=0
   else
@@ -1504,6 +1509,25 @@ prepare_replacement_authority_freeze() {
   fi
   REPLACEMENT_LIFECYCLE="${REPLACEMENT_STAGED_LIFECYCLE}"
   REPLACEMENT_FINISH_ALLOWED=1
+}
+
+register_control_service() {
+  local app_path="$1"
+  local report="$2"
+  local executable="${app_path}/Contents/MacOS/Vifty"
+  [[ -x "${executable}" ]] || return 1
+  "${executable}" --helper-service-management register --json >"${report}" || return 1
+  /usr/bin/ruby -rjson -e '
+    report = JSON.parse(File.read(ARGV.fetch(0)))
+    abort unless report["complete"] == true && report["state"] == "enabled"
+  ' "${report}"
+}
+
+register_candidate_control_service() {
+  [[ -n "${REPLACEMENT_LIFECYCLE_CONTROL_APP}" ]] || return 0
+  register_control_service \
+    "${REPLACEMENT_LIFECYCLE_CONTROL_APP}" \
+    "${RUN_DIR}/candidate-control-registration.json"
 }
 
 finish_replacement_authority_freeze() {
@@ -1536,6 +1560,10 @@ finish_replacement_authority_freeze() {
     REPLACEMENT_AUTHORITY_STATE="unknown-active"
     echo "HARD FAILURE: replacement finish exited with status ${finish_status} and could not prove a frozen helper; preserving the verified new bundle instead of rolling back beneath possibly active authority." >&2
     return 76
+  fi
+  if ! register_control_service "${DEST_APP}" "${RUN_DIR}/installed-control-registration.json"; then
+    echo "error: the installed destination could not re-register its daemon after replacement finish." >&2
+    return 75
   fi
   REPLACEMENT_AUTHORITY_STATE="resumed"
 }
@@ -1848,7 +1876,8 @@ preflight_existing_install_before_replacement() {
     echo "error: authenticated existing viftyctl changed during diagnosis; refusing replacement." >&2
     exit 75
   fi
-  if [[ "${existing_diagnose_status}" -eq 0 ]] && protocol_v2_replacement_evidence_passes "${existing_report}"; then
+  if [[ "${existing_diagnose_status}" -eq 0 || "${existing_diagnose_status}" -eq 75 ]] &&
+     protocol_v2_replacement_evidence_passes "${existing_report}"; then
     REPLACEMENT_LIFECYCLE_APP="${DEST_APP}"
     echo "==> Existing authenticated ${existing_source_kind} install passed protocol-v2 Auto/System replacement preflight (diagnose exit ${existing_diagnose_status})."
     return 0
@@ -1986,6 +2015,17 @@ if [[ "${INSTALL_MODE}" == "public-release" ]]; then
   fi
 fi
 preflight_existing_install_before_replacement
+# Recovery bootstrap: the live SMAppService record may point at the freshly
+# built candidate after a stale-registration repair. Keep the destination app
+# bound to the replacement ledger, but use that exact signed candidate only as
+# the daemon-maintenance control client.
+if [[ "${VIFTY_USE_CANDIDATE_LIFECYCLE:-0}" == "1" ]]; then
+  REPLACEMENT_LIFECYCLE_CONTROL_APP="${APP_DIR}"
+  if ! register_candidate_control_service; then
+    echo "error: the freshly built candidate could not re-register its daemon before replacement preparation." >&2
+    exit 75
+  fi
+fi
 if [[ "${INSTALL_MODE}" == "public-release" ]]; then
   [[ "${PUBLIC_DESTINATION_EXPECTATION}" == "${PUBLIC_PRECHECK_DESTINATION_EXPECTATION}" ]] || {
     echo "error: public destination presence changed during replacement preflight." >&2

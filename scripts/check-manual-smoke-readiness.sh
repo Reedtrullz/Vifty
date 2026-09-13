@@ -24,9 +24,11 @@ Options:
 This script only runs:
   viftyctl diagnose --json
 
-It may also hash the installed LaunchDaemon helper and --expected-daemon when
-provided. It does not call prepare, run, restore-auto, ViftyHelper, sudo, or
-raw SMC tools. Exit 0 means the manual smoke preflight is ready. Exit 75 means
+It hashes the installed daemon path reported by diagnose when available,
+falling back to the legacy LaunchDaemon helper path, and hashes
+--expected-daemon when provided. It does not call prepare, run, restore-auto,
+ViftyHelper, sudo, or raw SMC tools. Exit 0 means the manual smoke preflight is
+ready. Exit 75 means
 the manual smoke test must be skipped until the printed blockers are cleared.
 JSON output uses schemaID:
   https://vifty.local/schemas/manual-smoke-readiness.schema.json
@@ -36,7 +38,7 @@ USAGE
 VIFTYCTL="${VIFTYCTL:-/Applications/Vifty.app/Contents/MacOS/viftyctl}"
 EXPECTED_DAEMON_PATH="${VIFTY_MANUAL_SMOKE_EXPECTED_DAEMON:-}"
 REQUIRE_DAEMON_MATCH="${VIFTY_MANUAL_SMOKE_REQUIRE_DAEMON_MATCH:-0}"
-INSTALLED_DAEMON_PATH="${VIFTY_MANUAL_SMOKE_INSTALLED_DAEMON_PATH:-/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon}"
+INSTALLED_DAEMON_PATH="${VIFTY_MANUAL_SMOKE_INSTALLED_DAEMON_PATH:-}"
 JSON_OUTPUT=0
 SUMMARY_PATH="${VIFTY_MANUAL_SMOKE_READINESS_SUMMARY:-}"
 
@@ -114,6 +116,33 @@ if [[ ! -x "${VIFTYCTL}" ]]; then
   exit 69
 fi
 
+DIAGNOSE_JSON="$(mktemp "${TMPDIR:-/tmp}/vifty-manual-smoke-diagnose.XXXXXXXX.json")"
+DIAGNOSE_STDERR="$(mktemp "${TMPDIR:-/tmp}/vifty-manual-smoke-diagnose.XXXXXXXX.stderr")"
+trap 'rm -f "${DIAGNOSE_JSON}" "${DIAGNOSE_STDERR}"' EXIT
+
+set +e
+if [[ "${VIFTY_TEST_SHELL_FIXTURES:-0}" == "1" ]]; then
+  /bin/sh "${VIFTYCTL}" diagnose --json > "${DIAGNOSE_JSON}" 2> "${DIAGNOSE_STDERR}"
+else
+  "${VIFTYCTL}" diagnose --json > "${DIAGNOSE_JSON}" 2> "${DIAGNOSE_STDERR}"
+fi
+DIAGNOSE_STATUS=$?
+set -e
+
+if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+  INSTALLED_DAEMON_PATH="$(/usr/bin/ruby -rjson -e '
+    begin
+      payload = JSON.parse(File.read(ARGV.fetch(0)))
+      path = payload.dig("daemonRuntime", "installedDaemonPath")
+      puts path if path.is_a?(String) && !path.empty?
+    rescue StandardError
+    end
+  ' "${DIAGNOSE_JSON}" 2>/dev/null || true)"
+  if [[ -z "${INSTALLED_DAEMON_PATH}" ]]; then
+    INSTALLED_DAEMON_PATH="/Library/PrivilegedHelperTools/tech.reidar.vifty.daemon"
+  fi
+fi
+
 INSTALLED_DAEMON_PRESENT="false"
 INSTALLED_DAEMON_SHA256=""
 EXPECTED_DAEMON_SHA256=""
@@ -132,19 +161,6 @@ if [[ -n "${EXPECTED_DAEMON_PATH}" ]]; then
     DAEMON_MATCHES_EXPECTED="false"
   fi
 fi
-
-DIAGNOSE_JSON="$(mktemp "${TMPDIR:-/tmp}/vifty-manual-smoke-diagnose.XXXXXXXX.json")"
-DIAGNOSE_STDERR="$(mktemp "${TMPDIR:-/tmp}/vifty-manual-smoke-diagnose.XXXXXXXX.stderr")"
-trap 'rm -f "${DIAGNOSE_JSON}" "${DIAGNOSE_STDERR}"' EXIT
-
-set +e
-if [[ "${VIFTY_TEST_SHELL_FIXTURES:-0}" == "1" ]]; then
-  /bin/sh "${VIFTYCTL}" diagnose --json > "${DIAGNOSE_JSON}" 2> "${DIAGNOSE_STDERR}"
-else
-  "${VIFTYCTL}" diagnose --json > "${DIAGNOSE_JSON}" 2> "${DIAGNOSE_STDERR}"
-fi
-DIAGNOSE_STATUS=$?
-set -e
 
 ruby -rjson -rfileutils - \
   "${DIAGNOSE_JSON}" \

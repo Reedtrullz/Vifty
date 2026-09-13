@@ -1314,7 +1314,7 @@ final class ViftyReviewFixtureTests: XCTestCase {
         await runtime.daemonInstaller.installOrOpenApproval()
         XCTAssertEqual(
             runtime.recorder.snapshot().attemptedExternalMutations,
-            ["helper-lifecycle-repair"]
+            ["helper-service-register", "helper-lifecycle-repair"]
         )
     }
 

@@ -52,7 +52,7 @@ final class SettingsSceneSourceTests: XCTestCase {
         XCTAssertTrue(general.contains("Text(\"Auto\").tag(ModeSelection.auto)"))
         XCTAssertTrue(general.contains("Text(\"Fixed RPM\").tag(ModeSelection.fixed)"))
         XCTAssertTrue(general.contains("Text(\"Temperature Curve\").tag(ModeSelection.curve)"))
-        XCTAssertTrue(general.contains("StartupModePresentation.resolve(model.startupMode).detail"))
+        XCTAssertTrue(general.contains("StartupModePresentation.detail(for: model.startupMode)"))
         XCTAssertFalse(general.contains("Text(mode.rawValue)"))
         XCTAssertTrue(menuBar.contains("SettingsPane(accessibilityPane: .menuBar) {"))
         XCTAssertTrue(menuBar.contains("Section(\"Display\")"))
