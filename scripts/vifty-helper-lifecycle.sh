@@ -774,10 +774,9 @@ force_lock_replacement_tree() {
 }
 
 force_unlock_replacement_tree() {
-  local root="$1" flag
-  flag="$(replacement_lock_flag)"
+  local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
-  /usr/bin/chflags -R "no${flag}" "${root}" || return 1
+  /usr/bin/chflags -R 0 "${root}" || return 1
   [[ "$(replacement_tree_flag_state "${root}")" == "unlocked" ]]
 }
 
@@ -795,14 +794,14 @@ lock_replacement_tree() {
 
 unlock_replacement_tree() {
   local root="$1"
-  local flag
-  flag="$(replacement_lock_flag)"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
   if [[ -n "${TEST_ROOT}" && "${ROOT_FIXTURE_PARTIAL_UNLOCK:-0}" == "1" ]]; then
+    local flag
+    flag="$(replacement_lock_flag)"
     /usr/bin/chflags "no${flag}" "${root}" || return 1
     return 1
   fi
-  /usr/bin/chflags -R "no${flag}" "${root}" || return 1
+  /usr/bin/chflags -R 0 "${root}" || return 1
   local entry
   while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
