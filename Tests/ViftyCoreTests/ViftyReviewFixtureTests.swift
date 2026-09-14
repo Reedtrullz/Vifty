@@ -1399,7 +1399,7 @@ final class ViftyReviewFixtureTests: XCTestCase {
         XCTAssertTrue(popover.contains(
             "runtime.recordFailure(ViftyReviewFixtureError.observationUnavailable)"
         ))
-        XCTAssertTrue(settings.contains(".scenePadding()\n        .frame(width: 600, height: 420)"))
+        XCTAssertTrue(settings.contains(".scenePadding()\n        .frame(minWidth: 600, minHeight: 420)"))
     }
 
     private func fixtureRequest(
