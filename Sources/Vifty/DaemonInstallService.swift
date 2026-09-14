@@ -240,7 +240,13 @@ struct DaemonInstallProcessRunner: Sendable {
                 }
                 func terminatePrivateGroup() throws {
                     if groupExists() { _ = kill(-privateGroupID, SIGTERM) }
-                    try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
+                    do {
+                        try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
+                    } catch {
+                        if groupExists() { _ = kill(-privateGroupID, SIGKILL) }
+                        try? waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
+                        throw error
+                    }
                     if groupExists() { _ = kill(-privateGroupID, SIGKILL) }
                     try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
                 }

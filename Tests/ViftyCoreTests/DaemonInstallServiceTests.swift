@@ -328,6 +328,18 @@ final class DaemonInstallServiceTests: XCTestCase {
         XCTAssertFalse(source.contains("processRunner.run(\n                lifecycleScriptURL"))
     }
 
+    func testPrivateGroupCleanupRetainsKillEscalationWhenTermWaitFails() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appendingPathComponent("Sources/Vifty/DaemonInstallService.swift"),
+            encoding: .utf8
+        )
+        let start = try XCTUnwrap(source.range(of: "func terminatePrivateGroup() throws {"))
+        let end = try XCTUnwrap(source[start.upperBound...].range(of: "\n                }"))
+        let function = String(source[start.lowerBound..<end.upperBound])
+        let catchRange = try XCTUnwrap(function.range(of: "catch"))
+        XCTAssertNotNil(function.range(of: "SIGKILL", range: catchRange.upperBound..<function.endIndex))
+    }
+
     private var repositoryRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
