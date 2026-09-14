@@ -41,8 +41,11 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(source.contains("service.unregister { completion"), source)
+        XCTAssertTrue(source.contains("service.unregister { error in"), source)
         XCTAssertTrue(source.contains("performServiceManagementUnregister"), source)
+        XCTAssertTrue(source.contains("Task { @MainActor in"), source)
+        XCTAssertTrue(source.contains("completion(error)"), source)
+        XCTAssertFalse(source.contains("service.unregister { completion($0)"), source)
         XCTAssertFalse(source.contains("try await service.unregister()"), source)
     }
 
