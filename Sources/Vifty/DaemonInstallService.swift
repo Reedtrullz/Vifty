@@ -308,7 +308,7 @@ struct DaemonLifecycleScriptLoader: Sendable {
         // This digest is compiled into the signed app executable. The resource is
         // read once into an immutable Data snapshot and only that snapshot runs.
         // Update it intentionally whenever vifty-helper-lifecycle.sh changes.
-        let expectedSHA256 = "0bd2fc572063b51d9fb4a5a335ecbdd42e5dc025c4166eeb3228869c8888d6dd"
+        let expectedSHA256 = "a6e960d374c2195858551ff6f540e2d6f0159c121a11e0032db65394e06125f4"
         let maximumSize = 256 * 1_024
         let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
         guard descriptor >= 0 else {

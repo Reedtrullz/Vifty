@@ -773,10 +773,15 @@ force_lock_replacement_tree() {
   [[ "$(replacement_tree_flag_state "${root}")" == "locked" ]]
 }
 
+clear_replacement_tree_flags() {
+  local root="$1"
+  /usr/bin/find -x "${root}" -depth -exec /usr/bin/chflags 0 {} + || return 1
+}
+
 force_unlock_replacement_tree() {
   local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
-  /usr/bin/chflags -R 0 "${root}" || return 1
+  clear_replacement_tree_flags "${root}" || return 1
   [[ "$(replacement_tree_flag_state "${root}")" == "unlocked" ]]
 }
 
@@ -801,7 +806,7 @@ unlock_replacement_tree() {
     /usr/bin/chflags "no${flag}" "${root}" || return 1
     return 1
   fi
-  /usr/bin/chflags -R 0 "${root}" || return 1
+  clear_replacement_tree_flags "${root}" || return 1
   local entry
   while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
@@ -1879,6 +1884,7 @@ build_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2315,6 +2321,7 @@ build_replacement_release_lock_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2392,6 +2399,7 @@ build_replacement_lock_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2458,6 +2466,7 @@ build_replacement_finish_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
