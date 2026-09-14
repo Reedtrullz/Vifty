@@ -210,7 +210,7 @@ protocol HelperServiceManagementBackend: AnyObject {
 @MainActor
 func performServiceManagementUnregister(
     timeout: TimeInterval = 30,
-    start: (@escaping (Error?) -> Void) -> Void
+    start: (@escaping @Sendable (Error?) -> Void) -> Void
 ) async throws {
     let gate = UnregisterCompletionGate(timeout: timeout)
     // Invoke start before awaiting: the callback may fire synchronously
