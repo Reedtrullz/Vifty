@@ -102,4 +102,53 @@ final class XPCAgentControlCodingTests: XCTestCase {
 
         XCTAssertEqual(decoded, events)
     }
+
+    func testAgentRPMMapRejectsNormalizedDuplicateFanIDsAndOversizedMaps() {
+        let duplicate: NSDictionary = [
+            "enabled": true,
+            "lastDecision": [
+                "allowed": true,
+                "message": "Allowed",
+                "targetRPMByFanID": ["01": 3000, "1": 3200],
+                "warnings": []
+            ]
+        ]
+        XCTAssertNil(XPCAgentControlCoding.decodeStatus(duplicate))
+
+        let oversized = Dictionary(uniqueKeysWithValues: (0..<11).map { (String($0), 3000) })
+        let decision: NSDictionary = [
+            "allowed": true,
+            "message": "Allowed",
+            "targetRPMByFanID": oversized,
+            "warnings": []
+        ]
+        XCTAssertNil(XPCAgentControlCoding.decodeStatus([
+            "enabled": true,
+            "lastDecision": decision
+        ]))
+    }
+
+    func testWireDecodersRejectFractionalNumbersAndNumericBooleans() {
+        XCTAssertNil(XPCAgentControlCoding.decodeStatus([
+            "enabled": NSNumber(value: 2)
+        ]))
+        XCTAssertNil(XPCAgentControlCoding.decodeStatus([
+            "enabled": NSNumber(value: 1.5)
+        ]))
+    }
+
+    func testUnknownAgentErrorCodeFailsClosed() {
+        let dictionary: NSDictionary = [
+            "enabled": true,
+            "lastDecision": [
+                "allowed": false,
+                "errorCode": "FUTURE_SAFETY_STATE",
+                "message": "Unknown",
+                "targetRPMByFanID": [:],
+                "warnings": []
+            ]
+        ]
+        XCTAssertNil(XPCAgentControlCoding.decodeStatus(dictionary))
+    }
+
 }
