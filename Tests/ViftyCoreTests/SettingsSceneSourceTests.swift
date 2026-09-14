@@ -1,8 +1,9 @@
 import Foundation
 import XCTest
+@testable import Vifty
 
 final class SettingsSceneSourceTests: XCTestCase {
-    func testSettingsLiveInNativeSceneAndRailUsesLauncher() throws {
+    func testSettingsLiveInNativeSceneAndUsesNativeTabs() throws {
         let app = try read("Sources/Vifty/ViftyApp.swift")
         let contentView = try read("Sources/Vifty/ContentView.swift")
         let header = try read("Sources/Vifty/MainWindowHeader.swift")
@@ -26,12 +27,14 @@ final class SettingsSceneSourceTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("SettingsMenuBarView(model: model)"))
         XCTAssertTrue(settingsView.contains("SettingsNotificationsView(model: model)"))
         XCTAssertTrue(settingsView.contains("SettingsAgentWorkflowView(model: model)"))
-        XCTAssertTrue(settingsView.contains("ForEach(ViftySettingsTab.allCases)"))
-        XCTAssertTrue(settingsView.contains("Label(tab.title, systemImage: tab.systemImage)"))
-        XCTAssertTrue(settingsView.contains(".accessibilityValue(isSelected ? \"Selected\" : \"Not selected\")"))
-        XCTAssertTrue(settingsView.contains(".accessibilityIdentifier(tab.accessibilityIdentifier)"))
-        XCTAssertFalse(settingsView.contains("TabView(selection:"))
-        XCTAssertTrue(settingsView.contains(".frame(width: 600, height: 420)"))
+        XCTAssertTrue(settingsView.contains("TabView(selection:"))
+        XCTAssertTrue(settingsView.contains(".frame(minWidth: 600, minHeight: 420)"))
+        XCTAssertFalse(settingsView.contains("ViftySettingsTabStripLayout"))
+        XCTAssertFalse(settingsView.contains(".buttonStyle(.plain)"))
+        XCTAssertFalse(settingsView.contains(".frame(width: 600, height: 420)"))
+        for tab in ViftySettingsTab.allCases {
+            XCTAssertTrue(settingsView.contains("ViftySettingsTab.\(tab.rawValue)"))
+        }
         XCTAssertTrue(pane.contains("ScrollView"))
         XCTAssertTrue(pane.contains("Form {"))
         XCTAssertTrue(pane.contains("alignment: .topLeading"))
