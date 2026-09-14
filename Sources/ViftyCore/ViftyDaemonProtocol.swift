@@ -44,6 +44,24 @@ public enum ViftyDaemonConstants {
     )
 }
 
+private enum StrictXPCValue {
+    static func integer(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        guard let number = value as? NSNumber else { return nil }
+        guard CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        guard number.doubleValue.isFinite else { return nil }
+        guard number.doubleValue == number.doubleValue.rounded(.towardZero) else { return nil }
+        return Int(exactly: number)
+    }
+
+    static func boolean(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        guard let number = value as? NSNumber else { return nil }
+        guard CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+}
+
 public enum XPCFanControlCoding {
     private static let maximumFanCount = 10
     private static let maximumTransactionIDUTF8Bytes = 256
@@ -101,7 +119,7 @@ public enum XPCFanControlCoding {
         guard let transactionID = dictionary["transactionID"] as? String,
               let expectedFanIDs = intArray(dictionary["expectedFanIDs"], maximumCount: maximumFanCount),
               let reason = dictionary["reason"] as? String,
-              let allowRestoreAllTrustedFans = bool(dictionary["allowRestoreAllTrustedFans"]) else {
+              let allowRestoreAllTrustedFans = StrictXPCValue.boolean(dictionary["allowRestoreAllTrustedFans"]) else {
             return nil
         }
         guard transactionID.utf8.count <= maximumTransactionIDUTF8Bytes,
@@ -136,10 +154,10 @@ public enum XPCFanControlCoding {
     }
 
     public static func decodeOwnershipStatus(_ dictionary: NSDictionary) -> FanControlOwnershipStatus? {
-        guard let protocolVersion = int(dictionary["protocolVersion"]),
+        guard let protocolVersion = StrictXPCValue.integer(dictionary["protocolVersion"]),
               let expectedFanIDs = intArray(dictionary["expectedFanIDs"]),
               let confirmedOSManagedFanIDs = intArray(dictionary["confirmedOSManagedFanIDs"]),
-              let recoveryPending = bool(dictionary["recoveryPending"]) else {
+              let recoveryPending = StrictXPCValue.boolean(dictionary["recoveryPending"]) else {
             return nil
         }
         let owner: FanControlOwner?
@@ -167,7 +185,7 @@ public enum XPCFanControlCoding {
             recoveryPending: recoveryPending,
             errorCode: dictionary["errorCode"] as? String,
             errorMessage: dictionary["errorMessage"] as? String,
-            recoveryAttemptCount: int(dictionary["recoveryAttemptCount"]) ?? 0
+            recoveryAttemptCount: StrictXPCValue.integer(dictionary["recoveryAttemptCount"]) ?? 0
         )
     }
 
@@ -252,7 +270,7 @@ public enum XPCFanControlCoding {
         for (key, value) in dictionary {
             guard let key = key as? String,
                   let fanID = Int(key),
-                  let rpm = int(value),
+                  let rpm = StrictXPCValue.integer(value),
                   targets[fanID] == nil else { return nil }
             targets[fanID] = rpm
         }
@@ -264,23 +282,12 @@ public enum XPCFanControlCoding {
         if let maximumCount, values.count > maximumCount { return nil }
         var result: [Int] = []
         for value in values {
-            guard let decoded = int(value) else { return nil }
+            guard let decoded = StrictXPCValue.integer(value) else { return nil }
             result.append(decoded)
         }
         return result
     }
 
-    private static func int(_ value: Any?) -> Int? {
-        if let value = value as? Int { return value }
-        if let value = value as? NSNumber { return value.intValue }
-        return nil
-    }
-
-    private static func bool(_ value: Any?) -> Bool? {
-        if let value = value as? Bool { return value }
-        if let value = value as? NSNumber { return value.boolValue }
-        return nil
-    }
 }
 
 public enum XPCSnapshotCoding {
@@ -435,8 +442,8 @@ public enum XPCAgentControlCoding {
     public static func decodeRequest(_ dictionary: NSDictionary) -> AgentControlRequest? {
         guard let workloadRaw = dictionary["workload"] as? String,
               let workload = AgentControlWorkload(rawValue: workloadRaw),
-              let durationSeconds = intValue(dictionary["durationSeconds"]),
-              let maxRPMPercent = intValue(dictionary["maxRPMPercent"]),
+              let durationSeconds = StrictXPCValue.integer(dictionary["durationSeconds"]),
+              let maxRPMPercent = StrictXPCValue.integer(dictionary["maxRPMPercent"]),
               let reason = dictionary["reason"] as? String,
               let idempotencyKey = dictionary["idempotencyKey"] as? String else {
             return nil
@@ -477,7 +484,7 @@ public enum XPCAgentControlCoding {
     }
 
     public static func decodeStatus(_ dictionary: NSDictionary) -> AgentControlStatus? {
-        guard let enabled = boolValue(dictionary["enabled"]) else {
+        guard let enabled = StrictXPCValue.boolean(dictionary["enabled"]) else {
             return nil
         }
 
@@ -520,8 +527,8 @@ public enum XPCAgentControlCoding {
         let persistenceHealth: AgentControlPersistenceHealth
         if let value = dictionary["persistenceHealth"] {
             guard let healthDictionary = value as? NSDictionary,
-                  let policyStatusAvailable = boolValue(healthDictionary["policyStatusAvailable"]),
-                  let auditStatusAvailable = boolValue(healthDictionary["auditStatusAvailable"]),
+                  let policyStatusAvailable = StrictXPCValue.boolean(healthDictionary["policyStatusAvailable"]),
+                  let auditStatusAvailable = StrictXPCValue.boolean(healthDictionary["auditStatusAvailable"]),
                   (healthDictionary["policyError"] == nil || healthDictionary["policyError"] is String || healthDictionary["policyError"] is NSNull),
                   (healthDictionary["auditError"] == nil || healthDictionary["auditError"] is String || healthDictionary["auditError"] is NSNull) else {
                 return nil
@@ -583,11 +590,11 @@ public enum XPCAgentControlCoding {
     }
 
     private static func decodePolicy(_ dictionary: NSDictionary) -> AgentControlPolicySnapshot? {
-        guard let enabled = boolValue(dictionary["enabled"]),
-              let minimumAgentRPMPercent = intValue(dictionary["minimumAgentRPMPercent"]),
-              let maximumAllowedRPMPercent = intValue(dictionary["maximumAllowedRPMPercent"]),
-              let maxDurationSeconds = intValue(dictionary["maxDurationSeconds"]),
-              let prepareCooldownSeconds = intValue(dictionary["prepareCooldownSeconds"]) else {
+        guard let enabled = StrictXPCValue.boolean(dictionary["enabled"]),
+              let minimumAgentRPMPercent = StrictXPCValue.integer(dictionary["minimumAgentRPMPercent"]),
+              let maximumAllowedRPMPercent = StrictXPCValue.integer(dictionary["maximumAllowedRPMPercent"]),
+              let maxDurationSeconds = StrictXPCValue.integer(dictionary["maxDurationSeconds"]),
+              let prepareCooldownSeconds = StrictXPCValue.integer(dictionary["prepareCooldownSeconds"]) else {
             return nil
         }
 
@@ -694,7 +701,7 @@ public enum XPCAgentControlCoding {
     }
 
     private static func decodeDecision(_ dictionary: NSDictionary) -> AgentControlDecision? {
-        guard let allowed = boolValue(dictionary["allowed"]),
+        guard let allowed = StrictXPCValue.boolean(dictionary["allowed"]),
               let message = dictionary["message"] as? String,
               let targetRPMByFanID = decodeRPMMap(dictionary["targetRPMByFanID"]),
               let warnings = dictionary["warnings"] as? [String] else {
@@ -712,7 +719,7 @@ public enum XPCAgentControlCoding {
 
         var retryAfterSeconds: Int?
         if let value = dictionary["retryAfterSeconds"] {
-            guard let decodedRetryAfterSeconds = intValue(value) else {
+            guard let decodedRetryAfterSeconds = StrictXPCValue.integer(value) else {
                 return nil
             }
             retryAfterSeconds = decodedRetryAfterSeconds
@@ -735,7 +742,8 @@ public enum XPCAgentControlCoding {
     }
 
     private static func decodeRPMMap(_ value: Any?) -> [Int: Int]? {
-        guard let dictionary = value as? NSDictionary else {
+        guard let dictionary = value as? NSDictionary,
+              dictionary.count <= 10 else {
             return nil
         }
 
@@ -743,32 +751,13 @@ public enum XPCAgentControlCoding {
         for (key, value) in dictionary {
             guard let key = key as? String,
                   let fanID = Int(key),
-                  let rpm = intValue(value) else {
+                  let rpm = StrictXPCValue.integer(value),
+                  decoded[fanID] == nil else {
                 return nil
             }
             decoded[fanID] = rpm
         }
         return decoded
-    }
-
-    private static func boolValue(_ value: Any?) -> Bool? {
-        if let value = value as? Bool {
-            return value
-        }
-        if let value = value as? NSNumber {
-            return value.boolValue
-        }
-        return nil
-    }
-
-    private static func intValue(_ value: Any?) -> Int? {
-        if let value = value as? Int {
-            return value
-        }
-        if let value = value as? NSNumber {
-            return value.intValue
-        }
-        return nil
     }
 
     private static func doubleValue(_ value: Any?) -> Double? {

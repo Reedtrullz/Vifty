@@ -308,13 +308,15 @@ final class DaemonInstaller: ObservableObject {
         isWorking = true
         canInstall = false
         statusText = "Checking safe helper maintenance preconditions"
+        defer {
+            isWorking = false
+            canInstall = true
+        }
         let result = await installService.perform(
             operation: .repair,
             appBundleURL: bundleURL,
             lifecycleScriptURL: lifecycleScriptURL
         )
-        isWorking = false
-        canInstall = true
         switch result.outcome {
         case .completed:
             statusText = "Fan helper lifecycle completed; waiting for daemon response"

@@ -111,7 +111,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func setAgentControlEnabled(_ enabled: Bool) async throws -> AgentControlStatus {
-        try await withProxy { proxy, finish in
+        try await withProxy(policy: .mutation) { proxy, finish in
             proxy.setAgentControlEnabled(enabled) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -128,7 +128,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func prepareAgentControl(_ request: AgentControlRequest) async throws -> AgentControlStatus {
-        try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.prepareAgentControlV2(XPCAgentControlCoding.encode(request)) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -145,7 +145,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func restoreAgentControl(reason: String) async throws -> AgentControlStatus {
-        try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.restoreAgentControlV2(reason) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -181,7 +181,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     public func applyManualFanControl(
         _ request: ManualFanControlRequest
     ) async throws -> FanControlTransactionResult {
-        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        return try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.applyManualFanControl(XPCFanControlCoding.encode(request)) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -200,7 +200,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     public func restoreAllAuto(
         _ request: AutoRestoreRequest
     ) async throws -> FanControlTransactionResult {
-        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        return try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.restoreAllAuto(XPCFanControlCoding.encode(request)) { dictionary, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -220,7 +220,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
         operation: HelperMaintenanceOperation
     ) async throws -> HelperMaintenanceReport {
         let helperSHA256 = try maintenanceHelperIdentity()
-        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        return try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.prepareHelperMaintenance(
                 operation.rawValue,
                 helperSHA256: helperSHA256
@@ -244,7 +244,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     public func consumeHelperMaintenanceToken(
         _ request: HelperMaintenanceAuthorizationRequest
     ) async throws -> HelperMaintenanceAuthorization {
-        return try await withProxy(timeout: fanControlTransactionTimeout) { proxy, finish in
+        return try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.consumeHelperMaintenanceToken(XPCHelperMaintenanceCoding.encode(request)) {
                 dictionary, error in
                 if let error {
@@ -264,7 +264,7 @@ public final class ViftyDaemonClient: @unchecked Sendable {
     }
 
     public func cancelHelperMaintenance() async throws {
-        let _: Void = try await withProxy { proxy, finish in
+        let _: Void = try await withProxy(timeout: fanControlTransactionTimeout, policy: .mutation) { proxy, finish in
             proxy.cancelHelperMaintenance { cancelled, error in
                 if let error {
                     finish(.failure(ViftyError.helperRejected(error)))
@@ -320,65 +320,81 @@ public final class ViftyDaemonClient: @unchecked Sendable {
 
     private func withProxy<T: Sendable>(
         timeout requestTimeout: TimeInterval? = nil,
-        _ operation: @escaping (
+        policy: DaemonRequestPolicy = .readOnly,
+        _ operation: @escaping @Sendable (
             ViftyDaemonProtocol,
             @escaping @Sendable (Result<T, Error>) -> Void
         ) -> Void
     ) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            ViftyCoreLog.xpc.debug("Daemon request started")
-            let state = CallbackState<T>()
-            let connection = connectionFactory()
+        let connection = connectionFactory()
+        let state = CallbackState<T>()
 
-            connection.setInvalidationHandler {
-                if state.finish(
-                    .failure(ViftyError.helperRejected("Daemon connection invalidated.")),
-                    continuation: continuation
-                ) {
-                    ViftyCoreLog.xpc.warning("Daemon request connection invalidated unexpectedly")
-                }
-            }
-            connection.setInterruptionHandler {
-                if state.finish(
-                    .failure(ViftyError.helperRejected("Daemon connection interrupted.")),
-                    continuation: continuation
-                ) {
-                    ViftyCoreLog.xpc.warning("Daemon request connection interrupted")
-                }
-            }
-            connection.resume()
+        let body: @Sendable () async throws -> T = {
+            try await withCheckedThrowingContinuation { continuation in
+                ViftyCoreLog.xpc.debug("Daemon request started")
+                guard state.setContinuation(continuation) else { return }
 
-            let timer = DispatchSource.makeTimerSource(queue: .global())
-            timer.schedule(deadline: .now() + (requestTimeout ?? timeout))
-            timer.setEventHandler {
-                if state.finish(.failure(ViftyError.helperRejected("Daemon request timed out.")), continuation: continuation) {
-                    connection.invalidate()
-                    ViftyCoreLog.xpc.warning("Daemon request timed out")
+                connection.setInvalidationHandler {
+                    if state.finish(
+                        .failure(ViftyError.helperRejected("Daemon connection invalidated."))
+                    ) {
+                        connection.invalidate()
+                        ViftyCoreLog.xpc.warning("Daemon request connection invalidated unexpectedly")
+                    }
                 }
-            }
-            state.retain(timer: timer)
-            timer.resume()
+                connection.setInterruptionHandler {
+                    if state.finish(
+                        .failure(ViftyError.helperRejected("Daemon connection interrupted."))
+                    ) {
+                        ViftyCoreLog.xpc.warning("Daemon request connection interrupted")
+                    }
+                }
 
-            guard let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
-                timer.cancel()
-                if state.finish(.failure(ViftyError.helperRejected(error.localizedDescription)), continuation: continuation) {
-                    connection.invalidate()
+                let timer = DispatchSource.makeTimerSource(queue: .global())
+                timer.schedule(deadline: .now() + (requestTimeout ?? self.timeout))
+                timer.setEventHandler {
+                    if state.finish(.failure(ViftyError.helperRejected("Daemon request timed out."))) {
+                        connection.invalidate()
+                        ViftyCoreLog.xpc.warning("Daemon request timed out")
+                    }
                 }
-            }) as? ViftyDaemonProtocol else {
-                timer.cancel()
-                if state.finish(.failure(ViftyError.helperRejected("Could not create daemon proxy.")), continuation: continuation) {
-                    connection.invalidate()
-                }
-                return
-            }
+                state.retain(timer: timer)
+                timer.resume()
 
-            operation(proxy) { result in
-                timer.cancel()
-                if state.finish(result, continuation: continuation) {
-                    connection.invalidate()
-                    ViftyCoreLog.xpc.debug("Daemon request completed")
+                guard let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
+                    if state.finish(.failure(ViftyError.helperRejected(error.localizedDescription))) {
+                        connection.invalidate()
+                    }
+                }) as? ViftyDaemonProtocol else {
+                    if state.finish(.failure(ViftyError.helperRejected("Could not create daemon proxy."))) {
+                        connection.invalidate()
+                    }
+                    return
+                }
+
+                connection.resume()
+                guard !state.isFinished else { return }
+
+                operation(proxy) { result in
+                    if state.finish(result) {
+                        connection.invalidate()
+                        ViftyCoreLog.xpc.debug("Daemon request completed")
+                    }
                 }
             }
+        }
+
+        switch policy {
+        case .readOnly:
+            return try await withTaskCancellationHandler {
+                try await body()
+            } onCancel: {
+                if state.finish(.failure(CancellationError())) {
+                    connection.invalidate()
+                }
+            }
+        case .mutation:
+            return try await body()
         }
     }
 }
@@ -420,10 +436,34 @@ private final class XPCDaemonConnection: ViftyDaemonConnection, @unchecked Senda
     }
 }
 
+private enum DaemonRequestPolicy: Sendable {
+    case readOnly
+    case mutation
+}
+
 private final class CallbackState<T: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var finished = false
     private var retainedTimer: DispatchSourceTimer?
+    private var continuation: CheckedContinuation<T, Error>?
+    private var completedResult: Result<T, Error>?
+
+    @discardableResult
+    func setContinuation(_ continuation: CheckedContinuation<T, Error>) -> Bool {
+        lock.lock()
+        if let completedResult {
+            lock.unlock()
+            resume(completedResult, continuation: continuation)
+            return false
+        }
+        self.continuation = continuation
+        lock.unlock()
+        return true
+    }
+
+    var isFinished: Bool {
+        lock.withLock { finished }
+    }
 
     func retain(timer: DispatchSourceTimer) {
         lock.withLock {
@@ -433,18 +473,35 @@ private final class CallbackState<T: Sendable>: @unchecked Sendable {
     }
 
     @discardableResult
-    func finish(_ result: Result<T, Error>, continuation: CheckedContinuation<T, Error>) -> Bool {
+    func finish(_ result: Result<T, Error>) -> Bool {
         lock.lock()
-        defer { lock.unlock() }
-        guard !finished else { return false }
+        guard !finished else {
+            lock.unlock()
+            return false
+        }
         finished = true
+        retainedTimer?.cancel()
         retainedTimer = nil
+        completedResult = result
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+
+        if let continuation {
+            resume(result, continuation: continuation)
+        }
+        return true
+    }
+
+    private func resume(
+        _ result: Result<T, Error>,
+        continuation: CheckedContinuation<T, Error>
+    ) {
         switch result {
         case .success(let value):
             continuation.resume(returning: value)
         case .failure(let error):
             continuation.resume(throwing: error)
         }
-        return true
     }
 }
