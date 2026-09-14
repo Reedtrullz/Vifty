@@ -3,7 +3,7 @@
 **Plan:** docs/superpowers/plans/2026-09-14-vifty-stability-and-macos-polish.md
 **Branch:** codex/vifty-stability-polish-sdd
 **Baseline:** 6294fef (1,392 fast tests, 0 failures, 64 GiB free)
-**Final commit:** c7f574e (post-review unregister gate fix)
+**Final commit:** 47cdd26 (clean post-review validation record)
 **Date:** 2026-09-14
 
 ## Source / Unit Tests
@@ -42,9 +42,9 @@ Per-slice focused suites (all green):
 
 ### make verify (fast trust gate)
 
-make verify was run before the test fix and passed. It covers shell syntax checks, community/support surface, release metadata validation, fast XCTest suite (1,399 tests at that point, minus the two stale failures), warnings-as-errors build, release app bundle including schema resources, plist lint, codesign verification, and viftyctl identifier checks.
+Fresh final-head `make verify SWIFT_BUILD_PATH="$PWD/.build"` passed with 1,400 XCTest tests and 0 failures. It also passed the shell syntax checks, community/support surface, release metadata validation, warnings-as-errors build, release app bundle including schema resources, plist lint, codesign verification, and viftyctl identifier checks.
 
-The post-review helper-gate fix was validated with its focused 11-test suite; the full make verify gate was not rerun after that focused remediation.
+The earlier pre-fix run's two stale frame-string failures were resolved by 7f52943; the final fresh gate includes that correction and c7f574e.
 
 ### make verify-full (CI-facing gate)
 
@@ -92,4 +92,4 @@ No release evidence is claimed. The following remain unchanged:
     df -h /System/Volumes/Data                # 62 GiB free
     swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.(AppArchitectureBoundaryTests|ViftyReviewFixtureTests|SettingsSceneSourceTests|SettingsPresentationTests|ViftyAccessibilitySemanticsTests)'  # 70/70 passed
     swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.HelperServiceManagementBridgeTests'  # 11/11 passed after c7f574e
-    make verify                                # passed (pre-test-fix)
+    make verify SWIFT_BUILD_PATH="$PWD/.build"  # passed; 1,400 tests, 0 failures
