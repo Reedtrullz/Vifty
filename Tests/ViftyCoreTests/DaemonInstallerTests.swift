@@ -95,7 +95,7 @@ final class DaemonInstallerTests: XCTestCase {
         XCTAssertEqual(serviceCallCount, 0)
     }
 
-    func testEnabledHelperUsesAsyncLifecycleServiceAndFailsClosedOnBlockedPreflight() async {
+    func testEnabledHelperRestoresUIStateAfterBlockedLifecycleResult() async {
         let backend = InstallerBackendFixture(status: .enabled)
         let service = InstallerServiceFixture(result: .blockedResult)
         let app = URL(fileURLWithPath: "/Applications/Vifty.app")

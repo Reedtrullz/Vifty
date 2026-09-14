@@ -120,6 +120,31 @@ final class ViftyDaemonClientTests: XCTestCase {
         XCTAssertEqual(connection.invalidateCount, 1)
     }
 
+    func testImmediateInvalidationDuringResumeCompletesExactlyOnce() async throws {
+        let connection = FakeDaemonConnection(proxy: FakeDaemonProxy())
+        connection.onResume = {
+            connection.fireInvalidation()
+        }
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+
+        do {
+            _ = try await client.snapshot()
+            XCTFail("Expected invalidation failure")
+        } catch {
+            XCTAssertTrue(error is ViftyError)
+        }
+        XCTAssertEqual(connection.resumeCount, 1)
+        XCTAssertEqual(connection.invalidateCount, 1)
+
+        let source = try String(
+            contentsOf: repositoryRoot.appendingPathComponent("Sources/ViftyCore/ViftyDaemonClient.swift"),
+            encoding: .utf8
+        )
+        let retainIndex = try XCTUnwrap(source.range(of: "state.retain(timer:"))
+        let resumeIndex = try XCTUnwrap(source.range(of: "connection.resume()"))
+        XCTAssertLessThan(retainIndex.lowerBound, resumeIndex.lowerBound)
+    }
+
     func testAgentControlAuditReturnsDecodedProxyResponse() async throws {
         let events = [
             AgentControlAuditEvent(
@@ -349,6 +374,72 @@ final class ViftyDaemonClientTests: XCTestCase {
         XCTAssertEqual(connection.invalidateCount, 1)
     }
 
+    func testReadOnlyCancellationInvalidatesTheConnection() async {
+        let replyGate = DispatchSemaphore(value: 0)
+        let replyStore = ReplyStore<(NSDictionary?, String?)>()
+        let proxy = FakeDaemonProxy()
+        proxy.snapshotHandler = { reply in
+            replyStore.store { value in
+                reply(value.0, value.1)
+            }
+            DispatchQueue.global().async {
+                replyGate.wait()
+                replyStore.reply(with: (nil, "late snapshot"))
+            }
+        }
+        let connection = FakeDaemonConnection(proxy: proxy)
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+        let task = Task { try await client.snapshot() }
+
+        await Task.yield()
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(connection.invalidateCount, 1)
+        replyGate.signal()
+    }
+
+    func testMutationCancellationWaitsForAuthoritativeReply() async throws {
+        let replyGate = DispatchSemaphore(value: 0)
+        let request = ManualFanControlRequest(
+            transactionID: "cancellation-test",
+            sessionID: "cancellation-test",
+            expectedFanIDs: [0],
+            targetRPMByFanID: [0: 3000],
+            reason: "cancellation test"
+        )
+        let expected = FanControlTransactionResult(
+            transactionID: request.transactionID,
+            owner: .manual(sessionID: request.sessionID),
+            phase: .active,
+            expectedFanIDs: request.expectedFanIDs,
+            confirmedFanIDs: request.expectedFanIDs
+        )
+        let proxy = FakeDaemonProxy()
+        proxy.applyManualFanControlHandler = { _, reply in
+            DispatchQueue.global().async {
+                replyGate.wait()
+                reply(XPCFanControlCoding.encode(expected), nil)
+            }
+        }
+        let connection = FakeDaemonConnection(proxy: proxy)
+        let client = ViftyDaemonClient(connectionFactory: { connection })
+        let task = Task {
+            try await client.applyManualFanControl(request)
+        }
+
+        await Task.yield()
+        task.cancel()
+        XCTAssertEqual(connection.invalidateCount, 0)
+        replyGate.signal()
+        _ = try await task.value
+        XCTAssertEqual(connection.invalidateCount, 1)
+    }
+
     func testProtocolMethodThatNeverRepliesStillTimesOut() async {
         let connection = FakeDaemonConnection(proxy: FakeDaemonProxy())
         let client = ViftyDaemonClient(timeout: 0.01, connectionFactory: { connection })
@@ -510,6 +601,14 @@ final class ViftyDaemonClientTests: XCTestCase {
             controllable: controllable
         )
     }
+
+    private var repositoryRoot: URL {
+        let testFile = URL(fileURLWithPath: #filePath)
+        return testFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
 }
 
 private final class FakeDaemonConnection: ViftyDaemonConnection, @unchecked Sendable {
@@ -518,6 +617,7 @@ private final class FakeDaemonConnection: ViftyDaemonConnection, @unchecked Send
 
     var proxyError: Error?
     var fireInvalidationOnInvalidate = false
+    var onResume: (@Sendable () -> Void)?
     private var invalidationHandler: (@Sendable () -> Void)?
     private var interruptionHandler: (@Sendable () -> Void)?
 
@@ -543,7 +643,9 @@ private final class FakeDaemonConnection: ViftyDaemonConnection, @unchecked Send
     func resume() {
         lock.lock()
         _resumeCount += 1
+        let handler = onResume
         lock.unlock()
+        handler?()
     }
 
     func setInvalidationHandler(_ handler: @escaping @Sendable () -> Void) {
@@ -556,6 +658,13 @@ private final class FakeDaemonConnection: ViftyDaemonConnection, @unchecked Send
         lock.lock()
         interruptionHandler = handler
         lock.unlock()
+    }
+
+    func fireInvalidation() {
+        lock.lock()
+        let handler = invalidationHandler
+        lock.unlock()
+        handler?()
     }
 
     func invalidate() {

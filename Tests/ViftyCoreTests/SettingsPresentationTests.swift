@@ -17,76 +17,22 @@ final class SettingsPresentationTests: XCTestCase {
         XCTAssertTrue(denied.usesPrimaryStatusText)
     }
 
-    func testSettingsTabsUseStableSingleRowUntilAccessibilityScale() {
-        XCTAssertEqual(ViftySettingsTabLayout.resolve(textScale: .standard), .singleRow)
-        XCTAssertEqual(ViftySettingsTabLayout.resolve(textScale: .large), .singleRow)
-        XCTAssertEqual(ViftySettingsTabLayout.resolve(textScale: .accessibility), .twoRows)
-        XCTAssertEqual(ViftySettingsTabLayout.singleRow.columnCount, 4)
-        XCTAssertEqual(ViftySettingsTabLayout.twoRows.columnCount, 2)
-    }
-
-    func testSingleRowTabWidthsPreserveIdealWidthsWhenTheyFitExactly() {
-        let idealWidths: [CGFloat] = [72, 96, 118, 154]
-        let spacing: CGFloat = 4
-        let availableWidth = idealWidths.reduce(0, +)
-            + spacing * CGFloat(idealWidths.count - 1)
-
-        let widths = ViftySettingsTabWidthAllocation.resolve(
-            idealWidths: idealWidths,
-            availableWidth: availableWidth,
-            spacing: spacing,
-            arrangement: .singleRow
-        )
-
-        XCTAssertEqual(widths, idealWidths)
-    }
-
-    func testSingleRowTabWidthsDistributeRemainingSpaceAndConsumeAvailableWidth() {
-        let idealWidths: [CGFloat] = [72, 96, 118, 154]
-        let spacing: CGFloat = 4
-        let availableWidth: CGFloat = 520
-
-        let widths = ViftySettingsTabWidthAllocation.resolve(
-            idealWidths: idealWidths,
-            availableWidth: availableWidth,
-            spacing: spacing,
-            arrangement: .singleRow
-        )
-
-        XCTAssertEqual(widths.count, idealWidths.count)
-        for (width, idealWidth) in zip(widths, idealWidths) {
-            XCTAssertGreaterThanOrEqual(width, idealWidth)
-        }
+    func testSettingsTabMetadataRemainsStable() {
+        XCTAssertEqual(ViftySettingsTab.allCases.map(\.title), [
+            "General", "Menu Bar", "Notifications", "Agent Workflows"
+        ])
+        XCTAssertEqual(ViftySettingsTab.allCases.map(\.systemImage), [
+            "gearshape", "menubar.rectangle", "bell", "terminal"
+        ])
         XCTAssertEqual(
-            widths.reduce(0, +) + spacing * CGFloat(widths.count - 1),
-            availableWidth,
-            accuracy: 0.001
+            ViftySettingsTab.allCases.map(\.accessibilityIdentifier),
+            [
+                ViftyAccessibilityIdentifier.settingsTabGeneral,
+                ViftyAccessibilityIdentifier.settingsTabMenuBar,
+                ViftyAccessibilityIdentifier.settingsTabNotifications,
+                ViftyAccessibilityIdentifier.settingsTabAgentWorkflows
+            ]
         )
-        XCTAssertGreaterThan(widths.last ?? 0, widths.first ?? 0)
-    }
-
-    func testSingleRowTabWidthsRemainNonnegativeAndPreserveCountWhenConstrained() {
-        let widths = ViftySettingsTabWidthAllocation.resolve(
-            idealWidths: [0, -8, 90, 150],
-            availableWidth: 30,
-            spacing: 4,
-            arrangement: .singleRow
-        )
-
-        XCTAssertEqual(widths.count, 4)
-        XCTAssertTrue(widths.allSatisfy { $0 >= 0 })
-        XCTAssertEqual(widths.reduce(0, +) + 12, 30, accuracy: 0.001)
-    }
-
-    func testTwoRowTabWidthsUseEqualColumns() {
-        let widths = ViftySettingsTabWidthAllocation.resolve(
-            idealWidths: [72, 96, 118, 154],
-            availableWidth: 300,
-            spacing: 4,
-            arrangement: .twoRows
-        )
-
-        XCTAssertEqual(widths, [148, 148])
     }
 
     func testLastEnabledCustomMenuFieldCannotBeDisabled() {

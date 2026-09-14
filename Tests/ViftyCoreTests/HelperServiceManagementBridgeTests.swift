@@ -41,8 +41,8 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(source.contains("service.unregister { error in"), source)
-        XCTAssertTrue(source.contains("withCheckedThrowingContinuation"), source)
+        XCTAssertTrue(source.contains("service.unregister { completion"), source)
+        XCTAssertTrue(source.contains("performServiceManagementUnregister"), source)
         XCTAssertFalse(source.contains("try await service.unregister()"), source)
     }
 
@@ -196,6 +196,39 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
             XCTFail("A valid record from another lifecycle parent process must not replay")
         } catch {}
         XCTAssertEqual(replayBackend.unregisterCount, 0)
+    }
+
+    func testUnregisterCompletionTimeoutFailsClosedWithoutHanging() async throws {
+        do {
+            try await performServiceManagementUnregister(timeout: 0.05) { _ in }
+            XCTFail("Expected unregister timeout")
+        } catch let error as HelperServiceManagementBridgeError {
+            guard case .transitionFailed(let message) = error else {
+                return XCTFail("Unexpected bridge error: \(error)")
+            }
+            XCTAssertTrue(message.contains("timed out"))
+        }
+    }
+
+    func testUnregisterLateCallbackAfterTimeoutIsIgnored() async throws {
+        do {
+            try await performServiceManagementUnregister(timeout: 0.01) { completion in
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+                    completion(nil)
+                }
+            }
+            XCTFail("Expected timeout")
+        } catch {}
+        try await Task.sleep(for: .milliseconds(100))
+    }
+
+    func testImmediateNativeCompletionReturnsBeforeTimeoutAndInvokesStart() async throws {
+        var startInvoked = false
+        try await performServiceManagementUnregister(timeout: 30) { completion in
+            startInvoked = true
+            completion(nil)
+        }
+        XCTAssertTrue(startInvoked)
     }
 
     private func performRegister(
