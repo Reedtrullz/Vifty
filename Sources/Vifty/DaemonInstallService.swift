@@ -24,6 +24,11 @@ struct DaemonInstallProcessOutput: Equatable, Sendable {
     var standardError: String
 }
 
+enum DaemonInstallProcessError: Error, Equatable, Sendable {
+    case timedOut
+    case processGroupUnavailable
+}
+
 private actor BoundedProcessOutput {
     static let maximumBytesPerStream = 64 * 1_024
     private var data = Data()
@@ -47,84 +52,242 @@ struct DaemonInstallProcessRunner: Sendable {
         self.run = run
     }
 
-    static let system = DaemonInstallProcessRunner { executable, arguments, standardInput in
-        try await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = executable
-            process.arguments = arguments
-            process.environment = [
-                "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
-                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"
-            ]
-            let inputPipe = Pipe()
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            let inputHandle = inputPipe.fileHandleForWriting
-            let outputHandle = outputPipe.fileHandleForReading
-            let errorHandle = errorPipe.fileHandleForReading
-            process.standardInput = inputPipe
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
-            defer {
-                try? inputHandle.close()
-                try? outputHandle.close()
-                try? errorHandle.close()
-            }
-            try process.run()
-            let output = BoundedProcessOutput()
-            let error = BoundedProcessOutput()
-            let outputReader = Task.detached(priority: .userInitiated) {
-                do {
-                    while let chunk = try outputHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
-                        await output.append(chunk)
-                    }
-                } catch {
-                    return
+    static let defaultLifecycleTimeout: TimeInterval = 180
+
+    static func system(
+        timeout: TimeInterval = defaultLifecycleTimeout
+    ) -> DaemonInstallProcessRunner {
+        DaemonInstallProcessRunner { executable, arguments, standardInput in
+            try await Task.detached(priority: .userInitiated) {
+                let commandArguments = [executable.path] + arguments
+                var inputFileDescriptors = [Int32](repeating: 0, count: 2)
+                var outputFileDescriptors = [Int32](repeating: 0, count: 2)
+                var errorFileDescriptors = [Int32](repeating: 0, count: 2)
+                guard pipe(&inputFileDescriptors) == 0,
+                      pipe(&outputFileDescriptors) == 0,
+                      pipe(&errorFileDescriptors) == 0 else {
+                    (inputFileDescriptors + outputFileDescriptors + errorFileDescriptors)
+                        .filter { $0 > 0 }
+                        .forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
                 }
-            }
-            let errorReader = Task.detached(priority: .userInitiated) {
-                do {
-                    while let chunk = try errorHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
-                        await error.append(chunk)
-                    }
-                } catch {
-                    return
+
+                var fileActions: posix_spawn_file_actions_t?
+                guard posix_spawn_file_actions_init(&fileActions) == 0 else {
+                    (inputFileDescriptors + outputFileDescriptors + errorFileDescriptors)
+                        .forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
                 }
-            }
-            do {
-                try inputHandle.write(contentsOf: standardInput)
-                try inputHandle.close()
-            } catch {
-                process.terminate()
-                try? inputHandle.close()
-                try? outputHandle.close()
-                try? errorHandle.close()
-                let deadline = Date().addingTimeInterval(0.25)
-                while process.isRunning && Date() < deadline {
+                defer { posix_spawn_file_actions_destroy(&fileActions) }
+
+                let childFileDescriptors = inputFileDescriptors + outputFileDescriptors + errorFileDescriptors
+                let actionResults = [
+                    posix_spawn_file_actions_adddup2(&fileActions, inputFileDescriptors[0], STDIN_FILENO),
+                    posix_spawn_file_actions_adddup2(&fileActions, outputFileDescriptors[1], STDOUT_FILENO),
+                    posix_spawn_file_actions_adddup2(&fileActions, errorFileDescriptors[1], STDERR_FILENO)
+                ] + childFileDescriptors.map {
+                    posix_spawn_file_actions_addclose(&fileActions, $0)
+                }
+                guard actionResults.allSatisfy({ $0 == 0 }) else {
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(EINVAL))
+                }
+
+                var attributes: posix_spawnattr_t?
+                guard posix_spawnattr_init(&attributes) == 0 else {
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+                defer { posix_spawnattr_destroy(&attributes) }
+                guard posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)) == 0,
+                      posix_spawnattr_setpgroup(&attributes, 0) == 0 else {
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+
+                var cArguments = commandArguments.map { strdup($0) }
+                guard cArguments.allSatisfy({ $0 != nil }) else {
+                    cArguments.compactMap { $0 }.forEach { free($0) }
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(ENOMEM))
+                }
+                cArguments.append(nil)
+                defer { cArguments.compactMap { $0 }.forEach { free($0) } }
+
+                let environment = [
+                    "HOME=\(FileManager.default.homeDirectoryForCurrentUser.path)",
+                    "PATH=/usr/bin:/bin:/usr/sbin:/sbin"
+                ]
+                var cEnvironment = environment.map { strdup($0) }
+                guard cEnvironment.allSatisfy({ $0 != nil }) else {
+                    cEnvironment.compactMap { $0 }.forEach { free($0) }
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(ENOMEM))
+                }
+                cEnvironment.append(nil)
+                defer { cEnvironment.compactMap { $0 }.forEach { free($0) } }
+
+                var processID = pid_t()
+                let spawnResult = cArguments.withUnsafeMutableBufferPointer { argumentBuffer in
+                    cEnvironment.withUnsafeMutableBufferPointer { environmentBuffer in
+                        executable.path.withCString { executablePath in
+                            posix_spawn(
+                                &processID,
+                                executablePath,
+                                &fileActions,
+                                &attributes,
+                                argumentBuffer.baseAddress,
+                                environmentBuffer.baseAddress
+                            )
+                        }
+                    }
+                }
+                guard spawnResult == 0 else {
+                    childFileDescriptors.forEach { _ = close($0) }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(spawnResult))
+                }
+
+                let privateGroupID = processID
+                let groupIsPrivate = getpgid(processID) == privateGroupID && privateGroupID != getpgrp()
+                guard groupIsPrivate else {
+                    _ = kill(processID, SIGTERM)
+                    _ = kill(processID, SIGKILL)
+                    var status = Int32()
+                    let cleanupDeadline = DispatchTime.now().uptimeNanoseconds + 250_000_000
+                    while DispatchTime.now().uptimeNanoseconds < cleanupDeadline {
+                        let waitResult = waitpid(processID, &status, WNOHANG)
+                        if waitResult == processID || (waitResult == -1 && errno != EINTR) { break }
+                        usleep(10_000)
+                    }
+                    (inputFileDescriptors + outputFileDescriptors + errorFileDescriptors)
+                        .forEach { _ = close($0) }
+                    throw DaemonInstallProcessError.processGroupUnavailable
+                }
+
+                _ = close(inputFileDescriptors[0])
+                _ = close(outputFileDescriptors[1])
+                _ = close(errorFileDescriptors[1])
+                let inputHandle = FileHandle(fileDescriptor: inputFileDescriptors[1], closeOnDealloc: true)
+                let outputHandle = FileHandle(fileDescriptor: outputFileDescriptors[0], closeOnDealloc: true)
+                let errorHandle = FileHandle(fileDescriptor: errorFileDescriptors[0], closeOnDealloc: true)
+                var inputClosed = false
+                var outputClosed = false
+                var errorClosed = false
+                func closeInput() {
+                    guard !inputClosed else { return }
+                    inputClosed = true
+                    try? inputHandle.close()
+                }
+                func closeOutput() {
+                    guard !outputClosed else { return }
+                    outputClosed = true
+                    try? outputHandle.close()
+                }
+                func closeError() {
+                    guard !errorClosed else { return }
+                    errorClosed = true
+                    try? errorHandle.close()
+                }
+                defer {
+                    closeInput()
+                    closeOutput()
+                    closeError()
+                }
+
+                let output = BoundedProcessOutput()
+                let error = BoundedProcessOutput()
+                let outputReader = Task.detached(priority: .userInitiated) {
+                    do {
+                        while let chunk = try outputHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+                            await output.append(chunk)
+                        }
+                    } catch {}
+                }
+                let errorReader = Task.detached(priority: .userInitiated) {
+                    do {
+                        while let chunk = try errorHandle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+                            await error.append(chunk)
+                        }
+                    } catch {}
+                }
+
+                var waitStatus = Int32()
+                var leaderExited = false
+                func reapLeaderIfNeeded() throws {
+                    guard !leaderExited else { return }
+                    while true {
+                        let waitResult = waitpid(processID, &waitStatus, WNOHANG)
+                        if waitResult == processID {
+                            leaderExited = true
+                            return
+                        }
+                        if waitResult == 0 { return }
+                        if errno == EINTR { continue }
+                        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                    }
+                }
+                func groupExists() -> Bool {
+                    let result = kill(-privateGroupID, 0)
+                    return result == 0 || errno == EPERM
+                }
+                func waitForCleanup(until deadline: UInt64) throws {
+                    while DispatchTime.now().uptimeNanoseconds < deadline {
+                        try reapLeaderIfNeeded()
+                        if leaderExited && !groupExists() { return }
+                        usleep(10_000)
+                    }
+                    try reapLeaderIfNeeded()
+                }
+                func terminatePrivateGroup() throws {
+                    if groupExists() { _ = kill(-privateGroupID, SIGTERM) }
+                    try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
+                    if groupExists() { _ = kill(-privateGroupID, SIGKILL) }
+                    try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
+                }
+
+                do {
+                    try inputHandle.write(contentsOf: standardInput)
+                    closeInput()
+                } catch {
+                    closeInput()
+                    try? terminatePrivateGroup()
+                    closeOutput()
+                    closeError()
+                    _ = await outputReader.value
+                    _ = await errorReader.value
+                    throw error
+                }
+
+                let deadline = DispatchTime.now().uptimeNanoseconds
+                    + UInt64(max(0, timeout) * 1_000_000_000)
+                while !leaderExited {
+                    try reapLeaderIfNeeded()
+                    if leaderExited { break }
+                    if DispatchTime.now().uptimeNanoseconds >= deadline { break }
                     usleep(10_000)
                 }
-                if process.isRunning {
-                    kill(process.processIdentifier, SIGKILL)
+
+                if !leaderExited {
+                    try? terminatePrivateGroup()
+                    closeOutput()
+                    closeError()
+                    _ = await outputReader.value
+                    _ = await errorReader.value
+                    throw DaemonInstallProcessError.timedOut
                 }
-                outputReader.cancel()
-                errorReader.cancel()
-                throw error
-            }
-            process.waitUntilExit()
-            _ = await outputReader.value
-            _ = await errorReader.value
-            return DaemonInstallProcessOutput(
-                terminationStatus: process.terminationStatus,
-                standardOutput: String(
-                    decoding: await output.snapshot(),
-                    as: UTF8.self
-                ),
-                standardError: String(
-                    decoding: await error.snapshot(),
-                    as: UTF8.self
+
+                try terminatePrivateGroup()
+                closeOutput()
+                closeError()
+                _ = await outputReader.value
+                _ = await errorReader.value
+                return DaemonInstallProcessOutput(
+                    terminationStatus: (waitStatus & 0x7f) == 0 ? (waitStatus >> 8) & 0xff : 128 + (waitStatus & 0x7f),
+                    standardOutput: String(decoding: await output.snapshot(), as: UTF8.self),
+                    standardError: String(decoding: await error.snapshot(), as: UTF8.self)
                 )
-            )
-        }.value
+            }.value
+        }
     }
 }
 
@@ -202,7 +365,7 @@ actor DaemonInstallService: DaemonInstallServicing {
     private let lifecycleScriptLoader: DaemonLifecycleScriptLoader
 
     init() {
-        processRunner = .system
+        processRunner = .system()
         lifecycleScriptLoader = .bundled
     }
 
@@ -251,6 +414,11 @@ actor DaemonInstallService: DaemonInstallServicing {
                     operatorMessage: "Fan helper lifecycle failed; fan writes stay blocked. Copy support evidence if it keeps failing."
                 )
             }
+        } catch let error as DaemonInstallProcessError where error == .timedOut {
+            return DaemonInstallResult(
+                outcome: .blocked,
+                operatorMessage: "Helper lifecycle timed out; fan writes stay blocked until helper state is verified."
+            )
         } catch {
             return DaemonInstallResult(
                 outcome: .failed,

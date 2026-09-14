@@ -77,6 +77,28 @@ final class DaemonInstallServiceTests: XCTestCase {
         }
     }
 
+    func testServiceMapsTimeoutToBlockedWithoutLeakingRunnerError() async {
+        let service = DaemonInstallService(
+            processRunner: DaemonInstallProcessRunner { _, _, _ in
+                throw DaemonInstallProcessError.timedOut
+            },
+            lifecycleScriptLoader: DaemonLifecycleScriptLoader { _ in
+                Data("#!/usr/bin/env bash\n".utf8)
+            }
+        )
+
+        let result = await service.perform(
+            operation: .repair,
+            appBundleURL: URL(fileURLWithPath: "/Applications/Vifty.app"),
+            lifecycleScriptURL: URL(fileURLWithPath: "/Applications/Vifty.app/Contents/Resources/vifty-helper-lifecycle.sh")
+        )
+
+        XCTAssertEqual(result, DaemonInstallResult(
+            outcome: .blocked,
+            operatorMessage: "Helper lifecycle timed out; fan writes stay blocked until helper state is verified."
+        ))
+    }
+
     func testSystemRunnerDrainsLargeOutputWithoutDeadlock() async throws {
         let script = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-output-" + UUID().uuidString + ".sh")
@@ -90,7 +112,7 @@ final class DaemonInstallServiceTests: XCTestCase {
         let maximumBytesPerStream = 64 * 1_024
         let task = Task {
             defer { completion.fulfill() }
-            resultBox.set(try? await DaemonInstallProcessRunner.system.run(script, [], Data("input\n".utf8)))
+            resultBox.set(try? await DaemonInstallProcessRunner.system().run(script, [], Data("input\n".utf8)))
         }
         defer { task.cancel() }
 
@@ -100,6 +122,71 @@ final class DaemonInstallServiceTests: XCTestCase {
         XCTAssertEqual(result.terminationStatus, 0)
         XCTAssertEqual(result.standardOutput.utf8.count, maximumBytesPerStream)
         XCTAssertEqual(result.standardError.utf8.count, maximumBytesPerStream)
+    }
+
+    func testSystemRunnerTimesOutAndCleansThePrivateProcessGroup() async throws {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-timeout-\(UUID().uuidString).sh")
+        let shellPIDFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-timeout-shell-\(UUID().uuidString).pid")
+        let groupPIDFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-timeout-group-\(UUID().uuidString).pid")
+        let childPIDFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-timeout-child-\(UUID().uuidString).pid")
+        defer {
+            try? FileManager.default.removeItem(at: script)
+            try? FileManager.default.removeItem(at: shellPIDFile)
+            try? FileManager.default.removeItem(at: groupPIDFile)
+            try? FileManager.default.removeItem(at: childPIDFile)
+        }
+        try Data("""
+        #!/bin/bash
+        echo $$ > "\(shellPIDFile.path)"
+        ps -o pgid= -p $$ | tr -d ' ' > "\(groupPIDFile.path)"
+        trap '' TERM
+        (while :; do sleep 1; done) &
+        echo $! > "\(childPIDFile.path)"
+        while :; do sleep 1; done
+        """.utf8).write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+
+        func readPID(from url: URL) throws -> Int32 {
+            guard let pid = Int32(try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw NSError(domain: "DaemonInstallServiceTests", code: 1)
+            }
+            return pid
+        }
+
+        let startedAt = Date()
+        do {
+            _ = try await DaemonInstallProcessRunner.system(timeout: 0.2)
+                .run(script, [], Data())
+            XCTFail("Expected a bounded timeout")
+        } catch let error as DaemonInstallProcessError {
+            XCTAssertEqual(error, .timedOut)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2)
+
+        var shellPID: Int32?
+        var groupPID: Int32?
+        var childPID: Int32?
+        for _ in 0..<100 where shellPID == nil || groupPID == nil || childPID == nil {
+            shellPID = try? readPID(from: shellPIDFile)
+            groupPID = try? readPID(from: groupPIDFile)
+            childPID = try? readPID(from: childPIDFile)
+            if shellPID == nil || groupPID == nil || childPID == nil { usleep(10_000) }
+        }
+        let emittedShellPID = try XCTUnwrap(shellPID)
+        let emittedGroupPID = try XCTUnwrap(groupPID)
+        let emittedChildPID = try XCTUnwrap(childPID)
+        XCTAssertNotEqual(emittedShellPID, getpid())
+        XCTAssertNotEqual(emittedGroupPID, getpgrp())
+
+        for _ in 0..<100 where kill(emittedChildPID, 0) == 0 {
+            usleep(10_000)
+        }
+        XCTAssertEqual(kill(emittedChildPID, 0), -1)
+        XCTAssertEqual(kill(emittedShellPID, 0), -1)
     }
 
     func testSystemRunnerBoundsCleanupAfterStdinWriteFailure() async throws {
@@ -117,7 +204,7 @@ final class DaemonInstallServiceTests: XCTestCase {
         let task = Task {
             defer { completion.fulfill() }
             do {
-                _ = try await DaemonInstallProcessRunner.system.run(
+                _ = try await DaemonInstallProcessRunner.system().run(
                     script,
                     [],
                     Data(repeating: 0, count: 1 * 1_024 * 1_024)
@@ -234,10 +321,10 @@ final class DaemonInstallServiceTests: XCTestCase {
         XCTAssertFalse(source.contains("@MainActor"))
         XCTAssertTrue(source.contains("actor DaemonInstallService"))
         XCTAssertTrue(source.contains("Task.detached"))
-        XCTAssertTrue(source.contains("URL(fileURLWithPath: \"/bin/bash\")"))
-        XCTAssertTrue(source.contains("process.environment = ["))
-        XCTAssertTrue(source.contains("\"PATH\": \"/usr/bin:/bin:/usr/sbin:/sbin\""))
-        XCTAssertTrue(source.contains("[\"--noprofile\", \"--norc\", \"-s\""))
+        XCTAssertTrue(source.contains("\"/bin/bash\""))
+        XCTAssertTrue(source.contains("\"HOME=\\(FileManager.default.homeDirectoryForCurrentUser.path)\""))
+        XCTAssertTrue(source.contains("\"PATH=/usr/bin:/bin:/usr/sbin:/sbin\""))
+        XCTAssertTrue(source.contains("[executable.path] + arguments"))
         XCTAssertFalse(source.contains("processRunner.run(\n                lifecycleScriptURL"))
     }
 
