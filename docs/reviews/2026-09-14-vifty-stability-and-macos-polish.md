@@ -3,7 +3,7 @@
 **Plan:** docs/superpowers/plans/2026-09-14-vifty-stability-and-macos-polish.md
 **Branch:** codex/vifty-stability-polish-sdd
 **Baseline:** 6294fef (1,392 fast tests, 0 failures, 64 GiB free)
-**Final commit:** 7f52943 (test frame expectations update)
+**Final commit:** c7f574e (post-review unregister gate fix)
 **Date:** 2026-09-14
 
 ## Source / Unit Tests
@@ -20,12 +20,15 @@
 | Wire hardening | ad908fe | RPM map duplicate rejection, strict NSNumber coercion, unknown-error fail-closed |
 | Settings UI | c1fac50 | Native macOS TabView settings navigation |
 | Test fix | 7f52943 | Frame expectation updated from .frame(width:height:) to .frame(minWidth:minHeight:) |
+| Review fix | c7f574e | Start native unregister before awaiting completion; close the continuation race |
 
 ### Focused test results
 
 Pre-fix make test-fast ran 1,399 tests with exactly two stale frame-string failures in AppArchitectureBoundaryTests and ViftyReviewFixtureTests. Both failures matched the intentional Task 5 change from .frame(width: 600, height: 420) to .frame(minWidth: 600, minHeight: 420).
 
 Post-fix focused boundary tests: 70/70 passed (0 failures) across AppArchitectureBoundaryTests, ViftyReviewFixtureTests, SettingsSceneSourceTests, SettingsPresentationTests, and ViftyAccessibilitySemanticsTests.
+
+Final-review remediation: HelperServiceManagementBridgeTests passed 11/11 after adding the immediate native-completion regression test. The fix starts the native unregister operation before awaiting the completion gate and resumes a continuation immediately if the gate already finished synchronously or by timeout.
 
 Per-slice focused suites (all green):
 
@@ -38,6 +41,8 @@ Per-slice focused suites (all green):
 ### make verify (fast trust gate)
 
 make verify was run before the test fix and passed. It covers shell syntax checks, community/support surface, release metadata validation, fast XCTest suite (1,399 tests at that point, minus the two stale failures), warnings-as-errors build, release app bundle including schema resources, plist lint, codesign verification, and viftyctl identifier checks.
+
+The post-review helper-gate fix was validated with its focused 11-test suite; the full make verify gate was not rerun after that focused remediation.
 
 ### make verify-full (CI-facing gate)
 
@@ -84,5 +89,5 @@ No release evidence is claimed. The following remain unchanged:
     git diff --check                          # clean
     df -h /System/Volumes/Data                # 62 GiB free
     swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.(AppArchitectureBoundaryTests|ViftyReviewFixtureTests|SettingsSceneSourceTests|SettingsPresentationTests|ViftyAccessibilitySemanticsTests)'  # 70/70 passed
+    swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.HelperServiceManagementBridgeTests'  # 11/11 passed after c7f574e
     make verify                                # passed (pre-test-fix)
-
