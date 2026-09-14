@@ -202,6 +202,83 @@ protocol HelperServiceManagementBackend: AnyObject {
     func unregister() async throws
 }
 
+/// An internal callback gate that bounds the native SMAppService unregister
+/// completion with a DispatchSourceTimer deadline.  The gate uses an NSLock-
+/// protected boolean to guarantee exactly one continuation resume, even when
+/// the native completion arrives after the timer fires or fires after the
+/// native completion.
+@MainActor
+func performServiceManagementUnregister(
+    timeout: TimeInterval = 30,
+    start: (@escaping (Error?) -> Void) -> Void
+) async throws {
+    let gate = UnregisterCompletionGate(timeout: timeout)
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        gate.setContinuation(continuation)
+    }
+    start { error in
+        gate.finish(error: error)
+    }
+    try gate.result()
+}
+
+/// Thread-safe callback gate using NSLock.  No actor isolation — the
+/// DispatchSourceTimer fires on a global queue and finishes directly.
+final class UnregisterCompletionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private var storedError: Error?
+    private var storedContinuation: CheckedContinuation<Void, Never>?
+    private var timer: DispatchSourceTimer?
+
+    init(timeout: TimeInterval) {
+        let timer = DispatchSource.makeTimerSource(queue: .global())
+        timer.schedule(deadline: .now() + timeout)
+        timer.setEventHandler { [weak self] in
+            self?.finish(error: HelperServiceManagementBridgeError.transitionFailed(
+                "SMAppService unregister timed out; registration state is not trusted."
+            ))
+        }
+        timer.activate()
+        self.timer = timer
+    }
+
+    func setContinuation(_ continuation: CheckedContinuation<Void, Never>) {
+        lock.lock()
+        storedContinuation = continuation
+        lock.unlock()
+    }
+
+    /// Returns false if the gate was already closed (late callback).
+    @discardableResult
+    func finish(error: Error?) -> Bool {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return false
+        }
+        finished = true
+        let timer = self.timer
+        self.timer = nil
+        storedError = error
+        let continuation = storedContinuation
+        storedContinuation = nil
+        lock.unlock()
+        timer?.cancel()
+        continuation?.resume()
+        return true
+    }
+
+    func result() throws {
+        lock.lock()
+        let error = storedError
+        lock.unlock()
+        if let error {
+            throw error
+        }
+    }
+}
+
 @MainActor
 final class SystemHelperServiceManagementBackend: HelperServiceManagementBackend {
     private let service: SMAppService
@@ -226,14 +303,8 @@ final class SystemHelperServiceManagementBackend: HelperServiceManagementBackend
     }
 
     func unregister() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            service.unregister { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
+        try await performServiceManagementUnregister(timeout: 30) { [service] completion in
+            service.unregister { completion($0) }
         }
     }
 
