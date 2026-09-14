@@ -313,7 +313,11 @@ final class SystemHelperServiceManagementBackend: HelperServiceManagementBackend
 
     func unregister() async throws {
         try await performServiceManagementUnregister(timeout: 30) { [service] completion in
-            service.unregister { completion($0) }
+            service.unregister { error in
+                Task { @MainActor in
+                    completion(error)
+                }
+            }
         }
     }
 
