@@ -222,6 +222,15 @@ final class HelperServiceManagementBridgeTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
     }
 
+    func testImmediateNativeCompletionReturnsBeforeTimeoutAndInvokesStart() async throws {
+        var startInvoked = false
+        try await performServiceManagementUnregister(timeout: 30) { completion in
+            startInvoked = true
+            completion(nil)
+        }
+        XCTAssertTrue(startInvoked)
+    }
+
     private func performRegister(
         backend: any HelperServiceManagementBackend
     ) async throws -> HelperServiceManagementReport {

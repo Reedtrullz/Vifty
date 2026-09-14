@@ -213,11 +213,13 @@ func performServiceManagementUnregister(
     start: (@escaping (Error?) -> Void) -> Void
 ) async throws {
     let gate = UnregisterCompletionGate(timeout: timeout)
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-        gate.setContinuation(continuation)
-    }
+    // Invoke start before awaiting: the callback may fire synchronously
+    // or before the timeout, so setContinuation must handle both races.
     start { error in
         gate.finish(error: error)
+    }
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        gate.setContinuation(continuation)
     }
     try gate.result()
 }
@@ -245,6 +247,13 @@ final class UnregisterCompletionGate: @unchecked Sendable {
 
     func setContinuation(_ continuation: CheckedContinuation<Void, Never>) {
         lock.lock()
+        if finished {
+            // Gate already completed (timeout or synchronous callback).
+            // Resume the continuation immediately instead of storing it.
+            lock.unlock()
+            continuation.resume()
+            return
+        }
         storedContinuation = continuation
         lock.unlock()
     }
