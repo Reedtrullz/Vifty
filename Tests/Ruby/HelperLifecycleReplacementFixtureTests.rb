@@ -130,6 +130,19 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
     assert_includes cancelled[:output], "active or unknown"
   end
 
+  def test_replacement_can_use_previous_bundle_for_maintenance_while_candidate_controls_service
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    assert system("/usr/bin/ditto", @app, candidate)
+
+    prepared = run_lifecycle(
+      script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+      args: replacement_prepare_args(candidate, control_app: candidate, maintenance_app: @app)
+    )
+    assert_equal 0, prepared[:status], prepared[:output]
+    assert_equal "replacement-prepared", JSON.parse(File.read(@ledger)).fetch("status")
+  end
+
   def test_root_failure_is_75_only_after_exact_label_is_proven_disabled_and_offline
     failed = run_lifecycle(
       script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
@@ -500,12 +513,12 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
     Digest::SHA256.hexdigest(JSON.generate(entries))
   end
 
-  def replacement_prepare_args(candidate, transaction_id: TRANSACTION_ID)
+  def replacement_prepare_args(candidate, transaction_id: TRANSACTION_ID, control_app: nil, maintenance_app: nil)
     lifecycle = File.join(candidate, "Contents/Resources/vifty-helper-lifecycle.sh")
     digest_output, digest_status = Open3.capture2("/usr/bin/shasum", "-a", "256", lifecycle)
     raise "fixture lifecycle hash failed" unless digest_status.success?
     digest = digest_output.split.first
-    [
+    args = [
       "--operation", "repair", "--app", @app, "--record", @record,
       "--replacement-phase", "prepare", "--replacement-destination", @app,
       "--replacement-transaction-id", transaction_id,
@@ -513,6 +526,9 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
       "--replacement-lifecycle-source", lifecycle,
       "--replacement-lifecycle-sha256", digest
     ]
+    args += ["--control-app", control_app] if control_app
+    args += ["--maintenance-app", maintenance_app] if maintenance_app
+    args
   end
 
   def replacement_finish_args

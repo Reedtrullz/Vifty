@@ -98,9 +98,15 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     assert_includes lifecycle, "--control-app"
     assert_includes lifecycle, 'CONTROL_APP_EXPLICIT=0'
     assert_includes lifecycle, 'CONTROL_APP_PATH="${APP_PATH}"'
+    assert_includes lifecycle, "--maintenance-app"
+    assert_includes lifecycle, 'MAINTENANCE_APP_EXPLICIT=0'
     assert_includes lifecycle, '--control-app is only valid for uninstall or repair replacement prepare.'
     assert_includes lifecycle, 'payload[:controlApp] = control_app unless control_app == app'
-    assert_match(/VIFTY_CTL="\$\{CONTROL_APP_PATH\}\/Contents\/MacOS\/viftyctl"/, lifecycle)
+    assert_match(/VIFTY_MAIN="\$\{CONTROL_APP_PATH\}\/Contents\/MacOS\/Vifty"/, lifecycle)
+    assert_match(/VIFTY_CTL="\$\{MAINTENANCE_APP_PATH\}\/Contents\/MacOS\/viftyctl"/, lifecycle)
+    assert_includes installer, 'REPLACEMENT_LIFECYCLE_MAINTENANCE_APP=""'
+    assert_includes installer, 'prepare_arguments+=(--maintenance-app "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}")'
+    assert_includes installer, 'REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${DEST_APP}"'
     assert_match(/release_prior_replacement_lock_after_quiesce[\s\S]+capture_bundle_binding "\$\{APP_PATH\}"/, lifecycle)
     assert_includes lifecycle, 'PUBLIC_RECOVERY_HELPER_SHA256="4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f"'
     assert_includes lifecycle, 'identity["kind"] == "developer-id"'

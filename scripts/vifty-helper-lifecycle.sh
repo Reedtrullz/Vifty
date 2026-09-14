@@ -5,6 +5,8 @@ OPERATION=""
 APP_PATH="${VIFTY_APP:-/Applications/Vifty.app}"
 CONTROL_APP_PATH=""
 CONTROL_APP_EXPLICIT=0
+MAINTENANCE_APP_PATH=""
+MAINTENANCE_APP_EXPLICIT=0
 REPLACEMENT_PHASE=""
 REPLACEMENT_DESTINATION=""
 REPLACEMENT_TRANSACTION_ID=""
@@ -122,6 +124,7 @@ usage() {
 Usage:
   vifty-helper-lifecycle.sh --operation repair|uninstall [--app /Applications/Vifty.app]
                             [--control-app /path/to/Vifty.app]
+                            [--maintenance-app /path/to/Vifty.app]
                             [--dry-run] [--record command-record.json]
                             [--replacement-phase prepare|finish
                              --replacement-destination /Applications/Vifty.app
@@ -168,6 +171,7 @@ while [[ "$#" -gt 0 ]]; do
     --operation) require_value "$1" "${2:-}"; OPERATION="$2"; shift 2 ;;
     --app) require_value "$1" "${2:-}"; APP_PATH="${2%/}"; shift 2 ;;
     --control-app) require_value "$1" "${2:-}"; CONTROL_APP_PATH="${2%/}"; CONTROL_APP_EXPLICIT=1; shift 2 ;;
+    --maintenance-app) require_value "$1" "${2:-}"; MAINTENANCE_APP_PATH="${2%/}"; MAINTENANCE_APP_EXPLICIT=1; shift 2 ;;
     --record) require_value "$1" "${2:-}"; RECORD_PATH="$2"; shift 2 ;;
     --maintenance-report) require_value "$1" "${2:-}"; MAINTENANCE_REPORT="$2"; shift 2 ;;
     --replacement-phase) require_value "$1" "${2:-}"; REPLACEMENT_PHASE="$2"; shift 2 ;;
@@ -197,6 +201,15 @@ if [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]] && {
      ! ( "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" ) ]]
 }; then
   echo "helper-lifecycle: --control-app is only valid for uninstall or repair replacement prepare." >&2
+  exit 64
+fi
+if [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]] && {
+  [[ "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" &&
+     "${CONTROL_APP_EXPLICIT}" -eq 1 ]]
+}; then
+  :
+elif [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]]; then
+  echo "helper-lifecycle: --maintenance-app is only valid with explicit candidate control during repair replacement prepare." >&2
   exit 64
 fi
 if [[ -n "${REPLACEMENT_PHASE}" ]]; then
@@ -234,6 +247,15 @@ if [[ -n "${CONTROL_APP_PATH}" ]]; then
   CONTROL_APP_PATH="${control_app_parent}/$(/usr/bin/basename "${CONTROL_APP_PATH}")"
 else
   CONTROL_APP_PATH="${APP_PATH}"
+fi
+if [[ -n "${MAINTENANCE_APP_PATH}" ]]; then
+  maintenance_app_parent="$(cd "$(/usr/bin/dirname "${MAINTENANCE_APP_PATH}")" 2>/dev/null && pwd -P)" || {
+    echo "helper-lifecycle: maintenance app parent is unavailable." >&2
+    exit 66
+  }
+  MAINTENANCE_APP_PATH="${maintenance_app_parent}/$(/usr/bin/basename "${MAINTENANCE_APP_PATH}")"
+else
+  MAINTENANCE_APP_PATH="${CONTROL_APP_PATH}"
 fi
 [[ "$(/usr/bin/basename "${APP_PATH}")" == "Vifty.app" ]] || {
   echo "helper-lifecycle: target app must be a Vifty.app bundle path." >&2
@@ -317,6 +339,10 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
       echo "helper-lifecycle: replacement prepare bundle paths do not match the declared destination." >&2
       exit 64
     }
+    if [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 && "${MAINTENANCE_APP_PATH}" != "${REPLACEMENT_PREVIOUS_APP}" ]]; then
+      echo "helper-lifecycle: explicit maintenance app must be the exact previous replacement bundle." >&2
+      exit 64
+    fi
   else
     [[ -z "${REPLACEMENT_CANDIDATE_APP}" && -z "${REPLACEMENT_PREVIOUS_APP}" &&
        -z "${REPLACEMENT_LIFECYCLE_SOURCE}" && -z "${REPLACEMENT_LIFECYCLE_EXPECTED_SHA256}" &&
@@ -334,10 +360,10 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
     fi
   fi
 fi
-VIFTY_CTL="${CONTROL_APP_PATH}/Contents/MacOS/viftyctl"
 VIFTY_MAIN="${CONTROL_APP_PATH}/Contents/MacOS/Vifty"
-VIFTY_HELPER="${CONTROL_APP_PATH}/Contents/MacOS/ViftyHelper"
-VIFTY_DAEMON="${CONTROL_APP_PATH}/Contents/MacOS/ViftyDaemon"
+VIFTY_CTL="${MAINTENANCE_APP_PATH}/Contents/MacOS/viftyctl"
+VIFTY_HELPER="${MAINTENANCE_APP_PATH}/Contents/MacOS/ViftyHelper"
+VIFTY_DAEMON="${MAINTENANCE_APP_PATH}/Contents/MacOS/ViftyDaemon"
 PLIST_NAME="tech.reidar.vifty.daemon.plist"
 SERVICE_LABEL="tech.reidar.vifty.daemon"
 RELEASE_TEAM_ID="X88J3853S2"
@@ -357,6 +383,7 @@ if [[ -n "${TEST_ROOT}" ]]; then
   TEST_ROOT="$(cd "${TEST_ROOT}" 2>/dev/null && pwd -P)"
   case "${APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
   case "${CONTROL_APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture control app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
+  case "${MAINTENANCE_APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture maintenance app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
   if [[ "${REPLACEMENT_PHASE}" == "prepare" ]]; then
     case "${REPLACEMENT_CANDIDATE_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture replacement candidate escaped the test root." >&2; exit 65 ;; esac
     case "${REPLACEMENT_PREVIOUS_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture previous bundle escaped the test root." >&2; exit 65 ;; esac
@@ -1301,6 +1328,37 @@ validate_control_app() {
       exit 75 unless identity["kind"] == "adhoc" && identity["teamID"].nil?
     end
   ' "${binding}" "${CONTROL_APP_PATH}" "${RELEASE_TEAM_ID}" "${expected_helper_sha}" "${TEST_ROOT}"
+}
+
+validate_maintenance_app() {
+  [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]] || return 0
+  [[ "${OPERATION}:${REPLACEMENT_PHASE}" == "repair:prepare" ]] || return 1
+  [[ "${MAINTENANCE_APP_PATH}" == "${REPLACEMENT_PREVIOUS_APP}" ]] || return 1
+  [[ -d "${MAINTENANCE_APP_PATH}" && ! -L "${MAINTENANCE_APP_PATH}" ]] || return 1
+  [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "${MAINTENANCE_APP_PATH}/Contents/Info.plist" 2>/dev/null)" == "tech.reidar.vifty" ]] || return 1
+
+  local binding
+  binding="$(capture_bundle_binding "${MAINTENANCE_APP_PATH}")" || return 1
+  /usr/bin/ruby -rjson -e '
+    binding = JSON.parse(ARGV.fetch(0))
+    path, expected_team, test_root = ARGV.drop(1)
+    identity = binding.fetch("identity")
+    expected_ids = {
+      "Vifty" => "tech.reidar.vifty",
+      "viftyctl" => "tech.reidar.vifty.ctl",
+      "ViftyDaemon" => "tech.reidar.vifty.daemon",
+      "ViftyHelper" => "tech.reidar.vifty.helper"
+    }
+    exit 75 unless binding["sourcePath"] == File.expand_path(path) &&
+      identity["componentIdentifiers"] == expected_ids &&
+      identity["componentSHA256"].is_a?(Hash) &&
+      identity["componentSHA256"].keys.sort == expected_ids.keys.sort
+    if test_root.empty?
+      exit 75 unless identity["kind"] == "developer-id" && identity["teamID"] == expected_team
+    else
+      exit 75 unless identity["kind"] == "adhoc" && identity["teamID"].nil?
+    end
+  ' "${binding}" "${MAINTENANCE_APP_PATH}" "${RELEASE_TEAM_ID}" "${TEST_ROOT}"
 }
 
 persist_root_record() {
@@ -2626,6 +2684,12 @@ fi
 
 if ! validate_control_app; then
   BLOCKER="The explicit control app failed the complete bundle, identifier, signature, TeamID, or pinned helper digest check."
+  write_record || true
+  echo "helper-lifecycle: ${BLOCKER}" >&2
+  exit 75
+fi
+if ! validate_maintenance_app; then
+  BLOCKER="The explicit maintenance app failed the complete bundle, identifier, signature, TeamID, or previous-bundle binding check."
   write_record || true
   echo "helper-lifecycle: ${BLOCKER}" >&2
   exit 75

@@ -220,6 +220,7 @@ REPLACEMENT_PREPARE_LIFECYCLE=""
 REPLACEMENT_PREPARE_LIFECYCLE_SHA256=""
 REPLACEMENT_STAGED_LIFECYCLE=""
 REPLACEMENT_LIFECYCLE_CONTROL_APP=""
+REPLACEMENT_LIFECYCLE_MAINTENANCE_APP=""
 REPLACEMENT_FINISH_ALLOWED=0
 
 path_exists_without_following() {
@@ -1487,6 +1488,9 @@ prepare_replacement_authority_freeze() {
   if [[ -n "${REPLACEMENT_LIFECYCLE_CONTROL_APP}" ]]; then
     prepare_arguments+=(--control-app "${REPLACEMENT_LIFECYCLE_CONTROL_APP}")
   fi
+  if [[ -n "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}" ]]; then
+    prepare_arguments+=(--maintenance-app "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}")
+  fi
   if "${REPLACEMENT_PREPARE_LIFECYCLE}" "${prepare_arguments[@]}"; then
     prepare_status=0
   else
@@ -2021,9 +2025,18 @@ preflight_existing_install_before_replacement
 # the daemon-maintenance control client.
 if [[ "${VIFTY_USE_CANDIDATE_LIFECYCLE:-0}" == "1" ]]; then
   REPLACEMENT_LIFECYCLE_CONTROL_APP="${APP_DIR}"
-  if ! register_candidate_control_service; then
-    echo "error: the freshly built candidate could not re-register its daemon before replacement preparation." >&2
-    exit 75
+  if [[ -d "${DEST_APP}" && ! -L "${DEST_APP}" ]]; then
+    # Keep maintenance bound to the currently running daemon/helper. The
+    # candidate main executable is used only for the fixed SMAppService
+    # unregister callback; registering the candidate here would leave the
+    # existing daemon and candidate helper identities mismatched.
+    REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${DEST_APP}"
+  else
+    REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${APP_DIR}"
+    if ! register_candidate_control_service; then
+      echo "error: the freshly built candidate could not re-register its daemon before replacement preparation." >&2
+      exit 75
+    fi
   fi
 fi
 if [[ "${INSTALL_MODE}" == "public-release" ]]; then
