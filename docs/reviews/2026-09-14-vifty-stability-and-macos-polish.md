@@ -48,7 +48,7 @@ The earlier pre-fix run's two stale frame-string failures were resolved by 7f529
 
 ### make verify-full (CI-facing gate)
 
-make verify-full was interrupted with SIGTERM during InstallReplacementPreflightScriptTests. It is incomplete and must not be treated as a pass. The interruption was external to the implementation; no test failure was observed before termination.
+The earlier make verify-full attempt was interrupted with SIGTERM during InstallReplacementPreflightScriptTests. A clean final-head rerun completed successfully: 2,062 XCTest tests with 0 failures, followed by all release/package checks and Ruby contract suites with 0 failures. The earlier interruption is superseded; no make verify-full failure remains.
 
 ## Live UI Evidence
 
@@ -83,7 +83,6 @@ No release evidence is claimed. The following remain unchanged:
 - No notarization
 - No release publication
 - No cross-Mac compatibility
-- make verify-full is incomplete (SIGTERM interruption)
 - Live UI/AX acceptance is pending a follow-up (Task 5 Ruling)
 
 ## Verification Commands
@@ -93,3 +92,4 @@ No release evidence is claimed. The following remain unchanged:
     swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.(AppArchitectureBoundaryTests|ViftyReviewFixtureTests|SettingsSceneSourceTests|SettingsPresentationTests|ViftyAccessibilitySemanticsTests)'  # 70/70 passed
     swift test --scratch-path "$PWD/.build" --filter 'ViftyCoreTests.HelperServiceManagementBridgeTests'  # 11/11 passed after c7f574e
     make verify SWIFT_BUILD_PATH="$PWD/.build"  # passed; 1,400 tests, 0 failures
+    make verify-full SWIFT_BUILD_PATH="$PWD/.build"  # passed; 2,062 XCTest tests plus release/Ruby contract suites
