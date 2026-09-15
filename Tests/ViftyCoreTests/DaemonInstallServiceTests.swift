@@ -200,7 +200,6 @@ final class DaemonInstallServiceTests: XCTestCase {
         defer { signal(SIGPIPE, previousSIGPIPEHandler) }
         let resultBox = ProcessFailureBox()
         let completion = expectation(description: "stdin failure cleanup completes")
-        let startedAt = Date()
         let task = Task {
             defer { completion.fulfill() }
             do {
@@ -216,8 +215,9 @@ final class DaemonInstallServiceTests: XCTestCase {
         }
         defer { task.cancel() }
 
+        // Bound completion without a second wall-clock limit that includes task
+        // scheduling, process startup and the input write as well as cleanup.
         await fulfillment(of: [completion], timeout: 2)
-        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1.25)
         let didThrow = resultBox.threw
         XCTAssertTrue(didThrow)
     }
