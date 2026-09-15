@@ -123,6 +123,25 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     assert_includes lifecycle, "ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE"
   end
 
+  def test_system_immutable_scan_rejects_incomplete_traversal_and_symlinks
+    Dir.mktmpdir("vifty-flag-scan-", File.join(ROOT, ".build")) do |dir|
+      child = File.join(dir, "unreadable")
+      Dir.mkdir(child)
+      link = File.join(dir, "link")
+      File.symlink(child, link)
+      script = installer_function("tree_has_system_immutable_flag") +
+        "\n" + 'tree_has_system_immutable_flag "$1"'
+      assert_equal 1, Open3.capture3("/bin/bash", "-c", script, "scan", child).last.exitstatus
+      assert_equal 2, Open3.capture3("/bin/bash", "-c", script, "scan", link).last.exitstatus
+      File.chmod(0o000, child)
+      begin
+        assert_equal 2, Open3.capture3("/bin/bash", "-c", script, "scan", dir).last.exitstatus
+      ensure
+        File.chmod(0o700, child)
+      end
+    end
+  end
+
   def test_live_replacement_lock_is_releasable_on_sip_enabled_macos
     lock_function = lifecycle_function("replacement_lock_flag")
     assert_includes lock_function, "uchg"

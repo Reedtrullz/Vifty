@@ -1428,14 +1428,16 @@ verify_root_staged_lifecycle() {
 
 tree_has_system_immutable_flag() {
   local root="$1"
-  local entry flags
-  [[ -d "${root}" && ! -L "${root}" ]] || return 1
-  while IFS= read -r -d '' entry; do
-    flags="$(/usr/bin/stat -f '%Sf' "${entry}" 2>/dev/null)" || return 2
+  local flags tree_flags
+  [[ ! -L "${root}" ]] || return 2
+  [[ -e "${root}" ]] || return 1
+  [[ -d "${root}" ]] || return 2
+  tree_flags="$(/usr/bin/find -x "${root}" -exec /usr/bin/stat -f '%Sf' {} + 2>/dev/null)" || return 2
+  while IFS= read -r flags; do
     case ",${flags}," in
       *,schg,*) return 0 ;;
     esac
-  done < <(/usr/bin/find -x "${root}" -print0 2>/dev/null)
+  done <<< "${tree_flags}"
   return 1
 }
 
