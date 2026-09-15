@@ -1403,10 +1403,9 @@ verify_root_staged_lifecycle() {
   local lifecycle="$1"
   local expected_sha="$2"
   local expected_owner=0
-  local expected_flag=schg
+  local expected_flag=uchg
   if [[ "${FIXTURE_CONTEXT_VALID}" == "1" ]]; then
     expected_owner="$(/usr/bin/id -u)"
-    expected_flag=uchg
   fi
   [[ "${lifecycle}" == "${REPLACEMENT_LIFECYCLE_ROOT}/${REPLACEMENT_TRANSACTION_ID}/vifty-helper-lifecycle.sh" ]] || return 1
   local transaction_dir="${lifecycle%/*}"
@@ -1425,6 +1424,36 @@ verify_root_staged_lifecycle() {
   case ",${dir_flags}," in *",${expected_flag},"*) ;; *) return 1 ;; esac
   actual_sha="$(sha256_file "${lifecycle}")" || return 1
   [[ "${actual_sha}" == "${expected_sha}" ]]
+}
+
+tree_has_system_immutable_flag() {
+  local root="$1"
+  local entry flags
+  [[ -d "${root}" && ! -L "${root}" ]] || return 1
+  while IFS= read -r -d '' entry; do
+    flags="$(/usr/bin/stat -f '%Sf' "${entry}" 2>/dev/null)" || return 2
+    case ",${flags}," in
+      *,schg,*) return 0 ;;
+    esac
+  done < <(/usr/bin/find -x "${root}" -print0 2>/dev/null)
+  return 1
+}
+
+reject_system_immutable_tree() {
+  local root="$1"
+  local blocked_message="$2"
+  local inspection_message="$3"
+  if tree_has_system_immutable_flag "${root}"; then
+    echo "error: ${blocked_message}" >&2
+    return 1
+  else
+    local inspection_status=$?
+    if [[ "${inspection_status}" -ne 1 ]]; then
+      echo "error: ${inspection_message}" >&2
+      return 1
+    fi
+  fi
+  return 0
 }
 
 prepared_lifecycle_source_is_unchanged() {
@@ -1692,6 +1721,11 @@ preflight_existing_install_before_replacement() {
   REPLACEMENT_LIFECYCLE_APP=""
   local existing_main="${DEST_APP}/Contents/MacOS/Vifty"
   local existing_ctl="${DEST_APP}/Contents/MacOS/viftyctl"
+  reject_system_immutable_tree \
+    "${REPLACEMENT_LIFECYCLE_ROOT}" \
+    "prior Vifty replacement evidence carries the macOS system-immutable (schg) flag; clear the stale replacement evidence once from macOS Recovery, then retry." \
+    "could not inspect prior Vifty replacement evidence safely; refusing replacement." \
+    || exit 75
   if [[ -L "${DEST_APP}" ]]; then
     echo "error: existing Vifty app root is a symbolic link; refusing replacement before executing or copying anything." >&2
     exit 75
@@ -1716,6 +1750,11 @@ preflight_existing_install_before_replacement() {
     echo "error: existing Vifty app root is not a directory; refusing replacement." >&2
     exit 75
   }
+  reject_system_immutable_tree \
+    "${DEST_APP}" \
+    "existing Vifty bundle carries the macOS system-immutable (schg) flag; SIP-enabled macOS cannot release that flag during a normal boot, so clear it once from macOS Recovery, then retry." \
+    "could not inspect the existing Vifty bundle safely; refusing replacement." \
+    || exit 75
 
   if [[ ! -x "${existing_main}" ]]; then
     echo "error: existing Vifty install has no executable main app safety interface; refusing replacement." >&2

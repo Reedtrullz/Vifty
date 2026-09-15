@@ -123,6 +123,15 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     assert_includes lifecycle, "ROOT_FIXTURE_RECORD_POST_RENAME_FAILURE"
   end
 
+  def test_live_replacement_lock_is_releasable_on_sip_enabled_macos
+    lock_function = lifecycle_function("replacement_lock_flag")
+    assert_includes lock_function, "uchg"
+    refute_match(/printf[^\n]*schg/, lock_function)
+    assert_match(/local expected_flag=uchg/, installer_function("verify_root_staged_lifecycle"))
+    assert_includes installer, "tree_has_system_immutable_flag"
+    assert_includes installer, "clear it once from macOS Recovery"
+  end
+
   def test_privileged_prepare_uses_a_complete_candidate_snapshot
     assert_includes lifecycle, "stage_replacement_candidate_snapshot"
     assert_includes lifecycle, "CandidateSnapshot/Vifty.app"

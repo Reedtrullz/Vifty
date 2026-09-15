@@ -716,11 +716,10 @@ ensure_privileged_execution_directory() {
 }
 
 replacement_lock_flag() {
-  if [[ -n "${TEST_ROOT}" ]]; then
-    /usr/bin/printf '%s' uchg
-  else
-    /usr/bin/printf '%s' schg
-  fi
+  # `schg` can only be cleared from single-user/Recovery mode on current
+  # macOS. Vifty's replacement tree lives in user-space, so root-owned
+  # maintenance plus `uchg` provides a releasable immutable boundary.
+  /usr/bin/printf '%s' uchg
 }
 
 path_has_replacement_lock() {
@@ -2373,7 +2372,7 @@ replacement_lock_root_worker() {
   fi
   if ! lock_replacement_tree "${REPLACEMENT_DESTINATION}"; then
     reconcile_replacement_flag_state locked >/dev/null 2>&1 || true
-    echo "helper-lifecycle: system-immutable replacement bundle lock is unavailable or incomplete." >&2
+    echo "helper-lifecycle: immutable replacement bundle lock is unavailable or incomplete." >&2
     exit 75
   fi
   if [[ -n "${TEST_ROOT}" && "${ROOT_FIXTURE_EXIT_AFTER_LOCK}" == "1" ]]; then
