@@ -2,6 +2,7 @@
 set -euo pipefail
 
 OPERATION=""
+TERMINAL_AUTHORIZATION=0
 APP_PATH="${VIFTY_APP:-/Applications/Vifty.app}"
 CONTROL_APP_PATH=""
 CONTROL_APP_EXPLICIT=0
@@ -126,6 +127,7 @@ Usage:
                             [--control-app /path/to/Vifty.app]
                             [--maintenance-app /path/to/Vifty.app]
                             [--dry-run] [--record command-record.json]
+                            [--terminal-authorization]
                             [--replacement-phase prepare|finish
                              --replacement-destination /Applications/Vifty.app
                              --replacement-transaction-id UUID
@@ -189,6 +191,7 @@ while [[ "$#" -gt 0 ]]; do
     --replacement-public-team-id) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_TEAM_ID="$2"; shift 2 ;;
     --replacement-public-archive-sha256) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_ARCHIVE_SHA256="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --terminal-authorization) TERMINAL_AUTHORIZATION=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "helper-lifecycle: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
@@ -196,6 +199,13 @@ done
 
 case "${OPERATION}" in repair|uninstall) ;; *) echo "helper-lifecycle: --operation must be repair or uninstall." >&2; exit 64 ;; esac
 case "${REPLACEMENT_PHASE}" in ""|prepare|finish|release-lock) ;; *) echo "helper-lifecycle: --replacement-phase must be prepare, finish, or release-lock." >&2; exit 64 ;; esac
+if [[ "${TERMINAL_AUTHORIZATION}" == "1" && "${DRY_RUN}" == "0" ]]; then
+  [[ -t 0 && -t 1 ]] || {
+    echo "helper-lifecycle: terminal authorization requires a visible terminal." >&2
+    exit 75
+  }
+  /usr/bin/sudo -v || exit 75
+fi
 if [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]] && {
   [[ "${OPERATION}" != "uninstall" &&
      ! ( "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" ) ]]
@@ -738,17 +748,28 @@ path_has_replacement_lock() {
 replacement_tree_is_locked() {
   local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
+  local find_arguments=(-x "${root}" -print0)
+  if [[ "${root}" == "${REPLACEMENT_TRANSACTION_DIR:-}" &&
+        "$(/usr/bin/id -u)" != "${EXPECTED_OWNER_UID:-0}" ]]; then
+    # The caller verifies the immutable root-private boundary; only the root
+    # worker can traverse and verify its contents. Never broaden its permissions.
+    local private_snapshot="${root}/CandidateSnapshot"
+    [[ -d "${private_snapshot}" && ! -L "${private_snapshot}" &&
+       "$(/usr/bin/stat -f '%u:%Lp' "${private_snapshot}")" == "0:700" ]] || return 1
+    find_arguments+=(-path "${private_snapshot}" -prune)
+  fi
   local entry
-  while IFS= read -r -d '' entry; do
+  /usr/bin/find "${find_arguments[@]}" | while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
     path_has_replacement_lock "${entry}" || return 1
-  done < <(/usr/bin/find -x "${root}" -print0)
+  done
 }
 
 replacement_tree_flag_state() {
   local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
   local entry locked=0 unlocked=0
+  /usr/bin/find -x "${root}" -print0 | {
   while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
     if path_has_replacement_lock "${entry}"; then
@@ -756,7 +777,7 @@ replacement_tree_flag_state() {
     else
       unlocked=$((unlocked + 1))
     fi
-  done < <(/usr/bin/find -x "${root}" -print0)
+  done
   if [[ "${locked}" -gt 0 && "${unlocked}" -eq 0 ]]; then
     /usr/bin/printf '%s\n' locked
   elif [[ "${unlocked}" -gt 0 && "${locked}" -eq 0 ]]; then
@@ -764,13 +785,15 @@ replacement_tree_flag_state() {
   else
     /usr/bin/printf '%s\n' mixed
   fi
+  }
 }
 
 force_lock_replacement_tree() {
-  local root="$1" flag
+  local root="$1" flag state
   flag="$(replacement_lock_flag)"
   /usr/bin/chflags -R "${flag}" "${root}" || return 1
-  [[ "$(replacement_tree_flag_state "${root}")" == "locked" ]]
+  state="$(replacement_tree_flag_state "${root}")" || return 1
+  [[ "${state}" == "locked" ]]
 }
 
 clear_replacement_tree_flags() {
@@ -779,10 +802,11 @@ clear_replacement_tree_flags() {
 }
 
 force_unlock_replacement_tree() {
-  local root="$1"
+  local root="$1" state
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
   clear_replacement_tree_flags "${root}" || return 1
-  [[ "$(replacement_tree_flag_state "${root}")" == "unlocked" ]]
+  state="$(replacement_tree_flag_state "${root}")" || return 1
+  [[ "${state}" == "unlocked" ]]
 }
 
 lock_replacement_tree() {
@@ -2498,6 +2522,27 @@ build_replacement_finish_root_program() {
   /usr/bin/printf '%s\n' 'replacement_finish_root_worker'
 }
 
+run_authorized_root_stager() {
+  if [[ "${TERMINAL_AUTHORIZATION}" == "1" ]]; then
+    [[ -t 0 && -t 1 ]] || {
+      echo "helper-lifecycle: terminal authorization requires a visible terminal." >&2
+      return 75
+    }
+    /usr/bin/sudo /usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+      /bin/bash --noprofile --norc -c "$1" -- "$2" "$3"
+    return $?
+  fi
+  /usr/bin/osascript - "$1" "$2" "$3" <<'APPLESCRIPT'
+on run argv
+  set stagingProgram to item 1 of argv
+  set encodedWorker to item 2 of argv
+  set expectedDigest to item 3 of argv
+  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
+  do shell script commandText with administrator privileges
+end run
+APPLESCRIPT
+}
+
 run_replacement_finish_root_program() {
   local root_program="$1"
   if [[ -n "${TEST_ROOT}" ]]; then
@@ -2520,15 +2565,7 @@ worker_path="${worker_dir}/worker.sh"
 actual_digest="$(/usr/bin/shasum -a 256 "${worker_path}" | /usr/bin/awk '\''{print $1}'\'')"
 [[ "${actual_digest}" == "${expected_digest}" ]] || exit 78
 /usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc "${worker_path}"'
-  /usr/bin/osascript - "${root_stager}" "${root_base64}" "${root_digest}" <<'APPLESCRIPT'
-on run argv
-  set stagingProgram to item 1 of argv
-  set encodedWorker to item 2 of argv
-  set expectedDigest to item 3 of argv
-  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
-  do shell script commandText with administrator privileges
-end run
-APPLESCRIPT
+  run_authorized_root_stager "${root_stager}" "${root_base64}" "${root_digest}"
 }
 
 replacement_authority_is_proven_disabled_offline() {
@@ -2826,16 +2863,7 @@ actual_digest="$(/usr/bin/shasum -a 256 "${worker_path}" | /usr/bin/awk '{print 
   /bin/bash --noprofile --norc "${worker_path}"
 ROOTSTAGER
 )"
-  if ! /usr/bin/osascript - "${ROOT_STAGER}" "${ROOT_PROGRAM_BASE64}" "${ROOT_PROGRAM_SHA256}" <<'APPLESCRIPT'
-on run argv
-  set stagingProgram to item 1 of argv
-  set encodedWorker to item 2 of argv
-  set expectedDigest to item 3 of argv
-  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
-  do shell script commandText with administrator privileges
-end run
-APPLESCRIPT
-  then
+  if ! run_authorized_root_stager "${ROOT_STAGER}" "${ROOT_PROGRAM_BASE64}" "${ROOT_PROGRAM_SHA256}"; then
     if [[ "${TOKEN_CONSUMED}" -eq 1 ]]; then
       BLOCKER="Administrator authorization or privileged cleanup was cancelled/failed after daemon authorization. The helper remains disabled and fail-closed; retry the same operation before the root receipt expires, or use the reviewed offline recovery fallback afterward."
     else
