@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "json"
+require "digest"
+require "fileutils"
 require "minitest/autorun"
 require "open3"
 require "tmpdir"
@@ -10,6 +12,58 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
 
   def lifecycle
     @lifecycle ||= File.read(File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"))
+  end
+
+  def test_terminal_authorization_requires_a_terminal_before_running_worker
+    script = lifecycle_function("run_authorized_root_stager") +
+      "\nTERMINAL_AUTHORIZATION=1\nrun_authorized_root_stager 'exit 0' unused unused"
+    output, error, status = Open3.capture3("/bin/bash", "-c", script)
+    assert_equal 75, status.exitstatus, output + error
+    assert_includes error, "visible terminal"
+  end
+
+  def test_helper_report_uses_bundled_runtime_without_legacy_helper
+    Dir.mktmpdir("vifty-helper-report-", File.join(ROOT, ".build")) do |dir|
+      app = File.join(dir, "Vifty.app")
+      bin = File.join(app, "Contents", "MacOS")
+      FileUtils.mkdir_p(bin)
+      daemon = File.join(bin, "ViftyDaemon")
+      File.write(daemon, "test daemon")
+      File.chmod(0700, daemon)
+      sha = Digest::SHA256.file(daemon).hexdigest
+      report = {daemonRuntime: {matchesExpectedDaemon: true, installedDaemonPath: daemon,
+        expectedDaemonSHA256: sha, installedDaemonSHA256: sha}}
+      ctl = File.join(bin, "viftyctl")
+      File.write(ctl, "#!/bin/sh\nprintf '%s\\n' '#{JSON.generate(report)}'\n")
+      File.chmod(0700, ctl)
+      script = installer_function("report_helper_daemon_status") +
+        "\nshell_quote() { printf '%s' \"$1\"; }\n" +
+        "sha256_file() { /usr/bin/shasum -a 256 \"$1\" | /usr/bin/awk '{print $1}'; }\n" +
+        "report_helper_daemon_status"
+      output, error, status = Open3.capture3({"DEST_APP" => app, "CHECK_HELPER_DAEMON" => "1",
+        "HELPER_TARGET" => File.join(dir, "absent"), "INSTALL_MODE" => "source"},
+        "/bin/bash", "-c", script)
+      assert status.success?, error
+      assert_includes output, "Fan helper matches"
+      refute_includes output, "not installed"
+    end
+  end
+
+  def test_lock_scan_rejects_incomplete_enumeration
+    Dir.mktmpdir("vifty-lock-scan-", File.join(ROOT, ".build")) do |dir|
+      hidden = File.join(dir, "unreadable")
+      Dir.mkdir(hidden, 0000)
+      begin
+        %w[replacement_tree_is_locked replacement_tree_flag_state].each do |function|
+          script = "set -o pipefail\n" + lifecycle_function(function) +
+            "\npath_has_replacement_lock() { return 0; }\n#{function} \"$1\""
+          _, _, status = Open3.capture3("/bin/bash", "-c", script, "scan-test", dir)
+          refute status.success?, "#{function}: unreadable subtree must not count as fully verified"
+        end
+      ensure
+        File.chmod(0700, hidden)
+      end
+    end
   end
 
   def installer
@@ -98,9 +152,15 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     assert_includes lifecycle, "--control-app"
     assert_includes lifecycle, 'CONTROL_APP_EXPLICIT=0'
     assert_includes lifecycle, 'CONTROL_APP_PATH="${APP_PATH}"'
+    assert_includes lifecycle, "--maintenance-app"
+    assert_includes lifecycle, 'MAINTENANCE_APP_EXPLICIT=0'
     assert_includes lifecycle, '--control-app is only valid for uninstall or repair replacement prepare.'
     assert_includes lifecycle, 'payload[:controlApp] = control_app unless control_app == app'
-    assert_match(/VIFTY_CTL="\$\{CONTROL_APP_PATH\}\/Contents\/MacOS\/viftyctl"/, lifecycle)
+    assert_match(/VIFTY_MAIN="\$\{CONTROL_APP_PATH\}\/Contents\/MacOS\/Vifty"/, lifecycle)
+    assert_match(/VIFTY_CTL="\$\{MAINTENANCE_APP_PATH\}\/Contents\/MacOS\/viftyctl"/, lifecycle)
+    assert_includes installer, 'REPLACEMENT_LIFECYCLE_MAINTENANCE_APP=""'
+    assert_includes installer, 'prepare_arguments+=(--maintenance-app "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}")'
+    assert_includes installer, 'REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${DEST_APP}"'
     assert_match(/release_prior_replacement_lock_after_quiesce[\s\S]+capture_bundle_binding "\$\{APP_PATH\}"/, lifecycle)
     assert_includes lifecycle, 'PUBLIC_RECOVERY_HELPER_SHA256="4c467d99f7e59c2727f0e1a9b13de81772741d269b560ce6ca9fb605782f0d0f"'
     assert_includes lifecycle, 'identity["kind"] == "developer-id"'

@@ -26,7 +26,11 @@ extension AppModel {
     }
 
     func appliedTargetRPM(for fan: Fan) -> Int? {
-        let targetRPM = fan.targetRPM ?? (controlState.manualControlActive ? controlState.lastAppliedRPM[fan.id] : nil)
+        // Readback is telemetry, not a command: macOS may target zero RPM.
+        if let targetRPM = fan.targetRPM {
+            return targetRPM >= 0 ? targetRPM : nil
+        }
+        let targetRPM = controlState.manualControlActive ? controlState.lastAppliedRPM[fan.id] : nil
         return targetRPM.map { FanCurve.clamp($0, fan.minimumRPM, fan.maximumRPM) }
     }
 

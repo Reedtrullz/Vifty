@@ -7,6 +7,13 @@ export PATH
 APP_NAME="Vifty"
 INSTALL_MODE="source"
 PUBLIC_RELEASE_ARCHIVE=""
+TERMINAL_AUTHORIZATION="${VIFTY_TERMINAL_AUTHORIZATION:-0}"
+AUTHORIZATION_ARGUMENTS=()
+case "${TERMINAL_AUTHORIZATION}" in
+  0) ;;
+  1) AUTHORIZATION_ARGUMENTS=(--terminal-authorization) ;;
+  *) echo "error: VIFTY_TERMINAL_AUTHORIZATION must be 0 or 1." >&2; exit 64 ;;
+esac
 
 usage() {
   cat <<'USAGE'
@@ -18,6 +25,8 @@ With no arguments, Vifty builds and installs the current source checkout.
 The public-release mode installs only the exact current publishedRelease archive
 pinned by .github/release-manifest.json; it accepts no caller-supplied version,
 checksum, TeamID, verifier, or trust-skip override.
+Set VIFTY_TERMINAL_AUTHORIZATION=1 when running in a visible terminal to use
+sudo for the existing guarded root worker instead of AppleScript authorization.
 USAGE
 }
 
@@ -220,6 +229,7 @@ REPLACEMENT_PREPARE_LIFECYCLE=""
 REPLACEMENT_PREPARE_LIFECYCLE_SHA256=""
 REPLACEMENT_STAGED_LIFECYCLE=""
 REPLACEMENT_LIFECYCLE_CONTROL_APP=""
+REPLACEMENT_LIFECYCLE_MAINTENANCE_APP=""
 REPLACEMENT_FINISH_ALLOWED=0
 
 path_exists_without_following() {
@@ -1123,8 +1133,23 @@ report_helper_daemon_status() {
     return 0
   fi
 
+  local runtime_json bundled_runtime_sha
+  bundled_runtime_sha="$(sha256_file "${bundled_daemon}")" || return 0
+  if runtime_json="$("${DEST_APP}/Contents/MacOS/viftyctl" diagnose --json 2>/dev/null)" &&
+    /usr/bin/ruby -rjson -e '
+      runtime = JSON.parse(STDIN.read).fetch("daemonRuntime")
+      path, sha = ARGV
+      exit(runtime["matchesExpectedDaemon"] == true &&
+        runtime["installedDaemonPath"] == path &&
+        runtime["installedDaemonSHA256"] == sha &&
+        runtime["expectedDaemonSHA256"] == sha ? 0 : 1)
+    ' "${bundled_daemon}" "${bundled_runtime_sha}" <<<"${runtime_json}" 2>/dev/null; then
+    echo "==> Fan helper matches the installed app daemon (live bundled runtime)."
+    return 0
+  fi
+
   if [[ ! -f "${HELPER_TARGET}" ]]; then
-    echo "==> Fan helper is not installed yet."
+    echo "==> Could not confirm the live bundled helper; no legacy helper is present."
     if [[ "${INSTALL_MODE}" == "public-release" ]]; then
       echo "    RESULT: App installed; helper installation or repair is required before manual fan control."
     fi
@@ -1487,7 +1512,10 @@ prepare_replacement_authority_freeze() {
   if [[ -n "${REPLACEMENT_LIFECYCLE_CONTROL_APP}" ]]; then
     prepare_arguments+=(--control-app "${REPLACEMENT_LIFECYCLE_CONTROL_APP}")
   fi
-  if "${REPLACEMENT_PREPARE_LIFECYCLE}" "${prepare_arguments[@]}"; then
+  if [[ -n "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}" ]]; then
+    prepare_arguments+=(--maintenance-app "${REPLACEMENT_LIFECYCLE_MAINTENANCE_APP}")
+  fi
+  if "${REPLACEMENT_PREPARE_LIFECYCLE}" ${AUTHORIZATION_ARGUMENTS[@]+"${AUTHORIZATION_ARGUMENTS[@]}"} "${prepare_arguments[@]}"; then
     prepare_status=0
   else
     prepare_status=$?
@@ -1542,6 +1570,7 @@ finish_replacement_authority_freeze() {
   verify_root_staged_lifecycle "${REPLACEMENT_LIFECYCLE}" "${REPLACEMENT_PREPARE_LIFECYCLE_SHA256}" || return 75
   local finish_status
   if "${REPLACEMENT_LIFECYCLE}" \
+    ${AUTHORIZATION_ARGUMENTS[@]+"${AUTHORIZATION_ARGUMENTS[@]}"} \
     --operation repair \
     --app "${DEST_APP}" \
     --replacement-phase finish \
@@ -1574,6 +1603,7 @@ release_replacement_lock_for_rollback() {
   verify_root_staged_lifecycle "${REPLACEMENT_LIFECYCLE}" "${REPLACEMENT_PREPARE_LIFECYCLE_SHA256}" || return 75
   local release_status
   if "${REPLACEMENT_LIFECYCLE}" \
+    ${AUTHORIZATION_ARGUMENTS[@]+"${AUTHORIZATION_ARGUMENTS[@]}"} \
     --operation repair \
     --app "${DEST_APP}" \
     --replacement-phase release-lock \
@@ -2002,6 +2032,14 @@ if ! verify_candidate_bundle "${APP_DIR}"; then
   exit 1
 fi
 
+if [[ "${TERMINAL_AUTHORIZATION}" == "1" ]]; then
+  [[ -t 0 && -t 1 ]] || {
+    echo "error: terminal authorization requires a visible terminal." >&2
+    exit 75
+  }
+  # Authenticate before quitting the app or quiescing the daemon.
+  /usr/bin/sudo -v || exit 75
+fi
 quit_running_app_if_needed
 if [[ "${INSTALL_MODE}" == "public-release" ]]; then
   if path_exists_without_following "${DEST_APP}"; then
@@ -2021,9 +2059,18 @@ preflight_existing_install_before_replacement
 # the daemon-maintenance control client.
 if [[ "${VIFTY_USE_CANDIDATE_LIFECYCLE:-0}" == "1" ]]; then
   REPLACEMENT_LIFECYCLE_CONTROL_APP="${APP_DIR}"
-  if ! register_candidate_control_service; then
-    echo "error: the freshly built candidate could not re-register its daemon before replacement preparation." >&2
-    exit 75
+  if [[ -d "${DEST_APP}" && ! -L "${DEST_APP}" ]]; then
+    # Keep maintenance bound to the currently running daemon/helper. The
+    # candidate main executable is used only for the fixed SMAppService
+    # unregister callback; registering the candidate here would leave the
+    # existing daemon and candidate helper identities mismatched.
+    REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${DEST_APP}"
+  else
+    REPLACEMENT_LIFECYCLE_MAINTENANCE_APP="${APP_DIR}"
+    if ! register_candidate_control_service; then
+      echo "error: the freshly built candidate could not re-register its daemon before replacement preparation." >&2
+      exit 75
+    fi
   fi
 fi
 if [[ "${INSTALL_MODE}" == "public-release" ]]; then

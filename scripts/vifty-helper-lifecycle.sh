@@ -2,9 +2,12 @@
 set -euo pipefail
 
 OPERATION=""
+TERMINAL_AUTHORIZATION=0
 APP_PATH="${VIFTY_APP:-/Applications/Vifty.app}"
 CONTROL_APP_PATH=""
 CONTROL_APP_EXPLICIT=0
+MAINTENANCE_APP_PATH=""
+MAINTENANCE_APP_EXPLICIT=0
 REPLACEMENT_PHASE=""
 REPLACEMENT_DESTINATION=""
 REPLACEMENT_TRANSACTION_ID=""
@@ -122,7 +125,9 @@ usage() {
 Usage:
   vifty-helper-lifecycle.sh --operation repair|uninstall [--app /Applications/Vifty.app]
                             [--control-app /path/to/Vifty.app]
+                            [--maintenance-app /path/to/Vifty.app]
                             [--dry-run] [--record command-record.json]
+                            [--terminal-authorization]
                             [--replacement-phase prepare|finish
                              --replacement-destination /Applications/Vifty.app
                              --replacement-transaction-id UUID
@@ -168,6 +173,7 @@ while [[ "$#" -gt 0 ]]; do
     --operation) require_value "$1" "${2:-}"; OPERATION="$2"; shift 2 ;;
     --app) require_value "$1" "${2:-}"; APP_PATH="${2%/}"; shift 2 ;;
     --control-app) require_value "$1" "${2:-}"; CONTROL_APP_PATH="${2%/}"; CONTROL_APP_EXPLICIT=1; shift 2 ;;
+    --maintenance-app) require_value "$1" "${2:-}"; MAINTENANCE_APP_PATH="${2%/}"; MAINTENANCE_APP_EXPLICIT=1; shift 2 ;;
     --record) require_value "$1" "${2:-}"; RECORD_PATH="$2"; shift 2 ;;
     --maintenance-report) require_value "$1" "${2:-}"; MAINTENANCE_REPORT="$2"; shift 2 ;;
     --replacement-phase) require_value "$1" "${2:-}"; REPLACEMENT_PHASE="$2"; shift 2 ;;
@@ -185,6 +191,7 @@ while [[ "$#" -gt 0 ]]; do
     --replacement-public-team-id) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_TEAM_ID="$2"; shift 2 ;;
     --replacement-public-archive-sha256) require_value "$1" "${2:-}"; REPLACEMENT_PUBLIC_ARCHIVE_SHA256="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --terminal-authorization) TERMINAL_AUTHORIZATION=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "helper-lifecycle: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
@@ -192,11 +199,27 @@ done
 
 case "${OPERATION}" in repair|uninstall) ;; *) echo "helper-lifecycle: --operation must be repair or uninstall." >&2; exit 64 ;; esac
 case "${REPLACEMENT_PHASE}" in ""|prepare|finish|release-lock) ;; *) echo "helper-lifecycle: --replacement-phase must be prepare, finish, or release-lock." >&2; exit 64 ;; esac
+if [[ "${TERMINAL_AUTHORIZATION}" == "1" && "${DRY_RUN}" == "0" ]]; then
+  [[ -t 0 && -t 1 ]] || {
+    echo "helper-lifecycle: terminal authorization requires a visible terminal." >&2
+    exit 75
+  }
+  /usr/bin/sudo -v || exit 75
+fi
 if [[ "${CONTROL_APP_EXPLICIT}" -eq 1 ]] && {
   [[ "${OPERATION}" != "uninstall" &&
      ! ( "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" ) ]]
 }; then
   echo "helper-lifecycle: --control-app is only valid for uninstall or repair replacement prepare." >&2
+  exit 64
+fi
+if [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]] && {
+  [[ "${OPERATION}" == "repair" && "${REPLACEMENT_PHASE}" == "prepare" &&
+     "${CONTROL_APP_EXPLICIT}" -eq 1 ]]
+}; then
+  :
+elif [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]]; then
+  echo "helper-lifecycle: --maintenance-app is only valid with explicit candidate control during repair replacement prepare." >&2
   exit 64
 fi
 if [[ -n "${REPLACEMENT_PHASE}" ]]; then
@@ -234,6 +257,15 @@ if [[ -n "${CONTROL_APP_PATH}" ]]; then
   CONTROL_APP_PATH="${control_app_parent}/$(/usr/bin/basename "${CONTROL_APP_PATH}")"
 else
   CONTROL_APP_PATH="${APP_PATH}"
+fi
+if [[ -n "${MAINTENANCE_APP_PATH}" ]]; then
+  maintenance_app_parent="$(cd "$(/usr/bin/dirname "${MAINTENANCE_APP_PATH}")" 2>/dev/null && pwd -P)" || {
+    echo "helper-lifecycle: maintenance app parent is unavailable." >&2
+    exit 66
+  }
+  MAINTENANCE_APP_PATH="${maintenance_app_parent}/$(/usr/bin/basename "${MAINTENANCE_APP_PATH}")"
+else
+  MAINTENANCE_APP_PATH="${CONTROL_APP_PATH}"
 fi
 [[ "$(/usr/bin/basename "${APP_PATH}")" == "Vifty.app" ]] || {
   echo "helper-lifecycle: target app must be a Vifty.app bundle path." >&2
@@ -317,6 +349,10 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
       echo "helper-lifecycle: replacement prepare bundle paths do not match the declared destination." >&2
       exit 64
     }
+    if [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 && "${MAINTENANCE_APP_PATH}" != "${REPLACEMENT_PREVIOUS_APP}" ]]; then
+      echo "helper-lifecycle: explicit maintenance app must be the exact previous replacement bundle." >&2
+      exit 64
+    fi
   else
     [[ -z "${REPLACEMENT_CANDIDATE_APP}" && -z "${REPLACEMENT_PREVIOUS_APP}" &&
        -z "${REPLACEMENT_LIFECYCLE_SOURCE}" && -z "${REPLACEMENT_LIFECYCLE_EXPECTED_SHA256}" &&
@@ -334,10 +370,10 @@ if [[ -n "${REPLACEMENT_PHASE}" ]]; then
     fi
   fi
 fi
-VIFTY_CTL="${CONTROL_APP_PATH}/Contents/MacOS/viftyctl"
 VIFTY_MAIN="${CONTROL_APP_PATH}/Contents/MacOS/Vifty"
-VIFTY_HELPER="${CONTROL_APP_PATH}/Contents/MacOS/ViftyHelper"
-VIFTY_DAEMON="${CONTROL_APP_PATH}/Contents/MacOS/ViftyDaemon"
+VIFTY_CTL="${MAINTENANCE_APP_PATH}/Contents/MacOS/viftyctl"
+VIFTY_HELPER="${MAINTENANCE_APP_PATH}/Contents/MacOS/ViftyHelper"
+VIFTY_DAEMON="${MAINTENANCE_APP_PATH}/Contents/MacOS/ViftyDaemon"
 PLIST_NAME="tech.reidar.vifty.daemon.plist"
 SERVICE_LABEL="tech.reidar.vifty.daemon"
 RELEASE_TEAM_ID="X88J3853S2"
@@ -357,6 +393,7 @@ if [[ -n "${TEST_ROOT}" ]]; then
   TEST_ROOT="$(cd "${TEST_ROOT}" 2>/dev/null && pwd -P)"
   case "${APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
   case "${CONTROL_APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture control app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
+  case "${MAINTENANCE_APP_PATH}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture maintenance app must remain under VIFTY_LIFECYCLE_TEST_ROOT." >&2; exit 65 ;; esac
   if [[ "${REPLACEMENT_PHASE}" == "prepare" ]]; then
     case "${REPLACEMENT_CANDIDATE_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture replacement candidate escaped the test root." >&2; exit 65 ;; esac
     case "${REPLACEMENT_PREVIOUS_APP}" in "${TEST_ROOT}"/*) ;; *) echo "helper-lifecycle: fixture previous bundle escaped the test root." >&2; exit 65 ;; esac
@@ -711,17 +748,28 @@ path_has_replacement_lock() {
 replacement_tree_is_locked() {
   local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
+  local find_arguments=(-x "${root}" -print0)
+  if [[ "${root}" == "${REPLACEMENT_TRANSACTION_DIR:-}" &&
+        "$(/usr/bin/id -u)" != "${EXPECTED_OWNER_UID:-0}" ]]; then
+    # The caller verifies the immutable root-private boundary; only the root
+    # worker can traverse and verify its contents. Never broaden its permissions.
+    local private_snapshot="${root}/CandidateSnapshot"
+    [[ -d "${private_snapshot}" && ! -L "${private_snapshot}" &&
+       "$(/usr/bin/stat -f '%u:%Lp' "${private_snapshot}")" == "0:700" ]] || return 1
+    find_arguments+=(-path "${private_snapshot}" -prune)
+  fi
   local entry
-  while IFS= read -r -d '' entry; do
+  /usr/bin/find "${find_arguments[@]}" | while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
     path_has_replacement_lock "${entry}" || return 1
-  done < <(/usr/bin/find -x "${root}" -print0)
+  done
 }
 
 replacement_tree_flag_state() {
   local root="$1"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
   local entry locked=0 unlocked=0
+  /usr/bin/find -x "${root}" -print0 | {
   while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
     if path_has_replacement_lock "${entry}"; then
@@ -729,7 +777,7 @@ replacement_tree_flag_state() {
     else
       unlocked=$((unlocked + 1))
     fi
-  done < <(/usr/bin/find -x "${root}" -print0)
+  done
   if [[ "${locked}" -gt 0 && "${unlocked}" -eq 0 ]]; then
     /usr/bin/printf '%s\n' locked
   elif [[ "${unlocked}" -gt 0 && "${locked}" -eq 0 ]]; then
@@ -737,21 +785,28 @@ replacement_tree_flag_state() {
   else
     /usr/bin/printf '%s\n' mixed
   fi
+  }
 }
 
 force_lock_replacement_tree() {
-  local root="$1" flag
+  local root="$1" flag state
   flag="$(replacement_lock_flag)"
   /usr/bin/chflags -R "${flag}" "${root}" || return 1
-  [[ "$(replacement_tree_flag_state "${root}")" == "locked" ]]
+  state="$(replacement_tree_flag_state "${root}")" || return 1
+  [[ "${state}" == "locked" ]]
+}
+
+clear_replacement_tree_flags() {
+  local root="$1"
+  /usr/bin/find -x "${root}" -depth -exec /usr/bin/chflags 0 {} + || return 1
 }
 
 force_unlock_replacement_tree() {
-  local root="$1" flag
-  flag="$(replacement_lock_flag)"
+  local root="$1" state
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
-  /usr/bin/chflags -R "no${flag}" "${root}" || return 1
-  [[ "$(replacement_tree_flag_state "${root}")" == "unlocked" ]]
+  clear_replacement_tree_flags "${root}" || return 1
+  state="$(replacement_tree_flag_state "${root}")" || return 1
+  [[ "${state}" == "unlocked" ]]
 }
 
 lock_replacement_tree() {
@@ -768,14 +823,14 @@ lock_replacement_tree() {
 
 unlock_replacement_tree() {
   local root="$1"
-  local flag
-  flag="$(replacement_lock_flag)"
   [[ -d "${root}" && ! -L "${root}" ]] || return 1
   if [[ -n "${TEST_ROOT}" && "${ROOT_FIXTURE_PARTIAL_UNLOCK:-0}" == "1" ]]; then
+    local flag
+    flag="$(replacement_lock_flag)"
     /usr/bin/chflags "no${flag}" "${root}" || return 1
     return 1
   fi
-  /usr/bin/chflags -R "no${flag}" "${root}" || return 1
+  clear_replacement_tree_flags "${root}" || return 1
   local entry
   while IFS= read -r -d '' entry; do
     [[ -L "${entry}" ]] && continue
@@ -1303,6 +1358,37 @@ validate_control_app() {
   ' "${binding}" "${CONTROL_APP_PATH}" "${RELEASE_TEAM_ID}" "${expected_helper_sha}" "${TEST_ROOT}"
 }
 
+validate_maintenance_app() {
+  [[ "${MAINTENANCE_APP_EXPLICIT}" -eq 1 ]] || return 0
+  [[ "${OPERATION}:${REPLACEMENT_PHASE}" == "repair:prepare" ]] || return 1
+  [[ "${MAINTENANCE_APP_PATH}" == "${REPLACEMENT_PREVIOUS_APP}" ]] || return 1
+  [[ -d "${MAINTENANCE_APP_PATH}" && ! -L "${MAINTENANCE_APP_PATH}" ]] || return 1
+  [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "${MAINTENANCE_APP_PATH}/Contents/Info.plist" 2>/dev/null)" == "tech.reidar.vifty" ]] || return 1
+
+  local binding
+  binding="$(capture_bundle_binding "${MAINTENANCE_APP_PATH}")" || return 1
+  /usr/bin/ruby -rjson -e '
+    binding = JSON.parse(ARGV.fetch(0))
+    path, expected_team, test_root = ARGV.drop(1)
+    identity = binding.fetch("identity")
+    expected_ids = {
+      "Vifty" => "tech.reidar.vifty",
+      "viftyctl" => "tech.reidar.vifty.ctl",
+      "ViftyDaemon" => "tech.reidar.vifty.daemon",
+      "ViftyHelper" => "tech.reidar.vifty.helper"
+    }
+    exit 75 unless binding["sourcePath"] == File.expand_path(path) &&
+      identity["componentIdentifiers"] == expected_ids &&
+      identity["componentSHA256"].is_a?(Hash) &&
+      identity["componentSHA256"].keys.sort == expected_ids.keys.sort
+    if test_root.empty?
+      exit 75 unless identity["kind"] == "developer-id" && identity["teamID"] == expected_team
+    else
+      exit 75 unless identity["kind"] == "adhoc" && identity["teamID"].nil?
+    end
+  ' "${binding}" "${MAINTENANCE_APP_PATH}" "${RELEASE_TEAM_ID}" "${TEST_ROOT}"
+}
+
 persist_root_record() {
   local record_status="$1"
   local record_blocker="${2:-}"
@@ -1822,6 +1908,7 @@ build_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2258,6 +2345,7 @@ build_replacement_release_lock_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2335,6 +2423,7 @@ build_replacement_lock_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2401,6 +2490,7 @@ build_replacement_finish_root_program() {
   builtin declare -f path_has_replacement_lock
   builtin declare -f replacement_tree_is_locked
   builtin declare -f replacement_tree_flag_state
+  builtin declare -f clear_replacement_tree_flags
   builtin declare -f force_lock_replacement_tree
   builtin declare -f force_unlock_replacement_tree
   builtin declare -f lock_replacement_tree
@@ -2432,6 +2522,27 @@ build_replacement_finish_root_program() {
   /usr/bin/printf '%s\n' 'replacement_finish_root_worker'
 }
 
+run_authorized_root_stager() {
+  if [[ "${TERMINAL_AUTHORIZATION}" == "1" ]]; then
+    [[ -t 0 && -t 1 ]] || {
+      echo "helper-lifecycle: terminal authorization requires a visible terminal." >&2
+      return 75
+    }
+    /usr/bin/sudo /usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+      /bin/bash --noprofile --norc -c "$1" -- "$2" "$3"
+    return $?
+  fi
+  /usr/bin/osascript - "$1" "$2" "$3" <<'APPLESCRIPT'
+on run argv
+  set stagingProgram to item 1 of argv
+  set encodedWorker to item 2 of argv
+  set expectedDigest to item 3 of argv
+  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
+  do shell script commandText with administrator privileges
+end run
+APPLESCRIPT
+}
+
 run_replacement_finish_root_program() {
   local root_program="$1"
   if [[ -n "${TEST_ROOT}" ]]; then
@@ -2454,15 +2565,7 @@ worker_path="${worker_dir}/worker.sh"
 actual_digest="$(/usr/bin/shasum -a 256 "${worker_path}" | /usr/bin/awk '\''{print $1}'\'')"
 [[ "${actual_digest}" == "${expected_digest}" ]] || exit 78
 /usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc "${worker_path}"'
-  /usr/bin/osascript - "${root_stager}" "${root_base64}" "${root_digest}" <<'APPLESCRIPT'
-on run argv
-  set stagingProgram to item 1 of argv
-  set encodedWorker to item 2 of argv
-  set expectedDigest to item 3 of argv
-  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
-  do shell script commandText with administrator privileges
-end run
-APPLESCRIPT
+  run_authorized_root_stager "${root_stager}" "${root_base64}" "${root_digest}"
 }
 
 replacement_authority_is_proven_disabled_offline() {
@@ -2630,6 +2733,12 @@ if ! validate_control_app; then
   echo "helper-lifecycle: ${BLOCKER}" >&2
   exit 75
 fi
+if ! validate_maintenance_app; then
+  BLOCKER="The explicit maintenance app failed the complete bundle, identifier, signature, TeamID, or previous-bundle binding check."
+  write_record || true
+  echo "helper-lifecycle: ${BLOCKER}" >&2
+  exit 75
+fi
 
 if [[ -n "${MAINTENANCE_REPORT}" ]]; then
   BLOCKER="Caller-supplied maintenance reports cannot authorize live teardown; prepare must run in this invocation."
@@ -2754,16 +2863,7 @@ actual_digest="$(/usr/bin/shasum -a 256 "${worker_path}" | /usr/bin/awk '{print 
   /bin/bash --noprofile --norc "${worker_path}"
 ROOTSTAGER
 )"
-  if ! /usr/bin/osascript - "${ROOT_STAGER}" "${ROOT_PROGRAM_BASE64}" "${ROOT_PROGRAM_SHA256}" <<'APPLESCRIPT'
-on run argv
-  set stagingProgram to item 1 of argv
-  set encodedWorker to item 2 of argv
-  set expectedDigest to item 3 of argv
-  set commandText to "/usr/bin/env -i HOME=/var/root PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -c " & quoted form of stagingProgram & " -- " & quoted form of encodedWorker & " " & quoted form of expectedDigest
-  do shell script commandText with administrator privileges
-end run
-APPLESCRIPT
-  then
+  if ! run_authorized_root_stager "${ROOT_STAGER}" "${ROOT_PROGRAM_BASE64}" "${ROOT_PROGRAM_SHA256}"; then
     if [[ "${TOKEN_CONSUMED}" -eq 1 ]]; then
       BLOCKER="Administrator authorization or privileged cleanup was cancelled/failed after daemon authorization. The helper remains disabled and fail-closed; retry the same operation before the root receipt expires, or use the reviewed offline recovery fallback afterward."
     else

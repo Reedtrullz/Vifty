@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class AppModelFanControlTests: XCTestCase {
+    func testSystemManagedZeroTargetRemainsTelemetryAndNotAnOwnershipFailure() {
+        var snapshot = agentHardwareSnapshot(hardwareMode: .system)
+        snapshot.fans[0].targetRPM = 0
+        let model = AppModel(
+            coordinator: FanControlCoordinator(hardware: AppModelFakeHardware(snapshot: snapshot),
+                uncleanMarker: ManualControlMarker(url: temporaryMarkerPath())),
+            daemonPing: { true }, agentStatusReader: { nil }
+        )
+        model.snapshot = snapshot
+        model.daemonReachable = true
+        model.daemonResponding = true
+        model.fanControlOwnershipStatus = .osManaged
+        XCTAssertEqual(model.appliedTargetRPM(for: snapshot.fans[0]), 0)
+        XCTAssertFalse(model.controlOwnershipNeedsAttention)
+        XCTAssertEqual(model.controlSessionPresentation.state, .ready)
+        model.fanControlOwnershipStatus = nil
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        model.fanControlOwnershipStatus = .osManaged
+        snapshot.fans[0].hardwareMode = .forced
+        model.snapshot = snapshot
+        XCTAssertTrue(model.controlOwnershipNeedsAttention)
+        snapshot.fans[0].targetRPM = -1
+        XCTAssertNil(model.appliedTargetRPM(for: snapshot.fans[0]))
+    }
+
     func testRevertingManualDraftToAppliedValuesClearsPendingPresentation() async {
         let snapshot = agentHardwareSnapshot(hardwareMode: .forced)
         let hardware = AppModelFakeHardware(snapshot: snapshot)
