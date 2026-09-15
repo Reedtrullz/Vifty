@@ -38,3 +38,32 @@ Next work: use a supported interactive installation context with App Management
 authorization, or implement and review a native Vifty maintenance host that can
 obtain appropriate consent. Do not send the operator into Recovery based on
 the earlier incorrect immutable-flag diagnosis.
+
+## Interactive sudo route
+
+The owner authorized a one-time sudo exception for the guarded installation.
+`VIFTY_TERMINAL_AUTHORIZATION=1 scripts/install-vifty.sh` opts into an interactive
+terminal route; the default remains native AppleScript authorization. The
+installer authenticates before quitting Vifty or quiescing its daemon, and
+forwards `--terminal-authorization` through prepare, finish, and rollback.
+Only the existing digest-bound root stager is elevated. Signature checks,
+caller-bound receipts, immutable locks, and Auto-restoration checks are unchanged.
+
+The route requires terminal stdin/stdout and does not handle password bytes.
+Run it in a visible terminal; a hidden tool PTY cannot be opened by passing its
+numeric session ID to the Codex app terminal panel. The attempted hidden prompt
+was cancelled without authentication. Successful sudo authentication alone is
+not proof of App Management authorization or successful replacement.
+
+## Verified outcome
+
+The owner subsequently ran the guarded installer from visible Terminal using
+this opt-in route. Prepare, replacement, finish, and final identity checks
+completed with exit 0. Independent installed executable hashes matched the
+candidate, deep/strict code-sign verification passed, and daemon-backed
+diagnostics confirmed helper parity and OS-managed fan ownership. A follow-up
+installation also eliminated the diagnostic-only CandidateSnapshot permission
+warnings and false legacy-helper-missing message. See
+[installed runtime validation](2026-09-15-installed-runtime-smoke.md) for exact
+build identity and hardware/UI checks. No reboot, Recovery operation, SIP
+change, or persistent permission expansion was required.
