@@ -251,8 +251,36 @@ struct DaemonInstallProcessRunner: Sendable {
                     try waitForCleanup(until: DispatchTime.now().uptimeNanoseconds + 250_000_000)
                 }
 
+                // Input delivery and child execution share one deadline. A full pipe
+                // must not block before the timeout/termination path can run.
+                let deadline = DispatchTime.now().uptimeNanoseconds
+                    + UInt64(max(0, timeout) * 1_000_000_000)
                 do {
-                    try inputHandle.write(contentsOf: standardInput)
+                    let descriptor = inputHandle.fileDescriptor
+                    let flags = fcntl(descriptor, F_GETFL)
+                    guard flags != -1,
+                          fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != -1,
+                          fcntl(descriptor, F_SETNOSIGPIPE, 1) != -1 else {
+                        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                    }
+                    try standardInput.withUnsafeBytes { bytes in
+                        var offset = 0
+                        while offset < bytes.count {
+                            guard DispatchTime.now().uptimeNanoseconds < deadline else {
+                                throw DaemonInstallProcessError.timedOut
+                            }
+                            let written = Darwin.write(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
+                            if written > 0 {
+                                offset += written
+                            } else if written < 0 && errno == EINTR {
+                                continue
+                            } else if written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {
+                                usleep(10_000)
+                            } else {
+                                throw NSError(domain: NSPOSIXErrorDomain, code: Int(written == 0 ? EIO : errno))
+                            }
+                        }
+                    }
                     closeInput()
                 } catch {
                     closeInput()
@@ -264,8 +292,6 @@ struct DaemonInstallProcessRunner: Sendable {
                     throw error
                 }
 
-                let deadline = DispatchTime.now().uptimeNanoseconds
-                    + UInt64(max(0, timeout) * 1_000_000_000)
                 while !leaderExited {
                     try reapLeaderIfNeeded()
                     if leaderExited { break }
@@ -308,7 +334,7 @@ struct DaemonLifecycleScriptLoader: Sendable {
         // This digest is compiled into the signed app executable. The resource is
         // read once into an immutable Data snapshot and only that snapshot runs.
         // Update it intentionally whenever vifty-helper-lifecycle.sh changes.
-        let expectedSHA256 = "8cc4772c1e6f30e6827059ab998d67db5eea8e2eb41f2c3fd11d9f1ede3e4157"
+        let expectedSHA256 = "d343e2c3004cd3b5b5823480bbe83310a944c1695a8b52b90153be0518b9b695"
         let maximumSize = 256 * 1_024
         let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
         guard descriptor >= 0 else {

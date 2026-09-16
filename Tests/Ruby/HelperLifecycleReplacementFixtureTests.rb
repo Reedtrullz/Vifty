@@ -134,6 +134,15 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
     candidate = File.join(@root, "candidate", "Vifty.app")
     FileUtils.mkdir_p(File.dirname(candidate))
     assert system("/usr/bin/ditto", @app, candidate)
+    # Different bytes and execution markers prove routing, not just equal identities.
+    %w[viftyctl ViftyHelper Vifty].each do |name|
+      path = File.join(candidate, "Contents/MacOS", name)
+      contents = File.read(path).sub("set -euo pipefail", "set -euo pipefail\nprintf '%s\\n' 'candidate-#{name}' >> \"$VIFTY_FIXTURE_INVOCATION_LOG\"")
+      File.write(path, contents)
+      previous = File.join(@app, "Contents/MacOS", name)
+      contents = File.read(previous).sub("set -euo pipefail", "set -euo pipefail\nprintf '%s\\n' 'previous-#{name}' >> \"$VIFTY_FIXTURE_INVOCATION_LOG\"")
+      File.write(previous, contents)
+    end
 
     prepared = run_lifecycle(
       script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
@@ -141,6 +150,37 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
     )
     assert_equal 0, prepared[:status], prepared[:output]
     assert_equal "replacement-prepared", JSON.parse(File.read(@ledger)).fetch("status")
+    calls = File.read(@log)
+    assert_includes calls, "candidate-Vifty"
+    refute_includes calls, "candidate-viftyctl"
+    refute_includes calls, "candidate-ViftyHelper"
+    assert_includes calls, "previous-viftyctl"
+    assert_includes calls, "previous-ViftyHelper"
+    refute_includes calls.lines.map(&:strip), "previous-Vifty"
+    refute_equal Digest::SHA256.file(File.join(@app, "Contents/MacOS/ViftyHelper")).hexdigest,
+                 Digest::SHA256.file(File.join(candidate, "Contents/MacOS/ViftyHelper")).hexdigest
+  end
+
+  def test_replacement_rejects_maintenance_bundle_other_than_previous_before_teardown
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    assert system("/usr/bin/ditto", @app, candidate)
+    rejected = run_lifecycle(
+      script: File.join(ROOT, "scripts/vifty-helper-lifecycle.sh"),
+      args: replacement_prepare_args(candidate, control_app: candidate, maintenance_app: candidate)
+    )
+    refute_equal 0, rejected[:status], rejected[:output]
+    refute File.exist?(@ledger)
+    refute File.exist?(File.join(@root, "launchctl-disabled"))
+    refute File.exist?(File.join(@root, "Library/Application Support/Vifty/Maintenance/authorized-v1.json"))
+  end
+
+  def test_finish_authorization_refusal_preserves_prepared_frozen_state
+    assert_authorization_refusal_preserves_replacement_state("finish")
+  end
+
+  def test_release_authorization_refusal_preserves_locked_frozen_state
+    assert_authorization_refusal_preserves_replacement_state("release-lock")
   end
 
   def test_root_failure_is_75_only_after_exact_label_is_proven_disabled_and_offline
@@ -424,6 +464,38 @@ class HelperLifecycleReplacementFixtureTests < Minitest::Test
   end
 
   private
+
+  def assert_authorization_refusal_preserves_replacement_state(phase)
+    # Replace only the privilege boundary in this fixture copy; no sudo or native prompts.
+    lifecycle = File.join(@app, "Contents/Resources/vifty-helper-lifecycle.sh")
+    denied = File.join(@root, "authorization-denied")
+    source = File.read(lifecycle)
+    needle = "run_replacement_finish_root_program() {\n"
+    assert_includes source, needle
+    File.write(lifecycle, source.sub(needle, needle + "  [[ ! -e '#{denied}' ]] || return 1\n"))
+    candidate = File.join(@root, "candidate", "Vifty.app")
+    FileUtils.mkdir_p(File.dirname(candidate))
+    assert system("/usr/bin/ditto", @app, candidate)
+    prepared = run_lifecycle(script: lifecycle, args: replacement_prepare_args(candidate))
+    assert_equal 0, prepared[:status], prepared[:output]
+    FileUtils.rm_rf(@app)
+    assert system("/usr/bin/ditto", candidate, @app)
+    if phase == "release-lock"
+      failed_registration = run_lifecycle(script: @staged_lifecycle, args: replacement_finish_args,
+        extra_env: {"VIFTY_FIXTURE_REGISTER_FAIL_FROZEN" => "1"})
+      assert_equal 75, failed_registration[:status], failed_registration[:output]
+      assert immutable?(@app)
+    end
+    before = File.binread(@ledger)
+    File.write(denied, "deny")
+    result = run_lifecycle(script: @staged_lifecycle,
+      args: phase == "finish" ? replacement_finish_args : replacement_release_args)
+    assert_equal 75, result[:status], result[:output]
+    assert_equal before, File.binread(@ledger)
+    assert File.exist?(File.join(@root, "launchctl-disabled"))
+    assert File.exist?(File.join(@root, "launchctl-state"))
+    assert_equal phase == "release-lock", immutable?(@app)
+  end
 
   def assert_public_binding_mismatch_before_teardown(
     content_sha: nil,

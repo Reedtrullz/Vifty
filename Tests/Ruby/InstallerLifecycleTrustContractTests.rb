@@ -66,6 +66,54 @@ class InstallerLifecycleTrustContractTests < Minitest::Test
     end
   end
 
+  def test_unlock_preserves_external_symlink_targets_and_unrelated_flags
+    Dir.mktmpdir("vifty-unlock-", File.join(ROOT, ".build")) do |dir|
+      tree = File.join(dir, "tree")
+      Dir.mkdir(tree)
+      outside = File.join(dir, "outside")
+      inside = File.join(tree, "inside")
+      File.write(outside, "external sentinel")
+      File.write(inside, "internal target")
+      File.symlink(".", File.join(tree, "alias"))
+      File.symlink("alias/../outside", File.join(tree, "escape"))
+      File.symlink("inside", File.join(tree, "internal"))
+      File.symlink("missing", File.join(tree, "dangling"))
+      begin
+        assert system("/usr/bin/chflags", "uchg", outside)
+        assert system("/usr/bin/chflags", "uchg,hidden", inside)
+        script = lifecycle_function("clear_replacement_tree_flags") +
+          "\nreplacement_lock_flag() { printf uchg; }\nclear_replacement_tree_flags \"$1\""
+        output, error, status = Open3.capture3("/bin/bash", "-c", script, "unlock-test", tree)
+        assert status.success?, output + error
+        assert_equal "uchg", Open3.capture2("/usr/bin/stat", "-f", "%Sf", outside).first.strip
+        assert_equal "hidden", Open3.capture2("/usr/bin/stat", "-f", "%Sf", inside).first.strip
+        assert_equal "inside", File.readlink(File.join(tree, "internal"))
+      ensure
+        system("/usr/bin/chflags", "nouchg", outside, inside)
+      end
+    end
+  end
+
+  def test_unlock_rejects_actual_incomplete_enumeration
+    Dir.mktmpdir("vifty-unlock-failure-", File.join(ROOT, ".build")) do |dir|
+      hidden = File.join(dir, "unreadable")
+      accessible = File.join(dir, "accessible")
+      File.write(accessible, "partial unlock")
+      Dir.mkdir(hidden, 0000)
+      begin
+        assert system("/usr/bin/chflags", "uchg", accessible)
+        script = lifecycle_function("clear_replacement_tree_flags") +
+          "\nreplacement_lock_flag() { printf uchg; }\nclear_replacement_tree_flags \"$1\""
+        _, _, status = Open3.capture3("/bin/bash", "-c", script, "unlock-test", dir)
+        refute status.success?, "partial enumeration must not report a successful unlock"
+        assert_equal "-", Open3.capture2("/usr/bin/stat", "-f", "%Sf", accessible).first.strip
+      ensure
+        File.chmod(0700, hidden)
+        system("/usr/bin/chflags", "nouchg", accessible)
+      end
+    end
+  end
+
   def installer
     @installer ||= File.read(File.join(ROOT, "scripts/install-vifty.sh"))
   end

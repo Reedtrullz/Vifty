@@ -797,8 +797,11 @@ force_lock_replacement_tree() {
 }
 
 clear_replacement_tree_flags() {
-  local root="$1"
-  /usr/bin/find -x "${root}" -depth -exec /usr/bin/chflags 0 {} + || return 1
+  local root="$1" flag
+  flag="$(replacement_lock_flag)"
+  # Do not follow link operands or erase flags unrelated to our replacement lock.
+  # -h also protects a non-link entry substituted after find inspected it.
+  /usr/bin/find -x "${root}" -depth ! -type l -exec /usr/bin/chflags -h "no${flag}" {} + || return 1
 }
 
 force_unlock_replacement_tree() {
