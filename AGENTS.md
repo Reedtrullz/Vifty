@@ -2,6 +2,8 @@
 
 AI coding instructions for working in this repository.
 
+Source review (2026-09-25): [CURRENT_STATE.md](CURRENT_STATE.md) records the current working tree, release distinction and review limits. Preserve pre-existing installer changes.
+
 ## Build System
 
 - Swift Package Manager (`Package.swift`, tools-version 6.0).
@@ -11,15 +13,21 @@ AI coding instructions for working in this repository.
 
 ## Target Layout
 
-| Target | Type | Dependencies |
-|--------|------|-------------|
-| Vifty | executable | ViftyCore |
-| ViftyCore | library | ViftyPrivateIOKit |
-| ViftyDaemon | executable | ViftyCore |
-| ViftyHelper | executable | ViftyCore |
-| ViftyCtl | executable | ViftyCore |
-| ViftyPrivateIOKit | C target | IOKit framework |
-| ViftyCoreTests | test | ViftyCore, Vifty |
+| Target | Type / dependencies |
+|---|---|
+| Vifty | App executable; ViftyCore, ViftyBuildProvenance |
+| ViftyCore | Library; ViftyPrivateIOKit |
+| ViftyFanControlSafety | Internal library; ViftyCore |
+| ViftyDaemonSupport / ViftyHelperSupport | Internal libraries; ViftyCore, ViftyFanControlSafety |
+| ViftyDaemon | Executable; Core, Safety, DaemonSupport |
+| ViftyHelper | Executable; Core, HelperSupport |
+| ViftyCtl | CLI executable; Core |
+| ViftyAXEvidenceCore | Internal library; BuildProvenance |
+| ViftyAXCollector | Evidence executable; AXEvidenceCore, BuildProvenance |
+| ViftyBuildProvenance | Internal identity target |
+| ViftyPrivateIOKit | C target; IOKit |
+| ViftyLockTestHelper | Test-only executable; Safety |
+| ViftyCoreTests | XCTest; multiple production/support targets (see Package.swift) |
 
 ViftyCore links `IOKit.framework` and ViftyPrivateIOKit links it too (C target needs explicit linking).
 
