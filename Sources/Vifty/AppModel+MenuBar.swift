@@ -423,7 +423,8 @@ extension AppModel {
         guard let fans = snapshot?.fans, !fans.isEmpty else {
             return hasCompletedHardwarePoll || daemonReachable
         }
-        return !autoSystemModeFans.isEmpty
+        return (!autoSystemModeFans.isEmpty
+                && FanControlOwnershipPresentation.resolve(fanControlOwnershipStatus).owner != .macOS)
             || !autoForcedModeFans.isEmpty
             || !autoUnknownModeFans.isEmpty
             || !autoMissingModeFans.isEmpty

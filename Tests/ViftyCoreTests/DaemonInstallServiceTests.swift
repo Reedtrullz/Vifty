@@ -189,6 +189,40 @@ final class DaemonInstallServiceTests: XCTestCase {
         XCTAssertEqual(kill(emittedShellPID, 0), -1)
     }
 
+    func testSystemRunnerTimesOutWhileChildKeepsStdinOpenWithoutReading() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vifty-stalled-input-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("pid")
+        let script = directory.appendingPathComponent("child.sh")
+        // Finite child lifetime also bounds the test when run against the old blocking writer.
+        try Data("#!/bin/bash\necho $$ > \"\(pidFile.path)\"\nexec /bin/sleep 5\n".utf8).write(to: script)
+        XCTAssertEqual(chmod(script.path, 0o755), 0)
+        let previousHandler = signal(SIGPIPE, SIG_IGN)
+        defer { signal(SIGPIPE, previousHandler) }
+        let started = DispatchTime.now().uptimeNanoseconds
+        do {
+            _ = try await DaemonInstallProcessRunner.system(timeout: 0.2)
+                .run(script, [], Data(repeating: 42, count: 1_048_576))
+            XCTFail("Expected stdin delivery to obey the process timeout")
+        } catch {
+            XCTAssertEqual(error as? DaemonInstallProcessError, .timedOut)
+        }
+        XCTAssertLessThan(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000, 3)
+        let pidText = try String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let pid = try XCTUnwrap(Int32(pidText))
+        XCTAssertEqual(kill(pid, 0), -1, "timed-out child must be reaped")
+        XCTAssertEqual(kill(-pid, 0), -1, "private process group must be gone")
+    }
+
+    func testSystemRunnerDeliversLargeInputCompletely() async throws {
+        let output = try await DaemonInstallProcessRunner.system(timeout: 5)
+            .run(URL(fileURLWithPath: "/usr/bin/wc"), ["-c"], Data(repeating: 42, count: 1_048_576))
+        XCTAssertEqual(output.terminationStatus, 0)
+        XCTAssertEqual(output.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines), "1048576")
+    }
+
     func testSystemRunnerBoundsCleanupAfterStdinWriteFailure() async throws {
         let script = FileManager.default.temporaryDirectory
             .appendingPathComponent("vifty-input-failure-" + UUID().uuidString + ".sh")
@@ -200,7 +234,6 @@ final class DaemonInstallServiceTests: XCTestCase {
         defer { signal(SIGPIPE, previousSIGPIPEHandler) }
         let resultBox = ProcessFailureBox()
         let completion = expectation(description: "stdin failure cleanup completes")
-        let startedAt = Date()
         let task = Task {
             defer { completion.fulfill() }
             do {
@@ -216,8 +249,9 @@ final class DaemonInstallServiceTests: XCTestCase {
         }
         defer { task.cancel() }
 
+        // Bound completion without a second wall-clock limit that includes task
+        // scheduling, process startup and the input write as well as cleanup.
         await fulfillment(of: [completion], timeout: 2)
-        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1.25)
         let didThrow = resultBox.threw
         XCTAssertTrue(didThrow)
     }

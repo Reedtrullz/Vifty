@@ -106,6 +106,15 @@ The only legacy compatibility path is the published Developer ID `v1.3.2` build 
 
 ## Privileged Helper Maintenance Boundary
 
+Replacement unlocks remove only the lifecycle's immutable lock flag, not unrelated
+file flags. They traverse child-first without following symbolic-link operands;
+an incomplete traversal or flag operation cannot establish a successful unlock.
+The app's lifecycle process timeout covers both delivery of the script on stdin
+and child execution. A child that stops reading cannot hold the input writer
+outside that deadline; input failures enter the same private-process-group
+cleanup path. A timeout does not prove completion of privileged maintenance:
+fan writes remain blocked until helper state is verified.
+
 Destructive helper repair and uninstall use one lifecycle boundary. Under protocol v2, the daemon blocks new fan-control ownership, restores the complete trusted physical fan set to Auto/System, requires fresh confirmation, and consumes one short-lived operation token only after revalidating the boot session, daemon session, journal generation, quiesce generation, fan inventory, and exact canonical bundled `ViftyHelper` SHA-256. The requesting CLI hashes its sibling helper, while the daemon independently hashes its own canonical app sibling and requires equality; client report data cannot choose the receipt identity. It persists authorization at the fixed `/Library/Application Support/Vifty/Maintenance/authorized-v1.json` path. The directory is root-owned mode `0700`; authorized and claimed receipts are root-owned mode `0600`, singly linked, bounded, and opened without following symlinks. Every daemon bootstrap synchronously revokes prior authorized and claimed receipts before constructing the writer boundary or exposing XPC, and startup fails closed if revocation fails.
 
 After administrator authorization, an immutable digest-checked root worker atomically claims a valid receipt, parses the full disabled-service key literally, disables the launchd label, boots the service out, and confirms it remains disabled and offline. It then independently restores and freshly confirms the complete Auto/System fan set using a root-staged copy of the helper bytes snapshotted before authorization. Production accepts that helper only when its SHA-256 is unchanged and its signature satisfies Vifty's exact helper identifier, TeamID, Developer ID intermediate/leaf OIDs and authority chain, and hardened runtime. Only after that mandatory post-freeze proof does it consume the claim and delete legacy files; repair alone may re-enable the label afterward. The outer process requires recent caller-UID/parent-PID-bound completed root evidence before any registration or final unregister transition. Signal or incomplete-root paths persist blocked evidence and cannot register repair.
