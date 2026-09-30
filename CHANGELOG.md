@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-09-30
+
+### Fixed
+
+- Harden guarded app replacement, including candidate-to-installed helper maintenance, complete immutable-flag inspection, depth-first no-follow unlocking, and authorization-refusal handling.
+- Bound lifecycle subprocess input delivery by the same deadline as execution and terminate timed-out process groups.
+- Preserve macOS System-managed fan telemetry without misreporting it as manual control.
+
+### Improved
+
+- Include the post-v1.4.8 stability and native macOS polish already integrated into main, plus refreshed source and safety-boundary documentation.
+
+### Scope
+
+- Public signing, notarization, installation, and hardware acceptance remain separate gates. Unvalidated installer and review-fix worktrees are not part of this release.
+
 ## [1.4.8] - 2026-09-13
 
 ### Release

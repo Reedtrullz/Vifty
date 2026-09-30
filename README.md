@@ -38,6 +38,8 @@ open /Applications/Vifty.app
 
 ## Documentation
 
+- [Current source review and checkout boundaries](CURRENT_STATE.md) — 2026-09-25; no new installed/hardware acceptance claims.
+
 - [Compatibility and supported hardware](docs/compatibility.md)
 - [Safety and trust model](docs/trust-model.md)
 - [Agent cooling runbook](docs/safe-agent-cooling.md) · [integrations](docs/agent-integrations.md)
