@@ -10,7 +10,7 @@
 > Separate exact-build claims: installed release review `pending`; manual Fixed/Curve/Auto compatibility `pending`.
 <!-- END GENERATED RELEASE FACTS -->
 
-Release metadata in `Resources/Info.plist` and `Casks/vifty.rb` is aligned at `1.4.8` build `16`.
+Release candidate metadata in `Resources/Info.plist` is staged at `1.4.9` build `17`, while `Casks/vifty.rb` remains pinned to published `1.4.8` with SHA-256 `7853ca7ad8ca51a35aa89f56f2779c3d2b528523b7e3198be7c550d208e16683`.
 
 This page is the current public trust status for Vifty releases. Update it whenever the source tag, GitHub Release notes/assets, Developer ID release workflow outcome, Homebrew cask checksum, or published release assets change.
 
@@ -18,7 +18,7 @@ This page is the current public trust status for Vifty releases. Update it whene
 
 As of 2026-09-13, `v1.4.8` is the current published Developer ID release. Its immutable annotated tag object is `493e6b99ce954a5720283570acefaa19ace3089f` at commit `65cc3862beee62dd7abf7a31847988bbec7e37e8`, source CI run `34755252127` passed, signed/notarized Release run `34756659658` passed, and the four canonical trust assets are public at the [v1.4.8 GitHub Release](https://github.com/Reedtrullz/Vifty/releases/tag/v1.4.8). The public artifact, checksum, manifest promotion, Homebrew cask handoff, readiness check, and public verifier all pass for build `16`; installed release review and manual Fixed/Curve/Auto compatibility remain pending for this exact build. `/Applications/Vifty.app` remains v1.4.5/build 13 until an operator installs the promoted release. `v1.4.6` and `v1.4.7` are retired without publication after first-attempt notarization failed with invalid Apple credentials; their immutable tags must not be reused. `v1.4.4` and `v1.3.2` are previous published Developer ID releases (recorded in `historicalReleases`), and `v1.1.1` remains the published source-first fallback; its immutable tag resolves to `a82f2237ff39c24a6b366dca8f95a17ee54fd972`.
 
-The manifest candidate remains `null` until a separate release-prep pull request passes exact-main CI.
+The manifest candidate records `v1.4.9` build `17` as pending until exact-main CI and signed-tag publication; no release is authorized by candidate metadata alone.
 
 The supervised `v1.3.1` manual smoke is not a passed compatibility claim. Fixed and Curve control reached their targets and the right-fan curve line rendered, but selecting Auto during an in-flight Curve tick could briefly show Auto active before the suspended write resumed and returned both fans to Forced mode. Operator recovery after quitting Vifty restored and read-only diagnostics confirmed hardware Auto. The exact public v1.3.2 build repeated the sequence and passed without later reassertion; prior-version evidence remains historical and does not substitute for the v1.3.2 review.
 

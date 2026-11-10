@@ -28,7 +28,8 @@ let package = Package(
         ),
         .target(
             name: "ViftyFanControlSafety",
-            dependencies: ["ViftyCore"]
+            dependencies: ["ViftyCore"],
+            exclude: ["AGENTS.md"]
         ),
         .target(
             name: "ViftyDaemonSupport",
